@@ -1,0 +1,3 @@
+# The server owns the game rules
+
+In v1 every browser ran the full rules itself and the server only relayed events between the Players of a Room, even dice rolls. For v2 the server is the single source of truth: it rolls the dice, validates every move and computes the game state, while clients send intents and render the state they are given. We chose this so that a public game can't be cheated from a browser, so a Player can reconnect into a running game, and so the game state can outlive any one client; the cost is that the rules have to be rewritten as server-side code rather than migrated from the client slice.
