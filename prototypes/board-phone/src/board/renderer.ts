@@ -23,6 +23,8 @@ export interface RenderOptions {
 }
 
 export interface Camera { scale: number; x: number; y: number }
+/** Per-Field pick state: picked (lifted, green), off (not pickable, greyed by tint), auto (Auto-sell would take it, orange ring). */
+export type Mark = 'picked' | 'off' | 'auto'
 
 export interface Stats {
   renderer: string
@@ -118,6 +120,7 @@ export interface BoardRenderer {
   playerPos(i: number): { x: number; y: number }
   walkerField(): number
   setSelected(id: number | null): void
+  setMarks(marks: Record<number, Mark>): void
   setOptions(o: Partial<RenderOptions>): void
   getOptions(): RenderOptions
   stats(): Stats
@@ -168,6 +171,7 @@ export async function createBoardRenderer(host: HTMLElement, initial: RenderOpti
   let fields: FieldNode[] = []
   let players: Sprite[] = []
   let selected: number | null = null
+  let marks: Record<number, Mark> = {}
   let cam: Camera = { scale: 1, x: 0, y: 0 }
   let dirty = true
   let boardSize = { w: 1, h: 1 }
@@ -339,14 +343,22 @@ export async function createBoardRenderer(host: HTMLElement, initial: RenderOpti
   function applySelected() {
     for (const f of fields) {
       const on = f.def.id === selected
-      f.outline.visible = on
-      if (on) {
+      const m = marks[f.def.id]
+      // greyed by container tint (inherited by every sprite in v8), no filter
+      f.c.tint = m === 'off' ? 0x5a6070 : 0xffffff
+      const ring = on || m === 'picked' || m === 'auto'
+      f.outline.visible = ring
+      if (ring) {
         // constant ~3 screen px whatever the zoom
         const w = 3 / (cam.scale * G.scale)
-        f.outline.clear().poly(f.hullPts).fill({ color: 0xffffff, alpha: 0.3 }).stroke({ width: w, color: 0xffe14d })
+        const g = f.outline.clear().poly(f.hullPts)
+        if (m === 'picked') g.fill({ color: 0x5fd38d, alpha: 0.45 })
+        else if (on) g.fill({ color: 0xffffff, alpha: 0.3 })
+        g.stroke({ width: m === 'auto' && !on ? w * 0.8 : w, color: on ? 0xffe14d : m === 'picked' ? 0x5fd38d : 0xff9a3c })
       }
-      f.c.y = f.baseY - (on ? 15 : 0)
-      f.c.zIndex = on ? 500 : f.def.zIndex
+      const lift = on || m === 'picked'
+      f.c.y = f.baseY - (lift ? 15 : 0)
+      f.c.zIndex = on ? 500 : lift ? 400 : f.def.zIndex
     }
     dirty = true
   }
@@ -355,7 +367,7 @@ export async function createBoardRenderer(host: HTMLElement, initial: RenderOpti
   function applyCamera() {
     world.scale.set(cam.scale)
     world.position.set(cam.x, cam.y)
-    if (selected !== null) applySelected()
+    if (selected !== null || Object.keys(marks).length) applySelected()
     dirty = true
     // keep label text sharp: re-rasterise at the zoom level once the camera settles
     clearTimeout(textTimer)
@@ -461,6 +473,7 @@ export async function createBoardRenderer(host: HTMLElement, initial: RenderOpti
     playerPos(i) { const g = players[i].getGlobalPosition(); return { x: g.x, y: g.y } },
     walkerField() { return playerFields[0] },
     setSelected(id) { selected = id; applySelected() },
+    setMarks(m) { marks = m; applySelected() },
     setOptions(o) {
       const rebuild = (o.recolor !== undefined && o.recolor !== opts.recolor) || (o.labels !== undefined && o.labels !== opts.labels)
       const resChanged = o.resolution !== undefined && o.resolution !== opts.resolution

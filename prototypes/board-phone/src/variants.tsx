@@ -48,7 +48,7 @@ export function VariantA({ options, setOptions }: VariantProps) {
 type Area = { x: number; y: number; w: number; h: number }
 
 /** B's camera: pinch / drag / wheel zoom, +− buttons, fit, follow the walking Player. Taps go to onTap. */
-function useZoomPan(r: BoardRenderer | null, onTap: (x: number, y: number) => void, fitArea: () => Area | undefined = () => undefined, fitDeps: unknown[] = [], buttonsClass = '') {
+export function useZoomPan(r: BoardRenderer | null, onTap: (x: number, y: number) => void, fitArea: () => Area | undefined = () => undefined, fitDeps: unknown[] = [], buttonsClass = '') {
   const [follow, setFollow] = useState(false)
   const fitCam = useRef<Camera | null>(null)
   const followRef = useRef(follow)

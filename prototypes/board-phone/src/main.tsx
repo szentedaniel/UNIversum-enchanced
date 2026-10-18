@@ -1,6 +1,6 @@
 // PROTOTYPE, throwaway: isometric Board on a phone (map ticket "Prototype: isometric Board on a phone").
 // Four phone layouts of the same Board, switchable via ?variant=A|B|C|D|E and the bottom bar.
-// ?page=pixi-react opens the @pixi/react binding check. Extra URL flags: ?aa=1 (antialias), ?gpu=webgpu.
+// ?page=pixi-react opens the @pixi/react binding check. ?page=pick opens the Field-picking prototype (ticket #15). Extra URL flags: ?aa=1 (antialias), ?gpu=webgpu.
 
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -8,6 +8,7 @@ import type { RenderOptions } from './board/renderer'
 import { Switcher, TapTestProvider } from './shared'
 import { VariantA, VariantB, VariantC, VariantD, VariantE, type VariantProps } from './variants'
 import { PixiReactCheck } from './PixiReactCheck'
+import { PickPage } from './pick'
 import './styles.css'
 
 const VARIANTS: { key: string; name: string; C: (p: VariantProps) => React.ReactNode }[] = [
@@ -25,6 +26,7 @@ function App() {
     recolor: 'baked', labels: true, walking: true, continuous: false, resolution: Math.min(2, devicePixelRatio),
   })
   if (params.get('page') === 'pixi-react') return <PixiReactCheck />
+  if (params.get('page') === 'pick') return <PickPage />
   const change = (k: string) => {
     const u = new URL(location.href)
     u.searchParams.set('variant', k)

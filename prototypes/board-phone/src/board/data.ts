@@ -116,7 +116,7 @@ export const MOCK_FIELDS: Record<number, FieldState> = {
   9: { owner: 2, level: 2 }, 10: { owner: 2, level: 5 }, 13: { owner: 2, level: 3 },
   17: { owner: 3, level: 1 }, 21: { owner: 3, level: 2 }, 22: { owner: 1, level: 1 },
   26: { owner: 2, level: 4 }, 29: { owner: 0, level: 2 }, 31: { owner: 0, level: 1 },
-  4: { owner: 1, level: 0 }, 20: { owner: 3, level: 0 },
+  4: { owner: 1, level: 0 }, 20: { owner: 3, level: 0 }, 28: { owner: 0, level: 0 },
 }
 
 export const fieldState = (id: number): FieldState => MOCK_FIELDS[id] ?? { owner: null, level: 0 }

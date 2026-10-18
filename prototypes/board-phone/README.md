@@ -19,3 +19,15 @@ Open the printed `Network:` URL on a phone on the same Wi-Fi.
 
 The art is v1's (copied from `client/public/images/game`), and the layout is a straight port of v1's
 `calcCoords`. The game state is a static mock.
+
+## `?page=pick`: picking several Fields with the Field card (ticket #15)
+
+Lives on the `prototype/field-selection` branch (built on `prototype/board-phone`, never merged).
+Three pick flows on variant E's camera, each with three scenarios:
+
+- `?v=1` **Toggle on the card**: E unchanged; the card's button adds / removes; ‹ › steps eligible Fields (HUD: or all)
+- `?v=2` **Tap toggles the Board**: no card; taps snap to the nearest *eligible* Field and toggle it; chips in a tray; ⓘ = inspect mode
+- `?v=3` **Checklist in the sheet**: rows of eligible Fields (Sale: cheapest first, Auto-sell's picks badged); rows and Board taps toggle the same pick
+- `?pick=sale|doubler|erasmus` (or the top control). Sale: Rent 1.67M, cash 1.25M, Shortfall 420K; Sell unlocks at ≥ Shortfall.
+- Turn timer 20 s; in the last 5 s the Board rings what Auto-sell would take. `?clock=off` (or the HUD) pauses it.
+- Not pickable Fields are greyed by container tint (no filters). The HUD (top-left pill) shows the full pick state.
