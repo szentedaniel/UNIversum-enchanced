@@ -1,0 +1,135 @@
+# Research: backend runtime & framework
+
+Ticket: #3, part of the map #1 (UNIversum v2 modernization).
+Researched on **2026-10-18**. Everything version-sensitive below is as of that date, checked against the npm registry and each project's own release notes.
+
+## Question
+
+Which server runtime (Node.js LTS, Bun, Deno) and HTTP/WebSocket framework (Hono, Fastify, NestJS, ...) is the strongest 2026 choice for the v2 game server? How should it run TypeScript, validate incoming Player intents (Zod, Valibot, ...) and share types with the client? Which of these choices constrain, or are constrained by, the realtime and hosting options (#2)?
+
+The constraints that matter here (from the map #1 and ADR-0001): the server owns the rules and validates every intent. Target is ~1,000 concurrent Rooms (~4,000 Players), scaling 10× without a rewrite, on managed platforms for ≤ ~50 USD/month. Guests reconnect into running games, and Room state survives deploys.
+
+## Starting point (v1)
+
+`server/` runs Express 4 + Socket.io 4 through `ts-node` 10 with TypeScript 4.6, CommonJS output and `target: es2017` (`server/package.json`, `server/tsconfig.json`). The HTTP surface is nearly empty: everything goes over Socket.io events (`server/index.ts`). That will most likely stay true in v2. **The realtime layer (#2) is the core of the server, and the HTTP framework is a thin outer layer.** This matters more than anything else in the comparison below.
+
+## Options compared
+
+### Runtimes
+
+**Node.js.** Node 24 "Krypton" is Active LTS until 2026-10-20 and then Maintenance LTS until **2028-04-30**. Node 26 was released 2026-05-05, becomes Active LTS on **2026-10-28** and is supported until **2029-04-30**. Node 22 is supported until 2027-04-30, and Node 20 is already EOL ([nodejs/Release schedule.json](https://raw.githubusercontent.com/nodejs/Release/main/schedule.json), [nodejs.org previous releases](https://nodejs.org/en/about/previous-releases)). From Node 27 on, majors ship once a year and every major becomes LTS ([nodejs.org previous releases](https://nodejs.org/en/about/previous-releases)).
+- **Native TypeScript (type stripping)** is on by default since v22.18.0 / v23.6.0 and **Stable** since v24.12.0 / v25.2.0. Node 26 removed `--experimental-transform-types` ([Node TypeScript docs](https://nodejs.org/api/typescript.html), [source changelog](https://raw.githubusercontent.com/nodejs/node/main/doc/api/typescript.md)).
+- Limits of type stripping: no type checking, and `tsconfig.json` is ignored, so `paths` aliases don't work (use `#` subpath imports). Imports must use `.ts` extensions. Syntax that needs code generation is rejected: **enums, namespaces with runtime code, parameter properties, import aliases and decorators**. TypeScript files under `node_modules` are refused (same source).
+- No built-in WebSocket *server*. Node ships only a global `WebSocket` client, so a server needs `ws`, Socket.io, uWebSockets.js etc. ([Node http docs](https://nodejs.org/api/http.html)).
+- This is the reference runtime for every library in play: Socket.io, Colyseus (`engines: node >= 22`), Fastify, NestJS (`node >= 20`), `@hono/node-server` (`node >= 20`) (npm registry metadata, 2026-10-18).
+
+**Bun.** Latest is **v1.4.3** (2026-10-10). Bun 1.4 (2026-08-20) is the first release where "Bun is now written in Rust" (rewritten from Zig). It also added 1,517 Node test-suite tests and cut idle CPU 5× ([Bun 1.4 post](https://bun.com/blog/bun-v1.4), [releases](https://github.com/oven-sh/bun/releases)).
+- `node:http` is marked "fully implemented", with caveats (`http.Server` does not extend `net.Server`). `node:cluster` and `node:worker_threads` are partial. Bun treats any Node incompatibility as a bug ([Bun Node compat](https://bun.com/docs/runtime/nodejs-compat)).
+- Socket.io has an official Bun engine, `@socket.io/bun-engine`, announced 2025-08-22, currently at **v0.1.2**. It works with the existing Socket.io adapters, including Redis ([Socket.io blog](https://socket.io/blog/bun-engine/), npm registry). Colyseus lists a Bun WebSocket transport and `bun create colyseus-app` ([Colyseus docs](https://docs.colyseus.io/)).
+- Risk: the Rust rewrite is two months old in production releases, and the Socket.io engine is pre-1.0.
+
+**Deno.** Latest is **v2.9.7** (2026-09-16) ([releases](https://github.com/denoland/deno/releases)). "Most Node.js code runs in Deno without modification". It uses `npm:` specifiers or `package.json`, and over 75% of Node's own test suite passes as of 2.8 ([Deno Node docs](https://docs.deno.com/runtime/fundamentals/node/)). `deno run` strips types without checking them, and `--check` opts in ([Deno TS docs](https://docs.deno.com/runtime/fundamentals/typescript/)). Socket.io announced a Deno server in 2022 ([Socket.io blog](https://socket.io/blog/)), but its current server-initialization guide shows no Deno example ([Socket.io server init](https://socket.io/docs/v4/server-initialization/)). The Colyseus docs don't mention Deno ([Colyseus docs](https://docs.colyseus.io/)). Deno Deploy went GA on 2026-02-03 ([Deno blog](https://deno.com/blog)).
+
+### HTTP / WebSocket frameworks
+
+**Hono 4.13.13** (`next`: 5.0.0-rc.1, 2026-10-10) is built on Web Standards. It runs on Cloudflare Workers, Deno, Bun, Node (via an adapter), Vercel, Lambda and others ([Hono docs](https://hono.dev/docs/)). Its WebSocket helper has an adapter per runtime: `@hono/cloudflare-workers`, `@hono/deno`, `@hono/bun` and `@hono/node-server`. The Node adapter needs `ws`, and `@hono/node-ws` is now deprecated ([Hono WebSocket helper](https://hono.dev/docs/helpers/websocket)). RPC mode (`hc<AppType>`) shares route types with the client and accepts Zod or any Standard Schema validator. It requires `strict: true` on both sides and the same Hono version on server and client ([Hono RPC](https://hono.dev/docs/guides/rpc)). Socket.io documents both Hono + `@hono/node-server` and Hono + Bun integrations ([Socket.io server init](https://socket.io/docs/v4/server-initialization/)).
+
+**Fastify 5.12.7** (`next`: 6.0.0-alpha.5). v5 supports Node **20, 22, 24, 26**, and v6 will support Node 24 and 26 only. CI runs only on Node 24, and Bun and Deno are not on the support matrix ([Fastify LTS](https://raw.githubusercontent.com/fastify/fastify/main/docs/Reference/LTS.md)). Socket.io documents a plain Fastify integration ([Socket.io server init](https://socket.io/docs/v4/server-initialization/)). Fastify is Node-only, mature and fast, but most of what it offers (JSON-schema routes, serialization, plugins) goes unused when nearly all traffic is socket events.
+
+**NestJS 12.1.3** (12.0.0 released 2026-08-27). Packages are now ESM. It has first-class Standard Schema validation (Zod, Valibot, ArkType) and requires Node v20.19+ / v22.12+ ([v12.0.0 release](https://github.com/nestjs/nest/releases/tag/v12.0.0)). Gateways support socket.io and ws out of the box ([Nest gateways](https://docs.nestjs.com/websockets/gateways)). Scaling uses a `RedisIoAdapter`, and "Redis alone is not enough": you also need sticky sessions or websocket-only transport ([Nest adapter](https://docs.nestjs.com/websockets/adapter)). Its DI is built on legacy decorators: the official starter still sets `experimentalDecorators` and `emitDecoratorMetadata` ([nestjs/typescript-starter tsconfig](https://raw.githubusercontent.com/nestjs/typescript-starter/master/tsconfig.json)). Node's type stripping rejects decorators ([Node TypeScript docs](https://nodejs.org/api/typescript.html)), so **Nest always needs a compile step** (`nest build` / SWC).
+
+**Express 5.3.0** (the v1 baseline, `node >= 18`) is still maintained and is a peer option for Colyseus (`@colyseus/core` peer `express ^4 || ^5`, optional) (npm registry). It has nothing that Hono or Fastify lacks for this use, and it is not portable to Workers.
+
+**Colyseus 0.18.9** is not an HTTP framework, but it *replaces* one if #2 picks it. It is an authoritative Room framework with state sync, matchmaking and `allowReconnection()`, and it validates messages via `validate(zodSchema, handler)`. Messages that fail validation disconnect the client with code 4002 ([Colyseus Room docs](https://docs.colyseus.io/room)). `@colyseus/core` has an optional peer dependency on `zod ^4.1.12` and depends on `@standard-schema/spec` (npm registry, 2026-10-18).
+
+Elysia (Bun-only) and uWebSockets.js (a Socket.io transport option, not on npm) were not pursued: they bind the choice to a single runtime or transport.
+
+### TypeScript execution
+
+| Approach | Notes |
+|---|---|
+| Node type stripping (`node src/main.ts`) | No build step in dev or prod. You must write erasable-only TS. Recommended tsconfig: `noEmit`, `module: nodenext`, `rewriteRelativeImportExtensions`, `erasableSyntaxOnly`, `verbatimModuleSyntax` ([Node TypeScript docs](https://nodejs.org/api/typescript.html)). `erasableSyntaxOnly` was introduced in TS 5.8 ([TS 5.8](https://devblogs.microsoft.com/typescript/announcing-typescript-5-8/)). |
+| `tsx` 4.23.15 | Full TS syntax and `tsconfig` support. The Node docs use it as their example for full support ([Node TypeScript docs](https://nodejs.org/api/typescript.html)). |
+| Compile with `tsc` / bundler, run JS | Needed for decorators (Nest). Gives the most startup control. |
+| `ts-node` (v1 today) | Drop it. Node's native support and `tsx` make it redundant. |
+
+Type checking is always a separate step: run `tsc --noEmit` in CI and the editor. **TypeScript 7.0** (2026-07-08, latest 7.0.2) is the Go-native compiler: 8–12× faster full builds, `strict` on by default, `types` defaults to `[]`, and `es5`, `node10` resolution and `baseUrl` were removed. It "does not yet ship with an API", and a stable API is expected in 7.1, so tools that depend on the TS API use the `@typescript/typescript6` compatibility package ([TS 7.0 announcement](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/)). v1's `module: commonjs` + `es2017` tsconfig would need rewriting anyway.
+
+### Intent validation
+
+| Library | Version | Notes |
+|---|---|---|
+| **Zod 4** | 4.6.7 | 6.5–14× faster parsing than Zod 3, core 5.36 kB gz, and `zod/mini` 1.88 kB gz. First-party `z.toJSONSchema()` ([Zod 4](https://zod.dev/v4)). Implements Standard Schema (the `~standard` property is in `v4/core/schemas.js`). It is the library behind Colyseus's `validate()`. |
+| **Valibot** | 1.5.0 | Modular, tree-shakable. Starts under 700 B, and the docs claim up to 95% smaller bundles than Zod ([Valibot intro](https://valibot.dev/guides/introduction/)). Implements Standard Schema (`~standard` in `dist/index.mjs`). |
+| ArkType | 2.2.8 | Standard Schema compatible and named by Nest 12 ([v12.0.0 release](https://github.com/nestjs/nest/releases/tag/v12.0.0)). Not evaluated further. |
+
+**Standard Schema** (`@standard-schema/spec` 1.1.0) is a shared interface that lets a tool take any compliant schema without adapters ([spec README](https://raw.githubusercontent.com/standard-schema/standard-schema/main/packages/spec/README.md)). Hono ([RPC docs](https://hono.dev/docs/guides/rpc)) and Nest 12 accept it. Socket.io's typed events are compile-time only: "These type hints do not replace proper validation/sanitization of the input" ([Socket.io TypeScript](https://socket.io/docs/v4/typescript/)). So with Socket.io, the server must validate each event payload itself.
+
+On the server, bundle size doesn't matter. It matters only if the intent schemas are also imported by the client, for example to disable illegal moves in the UI.
+
+### Sharing types with the client
+
+- **Workspace package:** npm workspaces ([npm docs](https://docs.npmjs.com/cli/v11/using-npm/workspaces)) or pnpm workspaces ([pnpm docs](https://pnpm.io/workspaces)), plus TypeScript project references ([TS handbook](https://www.typescriptlang.org/docs/handbook/project-references.html)). Hono's docs recommend project references for RPC types in a monorepo ([Hono RPC](https://hono.dev/docs/guides/rpc)).
+- **What goes in it:** a `protocol` package holding the intent schemas, the inferred intent types, the game-state / view types and the event maps. Socket.io's `ServerToClientEvents` / `ClientToServerEvents` can be reused on the client with the directions swapped ([Socket.io TypeScript](https://socket.io/docs/v4/typescript/)). Colyseus instead shares the state schema with its SDK ([Colyseus docs](https://docs.colyseus.io/)).
+- **Type-stripping caveat:** Node refuses `.ts` under `node_modules` ([Node TypeScript docs](https://nodejs.org/api/typescript.html)). Workspace packages are symlinked into `node_modules`, but by default Node dereferences symlinks and uses the real on-disk path ([Node CLI `--preserve-symlinks`](https://nodejs.org/api/cli.html#--preserve-symlinks)). So a TS-source workspace package *should* load. This needs a 10-minute spike before it is relied on.
+
+## Comparison table
+
+Scores: ++ strong, + fine, 0 neutral, − weak, −− blocking.
+
+| | Node 26 LTS + Hono | Node 26 LTS + Fastify | Node + NestJS 12 | Bun 1.4 + Hono | Deno 2.9 + Hono |
+|---|---|---|---|---|---|
+| Support horizon | ++ LTS to 2029-04 | ++ | ++ | 0 (no LTS policy) | 0 |
+| Production maturity (2026-10) | ++ | ++ | ++ | − (Rust rewrite, Aug 2026) | + |
+| Socket.io support | ++ documented | ++ documented | ++ built-in gateways | + `@socket.io/bun-engine` 0.1.x | − no current guide |
+| Colyseus support | ++ (Colyseus brings its own server) | + | − (two frameworks) | + Bun transport | −− not documented |
+| Portability to Cloudflare Workers / DO | ++ same Hono app code | −− Node-only | −− | ++ | ++ |
+| Run TS without a build | ++ type stripping | ++ | −− decorators need compile | ++ | ++ |
+| Fit for a socket-first server | ++ minimal | + (mostly unused features) | − (heavy DI for a small surface) | ++ | + |
+| Managed-hosting availability | ++ every PaaS | ++ | ++ | + | + (Deno Deploy, containers) |
+
+## Recommendation
+
+1. **Runtime: Node.js 26 LTS** (Active LTS from 2026-10-28, supported to 2029-04-30). Use Node 24 LTS only if work starts before 2026-10-28. Every candidate from #2 (Socket.io + Redis/Valkey, Colyseus) treats Node as its reference runtime. Bun is attractive but too recently rewritten to be the production runtime of a public launch. Revisit it after a few 1.4.x/1.5 releases, or for tooling only.
+2. **TypeScript: run `.ts` directly with Node's native type stripping**, with `erasableSyntaxOnly` + `verbatimModuleSyntax` + `rewriteRelativeImportExtensions`. Type-check with **TypeScript 7** `tsc --noEmit` in CI. No enums, parameter properties or decorators: use `as const` objects and string-literal unions instead. Fall back to `tsx` only if a dependency forces non-erasable syntax.
+3. **HTTP framework: Hono on `@hono/node-server`**, kept deliberately thin: health check, room-code lookup if needed, static assets. Hono is the only candidate whose app code also runs unchanged on Workers/Durable Objects, Bun and Deno, so it keeps #2's options open. Socket.io officially documents mounting next to it. **If #2 picks Colyseus, drop the separate framework** and use Colyseus's own server, with Express only if its tooling needs it. Fastify is a sound runner-up for a Node-only, HTTP-heavy server, but this server is neither. NestJS is ruled out: it is heavyweight for the surface, and its decorator DI forces a build step.
+4. **Validation: Zod 4**, called at the single entry point where a Player intent reaches the rules. Reasons: it is what Colyseus's `validate()` takes, it is the most widely accepted library, and `zod/mini` keeps the client cost low (1.88 kB gz) if the client imports the schemas. Write that entry point against the **Standard Schema** interface, not Zod's API, so that switching to Valibot later is local.
+5. **Type sharing: one workspace `protocol` package** (npm or pnpm workspaces + project references) holding the intent schemas, inferred types, view-state types and the realtime event map. The server (type stripping) and the client (Vite) both consume it as TS source. Check the symlink behaviour noted above first.
+
+**Trade-offs accepted:** we stay on the most conservative runtime and give up Bun's speed and single-binary tooling for now. Type stripping forbids some TS syntax. Hono's RPC client is barely used, because the protocol is socket events rather than HTTP routes. Zod is a few kB heavier than Valibot on the client.
+
+## Interactions with realtime / hosting (#2)
+
+| If #2 picks... | Effect on this ticket |
+|---|---|
+| **Socket.io + Redis/Valkey adapter** on a container PaaS | Fits the recommendation exactly: Node 26 + Hono + Socket.io (+ `@socket.io/redis-adapter` / Redis Streams). Socket.io types are compile-time only, so Zod validation at the intent entry point is mandatory. Connection-state recovery works with the in-memory and Redis Streams adapters but **not** the classic Redis adapter ([Socket.io CSR](https://socket.io/docs/v4/connection-state-recovery)), which steers the adapter choice. Multi-instance needs sticky sessions or websocket-only transport ([Nest adapter docs](https://docs.nestjs.com/websockets/adapter)). That is a hosting requirement. |
+| **Colyseus** | The runtime stays Node (≥ 22) or Bun. Colyseus replaces the HTTP/WS framework and the event-map style of type sharing (it shares a state schema instead). Zod becomes effectively required (its `validate()` helper). Game rules must fit Colyseus's Room lifecycle. |
+| **Cloudflare Durable Objects / PartyServer** | The runtime becomes **workerd, not Node**: the Node LTS and type-stripping points become moot (Wrangler bundles the TS). Socket.io is out: Workers' `node:http` does not support the `'upgrade'` event ([Workers node:http](https://developers.cloudflare.com/workers/runtime-apis/nodejs/http/)). WebSockets go through the DO Hibernation API, where in-memory state is reset on hibernation, so Room state must live in DO storage or socket attachments (≤ 16 KiB) ([DO WebSockets](https://developers.cloudflare.com/durable-objects/best-practices/websockets/)). Hono (with `@hono/cloudflare-workers`) and Zod/Valibot carry over unchanged. This is the main reason to prefer Hono over Fastify now. |
+| Hosting platform's runtime support | Container PaaS: any runtime. Deno Deploy: Deno only. Workers: workerd only. Choosing a runtime-specific platform locks the runtime decision. |
+
+## Open questions for the grilling ticket
+
+1. Does #2's choice keep us on Node? If it is Durable Objects, re-run points 1–2 for workerd. If it is Colyseus, confirm dropping Hono.
+2. Will the client import the intent schemas (for UI hints / disabling illegal moves), or only the types? This decides whether client bundle size, Zod vs `zod/mini` vs Valibot, matters at all.
+3. Monorepo tool: npm workspaces (zero new tooling) or pnpm (stricter, faster)? And does the client move to Vite in the same restructure? (That belongs to the frontend ticket, but it shapes the `protocol` package.)
+4. Is giving up enums / parameter properties / decorators acceptable as a house style, in exchange for build-free `.ts` on Node?
+5. Is Bun acceptable as a dev-only tool (test runner, package manager) while Node runs production, or should we keep a single toolchain?
+6. Where does the game clock (the Room's minute limit) live, given the runtime's timer behaviour? Relevant if DO hibernation is chosen (alarms instead of `setTimeout`).
+
+## Sources
+
+- Node.js release schedule: https://raw.githubusercontent.com/nodejs/Release/main/schedule.json, https://nodejs.org/en/about/previous-releases
+- Node.js TypeScript docs: https://nodejs.org/api/typescript.html (source with changelog: https://raw.githubusercontent.com/nodejs/node/main/doc/api/typescript.md)
+- Node.js http docs: https://nodejs.org/api/http.html; CLI `--preserve-symlinks`: https://nodejs.org/api/cli.html#--preserve-symlinks
+- Bun 1.4: https://bun.com/blog/bun-v1.4; releases: https://github.com/oven-sh/bun/releases; Node compat: https://bun.com/docs/runtime/nodejs-compat
+- Deno releases: https://github.com/denoland/deno/releases; Node compat: https://docs.deno.com/runtime/fundamentals/node/; TypeScript: https://docs.deno.com/runtime/fundamentals/typescript/; blog: https://deno.com/blog
+- Socket.io: server init https://socket.io/docs/v4/server-initialization/, TypeScript https://socket.io/docs/v4/typescript/, Bun engine https://socket.io/blog/bun-engine/, connection state recovery https://socket.io/docs/v4/connection-state-recovery, blog https://socket.io/blog/
+- Hono: https://hono.dev/docs/, WebSocket helper https://hono.dev/docs/helpers/websocket, RPC https://hono.dev/docs/guides/rpc
+- Fastify LTS: https://raw.githubusercontent.com/fastify/fastify/main/docs/Reference/LTS.md
+- NestJS: v12.0.0 release https://github.com/nestjs/nest/releases/tag/v12.0.0, gateways https://docs.nestjs.com/websockets/gateways, adapters https://docs.nestjs.com/websockets/adapter, starter tsconfig https://raw.githubusercontent.com/nestjs/typescript-starter/master/tsconfig.json
+- Colyseus: https://docs.colyseus.io/, Room https://docs.colyseus.io/room
+- TypeScript 7.0: https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/; TS 5.8: https://devblogs.microsoft.com/typescript/announcing-typescript-5-8/; project references: https://www.typescriptlang.org/docs/handbook/project-references.html
+- Zod 4: https://zod.dev/v4; Valibot: https://valibot.dev/guides/introduction/; Standard Schema: https://raw.githubusercontent.com/standard-schema/standard-schema/main/packages/spec/README.md
+- npm workspaces: https://docs.npmjs.com/cli/v11/using-npm/workspaces; pnpm workspaces: https://pnpm.io/workspaces
+- Cloudflare: Workers node:http https://developers.cloudflare.com/workers/runtime-apis/nodejs/http/, DO WebSockets https://developers.cloudflare.com/durable-objects/best-practices/websockets/
+- Package versions, release dates, `engines` and peer dependencies: npm registry (`https://registry.npmjs.org/<pkg>`), queried 2026-10-18.
