@@ -31,3 +31,28 @@ Three pick flows on variant E's camera, each with three scenarios:
 - `?pick=sale|doubler|erasmus` (or the top control). Sale: Rent 1.67M, cash 1.25M, Shortfall 420K; Sell unlocks at ≥ Shortfall.
 - Turn timer 20 s; in the last 5 s the Board rings what Auto-sell would take. `?clock=off` (or the HUD) pauses it.
 - Not pickable Fields are greyed by container tint (no filters). The HUD (top-left pill) shows the full pick state.
+
+## `/ui.html`: UI visual direction (ticket #16)
+
+Lives on the `prototype/ui-direction` branch (built on `prototype/field-selection`, never merged).
+
+```sh
+cd prototypes/board-phone && npm install && npm run ui
+```
+
+Three directions, each with its own layout (not only colours) on the same mock state, in Tailwind v4 with
+shadcn-style tokens (`src/ui/ui.css`) and Player colours in `src/ui/dirs.ts`:
+
+- `?dir=a` **Yearbook**: paper, ink, a serif (Fraunces + Public Sans). Catalogue table, seminar-table Lobby, Board + ruled side ledger, diploma result.
+- `?dir=b` **Tabletop**: v1's sunset purple + cream, sticker cards (Sigmar One + Nunito). Tiles, big Seat cards, Players in the four corners like v1, podium.
+- `?dir=c` **Campus HUD**: neutral glass over a full-bleed Board (Inter + Geist Mono). Command-palette list, form Lobby, corner HUD clusters, data-table result.
+
+The bottom bar (or ← →) switches direction, and its menus set:
+
+- `?screen=list|lobby|game|sale|result|tokens`. `sale` is the #15 Sale pick (tap toggles; the tray holds chips, the Shortfall meter, Auto-sell, Sell and the checklist). `tokens` shows the tokens in light + dark, WCAG contrast and the Player colours under CVD simulation.
+- `?theme=light|dark` (default: the OS setting), `?lang=en|hu|de` (key strings only, to check text length)
+- `?cvd=protan|deutan|tritan|achroma` (SVG colour-matrix filter over the whole page, the Board canvas included)
+- `?frame=devices|themes` puts phone 390×844 and desktop 1440×900 side by side, or desktop light and dark.
+
+The Board renderer now takes a direction's Player colours (baked houses), ring colours and a badge over each pawn
+(Seat number / shape / initial).

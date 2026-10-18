@@ -187,7 +187,7 @@ export function useZoomPan(r: BoardRenderer | null, onTap: (x: number, y: number
       <button className={follow ? 'on' : ''} onClick={toFollow}>follow</button>
     </div>
   )
-  return { buttons, panTo }
+  return { buttons, panTo, zoom, toFit, toFollow, follow }
 }
 
 export function VariantB({ options, setOptions }: VariantProps) {

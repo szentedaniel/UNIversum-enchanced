@@ -20,6 +20,12 @@ export interface RenderOptions {
   walking: boolean
   continuous: boolean
   resolution: number
+  /** ?page=ui (ticket #16): a direction's Player palette for owned houses (default v1's). */
+  playerColors?: number[]
+  /** selected / picked / Auto-sell ring colours */
+  rings?: { sel: number; picked: number; auto: number }
+  /** a badge over each pawn (Seat number, shape or initial) so Players don't rely on colour alone */
+  badges?: { text: string[]; fill: number[]; ink: number[] } | null
 }
 
 export interface Camera { scale: number; x: number; y: number }
@@ -158,9 +164,13 @@ export async function createBoardRenderer(host: HTMLElement, initial: RenderOpti
   const bakedLabel: Record<number, Texture> = {}
   for (const [g, col] of Object.entries(GROUP_COLORS)) bakedLabel[+g] = bake(tex.label_bg, 0xc2beac, col, 0.095)
   const bakedHouse: Record<string, Texture> = {}
-  PLAYER_COLORS.forEach((col, i) => {
-    for (const part of ['haz_alap', 'haz_resz', 'haz_teto']) bakedHouse[`${part}_${i}`] = bake(tex[part], 0x8ab549, col, 1)
-  })
+  const pcol = () => opts.playerColors ?? PLAYER_COLORS
+  const bakeHouses = () => {
+    pcol().forEach((col, i) => {
+      for (const part of ['haz_alap', 'haz_resz', 'haz_teto']) bakedHouse[`${part}_${i}`] = bake(tex[part], 0x8ab549, col, 1)
+    })
+  }
+  bakeHouses()
 
   const world = new Container()
   const board = new Container({ sortableChildren: true })
@@ -184,7 +194,7 @@ export async function createBoardRenderer(host: HTMLElement, initial: RenderOpti
     return f
   }
   const ownerFilter = (owner: number) => {
-    const f = new ColorReplaceFilter({ originalColor: 0x8ab549, targetColor: PLAYER_COLORS[owner], tolerance: 1 })
+    const f = new ColorReplaceFilter({ originalColor: 0x8ab549, targetColor: pcol()[owner], tolerance: 1 })
     filterPool.push(f)
     return f
   }
@@ -216,7 +226,7 @@ export async function createBoardRenderer(host: HTMLElement, initial: RenderOpti
       const s = new Sprite({ texture: tex[part], anchor: 0.5, y })
       s.scale.set(flip ? 1 : -1, 1)
       if (opts.recolor === 'baked') s.texture = bakedHouse[`${part}_${owner}`]
-      else if (opts.recolor === 'tint') s.tint = PLAYER_COLORS[owner]
+      else if (opts.recolor === 'tint') s.tint = pcol()[owner]
       else s.filters = [ownerFilter(owner)]
       c.addChild(s)
     }
@@ -280,7 +290,7 @@ export async function createBoardRenderer(host: HTMLElement, initial: RenderOpti
       if (def.kind === 'museum') {
         const s = new Sprite({ texture: tex.museum, anchor: 0.5, x: W / 3, y: -H * 1.27, zIndex: 3, scale: 0.26 })
         if (st.owner !== null) {
-          if (opts.recolor === 'tint') s.tint = PLAYER_COLORS[st.owner]
+          if (opts.recolor === 'tint') s.tint = pcol()[st.owner]
           else if (opts.recolor === 'filters') s.filters = [ownerFilter(st.owner)]
         }
         c.addChild(s)
@@ -326,6 +336,12 @@ export async function createBoardRenderer(host: HTMLElement, initial: RenderOpti
     players = MOCK_PLAYERS.map((p, i) => {
       const s = new Sprite({ texture: tex[PLAYER_SPRITES[p.color]], anchor: { x: 0.5, y: 0.7 }, zIndex: 1000, alpha: i === 0 ? 1 : 0.7 })
       board.addChild(s)
+      if (opts.badges) {
+        const b = new Container({ y: -s.texture.height * 0.7 - 16 })
+        b.addChild(new Graphics().circle(0, 0, 13).fill(opts.badges.fill[i]).stroke({ width: 3, color: 0x1a1624 }))
+        b.addChild(new Text({ text: opts.badges.text[i], anchor: 0.5, style: { fontFamily: 'Arial', fontWeight: 'bold', fontSize: 16, fill: opts.badges.ink[i] } }))
+        s.addChild(b)
+      }
       return s
     })
     players.forEach((_, i) => placePlayer(i, calcCoords(playerFields[i])))
@@ -352,9 +368,10 @@ export async function createBoardRenderer(host: HTMLElement, initial: RenderOpti
         // constant ~3 screen px whatever the zoom
         const w = 3 / (cam.scale * G.scale)
         const g = f.outline.clear().poly(f.hullPts)
-        if (m === 'picked') g.fill({ color: 0x5fd38d, alpha: 0.45 })
+        const rc = opts.rings ?? { sel: 0xffe14d, picked: 0x5fd38d, auto: 0xff9a3c }
+        if (m === 'picked') g.fill({ color: rc.picked, alpha: 0.45 })
         else if (on) g.fill({ color: 0xffffff, alpha: 0.3 })
-        g.stroke({ width: m === 'auto' && !on ? w * 0.8 : w, color: on ? 0xffe14d : m === 'picked' ? 0x5fd38d : 0xff9a3c })
+        g.stroke({ width: m === 'auto' && !on ? w * 0.8 : w, color: on ? rc.sel : m === 'picked' ? rc.picked : rc.auto })
       }
       const lift = on || m === 'picked'
       f.c.y = f.baseY - (lift ? 15 : 0)
@@ -475,10 +492,14 @@ export async function createBoardRenderer(host: HTMLElement, initial: RenderOpti
     setSelected(id) { selected = id; applySelected() },
     setMarks(m) { marks = m; applySelected() },
     setOptions(o) {
+      const same = (k: 'playerColors' | 'badges' | 'rings') => o[k] === undefined || JSON.stringify(o[k]) === JSON.stringify(opts[k])
+      const recolorHouses = !same('playerColors')
       const rebuild = (o.recolor !== undefined && o.recolor !== opts.recolor) || (o.labels !== undefined && o.labels !== opts.labels)
+        || recolorHouses || !same('badges') || !same('rings')
       const resChanged = o.resolution !== undefined && o.resolution !== opts.resolution
       opts = { ...opts, ...o }
       if (resChanged) app.renderer.resize(host.clientWidth, host.clientHeight, opts.resolution)
+      if (recolorHouses) bakeHouses()
       if (rebuild) build()
       if (resChanged) applyCamera()
       dirty = true

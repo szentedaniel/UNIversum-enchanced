@@ -3,21 +3,34 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "PROTOTYPE, throwaway: isometric Board on a phone (map ticket #14). Never merged into main.",
+  "description": "PROTOTYPE, throwaway: isometric Board on a phone (#14), Field picking (#15), UI visual direction (#16). Never merged into main.",
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "ui": "vite --host --open /ui.html"
   },
   "dependencies": {
+    "@fontsource-variable/fraunces": "5.3.0",
+    "@fontsource-variable/geist-mono": "5.3.0",
+    "@fontsource-variable/inter": "5.3.0",
+    "@fontsource-variable/nunito": "5.3.0",
+    "@fontsource-variable/public-sans": "5.3.0",
+    "@fontsource/sigmar-one": "5.3.0",
     "@pixi/react": "8.0.5",
+    "@tailwindcss/vite": "4.3.3",
+    "lucide-react": "1.59.0",
     "pixi-filters": "6.1.5",
     "pixi.js": "8.22.0",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "tailwindcss": "4.3.3"
   },
   "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
+    "typescript": "7.0.2",
     "vite": "8.3.4"
   }
 }

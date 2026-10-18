@@ -1,0 +1,169 @@
+/* PROTOTYPE, throwaway: UI visual direction (map ticket #16).
+   Three directions as shadcn-style tokens ([data-dir] × [data-theme]); the Tailwind classes are the same
+   names v2 would use (bg-background, text-muted-foreground, bg-card, border-border, …). */
+@import 'tailwindcss';
+@import '@fontsource-variable/fraunces';
+@import '@fontsource-variable/public-sans';
+@import '@fontsource/sigmar-one';
+@import '@fontsource-variable/nunito';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/geist-mono';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  /* --p1…--p4 (Player colours) are set inline from dirs.ts, the one source for both CSS and the Board */
+  --color-p1: var(--p1);
+  --color-p2: var(--p2);
+  --color-p3: var(--p3);
+  --color-p4: var(--p4);
+  --font-display: var(--font-display-v);
+  --font-body: var(--font-body-v);
+  --font-num: var(--font-num-v);
+  --radius-ui: var(--radius);
+}
+
+/* ---------------- A · Yearbook: paper, ink, serif, ruled ledger ---------------- */
+[data-dir='a'] {
+  --background: #f3ede2; --foreground: #1d2540;
+  --card: #fbf8f2; --card-foreground: #1d2540;
+  --primary: #8a1f2d; --primary-foreground: #fbf8f2;
+  --secondary: #e7dfd0; --secondary-foreground: #1d2540;
+  --muted: #ebe4d6; --muted-foreground: #5f6478;
+  --accent: #b5852a; --accent-foreground: #1d2540;
+  --border: #d3c7b1; --ring: #8a1f2d;
+  --success: #2f6b3a; --warning: #a8651a; --danger: #a3222e;
+  --board-bg: #ece4d4;
+  --board-pattern: linear-gradient(#1d254010 1px, transparent 1px), linear-gradient(90deg, #1d254010 1px, transparent 1px);
+  --radius: 4px;
+  --font-display-v: 'Fraunces Variable', Georgia, serif;
+  --font-body-v: 'Public Sans Variable', system-ui, sans-serif;
+  --font-num-v: 'Public Sans Variable', system-ui, sans-serif;
+}
+[data-dir='a'][data-theme='dark'] {
+  --background: #15171f; --foreground: #ebe4d6;
+  --card: #1e212c; --card-foreground: #ebe4d6;
+  --primary: #e4707d; --primary-foreground: #15171f;
+  --secondary: #272b38; --secondary-foreground: #ebe4d6;
+  --muted: #232633; --muted-foreground: #a39e93;
+  --accent: #d8b25e; --accent-foreground: #15171f;
+  --border: #363a4b; --ring: #e4707d;
+  --success: #74c58a; --warning: #e6a35a; --danger: #ef7a84;
+  --board-bg: #11131a;
+  --board-pattern: linear-gradient(#ebe4d60b 1px, transparent 1px), linear-gradient(90deg, #ebe4d60b 1px, transparent 1px);
+}
+
+/* ---------------- B · Tabletop: v1's sunset purple + cream, chunky stickers ---------------- */
+[data-dir='b'] {
+  --background: #ffe8cc; --foreground: #2b2238;
+  --card: #fffaf3; --card-foreground: #2b2238;
+  --primary: #ff7a1a; --primary-foreground: #2b2238;
+  --secondary: #ffd3a1; --secondary-foreground: #2b2238;
+  --muted: #ffdcb5; --muted-foreground: #7a5a6a;
+  --accent: #2bb59a; --accent-foreground: #2b2238;
+  --border: #2b2238; --ring: #ff7a1a;
+  --success: #1f9d6e; --warning: #e0790b; --danger: #d6334a;
+  --board-bg: radial-gradient(ellipse at 50% 40%, #fff6ea, #ffd3a1 75%);
+  --board-pattern: none;
+  --radius: 18px;
+  --font-display-v: 'Sigmar One', 'Nunito Variable', sans-serif;
+  --font-body-v: 'Nunito Variable', system-ui, sans-serif;
+  --font-num-v: 'Nunito Variable', system-ui, sans-serif;
+}
+[data-dir='b'][data-theme='dark'] {
+  --background: #262335; --foreground: #fff3e4;
+  --card: #f5ece3; --card-foreground: #2b2238;
+  --primary: #ff9f43; --primary-foreground: #2b2238;
+  --secondary: #3b2f44; --secondary-foreground: #ffe3c4;
+  --muted: #3b2f44; --muted-foreground: #c7b3c9;
+  --accent: #7ee0c3; --accent-foreground: #2b2238;
+  --border: #14111c; --ring: #ffbb6c;
+  --success: #5fd38d; --warning: #ffb547; --danger: #ff6b6b;
+  --board-bg: radial-gradient(ellipse at 50% 40%, #6a4a62, #262335 72%);
+}
+
+/* ---------------- C · Campus HUD: neutral, glass, the Board is the hero ---------------- */
+[data-dir='c'] {
+  --background: #f4f5f7; --foreground: #0f1218;
+  --card: #ffffffd6; --card-foreground: #0f1218;
+  --primary: #3b5bfd; --primary-foreground: #ffffff;
+  --secondary: #e8eaef; --secondary-foreground: #0f1218;
+  --muted: #eceef2; --muted-foreground: #5b6272;
+  --accent: #e8eaef; --accent-foreground: #0f1218;
+  --border: #dde0e6; --ring: #3b5bfd;
+  --success: #15803d; --warning: #b45309; --danger: #dc2626;
+  --board-bg: #eef0f3;
+  --board-pattern: radial-gradient(#0f121822 1px, transparent 1.2px);
+  --radius: 12px;
+  --font-display-v: 'Inter Variable', system-ui, sans-serif;
+  --font-body-v: 'Inter Variable', system-ui, sans-serif;
+  --font-num-v: 'Geist Mono Variable', ui-monospace, monospace;
+}
+[data-dir='c'][data-theme='dark'] {
+  --background: #0b0d12; --foreground: #e8eaf0;
+  --card: #161921cc; --card-foreground: #e8eaf0;
+  --primary: #7c93ff; --primary-foreground: #0b0d12;
+  --secondary: #1b1f29; --secondary-foreground: #e8eaf0;
+  --muted: #171a22; --muted-foreground: #8b93a7;
+  --accent: #1b1f29; --accent-foreground: #e8eaf0;
+  --border: #262b36; --ring: #7c93ff;
+  --success: #4ade80; --warning: #fbbf24; --danger: #f87171;
+  --board-bg: #0e1117;
+  --board-pattern: radial-gradient(#ffffff14 1px, transparent 1.2px);
+}
+
+html, body, #root { margin: 0; height: 100%; }
+body {
+  background: var(--background); color: var(--foreground); font-family: var(--font-body-v);
+  -webkit-tap-highlight-color: transparent; overscroll-behavior: none;
+}
+.tnum { font-variant-numeric: tabular-nums; }
+.board-backdrop { background: var(--board-pattern), var(--board-bg); background-size: 28px 28px, auto; }
+[data-dir='c'] .board-backdrop { background-size: 18px 18px, auto; }
+/* B's sticker look */
+.sticker { border: 3px solid var(--border); box-shadow: 4px 4px 0 var(--border); }
+.sticker-sm { border: 2.5px solid var(--border); box-shadow: 2px 2px 0 var(--border); }
+.press:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--border); }
+/* C's glass */
+.glass { background: var(--card); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); border: 1px solid var(--border); }
+/* A's rules */
+.ruled > * + * { border-top: 1px solid var(--border); }
+.smallcaps { font-variant-caps: all-small-caps; letter-spacing: 0.06em; }
+.pb-bar { padding-bottom: calc(var(--bar, 0px) + env(safe-area-inset-bottom)); }
+.bottom-bar { bottom: calc(var(--bar, 0px) + env(safe-area-inset-bottom)); }
+.scroll-thin { scrollbar-width: thin; }
+@keyframes pop-in { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: none; } }
+.pop-in { animation: pop-in 0.25s ease-out; }
+@keyframes slide-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+.slide-in { animation: slide-in 0.3s ease-out; }
+@keyframes confetti { 0% { transform: translateY(-20vh) rotate(0); } 100% { transform: translateY(110vh) rotate(720deg); } }
+
+/* prototype chrome: never part of a direction */
+.proto-bar {
+  position: fixed; left: 50%; bottom: calc(8px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 100;
+  display: flex; align-items: center; gap: 4px; background: #fff; color: #111; border-radius: 999px; padding: 4px;
+  box-shadow: 0 4px 18px #0008; font: 600 12px/1 system-ui, sans-serif; white-space: nowrap; max-width: calc(100vw - 12px);
+}
+.proto-bar button, .proto-bar select {
+  font: inherit; background: #111; color: #fff; border: none; border-radius: 999px; min-height: 32px; padding: 0 10px; cursor: pointer;
+}
+.proto-bar select { appearance: none; padding: 0 8px; max-width: 110px; }
+.proto-bar .arrow { width: 32px; padding: 0; font-size: 18px; }
+.proto-bar .label { padding: 0 6px; }
