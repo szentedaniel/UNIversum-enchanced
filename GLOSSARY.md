@@ -30,6 +30,24 @@ _Avoid_: Slot
 The public list of Lobbies a Guest can join; Rooms whose game has started are not on it.
 _Avoid_: Room list, server browser
 
+### Play
+
+**Turn**:
+One Player's go, from their roll (or Quarantine choice) until play passes to the next Player.
+_Avoid_: Move, round
+
+**Turn timer**:
+The countdown a Player has to finish their Turn before it ends for them.
+_Avoid_: Turn countdown
+
+**Timeout penalty**:
+The fine a Player pays when their Turn timer runs out.
+_Avoid_: Punishment
+
+**Minute limit**:
+The length of a Room's game, chosen when the Room is created; it is checked at each Turn change, so the game ends after the Turn in progress.
+_Avoid_: Game clock, end time
+
 ### Board
 
 **Board**:
