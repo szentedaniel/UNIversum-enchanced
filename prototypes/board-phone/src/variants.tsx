@@ -74,13 +74,16 @@ function useZoomPan(r: BoardRenderer | null, onTap: (x: number, y: number) => vo
     const clampCam = (c: Camera): Camera => {
       const s = Math.min(maxS(), Math.max(minS(), c.scale))
       const { w, h } = r.boardSize
-      const vw = el.clientWidth, vh = el.clientHeight
       const f = fitCam.current!
-      // board centre in world units, derived from the fit camera
-      const cx = (vw / 2 - f.x) / f.scale, cy = (vh / 2 - f.y) / f.scale
-      const mx = Math.max(0, (w * s - vw) / 2 + vw * 0.25), my = Math.max(0, (h * s - vh) / 2 + vh * 0.25)
-      const x = Math.min(vw / 2 - cx * s + mx, Math.max(vw / 2 - cx * s - mx, c.x))
-      const y = Math.min(vh / 2 - cy * s + my, Math.max(vh / 2 - cy * s - my, c.y))
+      // the fit centres the Board in the fit area (only the part above C's card in portrait E),
+      // so anchor on that area, not on the viewport
+      const a = areaRef.current() ?? { x: 0, y: 0, w: el.clientWidth, h: el.clientHeight }
+      const acx = a.x + a.w / 2, acy = a.y + a.h / 2
+      const bx = (acx - f.x) / f.scale, by = (acy - f.y) / f.scale // Board centre, world units
+      // any Board edge can be dragged as far as the middle of the area
+      const mx = Math.max((w * s) / 2, a.w / 4), my = Math.max((h * s) / 2, a.h / 4)
+      const x = Math.min(acx - bx * s + mx, Math.max(acx - bx * s - mx, c.x))
+      const y = Math.min(acy - by * s + my, Math.max(acy - by * s - my, c.y))
       return { scale: s, x, y }
     }
     const begin = () => {
