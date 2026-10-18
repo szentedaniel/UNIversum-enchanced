@@ -22,6 +22,14 @@ _Avoid_: User (for in-game participants)
 A Player known only by an anonymous identity tied to their browser, with no account behind it.
 _Avoid_: Anonymous user
 
+**Seat**:
+A Player's place in a Room, kept for them while they are disconnected so they can rejoin.
+_Avoid_: Slot
+
+**Lobby list**:
+The public list of Lobbies a Guest can join; Rooms whose game has started are not on it.
+_Avoid_: Room list, server browser
+
 ### Board
 
 **Board**:
