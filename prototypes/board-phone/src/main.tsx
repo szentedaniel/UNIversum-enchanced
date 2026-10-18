@@ -1,12 +1,12 @@
 // PROTOTYPE, throwaway: isometric Board on a phone (map ticket "Prototype: isometric Board on a phone").
-// Four phone layouts of the same Board, switchable via ?variant=A|B|C|D and the bottom bar.
+// Four phone layouts of the same Board, switchable via ?variant=A|B|C|D|E and the bottom bar.
 // ?page=pixi-react opens the @pixi/react binding check. Extra URL flags: ?aa=1 (antialias), ?gpu=webgpu.
 
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { RenderOptions } from './board/renderer'
 import { Switcher, TapTestProvider } from './shared'
-import { VariantA, VariantB, VariantC, VariantD, type VariantProps } from './variants'
+import { VariantA, VariantB, VariantC, VariantD, VariantE, type VariantProps } from './variants'
 import { PixiReactCheck } from './PixiReactCheck'
 import './styles.css'
 
@@ -15,6 +15,7 @@ const VARIANTS: { key: string; name: string; C: (p: VariantProps) => React.React
   { key: 'B', name: 'Zoom & pan', C: VariantB },
   { key: 'C', name: 'Tap-to-inspect', C: VariantC },
   { key: 'D', name: 'Landscape + panel', C: VariantD },
+  { key: 'E', name: 'C + B (chosen)', C: VariantE },
 ]
 
 function App() {

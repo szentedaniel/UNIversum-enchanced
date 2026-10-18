@@ -76,6 +76,8 @@ a { color: #8fb3ff; }
 }
 .cam-buttons button { width: 52px; min-height: 48px; padding: 0; background: #000a; font-size: 15px; }
 .cam-buttons button.on { background: #4a5f99; }
+.cam-buttons.top { top: calc(8px + env(safe-area-inset-top)); bottom: auto; }
+.cam-buttons.top button { min-height: 44px; }
 
 .card {
   position: fixed; left: 8px; right: 8px; bottom: calc(56px + env(safe-area-inset-bottom)); z-index: 30;

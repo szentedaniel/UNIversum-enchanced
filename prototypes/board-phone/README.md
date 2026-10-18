@@ -9,8 +9,8 @@ cd prototypes/board-phone && npm install && npm run dev
 
 Open the printed `Network:` URL on a phone on the same Wi-Fi.
 
-- `?variant=A|B|C|D` (or the bottom bar / arrow keys): A Fit, tap direct · B Zoom & pan ·
-  C Tap-to-inspect · D Landscape + panel
+- `?variant=A|B|C|D|E` (or the bottom bar / arrow keys): A Fit, tap direct · B Zoom & pan ·
+  C Tap-to-inspect · D Landscape + panel · **E = C + B, the chosen layout**
 - HUD (top-left pill): fps, draw calls, on-screen Field width and label size, recolour mode
   (baked / tint / v1 filters), render on demand vs every frame, resolution, and a 10-round tap test
 - `?page=pixi-react`: the same Board through `@pixi/react` 8.0.5 under StrictMode, with remount

@@ -45,23 +45,29 @@ export function VariantA({ options, setOptions }: VariantProps) {
 }
 
 // ---------------- B ----------------
-export function VariantB({ options, setOptions }: VariantProps) {
-  const [r, setR] = useState<BoardRenderer | null>(null)
+type Area = { x: number; y: number; w: number; h: number }
+
+/** B's camera: pinch / drag / wheel zoom, +− buttons, fit, follow the walking Player. Taps go to onTap. */
+function useZoomPan(r: BoardRenderer | null, onTap: (x: number, y: number) => void, fitArea: () => Area | undefined = () => undefined, fitDeps: unknown[] = [], buttonsClass = '') {
   const [follow, setFollow] = useState(false)
-  const [msg, setMsg] = useFlash()
-  const { pick } = useTapTest()
   const fitCam = useRef<Camera | null>(null)
   const followRef = useRef(follow)
   followRef.current = follow
+  const tapRef = useRef(onTap)
+  tapRef.current = onTap
+  const areaRef = useRef(fitArea)
+  areaRef.current = fitArea
+  const ctl = useRef<{ zoom: (k: number) => void; panTo: (from: { x: number; y: number }, to: { x: number; y: number }) => void; refit: () => void } | null>(null)
 
   useEffect(() => {
     if (!r) return
-    const refit = () => { fitCam.current = r.fit(); r.setCamera(fitCam.current) }
+    const refit = () => { fitCam.current = r.fit(areaRef.current()); r.setCamera(fitCam.current) }
     refit()
     ;(r as unknown as { onResize: () => void }).onResize = refit
     const el = r.canvas
     const pts = new Map<number, { x: number; y: number }>()
     let g: { cam: Camera; mid: { x: number; y: number }; dist: number; moved: boolean; t: number; start: { x: number; y: number } } | null = null
+    let tween: { from: Camera; to: Camera; t0: number } | null = null
     const local = (e: PointerEvent | WheelEvent) => { const b = el.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top } }
     const minS = () => fitCam.current!.scale * 0.9
     const maxS = () => Math.max(1.6, fitCam.current!.scale * 2)
@@ -83,7 +89,7 @@ export function VariantB({ options, setOptions }: VariantProps) {
       const dist = p.length === 2 ? Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) : 0
       g = { cam: r.getCamera(), mid, dist, moved: g?.moved ?? false, t: g?.t ?? performance.now(), start: g?.start ?? mid }
     }
-    const down = (e: PointerEvent) => { el.setPointerCapture(e.pointerId); pts.set(e.pointerId, local(e)); if (pts.size === 1) g = null; begin() }
+    const down = (e: PointerEvent) => { tween = null; el.setPointerCapture(e.pointerId); pts.set(e.pointerId, local(e)); if (pts.size === 1) g = null; begin() }
     const move = (e: PointerEvent) => {
       if (!pts.has(e.pointerId) || !g) return
       pts.set(e.pointerId, local(e))
@@ -102,12 +108,7 @@ export function VariantB({ options, setOptions }: VariantProps) {
       const wasTap = g && !g.moved && pts.size === 1 && performance.now() - g.t < 500
       const at = local(e)
       pts.delete(e.pointerId)
-      if (wasTap) {
-        const id = r.fieldAt(at.x, at.y)
-        r.setSelected(id)
-        setMsg(id === null ? 'missed: no Field there' : FIELDS[id].label.toUpperCase())
-        if (id !== null) pick(id)
-      }
+      if (wasTap) tapRef.current(at.x, at.y)
       if (pts.size > 0) begin()
       else g = null
     }
@@ -124,8 +125,13 @@ export function VariantB({ options, setOptions }: VariantProps) {
     el.addEventListener('pointercancel', up)
     el.addEventListener('wheel', wheel, { passive: false })
     let raf = 0
-    const loop = () => {
+    const loop = (now: number) => {
       raf = requestAnimationFrame(loop)
+      if (tween) {
+        const k = Math.min(1, (now - tween.t0) / 250), e = 1 - (1 - k) ** 3
+        r.setCamera({ scale: tween.from.scale, x: tween.from.x + (tween.to.x - tween.from.x) * e, y: tween.from.y + (tween.to.y - tween.from.y) * e })
+        if (k >= 1) tween = null
+      }
       if (!followRef.current) return
       const c = r.getCamera()
       const p = r.playerPos(0)
@@ -133,22 +139,36 @@ export function VariantB({ options, setOptions }: VariantProps) {
       if (Math.abs(dx) + Math.abs(dy) > 0.5) r.setCamera(clampCam({ scale: c.scale, x: c.x + dx * 0.12, y: c.y + dy * 0.12 }))
     }
     raf = requestAnimationFrame(loop)
-    ;(r as unknown as { _zoom: (k: number) => void })._zoom = (k: number) => {
-      const c = r.getCamera(), m = { x: el.clientWidth / 2, y: el.clientHeight / 2 }
-      const s = c.scale * k
-      const wx = (m.x - c.x) / c.scale, wy = (m.y - c.y) / c.scale
-      r.setCamera(clampCam({ scale: s, x: m.x - wx * s, y: m.y - wy * s }))
+    ctl.current = {
+      refit,
+      zoom(k) {
+        // zoom around the centre of the free area (above C's card in portrait), not the viewport
+        const a = areaRef.current() ?? { x: 0, y: 0, w: el.clientWidth, h: el.clientHeight }
+        const c = r.getCamera(), m = { x: a.x + a.w / 2, y: a.y + a.h / 2 }
+        const s = c.scale * k
+        const wx = (m.x - c.x) / c.scale, wy = (m.y - c.y) / c.scale
+        r.setCamera(clampCam({ scale: s, x: m.x - wx * s, y: m.y - wy * s }))
+      },
+      // smooth pan (zoom unchanged) that moves screen point `from` to `to`
+      panTo(from, to) {
+        const c = r.getCamera()
+        tween = { from: c, to: { scale: c.scale, x: c.x + to.x - from.x, y: c.y + to.y - from.y }, t0: performance.now() }
+      },
     }
     return () => {
       cancelAnimationFrame(raf)
+      ctl.current = null
       el.removeEventListener('pointerdown', down); el.removeEventListener('pointermove', move)
       el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up)
       el.removeEventListener('wheel', wheel)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [r])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { ctl.current?.refit() }, fitDeps)
 
-  const zoom = (k: number) => (r as unknown as { _zoom?: (k: number) => void })?._zoom?.(k)
+  const zoom = (k: number) => ctl.current?.zoom(k)
+  const panTo = (from: { x: number; y: number }, to: { x: number; y: number }) => ctl.current?.panTo(from, to)
   const toFit = () => { setFollow(false); if (r && fitCam.current) r.setCamera(fitCam.current) }
   const toFollow = () => {
     if (!r || !fitCam.current) return
@@ -156,16 +176,31 @@ export function VariantB({ options, setOptions }: VariantProps) {
     if (c.scale < fitCam.current.scale * 2) zoom((fitCam.current.scale * 2.6) / c.scale)
     setFollow(true)
   }
+  const buttons = (
+    <div className={`cam-buttons ${buttonsClass}`}>
+      <button onClick={() => zoom(1.5)} aria-label="zoom in">＋</button>
+      <button onClick={() => zoom(1 / 1.5)} aria-label="zoom out">－</button>
+      <button onClick={toFit}>fit</button>
+      <button className={follow ? 'on' : ''} onClick={toFollow}>follow</button>
+    </div>
+  )
+  return { buttons, panTo }
+}
 
+export function VariantB({ options, setOptions }: VariantProps) {
+  const [r, setR] = useState<BoardRenderer | null>(null)
+  const [msg, setMsg] = useFlash()
+  const { pick } = useTapTest()
+  const { buttons } = useZoomPan(r, (x, y) => {
+    const id = r!.fieldAt(x, y)
+    r!.setSelected(id)
+    setMsg(id === null ? 'missed: no Field there' : FIELDS[id].label.toUpperCase())
+    if (id !== null) pick(id)
+  })
   return (
     <div className="screen">
       <BoardCanvas options={options} onReady={setR} />
-      <div className="cam-buttons">
-        <button onClick={() => zoom(1.5)} aria-label="zoom in">＋</button>
-        <button onClick={() => zoom(1 / 1.5)} aria-label="zoom out">－</button>
-        <button onClick={toFit}>fit</button>
-        <button className={follow ? 'on' : ''} onClick={toFollow}>follow</button>
-      </div>
+      {buttons}
       {msg && <div className="toast">{msg}</div>}
       <TapBanner />
       <Hud r={r} options={options} setOptions={setOptions} />
@@ -299,6 +334,66 @@ export function VariantD({ options, setOptions }: VariantProps) {
           {err && <div className="muted small">{err}</div>}
         </div>
       )}
+      <TapBanner />
+      <Hud r={r} options={options} setOptions={setOptions} />
+    </div>
+  )
+}
+
+// ---------------- E = C + B (the chosen mix) ----------------
+// B's camera (pinch / drag / +− / fit / follow, starts fitted) with C's tap-to-inspect card.
+// Opening or stepping the card never changes zoom; the camera pans only if the Field would be
+// hidden under the card or off-screen.
+export function VariantE({ options, setOptions }: VariantProps) {
+  const [r, setR] = useState<BoardRenderer | null>(null)
+  const [sel, setSel] = useState<number | null>(null)
+  const [msg, setMsg] = useFlash()
+  const { pick } = useTapTest()
+  const vp = useViewport()
+  const SHEET = 250
+  const { buttons, panTo } = useZoomPan(
+    r,
+    (x, y) => {
+      const n = r!.nearestField(x, y)
+      setSel(n.dist < Math.max(70, r!.stats().fieldPx) ? n.id : null)
+    },
+    () => (vp.portrait ? { x: 0, y: 0, w: vp.w, h: vp.h - SHEET - 56 } : undefined),
+    [vp.portrait, vp.w, vp.h],
+    'top',
+  )
+  useEffect(() => {
+    if (!r) return
+    r.setSelected(sel)
+    if (sel === null) return
+    const raf = requestAnimationFrame(() => {
+      const card = document.querySelector('.card')?.getBoundingClientRect()
+      if (!card) return
+      const c = r.fieldCenter(sel)
+      const m = 24
+      const underCard = c.x > card.left - m && c.x < card.right + m && c.y > card.top - m && c.y < card.bottom + m
+      const offScreen = c.x < m || c.y < m || c.x > vp.w - m || c.y > vp.h - m
+      if (underCard || offScreen) panTo(c, vp.portrait ? { x: vp.w / 2, y: card.top / 2 } : { x: card.left / 2, y: vp.h / 2 })
+    })
+    return () => cancelAnimationFrame(raf)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [r, sel])
+  return (
+    <div className="screen">
+      <BoardCanvas options={options} onReady={setR} />
+      {buttons}
+      {sel !== null ? (
+        <FieldCard
+          id={sel}
+          compactLayout={!vp.portrait}
+          onPrev={() => setSel((sel + 31) % 32)}
+          onNext={() => setSel((sel + 1) % 32)}
+          onClose={() => setSel(null)}
+          onSelect={() => { pick(sel); setMsg(`selected ${FIELDS[sel].label.toUpperCase()}`); setSel(null) }}
+        />
+      ) : (
+        vp.portrait && <div className="card hint">Tap near any Field to inspect it. Pinch to zoom.</div>
+      )}
+      {msg && <div className="toast">{msg}</div>}
       <TapBanner />
       <Hud r={r} options={options} setOptions={setOptions} />
     </div>
