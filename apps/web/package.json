@@ -17,10 +17,15 @@
     "@colyseus/sdk": "catalog:",
     "@universum/protocol": "workspace:*",
     "@universum/rules": "workspace:*",
+    "pixi.js": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "react-router": "catalog:",
+    "zustand": "catalog:"
   },
   "devDependencies": {
+    "@inlang/paraglide-js": "catalog:",
+    "@inlang/plugin-message-format": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
