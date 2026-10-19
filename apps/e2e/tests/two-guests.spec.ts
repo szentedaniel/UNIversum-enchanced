@@ -120,11 +120,15 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     expect(desktopView?.fields[field]).toMatchObject({ owner, level: 1 });
     expect(desktopView?.fields[field]?.value).toBeGreaterThan(0);
 
-    // Tapping a Field on the Board (found through the test hook) selects it.
-    const zurich = await fieldCenter(phone, 5);
-    expect(zurich).toBeDefined();
-    await phone.touchscreen.tap(zurich!.x, zurich!.y);
-    await expect(phone.getByTestId("selected-field")).toHaveText("Zurich");
+    // Tapping a Field on the Board (found through the test hook) selects it. The
+    // last push's toast can still re-flow the screen and resize the Board, so a
+    // tap that misses is retried with a fresh Field centre.
+    await expect(async () => {
+      const zurich = await fieldCenter(phone, 5);
+      expect(zurich).toBeDefined();
+      await phone.touchscreen.tap(zurich!.x, zurich!.y);
+      await expect(phone.getByTestId("selected-field")).toHaveText("Zurich", { timeout: 1_000 });
+    }).toPass();
   } finally {
     await Promise.all([desktopBrowser.close(), phoneBrowser.close()]);
   }
