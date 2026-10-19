@@ -31,13 +31,35 @@ export type FieldInfo = {
   readonly kind: FieldKind;
   /** The University's Group; `null` for every other Field (the Quarantine Field too, F1). */
   readonly group: GroupId | null;
+  /**
+   * A University's Value at each Level, indexed by Level: 0 (unbuilt, worth 0)
+   * to `MAX_LEVEL` (R25–R27). `null` for every other Field.
+   */
+  readonly values: readonly number[] | null;
 };
+
+/** The highest Level of a University (R25). */
+export const MAX_LEVEL = 4;
+
+/** Value by Level as tenths of the base price: 1.0 B, 1.2 B, 1.6 B, 2.2 B (R27). */
+const VALUE_TENTHS = [0, 10, 12, 16, 22] as const;
+
+/** Universities seen so far, so `f` can number them 1–20 in ring order. */
+let universities = 0;
+
+/** The n-th University's Values: base `B = 200,000 + (n − 1) × 20,000` (R26). */
+function universityValues(): readonly number[] {
+  universities += 1;
+  const base = 200_000 + (universities - 1) * 20_000;
+  return VALUE_TENTHS.map((tenths) => (base * tenths) / 10);
+}
 
 const f = (id: FieldId, key: string, kind: FieldKind, group: GroupId | null = null): FieldInfo => ({
   id,
   key,
   kind,
   group,
+  values: kind === "university" ? universityValues() : null,
 });
 
 /** The 32 Fields in ring order (v1 `gameConfig.js`, with the F1 fix). */

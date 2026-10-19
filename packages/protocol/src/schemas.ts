@@ -7,7 +7,7 @@
  * rules engine; `PlayerIntentsMatchRules` below fails to compile until the
  * schemas and the rules' `PlayerIntent` type agree.
  */
-import type { PlayerIntent } from "@universum/rules";
+import { MAX_LEVEL, type PlayerIntent } from "@universum/rules";
 import { z } from "zod";
 import {
   DEFAULT_SETTINGS,
@@ -22,7 +22,11 @@ import {
 
 const turn = z.int().nonnegative();
 
-const PLAYER_INTENT_SCHEMAS = [z.strictObject({ type: z.literal("Roll"), turn })] as const;
+const PLAYER_INTENT_SCHEMAS = [
+  z.strictObject({ type: z.literal("Roll"), turn }),
+  z.strictObject({ type: z.literal("BuyLevel"), turn, level: z.int().min(1).max(MAX_LEVEL) }),
+  z.strictObject({ type: z.literal("DeclineOffer"), turn }),
+] as const;
 
 const ROOM_INTENT_SCHEMAS = [z.strictObject({ type: z.literal("Start") })] as const;
 

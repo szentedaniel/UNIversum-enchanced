@@ -39,4 +39,5 @@ export {
   type Seed,
   type Settings,
 } from "#state.ts";
-export { publicView, type PublicView } from "#view.ts";
+export type { LevelOffer } from "#rules/universities.ts";
+export { publicView, type FieldView, type PublicView } from "#view.ts";

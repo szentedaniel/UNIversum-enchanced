@@ -1,5 +1,5 @@
 import { MatchMakeError } from "@colyseus/sdk";
-import { PLAYER_NAME_ADJECTIVES, PLAYER_NAME_NOUNS } from "@universum/protocol";
+import { PLAYER_NAME_ADJECTIVES, PLAYER_NAME_NOUNS, type GameMessage } from "@universum/protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startTestServer, type TestClient, type TestServer } from "./helpers.ts";
 
@@ -31,6 +31,26 @@ async function startedGame(players: 2 | 3 | 4) {
   const views = await Promise.all(clients.map((c) => c.next("game")));
   const ids = await Promise.all(clients.map(async (c) => (await c.next("welcome")).playerId));
   return { clients, ids, view: views[0]!.view };
+}
+
+/** The current Player of `view` sends `intent`; returns the push everyone got. */
+async function play(
+  clients: TestClient[],
+  view: GameMessage["view"],
+  intent: Record<string, unknown>,
+): Promise<GameMessage> {
+  const pushes = clients.map((c) => c.next("game"));
+  const current = view.players.findIndex((p) => p.id === view.currentPlayer);
+  clients[current]!.send({ ...intent, turn: view.turn });
+  const [first] = await Promise.all(pushes);
+  return first!;
+}
+
+/** The current Player rolls, and declines the offer the roll stops at, if any, so the Turn passes. */
+async function playTurn(clients: TestClient[], view: GameMessage["view"]): Promise<GameMessage> {
+  const rolled = await play(clients, view, { type: "Roll" });
+  if (rolled.view.phase.kind !== "offer") return rolled;
+  return play(clients, rolled.view, { type: "DeclineOffer" });
 }
 
 describe("creating and joining a Room", () => {
@@ -159,16 +179,48 @@ describe("starting the game", () => {
 
 describe("playing", () => {
   it("rolls: every Player gets the full view plus the roll's events, in order", async () => {
-    const { clients, ids } = await startedGame(2);
+    const { clients } = await startedGame(2);
 
     clients[0]!.send({ type: "Roll", turn: 1 });
     const [forAlice, forBob] = await Promise.all(clients.map((c) => c.next("game")));
 
     expect(forBob).toEqual(forAlice);
-    expect(forAlice!.events.map((e) => e.type)).toEqual(["DiceRolled", "Moved", "TurnPassed"]);
-    expect(forAlice!.view).toMatchObject({ version: 1, turn: 2, currentPlayer: ids[1] });
+    // The seed is random: the roll ends the Turn, or stops at a University offer.
+    expect(forAlice!.events.slice(0, 2).map((e) => e.type)).toEqual(["DiceRolled", "Moved"]);
+    expect(forAlice!.view.version).toBe(1);
     const [d1, d2] = forAlice!.events[0]!.type === "DiceRolled" ? forAlice!.events[0]!.dice : [];
     expect(forAlice!.view.players[0]!.position).toBe(d1! + d2!);
+  });
+
+  it("buys a University: the offer lists Levels and prices, and everyone sees the new owner", async () => {
+    const { clients, view: first } = await startedGame(2);
+    // The seed is random: play Turns until someone lands on an offer.
+    let { view } = await play(clients, first, { type: "Roll" });
+    for (let tries = 0; view.phase.kind !== "offer" && tries < 30; tries++) {
+      // oxlint-disable-next-line no-await-in-loop -- Turns are played one after another
+      ({ view } = await play(clients, view, { type: "Roll" }));
+    }
+    if (view.phase.kind !== "offer") throw new Error("no offer in 30 Turns");
+    const { field, levels } = view.phase;
+    const price = levels[0]!.price;
+    expect(levels[0]!.level).toBe(1);
+    expect(view.fields[field]).toMatchObject({ owner: null, level: 0 });
+
+    const bought = await play(clients, view, { type: "BuyLevel", level: 1 });
+
+    expect(bought.events[0]).toEqual({
+      type: "LevelBought",
+      player: view.currentPlayer,
+      field,
+      level: 1,
+      price,
+    });
+    expect(bought.view.fields[field]).toMatchObject({
+      owner: view.currentPlayer,
+      level: 1,
+      value: price,
+    });
+    expect(bought.view.turn).toBe(view.turn + 1);
   });
 
   it("never sends the PRNG state", async () => {
@@ -181,17 +233,16 @@ describe("playing", () => {
   });
 
   it("rejects a stale intent with STALE_TURN, to the sender only, and changes nothing", async () => {
-    const { clients } = await startedGame(2);
+    const { clients, view: first } = await startedGame(2);
     const [alice, bob] = [clients[0]!, clients[1]!];
-    alice.send({ type: "Roll", turn: 1 });
-    await Promise.all([alice.next("game"), bob.next("game")]);
+    const { view } = await playTurn(clients, first);
 
     bob.send({ type: "Roll", turn: 1 }); // Turn 2 is Bob's: his intent is for an old Turn
     expect(await bob.next("rejected")).toEqual({ code: "STALE_TURN" });
 
     bob.send({ type: "Roll", turn: 2 });
     const next = await alice.next("game");
-    expect(next.view.version).toBe(2);
+    expect(next.view.version).toBe(view.version + 1);
     expect(alice.pending("rejected")).toEqual([]);
   });
 

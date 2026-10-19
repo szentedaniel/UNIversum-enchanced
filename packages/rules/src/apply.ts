@@ -3,6 +3,7 @@ import type { AnyIntentHandler, IntentHandlers } from "#handlers.ts";
 import { SYSTEM, type Ctx, type Intent } from "#intents.ts";
 import { rejection, type Rejection } from "#rejections.ts";
 import { turnIntents } from "#rules/turn.ts";
+import { universityIntents } from "#rules/universities.ts";
 import type { GameState } from "#state.ts";
 import type { Tx } from "#tx.ts";
 
@@ -13,6 +14,7 @@ import type { Tx } from "#tx.ts";
  */
 const HANDLERS: IntentHandlers = {
   ...turnIntents,
+  ...universityIntents,
 };
 
 export type Applied = { state: GameState; events: GameEvent[] };
