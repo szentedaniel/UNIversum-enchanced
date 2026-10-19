@@ -79,6 +79,7 @@ describe("the Lobby list", () => {
     await alice.leave();
 
     await list.until((l) => l.get(alice.code) === undefined);
+    expect(list.get(alice.code)).toBeUndefined();
   });
 
   it("unlists a Room when its game starts, also for Guests who open the list later", async () => {
@@ -188,8 +189,14 @@ describe("password Lobbies", () => {
   it("refuses a join that skips the password check by sending create options", async () => {
     const alice = await server.create({ password: "pw" });
 
-    await expect(server.sdk.joinById(alice.code, { maxPlayers: 4 })).rejects.toThrow();
-    await expect(server.sdk.joinById(alice.code, { code: "100000" })).rejects.toThrow();
+    // Options that are not join options skip onAuth's check, but onJoin holds them to the password.
+    await expect(server.sdk.joinById(alice.code, { maxPlayers: 4 })).rejects.toThrow(
+      "WRONG_PASSWORD",
+    );
+    // A join naming another Room code is checked against that Room, not this one.
+    expect(await refusal(server.sdk.joinById(alice.code, { code: "100000" }))).toBe(
+      "ROOM_NOT_FOUND",
+    );
   });
 
   it("lets a Room without a password be joined with any password", async () => {
