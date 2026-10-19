@@ -1,16 +1,5 @@
 import { chromium, devices, expect, test, webkit, type Page } from "@playwright/test";
 
-// The renderer's test-only hooks (apps/web/src/test-hooks.ts).
-type ViewSummary = { turn: number; version: number; currentPlayer: string };
-declare global {
-  interface Window {
-    universumTest?: {
-      fieldCenter(id: number): { x: number; y: number };
-      view(): ViewSummary | null;
-    };
-  }
-}
-
 const viewOf = (page: Page) => page.evaluate(() => window.universumTest?.view() ?? null);
 
 const fieldCenter = (page: Page, id: number) =>
@@ -85,11 +74,11 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     expect(desktopView).toEqual(phoneView);
     expect(desktopView?.version).toBe(4);
 
-    // Tapping a Field on the Board (found through the test hook) selects it.
+    // Tapping a Field on the Board (found through the test hook) opens its card.
     const zurich = await fieldCenter(phone, 5);
     expect(zurich).toBeDefined();
     await phone.touchscreen.tap(zurich!.x, zurich!.y);
-    await expect(phone.getByTestId("selected-field")).toHaveText("Zurich");
+    await expect(phone.getByTestId("field-card").getByRole("heading")).toHaveText("Zurich");
   } finally {
     await Promise.all([desktopBrowser.close(), phoneBrowser.close()]);
   }
