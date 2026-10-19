@@ -1,10 +1,12 @@
-import { Room, ServerError, type Client } from "@colyseus/core";
+import { matchMaker, Room, ServerError, updateLobby, type Client } from "@colyseus/core";
 import {
   createOptionsSchema,
   intentSchema,
+  joinOptionsSchema,
   MESSAGE,
   type ClientIntent,
   type GameMessage,
+  type LobbyListingMetadata,
   type LobbyMessage,
   type LobbySeat,
   type RejectionCode,
@@ -24,9 +26,26 @@ import {
 } from "@universum/rules";
 import { newPlayerId, newSeed } from "#room/ids.ts";
 import { newPlayerName } from "#room/player-names.ts";
+import { hashPassword, passwordMatches, type PasswordHash } from "#room/password.ts";
 import { releaseRoomCode, reserveRoomCode } from "#room/room-code.ts";
+import { checkRoomName } from "#room/room-name.ts";
 
 export type SeatRecord = LobbySeat & { sessionId: string };
+
+/** `client.auth` of a Guest whose join `onAuth` admitted (the Room is not full, the password matched). */
+type JoinAuth = { code: string };
+
+/** A matchmaking refusal: the HTTP status Colyseus answers with, and the Rejection code as its message. */
+const refuse = (status: number, code: RejectionCode) => new ServerError(status, code);
+
+/** The password a client sent in its create or join options, if any. */
+const passwordIn = (options: unknown): string =>
+  typeof options === "object" &&
+  options !== null &&
+  "password" in options &&
+  typeof options.password === "string"
+    ? options.password
+    : "";
 
 type RoomIntentHandler<K extends RoomIntent["type"]> = (
   room: GameRoom,
@@ -53,19 +72,52 @@ const isRoomIntent = (intent: ClientIntent): intent is RoomIntent => intent.type
  * scheduling #25), `onJoin`/`onLeave` (Guest token and Seat hold #35),
  * `ROOM_INTENTS` (Room-level intents), `onIntent` (flood control #37).
  */
-export class GameRoom extends Room {
+export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   settings!: RoomSettings;
+  /**
+   * The checked Room name; `null` when the creator left it empty (the client
+   * shows a generated one). Not `roomName`: Colyseus uses that for the Room type.
+   */
+  displayName: string | null = null;
+  /** Never sent or logged; `null` for a Room without a password. */
+  password: PasswordHash | null = null;
   /** Taken Seats in join order (R6). */
   seats: SeatRecord[] = [];
   /** The running game, or `null` while the Room is a Lobby. */
   game: GameState | null = null;
 
-  override onCreate(options: unknown): void {
+  /**
+   * Runs before a Seat is reserved, for create and join alike (Colyseus gives
+   * it no Room, so a join names its Room code in the options). A join is
+   * refused here, holding no Seat, when the Lobby is full or the password is
+   * wrong; options that are not join options are a create, checked in
+   * `onCreate`, and `onJoin` still holds such a client to the password.
+   * Rate limits (#37) go here too.
+   */
+  static override async onAuth(_token: string, options: unknown): Promise<JoinAuth | true> {
+    const join = joinOptionsSchema.safeParse(options);
+    if (!join.success) return true;
+    const room = matchMaker.getLocalRoomById(join.data.code);
+    if (!(room instanceof GameRoom) || room.game) throw refuse(404, "ROOM_NOT_FOUND");
+    if (room.hasReachedMaxClients()) throw refuse(409, "ROOM_FULL");
+    if (!(await room.passwordMatches(join.data.password ?? ""))) {
+      throw refuse(403, "WRONG_PASSWORD");
+    }
+    return { code: room.roomId };
+  }
+
+  override async onCreate(options: unknown): Promise<void> {
     const parsed = createOptionsSchema.safeParse(options);
-    if (!parsed.success) throw new ServerError(400, "MALFORMED" satisfies RejectionCode);
-    this.settings = parsed.data;
+    if (!parsed.success) throw refuse(400, "MALFORMED");
+    const { roomName, password, maxPlayers, minuteLimit } = parsed.data;
+    const name = checkRoomName(roomName ?? "");
+    if (!name.ok) throw refuse(400, "ROOM_NAME_INVALID");
+    this.settings = { maxPlayers, minuteLimit };
+    this.displayName = name.name;
+    this.password = password ? await hashPassword(password) : null;
     this.roomId = reserveRoomCode();
-    this.maxClients = this.settings.maxPlayers;
+    this.maxClients = maxPlayers;
+    this.metadata = this.listing();
     this.onMessage(MESSAGE.intent, (client: Client, message: unknown) =>
       this.onIntent(client, message),
     );
@@ -73,7 +125,12 @@ export class GameRoom extends Room {
     this.onMessage("*", (client: Client) => this.reject(client, "MALFORMED"));
   }
 
-  override onJoin(client: Client): void {
+  override async onJoin(client: Client, options: unknown, auth?: JoinAuth): Promise<void> {
+    // The creator brings the password in its create options. Anyone else who
+    // reached a Seat without `onAuth` admitting a join to this Room must too.
+    if (auth?.code !== this.roomId && !(await this.passwordMatches(passwordIn(options)))) {
+      throw refuse(403, "WRONG_PASSWORD");
+    }
     const seat: SeatRecord = {
       playerId: newPlayerId(),
       name: newPlayerName(this.seats.map((s) => s.name)),
@@ -89,6 +146,22 @@ export class GameRoom extends Room {
     if (this.game) return;
     this.seats = this.seats.filter((s) => s.sessionId !== client.sessionId);
     this.broadcastLobby();
+  }
+
+  /**
+   * Colyseus locks a Room by itself (`lock(true)`) when its last Seat is
+   * reserved, and the matchmaker then answers a join with a bare "not found"
+   * before `onAuth` runs. A full Lobby stays unlocked so `onAuth` can answer
+   * `ROOM_FULL`; `maxClients` still caps the Seats when one is reserved.
+   * An explicit `lock()` (the game started) still locks.
+   */
+  override async lock(...internal: unknown[]): Promise<void> {
+    if (internal.length > 0) return;
+    await super.lock();
+  }
+
+  async passwordMatches(password: string): Promise<boolean> {
+    return this.password === null || (await passwordMatches(this.password, password));
   }
 
   override onDispose(): void {
@@ -109,8 +182,19 @@ export class GameRoom extends Room {
       seed: newSeed(),
       now: this.now(),
     });
-    void this.lock();
+    this.unlist();
     this.commit(game, []);
+  }
+
+  /**
+   * Takes a started Room off the Lobby list and closes it to joins. An
+   * unlisted Room sends Lobby-list updates no more, so the removal is sent
+   * first; the private flag is never used (spec).
+   */
+  private unlist(): void {
+    updateLobby(this, true);
+    void this.setMatchmaking({ unlisted: true });
+    void this.lock();
   }
 
   private onIntent(client: Client, message: unknown): void {
@@ -145,9 +229,24 @@ export class GameRoom extends Room {
     this.broadcast(MESSAGE.game, { view: publicView(state), events } satisfies GameMessage);
   }
 
+  /** The Lobby-list entry: what any Guest may see, so never the password or its hash. */
+  private listing(): LobbyListingMetadata {
+    return {
+      roomName: this.displayName,
+      players: this.seats.length,
+      maxPlayers: this.settings.maxPlayers,
+      minuteLimit: this.settings.minuteLimit,
+      hasPassword: this.password !== null,
+    };
+  }
+
+  /** Sends the Seats to the Room, and the Players count to the Lobby list. */
   private broadcastLobby(): void {
+    void this.setMetadata(this.listing());
     const lobby: LobbyMessage = {
       code: this.roomId,
+      roomName: this.displayName,
+      hasPassword: this.password !== null,
       settings: this.settings,
       seats: this.seats.map(({ playerId, name }) => ({ playerId, name })),
     };

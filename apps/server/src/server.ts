@@ -1,6 +1,6 @@
-import { Server } from "@colyseus/core";
+import { LobbyRoom, Server } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
-import { GAME_ROOM } from "@universum/protocol";
+import { GAME_ROOM, LOBBY_ROOM } from "@universum/protocol";
 import { GameRoom } from "#room/game-room.ts";
 
 export type GameServerOptions = {
@@ -15,6 +15,7 @@ export function createGameServer(options: GameServerOptions = {}): Server {
     greet: false,
     gracefullyShutdown: options.gracefullyShutdown ?? true,
   });
-  server.define(GAME_ROOM, GameRoom);
+  server.define(GAME_ROOM, GameRoom).enableRealtimeListing();
+  server.define(LOBBY_ROOM, LobbyRoom);
   return server;
 }

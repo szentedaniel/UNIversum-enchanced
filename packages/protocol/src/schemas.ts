@@ -12,7 +12,9 @@ import { z } from "zod";
 import {
   DEFAULT_SETTINGS,
   MINUTE_LIMITS,
+  PASSWORD_MAX_BYTES,
   PLAYER_COUNTS,
+  utf8Length,
   type Assert,
   type ClientIntent,
   type CreateOptions,
@@ -43,19 +45,32 @@ export type PlayerIntentsMatchRules = Assert<
 /** Compile-time check: `intentSchema` parses exactly `ClientIntent`. */
 export type ClientIntentsMatch = Assert<Same<z.infer<typeof intentSchema>, ClientIntent>>;
 
+/** A password of at most `PASSWORD_MAX_BYTES` UTF-8 bytes. */
+const password = z
+  .string()
+  .refine((value) => utf8Length(value) <= PASSWORD_MAX_BYTES, "password too long");
+
+/** A raw Room name; the server's Room name check normalises and judges it. This only bounds the work. */
+const ROOM_NAME_MAX_RAW_LENGTH = 256;
+
 export const createOptionsSchema = z.object({
   maxPlayers: z.literal(PLAYER_COUNTS).default(DEFAULT_SETTINGS.maxPlayers),
   minuteLimit: z.literal(MINUTE_LIMITS).default(DEFAULT_SETTINGS.minuteLimit),
+  roomName: z.string().max(ROOM_NAME_MAX_RAW_LENGTH).optional(),
+  password: password.optional(),
 });
 
 export type CreateOptionsInputMatch = Assert<
   Same<z.input<typeof createOptionsSchema>, CreateOptions>
 >;
 export type CreateOptionsOutputMatch = Assert<
-  Same<z.output<typeof createOptionsSchema>, RoomSettings>
+  Same<z.output<typeof createOptionsSchema>, Required<RoomSettings> & CreateOptions>
 >;
 
-export const joinOptionsSchema = z.object({});
+export const joinOptionsSchema = z.object({
+  code: z.string().regex(/^\d{6}$/),
+  password: password.optional(),
+});
 
 export type JoinOptionsMatch = Assert<
   [z.output<typeof joinOptionsSchema>] extends [JoinOptions] ? true : false
