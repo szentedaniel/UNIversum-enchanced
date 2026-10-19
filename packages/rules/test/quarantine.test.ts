@@ -94,6 +94,7 @@ describe("a quarantined Turn", () => {
       kind: "quarantineChoice",
       canBuyPcrTest: true,
       canUsePcrTest: false,
+      pcrTestPrice: 200_000,
     });
   });
 

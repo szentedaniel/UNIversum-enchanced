@@ -276,3 +276,21 @@ a {
   margin: 0;
   font-weight: 700;
 }
+
+/* A decision with several options (the Quarantine choice). */
+.choice-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.choice-panel p {
+  margin: 0;
+  flex-basis: 100%;
+}
+
+.badge {
+  font-size: 0.75rem;
+  color: var(--muted);
+}

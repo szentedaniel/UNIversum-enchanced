@@ -34,10 +34,29 @@ function describe(event: GameEvent, view: PublicView): string | null {
       });
     case "TurnPassed":
       return m.event_turn_passed({ name: name(event.player) });
+    case "QuarantineEntered":
+      return m.event_quarantine_entered({ name: name(event.player), rounds: event.rounds });
+    case "QuarantineRoundUsed":
+      return m.event_quarantine_round_used({
+        name: name(event.player),
+        rounds: event.roundsLeft,
+      });
+    case "QuarantineReleased":
+      return m.event_quarantine_released({ name: name(event.player) });
+    case "PcrTestBought":
+      return m.event_pcr_test_bought({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
+    case "PcrTestUsed":
+      return m.event_pcr_test_used({ name: name(event.player) });
     default:
       return null;
   }
 }
+
+const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
+  view.players.find((p) => p.id === playerId)?.quarantineRounds ?? 0;
 
 export function Game() {
   const { code = "" } = useParams();
@@ -64,6 +83,8 @@ export function Game() {
   const answeredAt = Math.max(push.seq, rejection?.seq ?? 0);
   const pending = sentAt !== null && answeredAt <= sentAt;
   const canRoll = myTurn && view.phase.kind === "awaitingRoll" && !pending;
+  const quarantineChoice =
+    myTurn && !pending && view.phase.kind === "quarantineChoice" ? view.phase : null;
   const toast = events
     .map((event) => describe(event, view))
     .filter((text) => text !== null)
@@ -71,9 +92,9 @@ export function Game() {
     .join(" · ");
   const selected = selectedField === null ? null : FIELDS[selectedField];
 
-  function roll() {
+  function send(type: "Roll" | "RollForTwelve" | "BuyPcrTest" | "UsePcrTest") {
     setSentAt(answeredAt);
-    sendIntent({ type: "Roll", turn: view.turn });
+    sendIntent({ type, turn: view.turn });
   }
 
   return (
@@ -106,6 +127,12 @@ export function Game() {
               <span className="cash" aria-label={m.game_cash()}>
                 {formatMoney(p.cash)}
               </span>
+              {p.quarantineRounds !== null && (
+                <span className="badge">
+                  {m.game_in_quarantine({ rounds: p.quarantineRounds })}
+                </span>
+              )}
+              {p.hasPcrTest && <span className="badge">{m.game_pcr_test_held()}</span>}
             </span>
           </li>
         ))}
@@ -121,9 +148,27 @@ export function Game() {
           </p>
         )}
         {canRoll && (
-          <button type="button" className="primary" onClick={roll}>
+          <button type="button" className="primary" onClick={() => send("Roll")}>
             {m.game_roll()}
           </button>
+        )}
+        {quarantineChoice && (
+          <section className="choice-panel" aria-label={m.field_quarantine()}>
+            <p>{m.game_quarantine_rounds({ rounds: me ? quarantineRoundsOf(view, me) : 0 })}</p>
+            <button type="button" className="primary" onClick={() => send("RollForTwelve")}>
+              {m.game_roll_for_twelve()}
+            </button>
+            {quarantineChoice.canBuyPcrTest && (
+              <button type="button" onClick={() => send("BuyPcrTest")}>
+                {m.game_buy_pcr_test({ price: formatMoney(quarantineChoice.pcrTestPrice) })}
+              </button>
+            )}
+            {quarantineChoice.canUsePcrTest && (
+              <button type="button" onClick={() => send("UsePcrTest")}>
+                {m.game_use_pcr_test()}
+              </button>
+            )}
+          </section>
         )}
       </footer>
     </main>

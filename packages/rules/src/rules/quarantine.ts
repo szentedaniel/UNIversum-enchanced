@@ -14,8 +14,9 @@ declare module "#state.ts" {
     /**
      * A quarantined Player with rounds left chooses (R41): roll for 12 (always
      * offered), buy a PCR test (with at least 200,000 cash), or use a held one.
+     * The price is listed so clients can show it without a rules constant.
      */
-    quarantineChoice: { canBuyPcrTest: boolean; canUsePcrTest: boolean };
+    quarantineChoice: { canBuyPcrTest: boolean; canUsePcrTest: boolean; pcrTestPrice: number };
   }
 }
 
@@ -49,6 +50,7 @@ export function beginTurn(tx: Tx): void {
       kind: "quarantineChoice",
       canBuyPcrTest: player.cash >= PCR_TEST_PRICE,
       canUsePcrTest: player.hasPcrTest,
+      pcrTestPrice: PCR_TEST_PRICE,
     });
     return;
   }
