@@ -19,9 +19,13 @@ type Diagnostic = { code: string; labels: { span: { line: number } }[] };
 async function restrictedImportLines(source: string): Promise<number[]> {
   const file = join(scratch, `sample-${Math.random().toString(36).slice(2)}.ts`);
   writeFileSync(file, source);
-  const result = await promisify(execFile)("pnpm", ["exec", "oxlint", "--format=json", file], {
-    cwd: repoRoot,
-  }).catch((error: { stdout: string }) => error);
+  const result = await promisify(execFile)(
+    "pnpm",
+    ["exec", "oxlint", "--disable-nested-config", "--format=json", file],
+    {
+      cwd: repoRoot,
+    },
+  ).catch((error: { stdout: string }) => error);
   const { diagnostics }: { diagnostics: Diagnostic[] } = JSON.parse(result.stdout);
   return diagnostics
     .filter((d) => d.code.endsWith("(no-restricted-imports)"))

@@ -1,3 +1,4 @@
+import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
 
@@ -21,7 +22,21 @@ export default defineConfig(({ mode }) => {
 
   return {
     envDir: repoRoot,
-    plugins: [react()],
+    plugins: [
+      react(),
+      // Same options as the `paraglide` script in package.json (run on install,
+      // so lint and type-checks see the generated messages).
+      paraglideVitePlugin({
+        project: "./project.inlang",
+        outdir: "./src/paraglide",
+        strategy: ["localStorage", "preferredLanguage", "baseLocale"],
+      }),
+    ],
+    define: {
+      // Test-only hooks for Playwright (src/test-hooks.ts): on in dev, compiled
+      // out of production builds unless TEST_HOOKS=1 (CI's e2e build).
+      TEST_HOOKS_ENABLED: JSON.stringify(mode !== "production" || env["TEST_HOOKS"] === "1"),
+    },
     server: { proxy },
     preview: { proxy },
     build: { sourcemap: "hidden" },

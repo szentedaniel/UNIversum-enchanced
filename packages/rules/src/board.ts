@@ -1,8 +1,80 @@
 /**
  * Static Board data: the only runtime values the web app may import from the
- * rules package (`@universum/rules/board`). Field ids, types, Groups and Level
- * prices land here with the rules engine.
+ * rules package (`@universum/rules/board`). Keep this file free of rule logic
+ * and of imports from the rest of the engine. Level prices land here with the
+ * Universities (#26).
  */
 
 /** Number of Fields on the Board. */
 export const FIELD_COUNT = 32;
+
+/** A Field's index on the ring, 0 (Start) to 31. */
+export type FieldId = number;
+
+export type FieldKind =
+  | "start"
+  | "university"
+  | "museum"
+  | "chance"
+  | "tax"
+  | "quarantine"
+  | "doubler"
+  | "erasmus";
+
+/** A University Group, 1 to 8. */
+export type GroupId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+export type FieldInfo = {
+  readonly id: FieldId;
+  /** Stable key; the web app maps it to a Paraglide message for the Field name. */
+  readonly key: string;
+  readonly kind: FieldKind;
+  /** The University's Group; `null` for every other Field (the Quarantine Field too, F1). */
+  readonly group: GroupId | null;
+};
+
+const f = (id: FieldId, key: string, kind: FieldKind, group: GroupId | null = null): FieldInfo => ({
+  id,
+  key,
+  kind,
+  group,
+});
+
+/** The 32 Fields in ring order (v1 `gameConfig.js`, with the F1 fix). */
+export const FIELDS: readonly FieldInfo[] = [
+  f(0, "start", "start"),
+  f(1, "veszprem", "university", 1),
+  f(2, "budapest", "university", 1),
+  f(3, "debrecen", "university", 1),
+  f(4, "museum1", "museum"),
+  f(5, "zurich", "university", 2),
+  f(6, "paris", "university", 2),
+  f(7, "edinburgh", "university", 2),
+  f(8, "quarantine", "quarantine"),
+  f(9, "chicago", "university", 3),
+  f(10, "austin", "university", 3),
+  f(11, "princeton", "university", 3),
+  f(12, "museum2", "museum"),
+  f(13, "vienna", "university", 4),
+  f(14, "chance1", "chance"),
+  f(15, "berlin", "university", 4),
+  f(16, "doubler", "doubler"),
+  f(17, "seattle", "university", 5),
+  f(18, "chance2", "chance"),
+  f(19, "newHaven", "university", 5),
+  f(20, "museum3", "museum"),
+  f(21, "london", "university", 6),
+  f(22, "oxford", "university", 6),
+  f(23, "cambridgeUk", "university", 6),
+  f(24, "erasmus", "erasmus"),
+  f(25, "chance3", "chance"),
+  f(26, "berkeley", "university", 7),
+  f(27, "newYork", "university", 7),
+  f(28, "museum4", "museum"),
+  f(29, "stanford", "university", 8),
+  f(30, "tax", "tax"),
+  f(31, "cambridgeUs", "university", 8),
+];
+
+/** The Start Field, where the Round bonus is paid. */
+export const START_FIELD: FieldId = 0;

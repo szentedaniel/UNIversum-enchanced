@@ -10,6 +10,8 @@ catalog:
   "@colyseus/core": 0.18.19
   "@colyseus/sdk": 0.18.5
   "@colyseus/ws-transport": 0.18.4
+  "@inlang/paraglide-js": 2.29.0
+  "@inlang/plugin-message-format": 4.5.4
   "@playwright/test": 1.64.1
   "@types/node": 26.6.5
   "@types/react": 19.3.0
@@ -18,12 +20,16 @@ catalog:
   oxfmt: 0.73.0
   oxlint: 1.88.0
   oxlint-tsgolint: 7.0.2004
+  pixi.js: 8.22.0
+  pure-rand: 8.4.2
   react: 19.3.1
   react-dom: 19.3.1
+  react-router: 8.4.0
   typescript: 7.0.2
   vite: 8.3.4
   vitest: 5.0.5
   zod: 4.6.7
+  zustand: 5.0.15
 
 allowBuilds:
   msgpackr-extract: false

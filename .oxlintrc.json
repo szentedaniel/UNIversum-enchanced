@@ -15,7 +15,13 @@
   },
   // v1/ is the frozen reference implementation; .claude/ and .agents/ are
   // untracked local tooling folders (they may hold other git worktrees).
-  "ignorePatterns": ["v1/**", ".claude/**", ".agents/**", "**/dist/**"],
+  "ignorePatterns": [
+    "v1/**",
+    ".claude/**",
+    ".agents/**",
+    "**/dist/**",
+    "apps/web/src/paraglide/**"
+  ],
   "rules": {
     "import/no-cycle": "error",
     // House style: explicit `.ts`/`.tsx` extensions, also where Vite resolves imports.
@@ -44,6 +50,14 @@
         "react/exhaustive-deps": "error",
         "react/jsx-key": "error",
         "react/react-in-jsx-scope": "off",
+        // Inline handlers and `<Route element={<Screen />}>` are idiomatic React
+        // (no memoised children here); these two rules would flag every one.
+        "react-perf/jsx-no-new-function-as-prop": "off",
+        "react-perf/jsx-no-jsx-as-prop": "off",
+        // Side-effect imports are only for CSS.
+        "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
+        // PixiJS `Graphics.fill({ … })` is not `Array.prototype.fill`.
+        "unicorn/no-array-fill-with-reference-type": "off",
         // The web app holds no rule logic and no Zod (spec: Modules). It may
         // import only types and the static Board data from rules, and only the
         // Zod-free `messages` subpath from protocol.
