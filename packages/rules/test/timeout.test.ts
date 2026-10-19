@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { publicView, START_CASH, SYSTEM, TURN_LIMIT_MS, TURN_SLACK_MS } from "#index.ts";
-import { accept, newGame, player, reject, roll, T0, withPlayer } from "./helpers.ts";
+import {
+  publicView,
+  START_CASH,
+  START_FIELD,
+  SYSTEM,
+  TURN_LIMIT_MS,
+  TURN_SLACK_MS,
+} from "#index.ts";
+import { accept, newGame, player, reject, rollOnto, T0, withPlayer } from "./helpers.ts";
 
 /** 20 s on the ring plus about 3 s of slack for animations (F22). */
 const DEADLINE_AFTER = 23_000;
@@ -20,7 +27,7 @@ describe("the Turn timer", () => {
   it("R17: every decision restarts the timer: the next Player's roll is due 23 s after the move", () => {
     const later = T0 + 7_000;
 
-    const applied = roll(newGame(), later);
+    const applied = rollOnto(newGame(), START_FIELD, later);
 
     expect(applied.state.phase.kind).toBe("awaitingRoll");
     expect(applied.state.turnDeadline).toBe(later + DEADLINE_AFTER);
@@ -100,7 +107,7 @@ describe("TurnTimedOut", () => {
   });
 
   it("a stale TurnTimedOut (an earlier Turn) is rejected and changes nothing", () => {
-    const state = roll(newGame()).state;
+    const { state } = rollOnto(newGame(), START_FIELD);
 
     expect(reject(state, { type: "TurnTimedOut", turn: 1 }, SYSTEM, state.turnDeadline)).toEqual({
       code: "STALE_TURN",

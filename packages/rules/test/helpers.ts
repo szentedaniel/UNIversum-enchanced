@@ -9,6 +9,8 @@ import {
   setupGame,
   type Actor,
   type Applied,
+  type FieldId,
+  type FieldState,
   type GameState,
   type Intent,
   type PlayerId,
@@ -94,4 +96,36 @@ export function diceOf(applied: Applied): readonly [number, number] {
   const rolled = applied.events.find((e) => e.type === "DiceRolled");
   if (!rolled) throw new Error("no DiceRolled event");
   return rolled.dice;
+}
+
+/**
+ * The current Player rolls and lands on `field`: they are first placed the
+ * dice's sum before it (the dice depend only on the PRNG state, not on where
+ * the Player stands). A start before Start makes the move pay the Round bonus.
+ */
+export function rollOnto(state: GameState, field: FieldId, now = T0): Applied {
+  const [a, b] = diceOf(roll(state, now));
+  const position = (field - (a + b) + 32) % 32;
+  return roll(withPlayer(state, state.currentPlayer, { position }), now);
+}
+
+/** Returns a copy of `state` with one Field's state replaced. */
+export function withField(state: GameState, field: FieldId, patch: Partial<FieldState>): GameState {
+  return {
+    ...state,
+    fields: state.fields.map((f, id) => (id === field ? { ...f, ...patch } : f)),
+  };
+}
+
+/**
+ * A whole Turn without buying: the current Player rolls, then declines any
+ * offer, so the Turn passes. Returns the roll's own result and the state after
+ * the Turn.
+ */
+export function playTurn(state: GameState, now = T0): { rolled: Applied; state: GameState } {
+  const rolled = roll(state, now);
+  const { phase, turn, currentPlayer } = rolled.state;
+  if (phase.kind !== "offer") return { rolled, state: rolled.state };
+  const declined = accept(rolled.state, { type: "DeclineOffer", turn }, currentPlayer, now);
+  return { rolled, state: declined.state };
 }

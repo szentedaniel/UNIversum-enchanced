@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { publicView, ROUND_BONUS, START_CASH, SYSTEM } from "#index.ts";
-import { accept, diceOf, newGame, player, reject, roll, SEED, T0, withPlayer } from "./helpers.ts";
+import { publicView, ROUND_BONUS, START_CASH, START_FIELD, SYSTEM } from "#index.ts";
+import {
+  accept,
+  diceOf,
+  newGame,
+  player,
+  playTurn,
+  reject,
+  roll,
+  rollOnto,
+  SEED,
+  T0,
+  withPlayer,
+} from "./helpers.ts";
 
 describe("the roll", () => {
   it("R21: rolls two six-sided dice and moves the Player forward by their sum", () => {
@@ -24,9 +36,9 @@ describe("the roll", () => {
     const rolls: string[] = [];
     let state = newGame();
     for (let i = 0; i < 20; i++) {
-      const applied = roll(state);
-      rolls.push(diceOf(applied).join(""));
-      state = applied.state;
+      const turn = playTurn(state);
+      rolls.push(diceOf(turn.rolled).join(""));
+      state = turn.state;
     }
 
     expect(new Set(rolls).size).toBeGreaterThan(1);
@@ -36,11 +48,11 @@ describe("the roll", () => {
     const faces = [new Set<number>(), new Set<number>()];
     let state = newGame();
     for (let i = 0; i < 200; i++) {
-      const applied = roll(state);
-      const [a, b] = diceOf(applied);
+      const turn = playTurn(state);
+      const [a, b] = diceOf(turn.rolled);
       faces[0]?.add(a);
       faces[1]?.add(b);
-      state = applied.state;
+      state = turn.state;
     }
 
     expect(faces.map((s) => [...s].toSorted((x, y) => x - y))).toEqual([
@@ -104,8 +116,8 @@ describe("the roll", () => {
   });
 
   it("bumps the state version on every accepted intent", () => {
-    const once = roll(newGame());
-    const twice = roll(once.state);
+    const once = rollOnto(newGame(), 13); // Vienna: the roll stops at the offer
+    const twice = accept(once.state, { type: "DeclineOffer", turn: 1 }, "p1");
 
     expect([once.state.version, twice.state.version]).toEqual([1, 2]);
   });
@@ -122,7 +134,7 @@ describe("the roll", () => {
 
 describe("passing the Turn", () => {
   it("R14: after the move the Turn passes to the next Seat, with a new Turn number", () => {
-    const applied = roll(newGame());
+    const applied = rollOnto(newGame(), START_FIELD);
 
     expect(applied.state.currentPlayer).toBe("p2");
     expect(applied.state.turn).toBe(2);
@@ -133,7 +145,7 @@ describe("passing the Turn", () => {
     let state = newGame({ settings: { maxPlayers: 3 } });
     const order: string[] = [];
     for (let i = 0; i < 4; i++) {
-      state = roll(state).state;
+      state = playTurn(state).state;
       order.push(state.currentPlayer);
     }
 
@@ -143,7 +155,7 @@ describe("passing the Turn", () => {
   it("R14: Bankrupt Players are skipped", () => {
     const state = withPlayer(newGame(), "p2", { bankrupt: true });
 
-    const applied = roll(state);
+    const applied = rollOnto(state, START_FIELD);
 
     expect(applied.state.currentPlayer).toBe("p3");
     expect(applied.events.at(-1)).toEqual({ type: "TurnPassed", player: "p3", turn: 2 });
@@ -152,7 +164,7 @@ describe("passing the Turn", () => {
 
 describe("Rejections", () => {
   it("rejects an intent for another Turn as stale, and changes nothing", () => {
-    const state = roll(newGame()).state;
+    const { state } = playTurn(newGame());
 
     expect(reject(state, { type: "Roll", turn: 1 }, "p2")).toEqual({ code: "STALE_TURN" });
   });
@@ -170,7 +182,7 @@ describe("Rejections", () => {
   });
 
   it("accepts the same roll from the current Player on the current Turn", () => {
-    expect(accept(newGame(), { type: "Roll", turn: 1 }, "p1", T0).state.turn).toBe(2);
+    expect(accept(newGame(), { type: "Roll", turn: 1 }, "p1", T0).state.version).toBe(1);
   });
 });
 
@@ -185,7 +197,7 @@ describe("publicView", () => {
   });
 
   it("keeps what clients show: Turn, current Player, phase, Players and version", () => {
-    const state = roll(newGame()).state;
+    const { state } = rollOnto(newGame(), START_FIELD);
 
     expect(publicView(state)).toMatchObject({
       version: 1,

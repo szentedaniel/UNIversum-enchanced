@@ -66,14 +66,19 @@ describe("the Turn deadline", () => {
     const aliceWakeUp = server.scheduler.lastTaskAt(view.turnDeadline);
     server.scheduler.advanceTo(view.turnDeadline - 10_000);
     alice.send({ type: "Roll", turn: 1 });
-    await Promise.all([alice.next("game"), bob.next("game")]);
+    let [ended] = await Promise.all([alice.next("game"), bob.next("game")]);
+    if (ended.view.phase.kind === "offer") {
+      // The seed is random: a roll onto a University stops at the offer.
+      alice.send({ type: "DeclineOffer", turn: 1 });
+      [ended] = await Promise.all([alice.next("game"), bob.next("game")]);
+    }
 
     server.scheduler.advanceTo(view.turnDeadline); // Alice's deadline, not Bob's
     aliceWakeUp(); // fires late anyway, as if a cancelled timer slipped through
 
     bob.send({ type: "Roll", turn: 2 });
     const next = await alice.next("game");
-    expect(next.view.version).toBe(2);
+    expect(next.view.version).toBe(ended.view.version + 1);
     expect(next.events[0]?.type).toBe("DiceRolled");
     expect(alice.pending("game")).toEqual([]);
   });

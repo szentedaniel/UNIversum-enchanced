@@ -1,5 +1,15 @@
+import type { FieldId } from "#board.ts";
 import { TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
-import type { GameState } from "#state.ts";
+import { rentOf, valueOf } from "#rules/pricing.ts";
+import type { FieldState, GameState } from "#state.ts";
+
+/** A Field as clients see it: its state plus the numbers the UI shows. */
+export type FieldView = FieldState & {
+  /** What the Field is worth at its current Level (0 when unbuilt). */
+  value: number;
+  /** What another Player pays on landing here now (0 when unowned). */
+  rent: number;
+};
 
 /**
  * The one view every client in the Room sees. It never contains the PRNG
@@ -7,7 +17,8 @@ import type { GameState } from "#state.ts";
  * compile here until someone decides whether clients may see it. Derived
  * numbers the UI shows (Rent, Buyout price, Auto-sell's picks) are added here.
  */
-export type PublicView = Omit<GameState, "rng"> & {
+export type PublicView = Omit<GameState, "rng" | "fields"> & {
+  fields: FieldView[];
   /**
    * The Turn timer ring: it runs for `limitMs` and empties at `endsAt`, which
    * is the slack before `turnDeadline` (the slack is never shown).
@@ -27,7 +38,12 @@ export function publicView(state: GameState): PublicView {
     settings: state.settings,
     endsAt: state.endsAt,
     players: state.players,
-    fields: state.fields,
+    fields: state.fields.map((field, id: FieldId) => ({
+      owner: field.owner,
+      level: field.level,
+      value: valueOf(state, id),
+      rent: rentOf(state, id),
+    })),
     doubler: state.doubler,
   };
 }
