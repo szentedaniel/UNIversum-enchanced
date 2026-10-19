@@ -9,8 +9,9 @@ import type { PlayerId } from "#state.ts";
 import type { IntentHandlers } from "#handlers.ts";
 import { landOn } from "#rules/landing.ts";
 import { moveForward } from "#rules/movement.ts";
+import { beginTurn } from "#rules/quarantine.ts";
 import { randomInt } from "#rng.ts";
-import { emit, setPhase, type Tx } from "#tx.ts";
+import { emit, type Tx } from "#tx.ts";
 
 declare module "#state.ts" {
   interface PhaseMap {
@@ -66,6 +67,6 @@ export function passTurn(tx: Tx): void {
     }
   }
   tx.state.turn += 1;
-  setPhase(tx, awaitingRoll());
   emit(tx, { type: "TurnPassed", player: tx.state.currentPlayer, turn: tx.state.turn });
+  beginTurn(tx);
 }

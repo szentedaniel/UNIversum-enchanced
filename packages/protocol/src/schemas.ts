@@ -22,7 +22,12 @@ import {
 
 const turn = z.int().nonnegative();
 
-const PLAYER_INTENT_SCHEMAS = [z.strictObject({ type: z.literal("Roll"), turn })] as const;
+const PLAYER_INTENT_SCHEMAS = [
+  z.strictObject({ type: z.literal("Roll"), turn }),
+  z.strictObject({ type: z.literal("RollForTwelve"), turn }),
+  z.strictObject({ type: z.literal("BuyPcrTest"), turn }),
+  z.strictObject({ type: z.literal("UsePcrTest"), turn }),
+] as const;
 
 const ROOM_INTENT_SCHEMAS = [z.strictObject({ type: z.literal("Start") })] as const;
 

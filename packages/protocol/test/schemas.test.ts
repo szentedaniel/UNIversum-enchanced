@@ -10,12 +10,16 @@ import {
 } from "#index.ts";
 
 describe("intentSchema", () => {
-  it.each([[{ type: "Start" }], [{ type: "Roll", turn: 1 }], [{ type: "Roll", turn: 42 }]])(
-    "accepts %j",
-    (message) => {
-      expect(intentSchema.safeParse(message)).toEqual({ success: true, data: message });
-    },
-  );
+  it.each([
+    [{ type: "Start" }],
+    [{ type: "Roll", turn: 1 }],
+    [{ type: "Roll", turn: 42 }],
+    [{ type: "RollForTwelve", turn: 3 }],
+    [{ type: "BuyPcrTest", turn: 3 }],
+    [{ type: "UsePcrTest", turn: 3 }],
+  ])("accepts %j", (message) => {
+    expect(intentSchema.safeParse(message)).toEqual({ success: true, data: message });
+  });
 
   it.each([
     ["no object", "Roll"],
@@ -27,6 +31,8 @@ describe("intentSchema", () => {
     ["a negative turn", { type: "Roll", turn: -1 }],
     ["extra keys", { type: "Roll", turn: 1, dice: [6, 6] }],
     ["a system intent", { type: "TurnTimedOut", turn: 1 }],
+    ["a PCR test bought without a turn", { type: "BuyPcrTest" }],
+    ["a PCR test with a price", { type: "BuyPcrTest", turn: 1, amount: 0 }],
   ])("refuses %s", (_, message) => {
     expect(intentSchema.safeParse(message).success).toBe(false);
   });

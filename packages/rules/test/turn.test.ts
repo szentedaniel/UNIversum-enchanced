@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { publicView, ROUND_BONUS, START_CASH, SYSTEM } from "#index.ts";
-import { accept, diceOf, newGame, player, reject, roll, SEED, T0, withPlayer } from "./helpers.ts";
+import {
+  accept,
+  diceOf,
+  newGame,
+  player,
+  reject,
+  roll,
+  rollOffered,
+  SEED,
+  T0,
+  withPlayer,
+} from "./helpers.ts";
 
 describe("the roll", () => {
   it("R21: rolls two six-sided dice and moves the Player forward by their sum", () => {
@@ -24,7 +35,7 @@ describe("the roll", () => {
     const rolls: string[] = [];
     let state = newGame();
     for (let i = 0; i < 20; i++) {
-      const applied = roll(state);
+      const applied = rollOffered(state);
       rolls.push(diceOf(applied).join(""));
       state = applied.state;
     }
@@ -36,7 +47,7 @@ describe("the roll", () => {
     const faces = [new Set<number>(), new Set<number>()];
     let state = newGame();
     for (let i = 0; i < 200; i++) {
-      const applied = roll(state);
+      const applied = rollOffered(state);
       const [a, b] = diceOf(applied);
       faces[0]?.add(a);
       faces[1]?.add(b);
@@ -89,15 +100,16 @@ describe("the roll", () => {
   });
 
   it("returns the events in order: DiceRolled, Moved, RoundBonusPaid, TurnPassed", () => {
-    const state = withPlayer(newGame(), "p1", { position: 31 });
+    // Ends exactly on Start, the one Field with no effect of its own.
+    const [a, b] = diceOf(roll(newGame()));
+    const from = 32 - (a + b);
+    const state = withPlayer(newGame(), "p1", { position: from });
 
     const applied = roll(state);
-    const [a, b] = diceOf(applied);
-    const to = (31 + a + b) % 32;
 
     expect(applied.events).toEqual([
       { type: "DiceRolled", player: "p1", dice: [a, b] },
-      { type: "Moved", player: "p1", from: 31, to, steps: a + b },
+      { type: "Moved", player: "p1", from, to: 0, steps: a + b },
       { type: "RoundBonusPaid", player: "p1", amount: 250_000 },
       { type: "TurnPassed", player: "p2", turn: 2 },
     ]);
