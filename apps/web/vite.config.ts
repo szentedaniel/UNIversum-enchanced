@@ -1,4 +1,5 @@
 import { paraglideVitePlugin } from "@inlang/paraglide-js";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import { buildAtlas } from "./scripts/atlas.ts";
@@ -40,6 +41,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       boardAtlas(),
       react(),
+      tailwindcss(),
       // Same options as the `paraglide` script in package.json (run on install,
       // so lint and type-checks see the generated messages).
       paraglideVitePlugin({

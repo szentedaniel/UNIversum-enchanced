@@ -1,95 +1,106 @@
 import type { PublicView } from "@universum/rules";
-import { FIELD_COUNT } from "@universum/rules/board";
+import { FIELD_COUNT, type FieldId } from "@universum/rules/board";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { CSSProperties } from "react";
-import { useStore } from "zustand";
-import { GROUP_COLORS, KIND_COLORS, PLAYER_COLORS } from "#board/colors.ts";
+import { GROUP_COLORS, KIND_COLORS } from "#board/colors.ts";
 import { fieldFacts } from "#board/field-facts.ts";
+import { PlayerToken } from "#components/PlayerToken.tsx";
+import { Button } from "#components/ui/button.tsx";
+import { cn } from "#lib/utils.ts";
 import { uiStore } from "#stores/ui-store.ts";
 import { fieldKindName, fieldName, formatMoney, m, playerName } from "#text.ts";
 
-const hex = (color: number) => `#${color.toString(16).padStart(6, "0")}`;
-const backgrounds = new Map<number, CSSProperties>();
-/** One shared style object per colour, so renders don't create new ones. */
-function background(color: number): CSSProperties {
-  let style = backgrounds.get(color);
+const bands = new Map<number, CSSProperties>();
+/** One shared style object per band colour, so renders don't create new ones. */
+function band(color: number): CSSProperties {
+  let style = bands.get(color);
   if (!style) {
-    style = { background: hex(color) };
-    backgrounds.set(color, style);
+    style = { background: `#${color.toString(16).padStart(6, "0")}` };
+    bands.set(color, style);
   }
   return style;
 }
-const amount = (value: number | null) =>
-  value === null ? m.field_card_none() : formatMoney(value);
-/** The shape cue next to each Player colour, by Seat. */
-const SEAT_SHAPES = ["●", "▲", "■", "★"];
+
+const money = (value: number | null) => (value === null ? m.field_card_none() : formatMoney(value));
+
+const step = (id: FieldId, by: number) =>
+  uiStore.getState().selectField((id + by + FIELD_COUNT) % FIELD_COUNT);
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col">
+      <dt className="text-xs font-bold text-ink/60">{label}</dt>
+      <dd className="tnum m-0 text-lg leading-tight font-black">{value}</dd>
+    </div>
+  );
+}
 
 /**
- * The Field card for the Field open in `uiStore`: a Group-colour band with the
- * kind and name, Rent / Level / Value tiles and the owner, and ‹ › to step
- * round the ring. A bottom sheet in portrait, a compact card on landscape and
- * desktop (styles.css). Opening or stepping never zooms the Board; the Board
- * pans only if the Field would be hidden under this card (`data-board-obstacle`).
+ * The Field card: a Group-colour band with the kind and name, Rent / Level /
+ * Value tiles and the owner, and ‹ › to step round the ring. The screen places
+ * it (a bottom sheet in portrait, a compact card on landscape and desktop).
+ * Opening or stepping never zooms the Board; the Board pans only if the Field
+ * would be hidden under this card (`data-board-obstacle`).
  */
-export function FieldCard({ view }: { view: PublicView }) {
-  const id = useStore(uiStore, (s) => s.selectedField);
-  const facts = id === null ? null : fieldFacts(view, id);
-  if (id === null || !facts) {
-    return <p className="board-hint">{m.board_tap_hint()}</p>;
-  }
-
+export function FieldCard({
+  id,
+  view,
+  className,
+}: {
+  id: FieldId;
+  view: PublicView;
+  className?: string;
+}) {
+  const facts = fieldFacts(view, id);
+  if (!facts) return null;
   const { field, owner } = facts;
-  const band = field.group ? GROUP_COLORS[field.group] : KIND_COLORS[field.kind];
-  const step = (by: number) =>
-    uiStore.getState().selectField((id + by + FIELD_COUNT) % FIELD_COUNT);
 
   return (
     <section
-      className="field-card"
       aria-label={m.field_card()}
       data-testid="field-card"
       data-board-obstacle
+      className={cn(
+        "sticker flex flex-col overflow-hidden rounded-ui bg-card text-card-foreground",
+        className,
+      )}
     >
-      <header className="field-card-band" style={background(band)}>
-        <div>
-          <p className="field-card-kind">{fieldKindName(field.kind)}</p>
-          <h2 className="field-card-name">{fieldName(field.key)}</h2>
+      <header
+        className="flex items-center justify-between gap-2 border-b-[3px] border-border px-4 py-2 text-ink"
+        style={band(field.group ? GROUP_COLORS[field.group] : KIND_COLORS[field.kind])}
+      >
+        <div className="min-w-0">
+          <p className="m-0 text-xs font-extrabold uppercase opacity-75">
+            {fieldKindName(field.kind)}
+          </p>
+          <h2 className="m-0 truncate font-display text-2xl leading-tight font-normal">
+            {fieldName(field.key)}
+          </h2>
         </div>
-        <button
-          type="button"
-          className="field-card-close"
+        <Button
+          variant="plain"
+          size="icon-sm"
           aria-label={m.field_card_close()}
           onClick={() => uiStore.getState().selectField(null)}
         >
-          ✕
-        </button>
+          <X size={18} strokeWidth={3} />
+        </Button>
       </header>
       {facts.ownable && (
         <>
-          <dl className="field-card-tiles">
-            <div>
-              <dt>{m.field_card_rent()}</dt>
-              <dd>{amount(facts.rent)}</dd>
-            </div>
-            <div>
-              <dt>{m.field_card_level()}</dt>
-              <dd>{facts.level > 0 ? facts.level : m.field_card_none()}</dd>
-            </div>
-            <div>
-              <dt>{m.field_card_value()}</dt>
-              <dd>{amount(facts.value)}</dd>
-            </div>
+          <dl className="m-0 grid grid-cols-3 gap-2 px-4 pt-2 text-center">
+            <Stat label={m.field_card_rent()} value={money(facts.rent)} />
+            <Stat
+              label={m.field_card_level()}
+              value={facts.level > 0 ? String(facts.level) : m.field_card_none()}
+            />
+            <Stat label={m.field_card_value()} value={money(facts.value)} />
           </dl>
-          <p className="field-card-owner">
+          <p className="mx-4 mt-2 mb-0 flex items-center justify-center gap-2 rounded-xl bg-secondary/40 py-1 text-sm font-extrabold">
             {owner ? (
               <>
-                <span
-                  className="token"
-                  aria-hidden="true"
-                  style={background(PLAYER_COLORS[owner.seat] ?? 0xffffff)}
-                >
-                  {SEAT_SHAPES[owner.seat]}
-                </span>
-                <span>
+                <PlayerToken seat={owner.seat} size={20} />
+                <span className="truncate">
                   {m.field_card_owner()}: {playerName(owner.name)}
                 </span>
               </>
@@ -99,13 +110,23 @@ export function FieldCard({ view }: { view: PublicView }) {
           </p>
         </>
       )}
-      <nav className="field-card-nav">
-        <button type="button" aria-label={m.field_card_previous()} onClick={() => step(-1)}>
-          ‹
-        </button>
-        <button type="button" aria-label={m.field_card_next()} onClick={() => step(1)}>
-          ›
-        </button>
+      <nav className="flex justify-between gap-2 p-2">
+        <Button
+          variant="plain"
+          size="sm"
+          aria-label={m.field_card_previous()}
+          onClick={() => step(id, -1)}
+        >
+          <ChevronLeft strokeWidth={3} />
+        </Button>
+        <Button
+          variant="plain"
+          size="sm"
+          aria-label={m.field_card_next()}
+          onClick={() => step(id, 1)}
+        >
+          <ChevronRight strokeWidth={3} />
+        </Button>
       </nav>
     </section>
   );

@@ -1,8 +1,10 @@
 import { FIELDS } from "@universum/rules/board";
+import { LocateFixed, Maximize, Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { createBoard, type Board as BoardRenderer } from "#board/board.ts";
 import { fieldFacts } from "#board/field-facts.ts";
+import { Button } from "#components/ui/button.tsx";
 import { roomStore } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
 import { exposeBoard } from "#test-hooks.ts";
@@ -18,7 +20,8 @@ const ZOOM_STEP = 1.5;
  * outside React), sends Field taps to `uiStore`, and holds the camera buttons.
  *
  * The camera fits the Board into `.board-fit-area`: the Board minus the
- * `--board-inset-*` space that the layout reserves for the card or tray.
+ * `--board-inset-*` space that the screen reserves for these buttons and the
+ * card or tray (set on an ancestor, see screens/Game.tsx).
  */
 export function Board() {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -99,43 +102,44 @@ export function Board() {
     <div className="board" data-testid="board">
       <div ref={hostRef} className="board-canvas" />
       <div ref={fitRef} className="board-fit-area" aria-hidden="true" />
-      <div className="camera-buttons">
-        <button
-          type="button"
+      <div className="absolute top-2 right-2 flex gap-2 wide:top-1/2 wide:-translate-y-1/2 wide:flex-col">
+        <Button
+          variant="plain"
+          size="icon"
           aria-label={m.camera_zoom_in()}
           disabled={!board}
           onClick={() => board?.zoomBy(ZOOM_STEP)}
         >
-          +
-        </button>
-        <button
-          type="button"
+          <Plus strokeWidth={3} />
+        </Button>
+        <Button
+          variant="plain"
+          size="icon"
           aria-label={m.camera_zoom_out()}
           disabled={!board}
           onClick={() => board?.zoomBy(1 / ZOOM_STEP)}
         >
-          −
-        </button>
-        <button
-          type="button"
+          <Minus strokeWidth={3} />
+        </Button>
+        <Button
+          variant="plain"
+          size="icon"
           aria-label={m.camera_fit()}
           disabled={!board}
-          onClick={() => {
-            uiStore.getState().setFollow(false);
-            board?.fit();
-          }}
+          onClick={() => board?.fit()}
         >
-          ⤢
-        </button>
-        <button
-          type="button"
+          <Maximize size={20} strokeWidth={3} />
+        </Button>
+        <Button
+          variant={follow ? "default" : "plain"}
+          size="icon"
           aria-label={m.camera_follow()}
           aria-pressed={follow}
           disabled={!board}
           onClick={() => uiStore.getState().setFollow(!follow)}
         >
-          ◎
-        </button>
+          <LocateFixed size={20} strokeWidth={3} />
+        </Button>
       </div>
     </div>
   );

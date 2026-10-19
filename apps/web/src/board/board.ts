@@ -14,7 +14,7 @@
  */
 import type { EventOf, GameEvent, PlayerId, PublicView } from "@universum/rules";
 import { FIELD_COUNT, FIELDS, type FieldId } from "@universum/rules/board";
-import { Application, Assets, Container, Graphics, Sprite, Text, type Spritesheet } from "pixi.js";
+import { Application, Assets, Container, Graphics, Sprite, type Spritesheet } from "pixi.js";
 import { createFieldArt, type FieldArt, type Frames } from "#board/art.ts";
 import {
   centreOf,
@@ -27,7 +27,8 @@ import {
   type Camera,
   type Rect,
 } from "#board/camera.ts";
-import { INK, PLAYER_COLORS } from "#board/colors.ts";
+import { pawnBadge } from "#board/badge.ts";
+import { INK } from "#board/colors.ts";
 import { attachGestures } from "#board/gestures.ts";
 import { FIELD_WIDTH, fieldPoint, type Point } from "#board/layout.ts";
 
@@ -94,8 +95,8 @@ const PAWN_OFFSETS: Point[] = [
   { x: -14, y: 14 },
   { x: 14, y: 14 },
 ];
-/** The shape cue over each pawn, by Seat (spec: Player colours). */
-const SEAT_SHAPES = ["●", "▲", "■", "★"];
+/** The Seat badge (board/badge.ts) is drawn for small pawns; ours are in Board units. */
+const BADGE_SCALE = 2.2;
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const lerpPoint = (a: Point, b: Point, t: number): Point => ({
@@ -232,7 +233,6 @@ export async function createBoard(
   const seats = new Map<PlayerId, number>();
   /** The pawn the camera follows: the one walking, else the current Player's. */
   let focus: PlayerId | null = null;
-  const badgeTexts: Text[] = [];
   const scene: Scene = {
     placePawn(player, at) {
       const pawn = pawns.get(player);
@@ -249,20 +249,9 @@ export async function createBoard(
     const figure = new Sprite({ texture: frames(`alien_p${seat}`), anchor: { x: 0.5, y: 0.9 } });
     figure.scale.set(PAWN_WIDTH / figure.texture.width);
     const shadow = new Graphics().ellipse(0, 0, 30, 12).fill({ color: INK, alpha: 0.25 });
-    const badge = new Container({ y: -figure.height - 14 });
-    badge.addChild(
-      new Graphics()
-        .circle(0, 0, 20)
-        .fill({ color: PLAYER_COLORS[seat] ?? 0xffffff })
-        .stroke({ width: 4, color: INK }),
-    );
-    const shape = new Text({
-      text: SEAT_SHAPES[seat] ?? "",
-      anchor: 0.5,
-      style: { fontFamily: "Arial, sans-serif", fontWeight: "bold", fontSize: 22, fill: INK },
-    });
-    badgeTexts.push(shape);
-    badge.addChild(shape);
+    const badge = pawnBadge(seat);
+    badge.scale.set(BADGE_SCALE);
+    badge.y = -figure.height - 14;
     pawn.addChild(shadow, figure, badge);
     return pawn;
   }
@@ -347,7 +336,6 @@ export async function createBoard(
     settleTimer = window.setTimeout(() => {
       const resolution = Math.min(4, Math.max(0.5, app.renderer.resolution * camera.scale * 1.2));
       for (const art of fields) for (const text of art.texts) text.resolution = resolution;
-      for (const text of badgeTexts) text.resolution = resolution;
       invalidate();
     }, SETTLE_MS);
   }

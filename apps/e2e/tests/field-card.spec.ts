@@ -37,10 +37,8 @@ async function startGame(page: Page, browser: Browser) {
   const code = new URL(page.url()).pathname.split("/").at(-1) ?? "";
   const other = await browser.newContext({ locale: "en-US" });
   const guest = await other.newPage();
-  await guest.goto("/");
-  await guest.getByLabel("Room code").fill(code);
-  await guest.getByRole("button", { name: "Join" }).click();
-  await expect(page.getByText("Players: 2/2")).toBeVisible();
+  await guest.goto(`/room/${code}`);
+  await expect(page.locator("[data-testid=seat][data-open]")).toHaveCount(0);
   await page.getByRole("button", { name: "Start" }).click();
   await expect(page).toHaveURL(`/game/${code}`);
   await expect.poll(() => scale(page)).toBeGreaterThan(0);
