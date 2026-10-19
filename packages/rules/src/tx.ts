@@ -4,6 +4,7 @@
  * pure from the outside. Rule areas talk to the engine only through these
  * helpers, so cross-cutting changes (deadlines for every phase, #25) land here.
  */
+import { turnDeadlineFrom } from "#constants.ts";
 import type { GameEvent } from "#events.ts";
 import type { Ctx } from "#intents.ts";
 import type { GameState, Phase, PlayerId, PlayerState } from "#state.ts";
@@ -21,9 +22,13 @@ export function emit(tx: Tx, event: GameEvent): void {
   tx.events.push(event);
 }
 
-/** Moves the game to `phase`. Every phase change goes through here. */
+/**
+ * Moves the game to `phase`. Every phase change goes through here, so every
+ * decision gets a fresh deadline (R17).
+ */
 export function setPhase(tx: Tx, phase: Phase): void {
   tx.state.phase = phase;
+  tx.state.turnDeadline = turnDeadlineFrom(tx.ctx.now);
 }
 
 /** Stops the intent at a Player decision: the phase lists the options. */

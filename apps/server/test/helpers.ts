@@ -12,6 +12,7 @@ import {
   type RejectionMessage,
   type WelcomeMessage,
 } from "@universum/protocol";
+import type { Scheduler } from "#room/scheduler.ts";
 import { createGameServer } from "#server.ts";
 
 type Messages = {
@@ -24,8 +25,60 @@ type MessageType = keyof Messages;
 
 const TIMEOUT_MS = 3_000;
 
+/** A fixed start for the test clock: 2026-10-19 12:00:00 UTC. */
+export const T0 = Date.UTC(2026, 9, 19, 12, 0, 0);
+
+type Task = { time: number; run: () => void; cancelled: boolean; done: boolean };
+
+/**
+ * A scheduler whose time moves only when a test says so; nothing ever fires
+ * by itself, so Room tests never sleep and never race real timers.
+ */
+export class ManualScheduler implements Scheduler {
+  #time: number;
+  readonly #tasks: Task[] = [];
+
+  constructor(start = T0) {
+    this.#time = start;
+  }
+
+  now(): number {
+    return this.#time;
+  }
+
+  at(time: number, run: () => void): () => void {
+    const task: Task = { time, run, cancelled: false, done: false };
+    this.#tasks.push(task);
+    return () => {
+      task.cancelled = true;
+    };
+  }
+
+  /** Moves the clock to `time` and runs every task due by then, in time order. */
+  advanceTo(time: number): void {
+    this.#time = Math.max(this.#time, time);
+    for (;;) {
+      const due = this.#tasks
+        .filter((t) => !t.cancelled && !t.done && t.time <= this.#time)
+        .toSorted((a, b) => a.time - b.time)[0];
+      if (!due) return;
+      due.done = true;
+      due.run();
+    }
+  }
+
+  /** The most recently scheduled task for `time`, to run by hand (a late or stale wake-up). */
+  lastTaskAt(time: number): () => void {
+    const task = this.#tasks.findLast((t) => t.time === time);
+    if (!task) throw new Error(`nothing is scheduled at ${time}`);
+    return task.run;
+  }
+}
+
 export type TestServer = {
   sdk: Client;
+  /** Every Room's clock and wake-ups. */
+  scheduler: ManualScheduler;
   /** A Guest creates a Room. */
   create(options?: CreateOptions): Promise<TestClient>;
   /** A Guest joins a Room by its Room code. */
@@ -34,7 +87,8 @@ export type TestServer = {
 };
 
 export async function startTestServer(): Promise<TestServer> {
-  const server = createGameServer({ gracefullyShutdown: false });
+  const scheduler = new ManualScheduler();
+  const server = createGameServer({ gracefullyShutdown: false, scheduler });
   await server.listen(0, "127.0.0.1");
   const address = server.transport.server?.address();
   if (!address || typeof address === "string") throw new Error("the server has no TCP port");
@@ -46,6 +100,7 @@ export async function startTestServer(): Promise<TestServer> {
   };
   return {
     sdk,
+    scheduler,
     create: async (options = {}) => track(new TestClient(await sdk.create(GAME_ROOM, options))),
     join: async (code) => track(new TestClient(await sdk.joinById(code, {}))),
     async stop() {

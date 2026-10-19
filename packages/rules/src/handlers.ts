@@ -7,8 +7,11 @@ import type { Tx } from "#tx.ts";
 export type IntentHandler<K extends IntentType> = {
   /** `player`: only the current Player may send it. `system`: only the Room server. */
   actor: K extends SystemIntent["type"] ? "system" : "player";
-  /** The phases in which the intent is legal; anywhere else it is `NOT_OFFERED`. */
-  phases: readonly PhaseKind[];
+  /**
+   * The phases in which the intent is legal; anywhere else it is `NOT_OFFERED`.
+   * `"any"`: every phase, including ones added later (`TurnTimedOut`).
+   */
+  phases: readonly PhaseKind[] | "any";
   /**
    * Plays the intent out on `tx` up to the next Player decision. Return a
    * Rejection to refuse it (for example an option the phase does not offer);
@@ -23,6 +26,6 @@ export type IntentHandlers = { [K in IntentType]: IntentHandler<K> };
 /** A handler seen without its intent type, as `apply` dispatches it. */
 export type AnyIntentHandler = {
   actor: "player" | "system";
-  phases: readonly PhaseKind[];
+  phases: readonly PhaseKind[] | "any";
   run(tx: Tx, intent: Intent): Rejection | void;
 };
