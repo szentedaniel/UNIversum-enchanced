@@ -56,6 +56,15 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     await Promise.all(both.map((page) => expect(page).toHaveURL(`/game/${code}`)));
     await expect(desktop.getByText("Your Turn")).toBeVisible();
 
+    // Every screen shows the one Turn-timer ring, on the current Player's card.
+    for (const page of both) {
+      const ring = page.getByRole("timer", { name: "Turn timer" });
+      // oxlint-disable-next-line no-await-in-loop -- one page after the other
+      await expect(ring).toHaveCount(1);
+      // oxlint-disable-next-line no-await-in-loop -- one page after the other
+      await expect(page.locator("[aria-current=true]").getByRole("timer")).toBeVisible();
+    }
+
     // A few Turns: the first Seat (the creator) rolls first, then play alternates.
     const playTurn = async (turn: number) => {
       const [roller, waiter] = turn % 2 === 1 ? [desktop, phone] : [phone, desktop];

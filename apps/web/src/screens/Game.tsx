@@ -11,6 +11,7 @@ import { Card } from "#components/ui/card.tsx";
 import { sendIntent } from "#connection.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
+import { TurnRing } from "#screens/TurnRing.tsx";
 import { roomStore } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
 import { fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
@@ -30,6 +31,13 @@ function describe(event: GameEvent, view: PublicView): string | null {
       });
     case "RoundBonusPaid":
       return m.event_round_bonus({ name: name(event.player), amount: formatMoney(event.amount) });
+    case "TimedOut":
+      return m.event_timed_out({ name: name(event.player) });
+    case "TimeoutPenaltyPaid":
+      return m.event_timeout_penalty({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
     case "TurnPassed":
       return m.event_turn_passed({ name: name(event.player) });
     default:
@@ -84,6 +92,13 @@ export function Game() {
     current: p.id === view.currentPlayer,
     you: p.id === me,
     bankrupt: p.bankrupt,
+    ring: p.id === view.currentPlayer && (
+      <TurnRing
+        key={`${view.turn}:${view.turnDeadline}`}
+        timer={view.turnTimer}
+        clockOffset={push.clockOffset}
+      />
+    ),
   }));
   const rejected = rejection !== null && rejection.seq > push.seq;
 

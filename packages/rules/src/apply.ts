@@ -2,6 +2,7 @@ import type { GameEvent } from "#events.ts";
 import type { AnyIntentHandler, IntentHandlers } from "#handlers.ts";
 import { SYSTEM, type Ctx, type Intent } from "#intents.ts";
 import { rejection, type Rejection } from "#rejections.ts";
+import { timeoutIntents } from "#rules/timeout.ts";
 import { turnIntents } from "#rules/turn.ts";
 import type { GameState } from "#state.ts";
 import type { Tx } from "#tx.ts";
@@ -13,6 +14,7 @@ import type { Tx } from "#tx.ts";
  */
 const HANDLERS: IntentHandlers = {
   ...turnIntents,
+  ...timeoutIntents,
 };
 
 export type Applied = { state: GameState; events: GameEvent[] };
@@ -28,7 +30,9 @@ export function apply(state: GameState, intent: Intent, ctx: Ctx): Applied | Rej
   if (intent.turn !== state.turn) return rejection("STALE_TURN");
   const allowed = handler.actor === "system" ? SYSTEM : state.currentPlayer;
   if (ctx.actor !== allowed) return rejection("NOT_YOUR_TURN");
-  if (!handler.phases.includes(state.phase.kind)) return rejection("NOT_OFFERED");
+  if (handler.phases !== "any" && !handler.phases.includes(state.phase.kind)) {
+    return rejection("NOT_OFFERED");
+  }
 
   // The state is plain JSON by contract, so a JSON round trip is a full copy.
   const copy: GameState = JSON.parse(JSON.stringify(state));

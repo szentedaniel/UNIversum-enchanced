@@ -1,32 +1,27 @@
 /**
- * A Player's figure inside a ring in their colour. While it's their Turn the
- * ring shows the Turn clock: `progress` (1 = full, 0 = out of time) drawn in
- * primary, in danger for the last 5 seconds, with the seconds in a badge.
+ * A Player's figure (on its cream disc) inside a ring in their colour. While
+ * it's their Turn, `ring` is the Turn timer (`screens/TurnRing.tsx`, an SVG
+ * that fills this box) drawn over the coloured ring.
  */
+import type { ReactNode } from "react";
 import { PlayerFigure } from "#components/PlayerToken.tsx";
 import { cn } from "#lib/utils.ts";
 import { playerLook } from "#players.ts";
 
-const DANGER_SECONDS = 5;
-
 export function TimerRing({
   seat,
   size = 56,
-  progress = null,
-  secondsLeft = null,
+  ring = null,
   className,
 }: {
   seat: number;
   size?: number;
-  /** The share of the Turn clock left, or null when it isn't this Player's Turn. */
-  progress?: number | null;
-  secondsLeft?: number | null;
+  /** The Turn timer, only on the current Player. */
+  ring?: ReactNode;
   className?: string;
 }) {
-  const stroke = Math.max(4, size / 11);
-  const radius = size / 2 - stroke / 2;
-  const circumference = 2 * Math.PI * radius;
-  const danger = secondsLeft !== null && secondsLeft <= DANGER_SECONDS;
+  // The figure's disc leaves the ring's stroke (4/36 of the box) free.
+  const disc = Math.round(size * (1 - 10 / 36));
   return (
     <span
       className={cn(
@@ -34,34 +29,9 @@ export function TimerRing({
         className,
       )}
       style={{ width: size, height: size, background: playerLook(seat).color }}
-      data-active={progress !== null || undefined}
     >
-      <PlayerFigure seat={seat} size={size - 2 * stroke} />
-      {progress !== null && (
-        <svg
-          aria-hidden
-          className="pointer-events-none absolute inset-0 -rotate-90"
-          width={size}
-          height={size}
-        >
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke={danger ? "var(--danger)" : "var(--primary)"}
-            strokeWidth={stroke}
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference * (1 - Math.min(1, Math.max(0, progress)))}
-            strokeLinecap="round"
-          />
-        </svg>
-      )}
-      {secondsLeft !== null && (
-        <span className="tnum absolute -right-1.5 -bottom-1.5 rounded-full border-2 border-ink bg-card px-1 text-[11px] leading-4 font-black text-card-foreground">
-          {Math.ceil(secondsLeft)}
-        </span>
-      )}
+      <PlayerFigure seat={seat} size={disc} />
+      {ring}
     </span>
   );
 }

@@ -18,6 +18,7 @@ import {
   isRejection,
   publicView,
   setupGame,
+  SYSTEM,
   type GameEvent,
   type GameState,
   type PlayerIntent,
@@ -25,6 +26,7 @@ import {
 import { newPlayerId, newSeed } from "#room/ids.ts";
 import { newPlayerName } from "#room/player-names.ts";
 import { releaseRoomCode, reserveRoomCode } from "#room/room-code.ts";
+import { systemScheduler, type Scheduler } from "#room/scheduler.ts";
 
 export type SeatRecord = LobbySeat & { sessionId: string };
 
@@ -49,8 +51,8 @@ const isRoomIntent = (intent: ClientIntent): intent is RoomIntent => intent.type
  * the full public view plus each intent's events to everyone, and Rejections
  * to the sender only. While it is a Lobby it sends the Seats instead.
  *
- * Extension points: `commit` (store write before broadcast #34, deadline
- * scheduling #25), `onJoin`/`onLeave` (Guest token and Seat hold #35),
+ * Extension points: `commit` (store write before broadcast #34; it also
+ * schedules the Turn deadline, which #34 reschedules on restore), `onJoin`/`onLeave` (Guest token and Seat hold #35),
  * `ROOM_INTENTS` (Room-level intents), `onIntent` (flood control #37).
  */
 export class GameRoom extends Room {
@@ -59,6 +61,10 @@ export class GameRoom extends Room {
   seats: SeatRecord[] = [];
   /** The running game, or `null` while the Room is a Lobby. */
   game: GameState | null = null;
+  /** The clock and wake-ups; `createGameServer` swaps in a test scheduler. */
+  scheduler: Scheduler = systemScheduler;
+  /** Cancels the one pending Turn-deadline wake-up. */
+  #cancelWakeUp: (() => void) | null = null;
 
   override onCreate(options: unknown): void {
     const parsed = createOptionsSchema.safeParse(options);
@@ -85,19 +91,20 @@ export class GameRoom extends Room {
   }
 
   override onLeave(client: Client): void {
-    // In a running game the Seat stays (its Turns time out, #25); a Lobby frees it.
+    // In a running game the Seat stays (its Turns time out); a Lobby frees it.
     if (this.game) return;
     this.seats = this.seats.filter((s) => s.sessionId !== client.sessionId);
     this.broadcastLobby();
   }
 
   override onDispose(): void {
+    this.#cancelWakeUp?.();
     releaseRoomCode(this.roomId);
   }
 
   /** The server's clock for the rules engine. */
   now(): number {
-    return Date.now();
+    return this.scheduler.now();
   }
 
   /** Start (R5): any Player, once every Seat is taken. */
@@ -139,10 +146,38 @@ export class GameRoom extends Room {
     this.commit(result.state, result.events);
   }
 
-  /** Accepts a new game state: store it (#34), then push the view and events to everyone. */
+  /**
+   * Accepts a new game state: store it (#34), push the view and events to
+   * everyone, and wake up at its Turn deadline.
+   */
   private commit(state: GameState, events: GameEvent[]): void {
     this.game = state;
-    this.broadcast(MESSAGE.game, { view: publicView(state), events } satisfies GameMessage);
+    const message: GameMessage = { view: publicView(state), events, now: this.now() };
+    this.broadcast(MESSAGE.game, message);
+    this.scheduleDeadline(state);
+  }
+
+  /** Keeps one wake-up per Room, for the current `turnDeadline`. */
+  private scheduleDeadline(state: GameState): void {
+    this.#cancelWakeUp?.();
+    const { turn } = state;
+    this.#cancelWakeUp = this.scheduler.at(state.turnDeadline, () => this.timeOut(turn));
+  }
+
+  /**
+   * The deadline of Turn `turn` has passed: the engine applies the Timeout
+   * outcome. A stale wake-up (the Turn moved on) is rejected and ignored.
+   */
+  private timeOut(turn: number): void {
+    if (!this.game) return;
+    let result;
+    try {
+      result = apply(this.game, { type: "TurnTimedOut", turn }, { actor: SYSTEM, now: this.now() });
+    } catch {
+      // The Room keeps its last good state (logging and reporting: #44).
+      return;
+    }
+    if (!isRejection(result)) this.commit(result.state, result.events);
   }
 
   private broadcastLobby(): void {

@@ -136,6 +136,38 @@
     inset: 0;
     touch-action: none;
   }
+
+  /* The Turn timer (screens/TurnRing.tsx) around the current Player's figure
+     (components/TimerRing.tsx): a primary arc that empties over the Turn limit. */
+  .turn-ring {
+    position: absolute;
+    inset: 0;
+    transform: rotate(-90deg);
+  }
+
+  .turn-ring circle {
+    fill: none;
+    stroke-width: 4;
+  }
+
+  .turn-ring-track {
+    stroke: rgb(43 34 56 / 0.2);
+  }
+
+  .turn-ring-left {
+    stroke: var(--primary);
+    stroke-dasharray: 100;
+    stroke-linecap: round;
+    animation-name: turn-ring;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+}
+
+@keyframes turn-ring {
+  to {
+    stroke-dashoffset: 100;
+  }
 }
 
 /* A sticker: a thick outline with a hard offset shadow in the border colour. */
@@ -207,8 +239,9 @@
   }
 }
 
+/* Less motion, but the Turn ring keeps its timing (its animation is the clock). */
 @media (prefers-reduced-motion: reduce) {
-  *,
+  *:not(.turn-ring-left),
   *::before,
   *::after {
     animation-duration: 0.01ms !important;

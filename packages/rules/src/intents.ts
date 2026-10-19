@@ -35,7 +35,6 @@ export type PlayerIntent = IntentUnion<PlayerIntentMap>;
 /** Intents the Room server sends with the `SYSTEM` actor. */
 export type SystemIntent = IntentUnion<SystemIntentMap>;
 
-// oxlint-disable-next-line typescript/no-redundant-type-constituents -- SystemIntent is `never` until #25 adds TurnTimedOut
 export type Intent = PlayerIntent | SystemIntent;
 
 export type IntentType = Intent["type"];

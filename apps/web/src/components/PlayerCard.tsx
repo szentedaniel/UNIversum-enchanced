@@ -3,6 +3,7 @@
  * name, cash, Field count; the current Player's card is larger) and a compact
  * chip on phone (the active one gets the ring).
  */
+import type { ReactNode } from "react";
 import { PlayerToken } from "#components/PlayerToken.tsx";
 import { TimerRing } from "#components/TimerRing.tsx";
 import { cn } from "#lib/utils.ts";
@@ -17,12 +18,12 @@ export type PlayerSummary = {
   current: boolean;
   you: boolean;
   bankrupt: boolean;
-  /** The Turn clock while it's this Player's Turn (see TimerRing). */
-  clock?: { progress: number; secondsLeft: number | null } | null;
+  /** The Turn timer, on the current Player only (see TimerRing). */
+  ring?: ReactNode;
 };
 
 export function PlayerCard({ player, className }: { player: PlayerSummary; className?: string }) {
-  const { seat, name, cash, fields, current, you, bankrupt, clock } = player;
+  const { seat, name, cash, fields, current, you, bankrupt, ring } = player;
   return (
     <li
       data-testid="player-card"
@@ -35,12 +36,7 @@ export function PlayerCard({ player, className }: { player: PlayerSummary; class
         className,
       )}
     >
-      <TimerRing
-        seat={seat}
-        size={56}
-        progress={current ? (clock?.progress ?? 1) : null}
-        secondsLeft={current ? (clock?.secondsLeft ?? null) : null}
-      />
+      <TimerRing seat={seat} size={56} ring={current ? ring : null} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <PlayerToken seat={seat} size={18} />
@@ -59,7 +55,7 @@ export function PlayerCard({ player, className }: { player: PlayerSummary; class
 }
 
 export function PlayerChip({ player, className }: { player: PlayerSummary; className?: string }) {
-  const { seat, name, cash, current, you, bankrupt, clock } = player;
+  const { seat, name, cash, current, you, bankrupt, ring } = player;
   return (
     <li
       data-testid="player-chip"
@@ -72,12 +68,7 @@ export function PlayerChip({ player, className }: { player: PlayerSummary; class
         className,
       )}
     >
-      <TimerRing
-        seat={seat}
-        size={40}
-        progress={current ? (clock?.progress ?? 1) : null}
-        secondsLeft={current ? (clock?.secondsLeft ?? null) : null}
-      />
+      <TimerRing seat={seat} size={40} ring={current ? ring : null} />
       <div className="mt-0.5 flex max-w-full items-center gap-0.5">
         <PlayerToken seat={seat} size={14} />
         <span className={cn("truncate text-[11px] font-extrabold", you && "underline")}>

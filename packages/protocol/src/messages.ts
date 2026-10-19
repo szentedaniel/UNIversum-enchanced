@@ -65,6 +65,11 @@ export type GameMessage = {
   view: PublicView;
   /** What this push's intent did, in order, for the Board to animate. */
   events: GameEvent[];
+  /**
+   * The server's clock when it sent this push (epoch ms), so clients can show
+   * the Turn timer without trusting their own clock.
+   */
+  now: number;
 };
 
 export type RejectionMessage = { code: RejectionCode };
