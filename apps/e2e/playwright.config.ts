@@ -3,8 +3,9 @@ import { defineConfig, devices } from "@playwright/test";
 const CI = Boolean(process.env["CI"]);
 
 // Own ports, so a running `pnpm dev` (2567 / 5173) never collides with a test run.
-const SERVER_PORT = 2577;
-const WEB_PORT = 5183;
+// E2E_SERVER_PORT / E2E_WEB_PORT override them, so parallel checkouts don't share servers.
+const SERVER_PORT = Number(process.env["E2E_SERVER_PORT"] ?? 2577);
+const WEB_PORT = Number(process.env["E2E_WEB_PORT"] ?? 5183);
 const repoRoot = new URL("../..", import.meta.url).pathname;
 const MIXED = /two-guests\.spec\.ts$/;
 
