@@ -39,7 +39,8 @@ body {
   color: var(--foreground);
 }
 
-button {
+button,
+a.button {
   font: inherit;
   padding: 0.6rem 1.2rem;
   border: 2.5px solid var(--border);
@@ -47,9 +48,11 @@ button {
   background: var(--card);
   color: #2b2238;
   cursor: pointer;
+  text-decoration: none;
 }
 
-button.primary {
+button.primary,
+a.button.primary {
   background: var(--primary);
   font-weight: 700;
 }
@@ -222,4 +225,93 @@ a {
 .selected-field {
   margin: 0;
   font-weight: 700;
+}
+
+/* Lobby list, create form and password prompt (#36). */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.lobby-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  width: min(100%, 60rem);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+@media (min-width: 640px) {
+  .lobby-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 960px) {
+  .lobby-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.lobby-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem;
+  border: 3px solid var(--border);
+  border-radius: 18px;
+  background: var(--card);
+  color: #2b2238;
+}
+
+.lobby-tile h3,
+.lobby-tile p {
+  margin: 0;
+}
+
+.lobby-tile .full {
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.create-form,
+.password {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(100%, 24rem);
+}
+
+.create-form label,
+.password label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.create-form fieldset label {
+  display: inline-flex;
+  flex-direction: row;
+  margin-right: 1rem;
+}
+
+.create-form input:not([type="radio"]),
+.password input {
+  font: inherit;
+  padding: 0.4rem;
+  border: 2.5px solid var(--border);
+  border-radius: 12px;
+}
+
+.settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
