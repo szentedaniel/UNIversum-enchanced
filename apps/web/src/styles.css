@@ -178,7 +178,8 @@ a {
 
 .player {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
   padding: 0.3rem 0.6rem;
   border: 2.5px solid var(--border);
   border-radius: 12px;
@@ -186,8 +187,60 @@ a {
   font-size: 0.85rem;
 }
 
+.player-text {
+  display: flex;
+  flex-direction: column;
+}
+
 .player.current {
   outline: 3px solid var(--primary);
+}
+
+/* The Player's figure, with the Turn-timer ring around it on the current Player. */
+.figure {
+  position: relative;
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+}
+
+.figure::after {
+  content: "";
+  position: absolute;
+  inset: 0.5rem;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  background: #fffaf3;
+}
+
+.turn-ring {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.turn-ring circle {
+  fill: none;
+  stroke-width: 4;
+}
+
+.turn-ring-track {
+  stroke: rgb(43 34 56 / 0.2);
+}
+
+.turn-ring-left {
+  stroke: var(--border);
+  stroke-dasharray: 100;
+  stroke-linecap: round;
+  animation-name: turn-ring;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes turn-ring {
+  to {
+    stroke-dashoffset: 100;
+  }
 }
 
 .cash {
