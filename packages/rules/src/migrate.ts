@@ -25,8 +25,8 @@ const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> 
  * in the chain. The host then leaves that Room in the store untouched.
  */
 export function migrate(stored: unknown): GameState {
-  if (stored === null || typeof stored !== "object") throw new Error("not a stored state");
-  let state = stored as StoredState;
+  if (!isObject(stored)) throw new Error("not a stored state");
+  let state = stored;
   for (;;) {
     const from = state["stateVersion"];
     if (typeof from !== "number" || !Number.isInteger(from) || from < 1) {
@@ -35,9 +35,18 @@ export function migrate(stored: unknown): GameState {
     if (from > STATE_VERSION) {
       throw new Error(`stateVersion ${from} is newer than this server's ${STATE_VERSION}`);
     }
-    if (from === STATE_VERSION) return state as GameState;
+    if (isCurrent(state)) return state;
     const step = MIGRATIONS[from];
     if (!step) throw new Error(`no migration from stateVersion ${from}`);
     state = step(state);
   }
+}
+
+function isObject(value: unknown): value is StoredState {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Trusted by version: every step and the snapshot fixtures keep the shape in line with it. */
+function isCurrent(state: StoredState): state is GameState {
+  return state["stateVersion"] === STATE_VERSION;
 }
