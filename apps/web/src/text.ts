@@ -6,6 +6,7 @@
  */
 import type { RejectionCode } from "@universum/protocol/messages";
 import type { PlayerName } from "@universum/rules";
+import type { FieldKind } from "@universum/rules/board";
 import { m } from "#paraglide/messages.js";
 import { getLocale } from "#paraglide/runtime.js";
 
@@ -125,5 +126,25 @@ export const formatMoney = (amount: number): string =>
     currency: "HUF",
     maximumFractionDigits: 0,
   }).format(amount);
+
+/** Money in short form for the Board's tiles (e.g. "1.2M"), in the active language. */
+export const formatCompactMoney = (amount: number): string =>
+  new Intl.NumberFormat(getLocale(), { notation: "compact", maximumFractionDigits: 1 }).format(
+    amount,
+  );
+
+const FIELD_KINDS: Record<FieldKind, Message> = {
+  start: m.field_kind_start,
+  university: m.field_kind_university,
+  museum: m.field_kind_museum,
+  chance: m.field_kind_chance,
+  tax: m.field_kind_tax,
+  quarantine: m.field_kind_quarantine,
+  doubler: m.field_kind_doubler,
+  erasmus: m.field_kind_erasmus,
+};
+
+/** A Field's kind ("University", "Museum", …) in the active language. */
+export const fieldKindName = (kind: FieldKind): string => FIELD_KINDS[kind]();
 
 export { m };

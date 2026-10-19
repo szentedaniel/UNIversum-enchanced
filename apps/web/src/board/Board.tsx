@@ -1,54 +1,142 @@
 import { FIELDS } from "@universum/rules/board";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useStore } from "zustand";
 import { createBoard, type Board as BoardRenderer } from "#board/board.ts";
+import { fieldFacts } from "#board/field-facts.ts";
 import { roomStore } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
 import { exposeBoard } from "#test-hooks.ts";
-import { fieldName } from "#text.ts";
+import { fieldName, formatCompactMoney, m } from "#text.ts";
+
+/** Elements over the Board (the Field card, the pick tray) that a revealed Field must clear. */
+const OBSTACLES = "[data-board-obstacle]";
+const ZOOM_STEP = 1.5;
 
 /**
  * The one React component around the PixiJS Board. It feeds the renderer
- * every push from `roomStore` (outside React) and sends Field taps to `uiStore`.
+ * every push from `roomStore` and the open Field card from `uiStore` (both
+ * outside React), sends Field taps to `uiStore`, and holds the camera buttons.
+ *
+ * The camera fits the Board into `.board-fit-area`: the Board minus the
+ * `--board-inset-*` space that the layout reserves for the card or tray.
  */
 export function Board() {
   const hostRef = useRef<HTMLDivElement>(null);
+  const fitRef = useRef<HTMLDivElement>(null);
+  const [board, setBoard] = useState<BoardRenderer | null>(null);
+  const follow = useStore(uiStore, (s) => s.follow);
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host) return undefined;
-    let board: BoardRenderer | null = null;
-    let unsubscribe = () => {};
+    const fitArea = fitRef.current;
+    if (!host || !fitArea) return undefined;
+    let created: BoardRenderer | null = null;
+    const unsubscribe: (() => void)[] = [];
     let cancelled = false;
+    let revealFrame = 0;
 
-    async function mount(element: HTMLElement) {
-      const created = await createBoard(element, {
+    async function mount(element: HTMLElement, area: HTMLElement) {
+      const renderer = await createBoard(element, area, {
         fieldLabel: (id) => fieldName(FIELDS[id]?.key ?? ""),
+        fieldNote(view, id) {
+          const rent = fieldFacts(view, id)?.rent ?? null;
+          return rent === null ? null : formatCompactMoney(rent);
+        },
         onFieldTap: (id) => uiStore.getState().selectField(id),
+        onFollowChange: (on) => uiStore.getState().setFollow(on),
       });
       if (cancelled) {
-        created.destroy();
+        renderer.destroy();
         return;
       }
-      board = created;
+      created = renderer;
       const first = roomStore.getState().push;
-      if (first) created.update(first.view, []);
-      unsubscribe = roomStore.subscribe(
-        (state) => state.push,
-        (push) => {
-          if (push) created.update(push.view, push.events);
-        },
+      if (first) renderer.update(first.view, []);
+      unsubscribe.push(
+        roomStore.subscribe(
+          (state) => state.push,
+          (push) => {
+            if (push) renderer.update(push.view, push.events);
+          },
+        ),
+        uiStore.subscribe(
+          (state) => state.selectedField,
+          (id) => {
+            renderer.setSelected(id);
+            cancelAnimationFrame(revealFrame);
+            if (id === null) return;
+            // After React has laid out the card: pan only if the Field is hidden.
+            revealFrame = requestAnimationFrame(() => {
+              const obstacles = [...document.querySelectorAll(OBSTACLES)].map((el) =>
+                el.getBoundingClientRect(),
+              );
+              renderer.reveal(id, obstacles);
+            });
+          },
+          { fireImmediately: true },
+        ),
+        uiStore.subscribe(
+          (state) => state.follow,
+          (on) => renderer.setFollow(on),
+          { fireImmediately: true },
+        ),
       );
-      exposeBoard(created);
+      exposeBoard(renderer);
+      setBoard(renderer);
     }
-    void mount(host);
+    void mount(host, fitArea);
 
     return () => {
       cancelled = true;
-      unsubscribe();
+      cancelAnimationFrame(revealFrame);
+      for (const stop of unsubscribe) stop();
       exposeBoard(null);
-      board?.destroy();
+      created?.destroy();
     };
   }, []);
 
-  return <div ref={hostRef} className="board" data-testid="board" />;
+  return (
+    <div className="board" data-testid="board">
+      <div ref={hostRef} className="board-canvas" />
+      <div ref={fitRef} className="board-fit-area" aria-hidden="true" />
+      <div className="camera-buttons">
+        <button
+          type="button"
+          aria-label={m.camera_zoom_in()}
+          disabled={!board}
+          onClick={() => board?.zoomBy(ZOOM_STEP)}
+        >
+          +
+        </button>
+        <button
+          type="button"
+          aria-label={m.camera_zoom_out()}
+          disabled={!board}
+          onClick={() => board?.zoomBy(1 / ZOOM_STEP)}
+        >
+          −
+        </button>
+        <button
+          type="button"
+          aria-label={m.camera_fit()}
+          disabled={!board}
+          onClick={() => {
+            uiStore.getState().setFollow(false);
+            board?.fit();
+          }}
+        >
+          ⤢
+        </button>
+        <button
+          type="button"
+          aria-label={m.camera_follow()}
+          aria-pressed={follow}
+          disabled={!board}
+          onClick={() => uiStore.getState().setFollow(!follow)}
+        >
+          ◎
+        </button>
+      </div>
+    </div>
+  );
 }

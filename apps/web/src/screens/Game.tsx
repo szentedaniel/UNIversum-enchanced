@@ -1,14 +1,13 @@
 import type { GameEvent, PublicView } from "@universum/rules";
-import { FIELDS } from "@universum/rules/board";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { useStore } from "zustand";
 import { Board } from "#board/Board.tsx";
+import { FieldCard } from "#board/FieldCard.tsx";
 import { sendIntent } from "#connection.ts";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { roomStore } from "#stores/room-store.ts";
-import { uiStore } from "#stores/ui-store.ts";
-import { fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
+import { formatMoney, m, playerName, rejectionText } from "#text.ts";
 
 /** The newest event worth a toast, as text. */
 function describe(event: GameEvent, view: PublicView): string | null {
@@ -45,7 +44,6 @@ export function Game() {
   const me = useStore(roomStore, (s) => s.me);
   const status = useStore(roomStore, (s) => s.status);
   const rejection = useStore(roomStore, (s) => s.rejection);
-  const selectedField = useStore(uiStore, (s) => s.selectedField);
   // No optimistic UI: after a tap the control stays hidden until the next push or a Rejection.
   const [sentAt, setSentAt] = useState<number | null>(null);
 
@@ -69,7 +67,6 @@ export function Game() {
     .filter((text) => text !== null)
     .slice(0, 2)
     .join(" · ");
-  const selected = selectedField === null ? null : FIELDS[selectedField];
 
   function roll() {
     setSentAt(answeredAt);
@@ -113,13 +110,11 @@ export function Game() {
       <output className="toast">
         {rejection && rejection.seq > push.seq ? rejectionText(rejection.code) : toast}
       </output>
-      <Board />
+      <div className="board-area">
+        <Board />
+        <FieldCard view={view} />
+      </div>
       <footer className="game-footer">
-        {selected && (
-          <p className="selected-field" data-testid="selected-field">
-            {fieldName(selected.key)}
-          </p>
-        )}
         {canRoll && (
           <button type="button" className="primary" onClick={roll}>
             {m.game_roll()}
