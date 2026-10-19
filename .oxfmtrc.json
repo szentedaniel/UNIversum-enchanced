@@ -1,0 +1,7 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  // v1/ is the frozen reference implementation; .claude/ and .agents/ are
+  // untracked local tooling folders (they may hold other git worktrees).
+  "ignorePatterns": ["v1/**", ".claude/**", ".agents/**", "pnpm-lock.yaml"]
+}

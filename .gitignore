@@ -103,4 +103,15 @@ dist
 # TernJS port file
 .tern-port
 
-client/build
+v1/client/build
+
+# v2
+.DS_Store
+# SQLite data (DATA_DIR default)
+apps/server/data/
+# Playwright output
+apps/e2e/test-results/
+apps/e2e/playwright-report/
+apps/e2e/blob-report/
+# Scratch files written by apps/web/test/import-fence.test.ts
+apps/web/test/fence-*/
