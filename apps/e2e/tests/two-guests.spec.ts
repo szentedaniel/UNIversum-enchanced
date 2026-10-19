@@ -69,6 +69,8 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     const playTurn = async (turn: number) => {
       const [roller, waiter] = turn % 2 === 1 ? [desktop, phone] : [phone, desktop];
       await expect(waiter.getByRole("button", { name: "Roll" })).toHaveCount(0);
+      // Not `exact`: a Player who landed on Quarantine gets "Roll for 12"
+      // instead, which also ends the Turn (one version either way).
       const rollButton = roller.getByRole("button", { name: "Roll" });
       await (roller === phone ? rollButton.tap() : rollButton.click());
       await Promise.all(
