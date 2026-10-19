@@ -106,9 +106,10 @@ export function LobbyB({ dir, theme, lang, go }: ScreenProps) {
             <span className="tnum font-display text-4xl tracking-widest">{LOBBY.code}</span><Copy size={20} strokeWidth={2.5} />
           </button>
         </div>
-        <div className={`mt-8 grid grid-cols-2 gap-4 ${max === 4 ? 'md:grid-cols-4' : max === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+        {/* Seat cards keep the 4-Seat size whatever the Player count; fewer Seats just centre */}
+        <div className="mt-8 flex flex-wrap justify-center gap-4">
           {seats.map((s, i) => (
-            <div key={i} className={`sticker relative flex aspect-[4/5] flex-col items-center justify-center gap-2 rounded-ui p-3 text-center ${s ? '' : 'border-dashed bg-transparent shadow-none'}`}
+            <div key={i} className={`sticker relative flex aspect-[4/5] w-[calc(50%-0.5rem)] flex-col md:w-[calc(25%-0.75rem)] items-center justify-center gap-2 rounded-ui p-3 text-center ${s ? '' : 'border-dashed bg-transparent shadow-none'}`}
               style={s ? { background: DIRS[dir].players[theme][s.color], color: '#2b2238' } : undefined}>
               {s ? (
                 <>
@@ -167,7 +168,7 @@ export function GameB({ dir, theme, lang, go, mode, result }: GameProps) {
   const [listOpen, setListOpen] = useState(false)
   const g = useGameBoard({
     dir, theme, mode, sale, obstacle,
-    fitArea: () => (wide ? { x: 110, y: 90, w: vp.w - 220, h: vp.h - 290 } : { x: 0, y: 120, w: vp.w, h: vp.h - 120 - (mode === 'sale' ? 250 : 200) }),
+    fitArea: () => (wide ? { x: 110, y: 110, w: vp.w - 220, h: vp.h - 310 } : { x: 0, y: 196, w: vp.w, h: vp.h - 196 - (mode === 'sale' ? 250 : 200) }),
     fitDeps: [wide, vp.w, vp.h, mode],
   })
   const pc = DIRS[dir].players[theme]
@@ -184,9 +185,9 @@ export function GameB({ dir, theme, lang, go, mode, result }: GameProps) {
       ))}
     </div>
   )
-  const toasts = <Toasts events={live.events} dir={dir} theme={theme} max={wide ? 3 : 1} />
+  const toasts = <Toasts events={live.events} dir={dir} theme={theme} max={1} />
   const minutePill = (
-    <div className="sticker-sm inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1 text-card-foreground">
+    <div className="sticker-sm inline-flex shrink-0 items-center gap-1.5 rounded-full bg-card px-3 py-1 text-card-foreground">
       <Timer size={16} strokeWidth={3} /><span className="tnum text-base font-black">{mmss(live.minuteLeft)}</span>
     </div>
   )
@@ -213,7 +214,8 @@ export function GameB({ dir, theme, lang, go, mode, result }: GameProps) {
               </div>
             )
           })}
-          <div className="absolute top-3 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
+          {/* Minute pill + the newest event share one row in the band between the top corner cards, above the Board's fit area */}
+          <div className="absolute top-6 left-1/2 flex w-[calc(100%-560px)] -translate-x-1/2 items-center justify-center gap-2">
             {minutePill}
             {toasts}
           </div>
@@ -263,7 +265,7 @@ function TimerRing({ left, color, size = 52, children }: { left: number; color: 
 
 function Toasts({ events, dir, theme, max }: { events: GameEvent[]; dir: GameProps['dir']; theme: GameProps['theme']; max: number }) {
   return (
-    <div className="flex w-full max-w-sm flex-col items-center gap-1.5">
+    <div className="flex min-w-0 max-w-md flex-col items-center gap-1.5">
       {events.slice(0, max).map((e, i) => (
         <div key={e.id} className={`sticker-sm pop-in flex max-w-full items-center gap-2 rounded-full px-3 py-1 text-sm font-bold ${
           e.tone === 'good' ? 'bg-accent text-accent-foreground' : e.tone === 'bad' ? 'bg-[#ffd0d0] text-[#2b2238]' : 'bg-card text-card-foreground'
