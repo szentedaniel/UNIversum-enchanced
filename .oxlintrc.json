@@ -54,6 +54,8 @@
         // (no memoised children here); these two rules would flag every one.
         "react-perf/jsx-no-new-function-as-prop": "off",
         "react-perf/jsx-no-jsx-as-prop": "off",
+        // Same for inline `style={{ … }}` (Player colours and sizes are runtime values).
+        "react-perf/jsx-no-new-object-as-prop": "off",
         // Side-effect imports are only for CSS.
         "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
         // PixiJS `Graphics.fill({ … })` is not `Array.prototype.fill`.

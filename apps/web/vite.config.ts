@@ -1,4 +1,5 @@
 import { paraglideVitePlugin } from "@inlang/paraglide-js";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
 
@@ -24,6 +25,7 @@ export default defineConfig(({ mode }) => {
     envDir: repoRoot,
     plugins: [
       react(),
+      tailwindcss(),
       // Same options as the `paraglide` script in package.json (run on install,
       // so lint and type-checks see the generated messages).
       paraglideVitePlugin({
