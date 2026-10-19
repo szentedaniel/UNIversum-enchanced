@@ -57,7 +57,7 @@ describe("buildAtlas", () => {
   afterAll(() => rmSync(out, { recursive: true, force: true }));
 
   it("packs the Board into one atlas at full and half resolution", () => {
-    const scales = sheets.map((s) => Number(s.meta.scale)).toSorted();
+    const scales = sheets.map((s) => Number(s.meta.scale)).toSorted((a, b) => a - b);
     expect(scales).toEqual([0.5, 1]);
   });
 

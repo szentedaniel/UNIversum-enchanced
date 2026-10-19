@@ -26,6 +26,8 @@ export const ATLAS_OUTPUT = join(webRoot, "public/atlas");
 /** The AssetPack bundle (and spritesheet alias) the Board loads. */
 export const ATLAS_BUNDLE = "board";
 
+const clamp = (value: number) => Math.max(0, Math.min(255, value));
+
 const channels = (color: number) => [(color >> 16) & 255, (color >> 8) & 255, color & 255] as const;
 
 /**
@@ -37,7 +39,6 @@ export function recolour(rgba: Uint8Array, from: number, to: number, tolerance: 
   const [fr, fg, fb] = channels(from);
   const [tr, tg, tb] = channels(to);
   const limit = (tolerance * 255) ** 2;
-  const clamp = (value: number) => Math.max(0, Math.min(255, value));
   for (let i = 0; i < rgba.length; i += 4) {
     if (rgba[i + 3] === 0) continue;
     const dr = fr - (rgba[i] ?? 0);
@@ -130,7 +131,9 @@ async function stageFrames(dir: string): Promise<void> {
       const { data, info } = await image.raw().toBuffer({ resolveWithObject: true });
       const raw = { width: info.width, height: info.height, channels: 4 } as const;
       const write = (frame: string, pixels: Uint8Array) =>
-        sharp(pixels, { raw }).png().toFile(join(dir, `${frame}.png`));
+        sharp(pixels, { raw })
+          .png()
+          .toFile(join(dir, `${frame}.png`));
       const writes = [];
       if (source.plain !== false) writes.push(write(name, data));
       const { recolour: variants } = source;
