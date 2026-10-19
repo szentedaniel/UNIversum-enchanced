@@ -1,5 +1,8 @@
 import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { once } from "node:events";
+import { existsSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createServer } from "node:net";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
@@ -36,18 +39,27 @@ describe("server under plain Node", () => {
     expect(stdout.trim()).toBe("intent 32");
   });
 
-  it("boots on the configured port and answers the health check", async () => {
-    const port = await freePort();
+  it("boots on the configured ports, keeps its SQLite file in DATA_DIR, and turns ready", async () => {
+    const [port, internalPort] = [await freePort(), await freePort()];
+    const dataDir = join(mkdtempSync(join(tmpdir(), "universum-main-")), "data");
     child = spawn(process.execPath, ["src/main.ts"], {
       cwd: serverDir,
-      env: { ...process.env, PORT: String(port) },
+      env: {
+        ...process.env,
+        PORT: String(port),
+        INTERNAL_PORT: String(internalPort),
+        DATA_DIR: dataDir,
+      },
       stdio: ["ignore", "pipe", "inherit"],
     });
 
-    await waitForOutput(child, `http://127.0.0.1:${port}`);
-    const response = await fetch(`http://127.0.0.1:${port}/__healthcheck`);
+    await waitForOutput(child, "ready on internal port");
+    const health = await fetch(`http://127.0.0.1:${port}/__healthcheck`);
+    const ready = await fetch(`http://127.0.0.1:${internalPort}/readyz`);
 
-    expect(response.status).toBe(200);
+    expect(health.status).toBe(200);
+    expect(ready.status).toBe(200);
+    expect(existsSync(join(dataDir, "rooms.sqlite"))).toBe(true);
   });
 });
 
