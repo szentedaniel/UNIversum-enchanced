@@ -6,7 +6,7 @@
     "dev": "pnpm --parallel --filter @universum/server --filter @universum/web run dev",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
-    "lint": "oxlint --type-aware --type-check",
+    "lint": "oxlint --type-aware --type-check --disable-nested-config",
     "typecheck": "pnpm -r run typecheck",
     "test": "vitest run",
     "build": "pnpm --filter @universum/web run build",

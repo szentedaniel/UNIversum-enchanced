@@ -36,8 +36,8 @@ jobs:
       - name: Format
         run: pnpm exec oxfmt --check
 
-      - name: Lint
-        run: pnpm exec oxlint --type-aware --type-check
+      - name: Lint (oxlint --type-aware --type-check)
+        run: pnpm run lint
 
       - name: Type-check (tsc --noEmit per package)
         run: pnpm -r run typecheck
@@ -45,8 +45,12 @@ jobs:
       - name: Unit and server tests
         run: pnpm exec vitest run
 
+      # TEST_HOOKS=1 keeps the Board's test-only hooks in this build, which
+      # Playwright drives below; production builds compile them out.
       - name: Build
         run: pnpm --filter @universum/web run build
+        env:
+          TEST_HOOKS: 1
 
       - name: Install Playwright browsers
         run: pnpm --filter @universum/e2e exec playwright install --with-deps chromium webkit
