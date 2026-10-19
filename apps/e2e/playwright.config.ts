@@ -6,6 +6,7 @@ const CI = Boolean(process.env["CI"]);
 const SERVER_PORT = 2577;
 const WEB_PORT = 5183;
 const repoRoot = new URL("../..", import.meta.url).pathname;
+const MIXED = /two-guests\.spec\.ts$/;
 
 export default defineConfig({
   testDir: "tests",
@@ -18,8 +19,11 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    { name: "desktop-chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "iphone-webkit", use: { ...devices["iPhone 15"] } },
+    { name: "desktop-chromium", use: { ...devices["Desktop Chrome"] }, testIgnore: MIXED },
+    { name: "iphone-webkit", use: { ...devices["iPhone 15"] }, testIgnore: MIXED },
+    // Multi-Guest tests launch their own desktop Chromium and iPhone WebKit
+    // browsers, one context per Guest, so they run once, not per project.
+    { name: "mixed-devices", testMatch: MIXED },
   ],
   webServer: [
     {
