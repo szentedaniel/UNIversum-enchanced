@@ -46,7 +46,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
 
     // The phone Guest joins by the Room code; both see the Seats fill.
     await phone.goto("/");
-    await phone.getByLabel("Room code").fill(code);
+    await phone.getByRole("textbox", { name: "Room code" }).fill(code);
     await phone.getByRole("button", { name: "Join" }).tap();
     await expect(phone).toHaveURL(`/room/${code}`);
     await Promise.all(both.map((page) => expect(page.getByText("Players: 2/2")).toBeVisible()));
@@ -62,7 +62,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
       // oxlint-disable-next-line no-await-in-loop -- one page after the other
       await expect(ring).toHaveCount(1);
       // oxlint-disable-next-line no-await-in-loop -- one page after the other
-      await expect(page.locator(".player.current").getByRole("timer")).toBeVisible();
+      await expect(page.locator("[aria-current=true]").getByRole("timer")).toBeVisible();
     }
 
     // A few Turns: the first Seat (the creator) rolls first, then play alternates.
