@@ -4,7 +4,7 @@ test("the page loads and reaches the Room server on the same origin", async ({ p
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "UNIversum" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create Room" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Create Room" })).toBeVisible();
 
   const health = await page.request.get("/colyseus/__healthcheck");
   expect(health.status()).toBe(200);

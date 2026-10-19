@@ -1,14 +1,15 @@
-import { ArrowLeft, Check, Copy, Timer, Users } from "lucide-react";
+import type { RejectionCode } from "@universum/protocol/messages";
+import { Check, Copy, Lock, LockOpen, Timer, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useStore } from "zustand";
-import { Logo } from "#components/Logo.tsx";
+import { ScreenHeader } from "#components/ScreenHeader.tsx";
 import { SeatCard } from "#components/SeatCard.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
+import { PasswordForm, RejectionText, useJoin } from "#screens/join.tsx";
 import { roomStore } from "#stores/room-store.ts";
-import { m, playerName, rejectionText } from "#text.ts";
-import type { RejectionCode } from "@universum/protocol/messages";
+import { m, playerName, roomNameText } from "#text.ts";
 
 const COPIED_MS = 1500;
 
@@ -55,12 +56,17 @@ export function Lobby() {
   const me = useStore(roomStore, (s) => s.me);
   const started = useStore(roomStore, (s) => s.code === code && s.push !== null);
   const [error, setError] = useState<RejectionCode | null>(null);
+  const passwordJoin = useJoin();
+  const { ask } = passwordJoin;
 
+  // Opened by its address: join, and ask for the password if the Room has one.
   useEffect(() => {
-    ensureJoined(code).catch((e: unknown) =>
-      setError(e instanceof JoinError ? e.code : "INTERNAL"),
-    );
-  }, [code]);
+    ensureJoined(code).catch((e: unknown) => {
+      const rejection = e instanceof JoinError ? e.code : "INTERNAL";
+      if (rejection === "WRONG_PASSWORD") ask(code);
+      else setError(rejection);
+    });
+  }, [code, ask]);
 
   useEffect(() => {
     if (started) void navigate(`/game/${code}`, { replace: true });
@@ -69,16 +75,28 @@ export function Lobby() {
   if (error) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-4 text-center">
-        <p
-          role="alert"
-          className="sticker-sm m-0 rounded-full bg-[#ffd0d0] px-4 py-1 font-bold text-ink"
-        >
-          {rejectionText(error)}
-        </p>
-        <Link to="/" className={buttonVariants({ variant: "plain" })}>
-          {m.back_home()}
+        <RejectionText code={error} />
+        <Link to="/rooms" className={buttonVariants({ variant: "plain" })}>
+          {m.back_to_list()}
         </Link>
       </main>
+    );
+  }
+
+  if (!lobby && passwordJoin.asking) {
+    return (
+      <div className="min-h-dvh pb-8">
+        <ScreenHeader back="/rooms" label={m.back_to_list()} />
+        <main className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 pt-10 text-center">
+          <h1 className="m-0 text-3xl font-black md:text-4xl">{m.lobby_title()}</h1>
+          <PasswordForm
+            className="sticker rounded-ui bg-card p-4 text-card-foreground"
+            busy={passwordJoin.busy}
+            onSubmit={(pw) => void passwordJoin.join(code, pw)}
+          />
+          {passwordJoin.error && <RejectionText code={passwordJoin.error} />}
+        </main>
+      </div>
     );
   }
 
@@ -96,19 +114,12 @@ export function Lobby() {
 
   return (
     <div className="min-h-dvh pb-8">
-      <header className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 pt-5">
-        <Link
-          to="/"
-          className={buttonVariants({ variant: "plain", size: "sm", className: "rounded-full" })}
-        >
-          <ArrowLeft size={18} strokeWidth={3} aria-hidden />
-          {m.back_home()}
-        </Link>
-        <Logo small />
-      </header>
+      <ScreenHeader back="/rooms" label={m.back_to_list()} />
       <main className="mx-auto max-w-5xl px-4 pt-6">
         <div className="flex flex-col items-center gap-3 text-center">
-          <h1 className="m-0 text-3xl font-black md:text-4xl">{m.lobby_title()}</h1>
+          <h1 className="m-0 text-3xl font-black md:text-4xl">
+            {roomNameText(lobby.roomName, lobby.code)}
+          </h1>
           <RoomCodeSticker code={lobby.code} />
         </div>
         <ul className="m-0 mt-8 flex list-none flex-wrap justify-center gap-4 p-0">
@@ -126,7 +137,7 @@ export function Lobby() {
             <SeatCard key={`open-${i}`} open />
           ))}
         </ul>
-        <ul className="sticker m-0 mt-8 grid list-none grid-cols-2 gap-4 rounded-ui bg-card p-4 text-card-foreground">
+        <ul className="sticker m-0 mt-8 grid list-none grid-cols-1 gap-4 rounded-ui bg-card p-4 text-card-foreground sm:grid-cols-3">
           <li className="flex items-center gap-2">
             <Users size={22} strokeWidth={2.5} aria-hidden />
             <span className="text-lg font-black">
@@ -137,6 +148,16 @@ export function Lobby() {
             <Timer size={22} strokeWidth={2.5} aria-hidden />
             <span className="text-lg font-black">
               {m.lobby_minute_limit({ minutes: minuteLimit })}
+            </span>
+          </li>
+          <li className="flex items-center gap-2">
+            {lobby.hasPassword ? (
+              <Lock size={22} strokeWidth={2.5} aria-hidden />
+            ) : (
+              <LockOpen size={22} strokeWidth={2.5} aria-hidden />
+            )}
+            <span className="text-lg font-black">
+              {lobby.hasPassword ? m.lobby_has_password() : m.lobby_no_password()}
             </span>
           </li>
         </ul>

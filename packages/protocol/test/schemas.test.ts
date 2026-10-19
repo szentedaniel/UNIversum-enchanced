@@ -60,8 +60,42 @@ describe("Room options", () => {
     },
   );
 
-  it("joins with no options", () => {
-    expect(joinOptionsSchema.parse({})).toEqual({});
+  it("takes a raw Room name and a password (the server checks the name itself)", () => {
+    expect(
+      createOptionsSchema.parse({ roomName: "  Friday  ", password: "secret", maxPlayers: 2 }),
+    ).toEqual({ roomName: "  Friday  ", password: "secret", maxPlayers: 2, minuteLimit: 50 });
+  });
+
+  it("takes a password of up to 64 bytes", () => {
+    expect(createOptionsSchema.safeParse({ password: "x".repeat(64) }).success).toBe(true);
+    expect(createOptionsSchema.safeParse({ password: "ő".repeat(32) }).success).toBe(true);
+  });
+
+  it.each([
+    ["a password over 64 bytes", { password: "x".repeat(65) }],
+    ["a password of 33 two-byte letters", { password: "ő".repeat(33) }],
+    ["a password that is not a string", { password: 1234 }],
+    ["a Room name that is not a string", { roomName: ["a"] }],
+    ["a huge Room name", { roomName: "x".repeat(1000) }],
+  ])("refuses %s", (_, options) => {
+    expect(createOptionsSchema.safeParse(options).success).toBe(false);
+  });
+
+  it("joins with the Room code and an optional password", () => {
+    expect(joinOptionsSchema.parse({ code: "123456" })).toEqual({ code: "123456" });
+    expect(joinOptionsSchema.parse({ code: "123456", password: "pw" })).toEqual({
+      code: "123456",
+      password: "pw",
+    });
+  });
+
+  it.each([
+    ["no Room code", {}],
+    ["a short Room code", { code: "12345" }],
+    ["a Room code that is a number", { code: 123456 }],
+    ["a password over 64 bytes", { code: "123456", password: "x".repeat(65) }],
+  ])("refuses join options with %s", (_, options) => {
+    expect(joinOptionsSchema.safeParse(options).success).toBe(false);
   });
 });
 

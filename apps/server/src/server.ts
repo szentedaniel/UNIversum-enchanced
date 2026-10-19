@@ -1,6 +1,6 @@
-import { Server } from "@colyseus/core";
+import { LobbyRoom, Server } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
-import { GAME_ROOM } from "@universum/protocol";
+import { GAME_ROOM, LOBBY_ROOM } from "@universum/protocol";
 import { GameRoom } from "#room/game-room.ts";
 import { systemScheduler, type Scheduler } from "#room/scheduler.ts";
 
@@ -19,11 +19,14 @@ export function createGameServer(options: GameServerOptions = {}): Server {
     gracefullyShutdown: options.gracefullyShutdown ?? true,
   });
   const scheduler = options.scheduler ?? systemScheduler;
-  server.define(
-    GAME_ROOM,
-    class extends GameRoom {
-      override scheduler = scheduler;
-    },
-  );
+  server
+    .define(
+      GAME_ROOM,
+      class extends GameRoom {
+        override scheduler = scheduler;
+      },
+    )
+    .enableRealtimeListing();
+  server.define(LOBBY_ROOM, LobbyRoom);
   return server;
 }

@@ -50,7 +50,8 @@ test("Lobby and game screens: Seat cards, then Player cards or chips around the 
   browser,
   isMobile,
 }) => {
-  await page.goto("/?players=2");
+  await page.goto("/create");
+  await page.getByLabel("2", { exact: true }).check();
   await page.getByRole("button", { name: "Create Room" }).click();
   await expect(page).toHaveURL(/\/room\/\d{6}$/);
   const code = new URL(page.url()).pathname.split("/").at(-1) ?? "";

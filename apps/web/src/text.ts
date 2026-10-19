@@ -114,9 +114,16 @@ const REJECTIONS: Record<RejectionCode, Message> = {
   MALFORMED: m.rejection_malformed,
   INTERNAL: m.rejection_internal,
   ROOM_NOT_FOUND: m.rejection_room_not_found,
+  ROOM_FULL: m.rejection_room_full,
+  ROOM_NAME_INVALID: m.rejection_room_name_invalid,
+  WRONG_PASSWORD: m.rejection_wrong_password,
 };
 
 export const rejectionText = (code: RejectionCode): string => REJECTIONS[code]();
+
+/** A Room name; `null` (left empty by its creator) gets one made from the Room code. */
+export const roomNameText = (name: string | null, code: string): string =>
+  name ?? m.room_name_generated({ code });
 
 /** Money in full, in the active language's number format. */
 export const formatMoney = (amount: number): string =>

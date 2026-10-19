@@ -2,14 +2,21 @@
  * The one connection to the Room server, and the only writer of `roomStore`.
  * It owns the `@colyseus/sdk` client; screens call these functions and read
  * the store. Reconnection by `reconnectionToken` and Guest token lands here (#35).
+ * It also streams the Lobby list (`watchLobbyList`), which lives outside the store.
  */
 import { Client, MatchMakeError, type Room } from "@colyseus/sdk";
 import {
   GAME_ROOM,
+  LOBBY_LIST_MESSAGE,
+  LOBBY_ROOM,
+  matchmakeRejection,
   MESSAGE,
   type ClientIntent,
   type CreateOptions,
   type GameMessage,
+  type JoinOptions,
+  type LobbyListing,
+  type LobbyListingMetadata,
   type LobbyMessage,
   type RejectionCode,
   type RejectionMessage,
@@ -38,9 +45,10 @@ export async function createRoom(options: CreateOptions = {}): Promise<string> {
   return attach(() => sdk.create(GAME_ROOM, options));
 }
 
-/** Joins the Room with this code. */
-export async function joinRoom(code: string): Promise<string> {
-  return attach(() => sdk.joinById(code, {}));
+/** Joins the Room with this code; a password Lobby refuses a missing or wrong password (`WRONG_PASSWORD`). */
+export async function joinRoom(code: string, password?: string): Promise<string> {
+  const options: JoinOptions = password === undefined ? { code } : { code, password };
+  return attach(() => sdk.joinById(code, options));
 }
 
 let joining: { code: string; done: Promise<string> } | null = null;
@@ -77,7 +85,7 @@ async function attach(connect: () => Promise<Room>): Promise<string> {
     joined = await connect();
   } catch (error) {
     roomStore.setState({ status: "idle" });
-    throw new JoinError(error instanceof MatchMakeError ? "ROOM_NOT_FOUND" : "INTERNAL");
+    throw new JoinError(error instanceof MatchMakeError ? matchmakeRejection(error) : "INTERNAL");
   }
   // Register every handler before the next await: the server sends on join.
   room = joined;
@@ -100,4 +108,55 @@ async function attach(connect: () => Promise<Room>): Promise<string> {
   });
   roomStore.setState({ status: "connected", code: joined.roomId });
   return joined.roomId;
+}
+
+type ListingCache = { roomId: string; metadata?: LobbyListingMetadata };
+
+/**
+ * Streams the Lobby list: calls `onChange` with every open Lobby whenever it
+ * changes, until the returned function stops it. Lobbies whose game has
+ * started are never in it (the server unlists them).
+ */
+export function watchLobbyList(onChange: (lobbies: LobbyListing[]) => void): () => void {
+  const lobbies = new Map<string, LobbyListing>();
+  const set = ({ roomId, metadata }: ListingCache) => {
+    if (metadata) lobbies.set(roomId, { ...metadata, code: roomId });
+  };
+  let stopped = false;
+  let lobbyRoom: Room | null = null;
+  const publish = () => {
+    if (!stopped) onChange([...lobbies.values()]);
+  };
+
+  async function open(): Promise<void> {
+    let joined: Room;
+    try {
+      joined = await sdk.joinOrCreate(LOBBY_ROOM);
+    } catch {
+      return; // No list (server unreachable): the screen keeps showing it as loading.
+    }
+    lobbyRoom = joined;
+    // Registered before any await: the list arrives on join.
+    joined.onMessage(LOBBY_LIST_MESSAGE.rooms, (listings: ListingCache[]) => {
+      lobbies.clear();
+      listings.forEach(set);
+      publish();
+    });
+    joined.onMessage(LOBBY_LIST_MESSAGE.add, ([, listing]: [string, ListingCache]) => {
+      set(listing);
+      publish();
+    });
+    joined.onMessage(LOBBY_LIST_MESSAGE.remove, (code: string) => {
+      lobbies.delete(code);
+      publish();
+    });
+    // Stopped while joining (the screen closed): leave again.
+    if (stopped) await joined.leave();
+  }
+
+  void open();
+  return () => {
+    stopped = true;
+    if (lobbyRoom?.connection.isOpen) void lobbyRoom.leave();
+  };
 }

@@ -43,7 +43,10 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     const both = [desktop, phone];
 
     // The desktop Guest creates a 2-Player Room and lands in its Lobby.
-    await desktop.goto("/?players=2");
+    await desktop.goto("/");
+    await desktop.getByRole("link", { name: "Create Room" }).click();
+    await expect(desktop).toHaveURL("/create");
+    await desktop.getByLabel("2", { exact: true }).check();
     await desktop.getByRole("button", { name: "Create Room" }).click();
     await expect(desktop).toHaveURL(/\/room\/[1-9]\d{5}$/);
     const code = new URL(desktop.url()).pathname.split("/").at(-1) ?? "";
