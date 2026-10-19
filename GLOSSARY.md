@@ -34,6 +34,14 @@ _Avoid_: Room list, server browser
 The short number a Guest uses to find and join a Room.
 _Avoid_: Lobby code, PIN
 
+**Room name**:
+The name the creator gives a Room, shown on the Lobby list; the only text a Guest types that other Guests see.
+_Avoid_: Lobby name, title
+
+**Player name**:
+The name other Players see for a Player, made up by the game when the Player takes a Seat; Guests do not choose or change it.
+_Avoid_: Username, nickname
+
 ### Play
 
 **Turn**:
