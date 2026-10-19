@@ -10,6 +10,7 @@
 import type { EventOf, GameEvent, PlayerId, PublicView } from "@universum/rules";
 import { FIELDS, type FieldId } from "@universum/rules/board";
 import { Application, Container, Graphics, Text } from "pixi.js";
+import { pawnBadge } from "#board/badge.ts";
 import { GROUP_COLORS, INK, KIND_COLORS, PLAYER_COLORS } from "#board/colors.ts";
 import { diamond, fieldPoint, TILE_H, TILE_W, type Point } from "#board/layout.ts";
 
@@ -149,6 +150,7 @@ export async function createBoard(host: HTMLElement, options: BoardOptions): Pro
           new Graphics().ellipse(0, 0, 9, 4).fill({ color: INK, alpha: 0.25 }),
           new Graphics().circle(0, -12, 9).fill({ color }).stroke({ width: 2, color: INK }),
         );
+        pawn.addChild(pawnBadge(player.seat)).position.set(0, -32);
         pawn.eventMode = "none";
         pawns.set(player.id, pawn);
         pawnLayer.addChild(pawn);
