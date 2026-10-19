@@ -5,6 +5,7 @@ import { Link, useParams } from "react-router";
 import { useStore } from "zustand";
 import { Board } from "#board/Board.tsx";
 import { sendIntent } from "#connection.ts";
+import { TurnRing } from "#screens/TurnRing.tsx";
 import { roomStore } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
 import { fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
@@ -24,6 +25,13 @@ function describe(event: GameEvent, view: PublicView): string | null {
       });
     case "RoundBonusPaid":
       return m.event_round_bonus({ name: name(event.player), amount: formatMoney(event.amount) });
+    case "TimedOut":
+      return m.event_timed_out({ name: name(event.player) });
+    case "TimeoutPenaltyPaid":
+      return m.event_timeout_penalty({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
     case "TurnPassed":
       return m.event_turn_passed({ name: name(event.player) });
     default:
@@ -84,9 +92,20 @@ export function Game() {
             key={p.id}
             className={`player seat-${p.seat}${p.id === view.currentPlayer ? " current" : ""}`}
           >
-            <span>{playerName(p.name)}</span>
-            <span className="cash" aria-label={m.game_cash()}>
-              {formatMoney(p.cash)}
+            <span className="figure">
+              {p.id === view.currentPlayer && (
+                <TurnRing
+                  key={`${view.turn}:${view.turnDeadline}`}
+                  timer={view.turnTimer}
+                  clockOffset={push.clockOffset}
+                />
+              )}
+            </span>
+            <span className="player-text">
+              <span>{playerName(p.name)}</span>
+              <span className="cash" aria-label={m.game_cash()}>
+                {formatMoney(p.cash)}
+              </span>
             </span>
           </li>
         ))}

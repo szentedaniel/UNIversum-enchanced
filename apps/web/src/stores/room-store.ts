@@ -16,6 +16,8 @@ export type Push = {
   events: readonly GameEvent[];
   /** Grows with every push, so a push with no events still differs from the last. */
   seq: number;
+  /** The server's clock minus this client's, when the push arrived (for the Turn timer). */
+  clockOffset: number;
 };
 
 export type RoomState = {
