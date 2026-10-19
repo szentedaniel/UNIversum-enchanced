@@ -5,11 +5,13 @@ import {
   type RejectionCode,
 } from "@universum/protocol/messages";
 import { useEffect, useState, type FormEvent } from "react";
+import { Plus } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
+import { Logo } from "#components/Logo.tsx";
+import { ROOM_CODE_LENGTH as CODE_LENGTH, RoomCodeInput } from "#components/RoomCodeInput.tsx";
+import { Button } from "#components/ui/button.tsx";
 import { createRoom, JoinError, joinRoom, leaveRoom } from "#connection.ts";
 import { m, rejectionText } from "#text.ts";
-
-const CODE_LENGTH = 6;
 
 /**
  * Create settings from the address (`/?players=2&minutes=15`). Until the
@@ -52,35 +54,32 @@ export function Home() {
   }
 
   return (
-    <main className="screen home">
-      <h1 className="logo">{m.logo()}</h1>
-      <button
-        type="button"
-        className="primary"
+    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col items-center gap-6 px-4 pt-10 pb-8 text-center md:pt-16">
+      <Logo />
+      <Button
+        size="lg"
+        className="w-full max-w-md"
         disabled={busy}
         onClick={() => void go(() => createRoom(settingsFrom(params)))}
       >
+        <Plus size={26} strokeWidth={3} aria-hidden />
         {m.home_create()}
-      </button>
-      <p>{m.home_or_join()}</p>
-      <form className="join" onSubmit={onJoin}>
-        <label>
-          {m.home_code_label()}
-          <input
-            inputMode="numeric"
-            autoComplete="off"
-            pattern="[0-9]*"
-            maxLength={CODE_LENGTH}
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))}
-          />
-        </label>
-        <button type="submit" disabled={busy || code.length !== CODE_LENGTH}>
+      </Button>
+      <p className="m-0 font-bold text-muted-foreground">{m.home_or_join()}</p>
+      <form
+        className="sticker flex flex-wrap items-center justify-center gap-2 rounded-ui bg-card p-2 text-card-foreground"
+        onSubmit={onJoin}
+      >
+        <RoomCodeInput value={code} onValueChange={setCode} disabled={busy} />
+        <Button type="submit" variant="accent" disabled={busy || code.length !== CODE_LENGTH}>
           {m.home_join()}
-        </button>
+        </Button>
       </form>
       {error && (
-        <p role="alert" className="error">
+        <p
+          role="alert"
+          className="sticker-sm m-0 rounded-full bg-[#ffd0d0] px-4 py-1 font-bold text-ink"
+        >
           {rejectionText(error)}
         </p>
       )}

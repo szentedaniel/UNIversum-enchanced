@@ -1,14 +1,49 @@
-/* Plain layout for the first slice; the Tabletop visual direction replaces it (#40). */
+/*
+ * The "B · Tabletop" visual direction (spec: Client → Visual direction).
+ * Tailwind v4, CSS-first, with shadcn-style token names. v1's sunset purple and
+ * cream as chunky sticker cards; light and dark follow the OS (dark is the
+ * reference look, and cards stay cream in dark).
+ *
+ * The colour tokens are checked against the spec table and for WCAG AA
+ * contrast by test/theme.test.ts. Player colours and shapes are in
+ * src/players.ts (one source for the DOM and the Board).
+ */
+@import "tailwindcss";
+/* Self-hosted fonts: Sigmar One (display, latin + latin-ext for Hungarian
+   ő/ű) and Nunito variable (body and numbers). */
+@import "@fontsource/sigmar-one/latin.css";
+@import "@fontsource/sigmar-one/latin-ext.css";
+@import "@fontsource-variable/nunito/wght.css";
+
+/* "Desktop" layouts: wide and landscape (corner Player cards, side camera). */
+@custom-variant wide (@media (min-width: 48rem) and (orientation: landscape));
+
 :root {
   --background: #ffe8cc;
   --foreground: #2b2238;
   --card: #fffaf3;
+  --card-foreground: #2b2238;
+  --popover: #fffaf3;
+  --popover-foreground: #2b2238;
   --primary: #ff7a1a;
-  --muted: #7a5a6a;
-  --danger: #d6334a;
+  --primary-foreground: #2b2238;
+  --secondary: #ffd3a1;
+  --secondary-foreground: #2b2238;
+  --muted: #ffdcb5;
+  --muted-foreground: #7a5a6a;
+  --accent: #2bb59a;
+  --accent-foreground: #2b2238;
   --border: #2b2238;
-  color-scheme: light dark;
-  font-family: system-ui, sans-serif;
+  --input: #2b2238;
+  --ring: #ff7a1a;
+  --success: #1f9d6e;
+  --warning: #e0790b;
+  --danger: #d6334a;
+  --board-backdrop: radial-gradient(ellipse at 50% 40%, #fff6ea, #ffd3a1 75%);
+  --radius: 18px;
+  /* The ink on Player colours and on cream, in both themes. */
+  --ink: #2b2238;
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -16,222 +51,117 @@
     --background: #262335;
     --foreground: #fff3e4;
     --card: #f5ece3;
+    --card-foreground: #2b2238;
+    --popover: #f5ece3;
+    --popover-foreground: #2b2238;
     --primary: #ff9f43;
-    --muted: #c7b3c9;
-    --danger: #ff6b6b;
+    --primary-foreground: #2b2238;
+    --secondary: #3b2f44;
+    --secondary-foreground: #ffe3c4;
+    --muted: #3b2f44;
+    --muted-foreground: #c7b3c9;
+    --accent: #7ee0c3;
+    --accent-foreground: #2b2238;
     --border: #14111c;
+    --input: #14111c;
+    --ring: #ffbb6c;
+    --success: #5fd38d;
+    --warning: #ffb547;
+    --danger: #ff6b6b;
+    --board-backdrop: radial-gradient(ellipse at 50% 40%, #6a4a62, #262335 72%);
+    color-scheme: dark;
   }
 }
 
-* {
-  box-sizing: border-box;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-destructive: var(--danger);
+  --color-ink: var(--ink);
+  --font-display: "Sigmar One", "Nunito Variable", system-ui, sans-serif;
+  --font-sans: "Nunito Variable", system-ui, sans-serif;
+  --radius-ui: var(--radius);
 }
 
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-}
+@layer components {
+  /* The Board's host (board/Board.tsx) fills the box the screen gives it. */
+  .board {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
 
-button {
-  font: inherit;
-  padding: 0.6rem 1.2rem;
-  border: 2.5px solid var(--border);
-  border-radius: 12px;
-  background: var(--card);
-  color: #2b2238;
-  cursor: pointer;
-}
+  .board canvas {
+    position: absolute;
+    inset: 0;
+    touch-action: none;
+  }
 
-button.primary {
-  background: var(--primary);
-  font-weight: 700;
-}
+  /* The Turn timer (screens/TurnRing.tsx) around the current Player's figure
+     (components/TimerRing.tsx): a primary arc that empties over the Turn limit. */
+  .turn-ring {
+    position: absolute;
+    inset: 0;
+    transform: rotate(-90deg);
+  }
 
-button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
+  .turn-ring circle {
+    fill: none;
+    stroke-width: 4;
+  }
 
-a {
-  color: inherit;
-}
+  .turn-ring-track {
+    stroke: rgb(43 34 56 / 0.2);
+  }
 
-.screen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-  min-height: 100%;
-  padding: 1rem;
-}
-
-.logo {
-  font-size: 3rem;
-  color: var(--primary);
-  margin: 2rem 0 1rem;
-}
-
-.join {
-  display: flex;
-  gap: 0.5rem;
-  align-items: end;
-}
-
-.join label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.join input {
-  font: inherit;
-  font-size: 1.5rem;
-  letter-spacing: 0.3em;
-  width: 9ch;
-  padding: 0.4rem;
-  border: 2.5px solid var(--border);
-  border-radius: 12px;
-}
-
-.error {
-  color: var(--danger);
-  font-weight: 700;
-}
-
-.room-code {
-  font-size: 1.5rem;
-  font-weight: 700;
-}
-
-.seats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(8rem, 12rem));
-  gap: 0.75rem;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.seat {
-  padding: 1rem;
-  border: 3px solid var(--border);
-  border-radius: 18px;
-  background: var(--card);
-  color: #2b2238;
-  text-align: center;
-  font-weight: 700;
-}
-
-.seat.open {
-  border-style: dashed;
-  background: transparent;
-  color: var(--muted);
-}
-
-.seat-0 {
-  background: #f29db6;
-}
-.seat-1 {
-  background: #8db5e7;
-}
-.seat-2 {
-  background: #70c4a8;
-}
-.seat-3 {
-  background: #ffcc00;
-}
-
-.hint {
-  color: var(--muted);
-}
-
-.game {
-  height: 100%;
-  gap: 0.5rem;
-}
-
-.game-header {
-  display: flex;
-  gap: 1rem;
-  align-items: baseline;
-}
-
-.players {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.5rem;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.player {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0.6rem;
-  border: 2.5px solid var(--border);
-  border-radius: 12px;
-  color: #2b2238;
-  font-size: 0.85rem;
-}
-
-.player-text {
-  display: flex;
-  flex-direction: column;
-}
-
-.player.current {
-  outline: 3px solid var(--primary);
-}
-
-/* The Player's figure, with the Turn-timer ring around it on the current Player. */
-.figure {
-  position: relative;
-  flex: none;
-  width: 2rem;
-  height: 2rem;
-}
-
-.figure::after {
-  content: "";
-  position: absolute;
-  inset: 0.5rem;
-  border: 2px solid var(--border);
-  border-radius: 50%;
-  background: #fffaf3;
-}
-
-.turn-ring {
-  position: absolute;
-  inset: 0;
-  transform: rotate(-90deg);
-}
-
-.turn-ring circle {
-  fill: none;
-  stroke-width: 4;
-}
-
-.turn-ring-track {
-  stroke: rgb(43 34 56 / 0.2);
-}
-
-.turn-ring-left {
-  stroke: var(--border);
-  stroke-dasharray: 100;
-  stroke-linecap: round;
-  animation-name: turn-ring;
-  animation-timing-function: linear;
-  animation-fill-mode: forwards;
+  .turn-ring-left {
+    stroke: var(--primary);
+    stroke-dasharray: 100;
+    stroke-linecap: round;
+    animation-name: turn-ring;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
 }
 
 @keyframes turn-ring {
@@ -240,57 +170,81 @@ a {
   }
 }
 
-.cash {
+/* A sticker: a thick outline with a hard offset shadow in the border colour. */
+@utility sticker {
+  border: 3px solid var(--border);
+  box-shadow: 4px 4px 0 var(--border);
+}
+
+/* The smaller sticker for small controls (buttons, chips, pills). */
+@utility sticker-sm {
+  border: 2.5px solid var(--border);
+  box-shadow: 2px 2px 0 var(--border);
+}
+
+/* Pressing moves a sticker into its shadow. */
+@utility press {
+  transition:
+    transform 80ms ease-out,
+    box-shadow 80ms ease-out;
+  &:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 var(--border);
+  }
+}
+
+/* Tabular figures for money, counters and the Room code. */
+@utility tnum {
   font-variant-numeric: tabular-nums;
 }
 
-.toast {
-  display: block;
-  min-height: 1.5em;
-  margin: 0;
-  text-align: center;
+@utility board-backdrop {
+  background: var(--board-backdrop);
 }
 
-.board {
-  flex: 1;
-  width: 100%;
-  min-height: 240px;
-  position: relative;
-  overflow: hidden;
+/* The Logo's outlined display lettering, and its small version. */
+@utility logo-outline {
+  -webkit-text-stroke: 2px var(--border);
+  paint-order: stroke fill;
+  text-shadow: 4px 4px 0 var(--border);
 }
 
-.board canvas {
-  position: absolute;
-  inset: 0;
-  touch-action: none;
+@utility logo-outline-sm {
+  -webkit-text-stroke: 1px var(--border);
+  paint-order: stroke fill;
+  text-shadow: 2px 2px 0 var(--border);
 }
 
-.game-footer {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  min-height: 3rem;
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-.selected-field {
-  margin: 0;
-  font-weight: 700;
+@utility pop-in {
+  animation: pop-in 0.25s ease-out;
 }
 
-/* A decision with several options (the Quarantine choice). */
-.choice-panel {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
+@keyframes confetti {
+  0% {
+    transform: translateY(-20vh) rotate(0);
+  }
+  100% {
+    transform: translateY(110vh) rotate(720deg);
+  }
 }
 
-.choice-panel p {
-  margin: 0;
-  flex-basis: 100%;
-}
-
-.badge {
-  font-size: 0.75rem;
-  color: var(--muted);
+/* Less motion, but the Turn ring keeps its timing (its animation is the clock). */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.turn-ring-left),
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
