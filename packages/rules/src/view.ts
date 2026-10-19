@@ -1,4 +1,5 @@
 import type { FieldId } from "#board.ts";
+import { TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
 import { rentOf, valueOf } from "#rules/pricing.ts";
 import type { FieldState, GameState } from "#state.ts";
 
@@ -16,7 +17,14 @@ export type FieldView = FieldState & {
  * compile here until someone decides whether clients may see it. Derived
  * numbers the UI shows (Rent, Buyout price, Auto-sell's picks) are added here.
  */
-export type PublicView = Omit<GameState, "rng" | "fields"> & { fields: FieldView[] };
+export type PublicView = Omit<GameState, "rng" | "fields"> & {
+  fields: FieldView[];
+  /**
+   * The Turn timer ring: it runs for `limitMs` and empties at `endsAt`, which
+   * is the slack before `turnDeadline` (the slack is never shown).
+   */
+  turnTimer: { endsAt: number; limitMs: number };
+};
 
 export function publicView(state: GameState): PublicView {
   return {
@@ -25,6 +33,8 @@ export function publicView(state: GameState): PublicView {
     turn: state.turn,
     currentPlayer: state.currentPlayer,
     phase: state.phase,
+    turnDeadline: state.turnDeadline,
+    turnTimer: { endsAt: state.turnDeadline - TURN_SLACK_MS, limitMs: TURN_LIMIT_MS },
     settings: state.settings,
     endsAt: state.endsAt,
     players: state.players,

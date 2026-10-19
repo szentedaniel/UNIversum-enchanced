@@ -87,8 +87,8 @@ async function attach(connect: () => Promise<Room>): Promise<string> {
   joined.onMessage(MESSAGE.lobby, (lobby: LobbyMessage) => {
     roomStore.setState({ lobby });
   });
-  joined.onMessage(MESSAGE.game, ({ view, events }: GameMessage) => {
-    roomStore.setState({ push: { view, events, seq: ++seq } });
+  joined.onMessage(MESSAGE.game, ({ view, events, now }: GameMessage) => {
+    roomStore.setState({ push: { view, events, seq: ++seq, clockOffset: now - Date.now() } });
   });
   joined.onMessage(MESSAGE.rejected, ({ code }: RejectionMessage) => {
     roomStore.setState({ rejection: { code, seq: ++seq } });

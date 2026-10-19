@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FIELDS, publicView, START_CASH, type GameState } from "#index.ts";
-import { accept, newGame, player, reject, rollOnto, withField, withPlayer } from "./helpers.ts";
+import { FIELDS, publicView, START_CASH, SYSTEM, type GameState } from "#index.ts";
+import { accept, newGame, player, reject, rollOnto, T0, withField, withPlayer } from "./helpers.ts";
 
 // Field ids used below (none of them is reached by passing Start from the
 // positions `rollOnto` picks, except where a test says so).
@@ -147,6 +147,22 @@ describe("buying and building", () => {
         code: "NOT_OFFERED",
       });
     }
+  });
+
+  it("R17, R18: the offer gets a fresh deadline; when it runs out, the penalty, nothing bought, and the Turn passes", () => {
+    const offered = rollOnto(newGame(), VIENNA, T0 + 5_000).state;
+    expect(offered.turnDeadline).toBe(T0 + 5_000 + 23_000);
+
+    const timedOut = accept(
+      offered,
+      { type: "TurnTimedOut", turn: offered.turn },
+      SYSTEM,
+      offered.turnDeadline,
+    );
+
+    expect(timedOut.state.fields[VIENNA]).toEqual({ owner: null, level: 0 });
+    expect(player(timedOut.state, "p1").cash).toBe(START_CASH - 250_000);
+    expect(timedOut.state).toMatchObject({ currentPlayer: "p2", phase: { kind: "awaitingRoll" } });
   });
 
   it("refuses an offer intent outside an offer", () => {
