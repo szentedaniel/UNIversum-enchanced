@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v7
+
+      # pnpm comes from `packageManager` in package.json; its store is cached.
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Format
+        run: pnpm exec oxfmt --check
+
+      - name: Lint
+        run: pnpm exec oxlint --type-aware --type-check
+
+      - name: Type-check (tsc --noEmit per package)
+        run: pnpm -r run typecheck
+
+      - name: Unit and server tests
+        run: pnpm exec vitest run
+
+      - name: Build
+        run: pnpm --filter @universum/web run build
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @universum/e2e exec playwright install --with-deps chromium webkit
+
+      - name: Playwright (desktop Chromium + iPhone WebKit)
+        run: pnpm --filter @universum/e2e run test
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: apps/e2e/playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
