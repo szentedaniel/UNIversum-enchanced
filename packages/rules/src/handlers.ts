@@ -1,4 +1,4 @@
-import type { IntentOf, IntentType } from "#intents.ts";
+import type { Intent, IntentOf, IntentType, SystemIntent } from "#intents.ts";
 import type { Rejection } from "#rejections.ts";
 import type { PhaseKind } from "#state.ts";
 import type { Tx } from "#tx.ts";
@@ -6,7 +6,7 @@ import type { Tx } from "#tx.ts";
 /** How `apply` runs one intent type. */
 export type IntentHandler<K extends IntentType> = {
   /** `player`: only the current Player may send it. `system`: only the Room server. */
-  actor: "player" | "system";
+  actor: K extends SystemIntent["type"] ? "system" : "player";
   /** The phases in which the intent is legal; anywhere else it is `NOT_OFFERED`. */
   phases: readonly PhaseKind[];
   /**
@@ -19,3 +19,10 @@ export type IntentHandler<K extends IntentType> = {
 
 /** One handler for every intent type: `apply.ts` fails to compile if one is missing. */
 export type IntentHandlers = { [K in IntentType]: IntentHandler<K> };
+
+/** A handler seen without its intent type, as `apply` dispatches it. */
+export type AnyIntentHandler = {
+  actor: "player" | "system";
+  phases: readonly PhaseKind[];
+  run(tx: Tx, intent: Intent): Rejection | void;
+};

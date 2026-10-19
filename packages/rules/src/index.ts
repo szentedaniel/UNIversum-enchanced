@@ -14,7 +14,10 @@ export {
   type Actor,
   type Ctx,
   type Intent,
-  type IntentMap,
+  type PlayerIntent,
+  type PlayerIntentMap,
+  type SystemIntent,
+  type SystemIntentMap,
   type IntentOf,
   type IntentType,
 } from "#intents.ts";

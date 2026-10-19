@@ -20,7 +20,7 @@ declare module "#state.ts" {
 }
 
 declare module "#intents.ts" {
-  interface IntentMap {
+  interface PlayerIntentMap {
     /** Roll two dice and play out the move (R21). */
     Roll: {};
   }

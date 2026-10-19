@@ -1,30 +1,44 @@
 /**
- * Intents: what a Player (or the Room server, as `system`) asks the engine to
- * do. Every intent carries the `turn` it was meant for; a mismatch is stale.
+ * Intents: what a Player, or the Room server itself, asks the engine to do.
+ * Every intent carries the `turn` it was meant for; a mismatch is stale.
  *
- * The map is open: each rule area adds its intents with declaration merging,
- * next to their handlers (see `rules/turn.ts`):
+ * The maps are open: each rule area adds its intents with declaration merging,
+ * next to their handlers (see `rules/turn.ts`). Player intents go in
+ * `PlayerIntentMap`; intents only the Room server sends (deadlines) go in
+ * `SystemIntentMap`:
  *
  * ```ts
  * declare module "#intents.ts" {
- *   interface IntentMap {
+ *   interface PlayerIntentMap {
  *     BuyLevel: { level: number };
+ *   }
+ *   interface SystemIntentMap {
+ *     TurnTimedOut: {};
  *   }
  * }
  * ```
  *
- * The protocol package checks its Zod schemas against `Intent` at compile time,
- * so a new intent also needs a schema there.
+ * The protocol package checks its Zod schemas against `PlayerIntent` at compile
+ * time, so a new Player intent also needs a schema there.
  */
 import type { PlayerId } from "#state.ts";
 
-export interface IntentMap {}
+export interface PlayerIntentMap {}
 
-export type IntentType = keyof IntentMap;
+export interface SystemIntentMap {}
 
-export type Intent = {
-  [K in IntentType]: { type: K; turn: number } & IntentMap[K];
-}[IntentType];
+type IntentUnion<M> = { [K in keyof M]: { type: K; turn: number } & M[K] }[keyof M];
+
+/** Intents a Player sends, as the current Player. */
+export type PlayerIntent = IntentUnion<PlayerIntentMap>;
+
+/** Intents the Room server sends with the `SYSTEM` actor. */
+export type SystemIntent = IntentUnion<SystemIntentMap>;
+
+// oxlint-disable-next-line typescript/no-redundant-type-constituents -- SystemIntent is `never` until #25 adds TurnTimedOut
+export type Intent = PlayerIntent | SystemIntent;
+
+export type IntentType = Intent["type"];
 
 export type IntentOf<K extends IntentType> = Extract<Intent, { type: K }>;
 

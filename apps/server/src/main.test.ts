@@ -26,9 +26,9 @@ describe("server under plain Node", () => {
       [
         "--input-type=module",
         "-e",
-        `import { INTENT_MESSAGE } from "@universum/protocol";
+        `import { MESSAGE } from "@universum/protocol";
          import { FIELD_COUNT } from "@universum/rules";
-         console.log(INTENT_MESSAGE + " " + FIELD_COUNT);`,
+         console.log(MESSAGE.intent + " " + FIELD_COUNT);`,
       ],
       { cwd: serverDir },
     );
