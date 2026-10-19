@@ -66,7 +66,7 @@ test("a password Lobby is listed with a lock, asks for its password, fills up an
     // A full Lobby shows Full, with no Join button; joining by code says so.
     await expect(tile).toContainText("Full");
     await expect(tile.getByRole("button", { name: "Join" })).toHaveCount(0);
-    await watcher!.getByLabel("Room code").fill(code);
+    await watcher!.getByRole("textbox", { name: "Room code" }).fill(code);
     await watcher!.locator("form.join").getByRole("button", { name: "Join" }).click();
     await expect(watcher!.getByRole("alert")).toHaveText("This Lobby is full.");
 
@@ -94,11 +94,11 @@ test("joining by Room code asks for the password, and an unknown code is refused
     const code = codeOf(creator);
 
     await guest.goto("/");
-    await guest.getByLabel("Room code").fill("100000");
+    await guest.getByRole("textbox", { name: "Room code" }).fill("100000");
     await guest.getByRole("button", { name: "Join" }).click();
     await expect(guest.getByRole("alert")).toHaveText("There is no open Room with this code.");
 
-    await guest.getByLabel("Room code").fill(code);
+    await guest.getByRole("textbox", { name: "Room code" }).fill(code);
     await guest.getByRole("button", { name: "Join" }).click();
     await expect(guest.getByText("This Lobby has a password.")).toBeVisible();
     await guest.getByLabel("Password").fill("pw");

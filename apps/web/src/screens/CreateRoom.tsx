@@ -149,11 +149,11 @@ function Segment({
   children: ReactNode;
 }) {
   return (
-    <label className="flex-1">
+    <label className="relative flex-1">
       <input
         type="radio"
         name={name}
-        className="peer sr-only"
+        className="peer absolute inset-0 z-10 m-0 size-full cursor-pointer appearance-none opacity-0"
         checked={checked}
         onChange={onChange}
       />
