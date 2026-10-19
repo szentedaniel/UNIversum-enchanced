@@ -1,4 +1,4 @@
-import type { GameEvent, PublicView } from "@universum/rules";
+import type { FieldId, GameEvent, PhaseOf, PlayerIntent, PublicView } from "@universum/rules";
 import { FIELDS } from "@universum/rules/board";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
@@ -26,6 +26,24 @@ function describe(event: GameEvent, view: PublicView): string | null {
       return m.event_round_bonus({ name: name(event.player), amount: formatMoney(event.amount) });
     case "TurnPassed":
       return m.event_turn_passed({ name: name(event.player) });
+    case "LevelBought":
+      return m.event_level_bought({
+        name: name(event.player),
+        field: fieldName(FIELDS[event.field]?.key ?? ""),
+        level: event.level,
+        price: formatMoney(event.price),
+      });
+    case "OfferDeclined":
+      return m.event_offer_declined({
+        name: name(event.player),
+        field: fieldName(FIELDS[event.field]?.key ?? ""),
+      });
+    case "RentPaid":
+      return m.event_rent_paid({
+        name: name(event.player),
+        owner: name(event.owner),
+        amount: formatMoney(event.amount),
+      });
     default:
       return null;
   }
@@ -56,6 +74,7 @@ export function Game() {
   const answeredAt = Math.max(push.seq, rejection?.seq ?? 0);
   const pending = sentAt !== null && answeredAt <= sentAt;
   const canRoll = myTurn && view.phase.kind === "awaitingRoll" && !pending;
+  const offer = myTurn && view.phase.kind === "offer" && !pending ? view.phase : null;
   const toast = events
     .map((event) => describe(event, view))
     .filter((text) => text !== null)
@@ -63,9 +82,9 @@ export function Game() {
     .join(" · ");
   const selected = selectedField === null ? null : FIELDS[selectedField];
 
-  function roll() {
+  function send(intent: PlayerIntent) {
     setSentAt(answeredAt);
-    sendIntent({ type: "Roll", turn: view.turn });
+    sendIntent(intent);
   }
 
   return (
@@ -96,17 +115,84 @@ export function Game() {
       </output>
       <Board />
       <footer className="game-footer">
-        {selected && (
-          <p className="selected-field" data-testid="selected-field">
-            {fieldName(selected.key)}
-          </p>
-        )}
+        {selected && <FieldDetails view={view} field={selected.id} />}
         {canRoll && (
-          <button type="button" className="primary" onClick={roll}>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => send({ type: "Roll", turn: view.turn })}
+          >
             {m.game_roll()}
           </button>
         )}
+        {offer && (
+          <OfferPanel
+            view={view}
+            offer={offer}
+            onBuy={(level) => send({ type: "BuyLevel", turn: view.turn, level })}
+            onDecline={() => send({ type: "DeclineOffer", turn: view.turn })}
+          />
+        )}
       </footer>
     </main>
+  );
+}
+
+/** The tapped Field: its name, and for a University its owner, Level, Value and Rent. */
+function FieldDetails({ view, field }: { view: PublicView; field: FieldId }) {
+  const info = FIELDS[field];
+  const state = view.fields[field];
+  if (!info || !state) return null;
+  const owner = view.players.find((p) => p.id === state.owner);
+  return (
+    <div className="field-details">
+      <p className="selected-field" data-testid="selected-field">
+        {fieldName(info.key)}
+      </p>
+      {info.kind === "university" && (
+        <p className="field-numbers" data-testid="field-numbers">
+          {owner
+            ? [
+                playerName(owner.name),
+                m.field_level({ level: state.level }),
+                m.field_value({ amount: formatMoney(state.value) }),
+                m.field_rent({ amount: formatMoney(state.rent) }),
+              ].join(" · ")
+            : m.field_unowned()}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The buy/build offer: one button per affordable Level with its price, and Decline. */
+function OfferPanel({
+  view,
+  offer,
+  onBuy,
+  onDecline,
+}: {
+  view: PublicView;
+  offer: PhaseOf<"offer">;
+  onBuy: (level: number) => void;
+  onDecline: () => void;
+}) {
+  const field = fieldName(FIELDS[offer.field]?.key ?? "");
+  const own = view.fields[offer.field]?.owner === view.currentPlayer;
+  const title = own ? m.offer_build({ field }) : m.offer_buy({ field });
+  return (
+    <section className="offer" aria-label={title} data-testid="offer">
+      <h2>{title}</h2>
+      <div className="offer-levels">
+        {offer.levels.map(({ level, price }) => (
+          <button key={level} type="button" className="primary" onClick={() => onBuy(level)}>
+            {m.offer_level({ level, price: formatMoney(price) })}
+          </button>
+        ))}
+        <button type="button" onClick={onDecline}>
+          {m.offer_decline()}
+        </button>
+      </div>
+    </section>
   );
 }

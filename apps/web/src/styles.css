@@ -214,9 +214,39 @@ a {
 
 .game-footer {
   display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
   align-items: center;
   min-height: 3rem;
+}
+
+.field-details p {
+  margin: 0;
+}
+
+.field-numbers {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.offer {
+  flex: 1 1 100%;
+}
+
+.offer h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.offer-levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.offer-levels button {
+  font-variant-numeric: tabular-nums;
 }
 
 .selected-field {

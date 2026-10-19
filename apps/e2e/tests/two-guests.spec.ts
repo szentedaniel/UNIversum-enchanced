@@ -1,7 +1,13 @@
 import { chromium, devices, expect, test, webkit, type Page } from "@playwright/test";
 
 // The renderer's test-only hooks (apps/web/src/test-hooks.ts).
-type ViewSummary = { turn: number; version: number; currentPlayer: string };
+type ViewSummary = {
+  turn: number;
+  version: number;
+  currentPlayer: string;
+  phase: { kind: string; field?: number; levels?: { level: number; price: number }[] };
+  fields: { owner: string | null; level: number; value: number; rent: number }[];
+};
 declare global {
   interface Window {
     universumTest?: {
@@ -56,25 +62,54 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     await Promise.all(both.map((page) => expect(page).toHaveURL(`/game/${code}`)));
     await expect(desktop.getByText("Your Turn")).toBeVisible();
 
-    // A few Turns: the first Seat (the creator) rolls first, then play alternates.
+    // Turns: the first Seat (the creator) rolls first, then play alternates. The
+    // first University offer is bought at Level 1; later offers are declined.
+    let bought: { field: number; owner: string } | null = null;
+    const press = (page: Page, name: string | RegExp) => {
+      const button = page.getByRole("button", { name });
+      return page === phone ? button.tap() : button.click();
+    };
     const playTurn = async (turn: number) => {
       const [roller, waiter] = turn % 2 === 1 ? [desktop, phone] : [phone, desktop];
       await expect(waiter.getByRole("button", { name: "Roll" })).toHaveCount(0);
-      const rollButton = roller.getByRole("button", { name: "Roll" });
-      await (roller === phone ? rollButton.tap() : rollButton.click());
+      await press(roller, "Roll");
+      // The roll ends the Turn, or stops at a University offer.
+      await expect
+        .poll(async () => {
+          const view = await viewOf(roller);
+          return view?.turn === turn + 1 || view?.phase.kind === "offer";
+        })
+        .toBe(true);
+      const view = await viewOf(roller);
+      if (view?.phase.kind === "offer") {
+        await expect(roller.getByTestId("offer")).toBeVisible();
+        await expect(waiter.getByTestId("offer")).toHaveCount(0);
+        if (bought) {
+          await press(roller, "Decline");
+        } else {
+          await press(roller, /^Level 1 · /);
+          bought = { field: view.phase.field!, owner: view.currentPlayer };
+        }
+      }
       await Promise.all(
         both.map((page) => expect.poll(async () => (await viewOf(page))?.turn).toBe(turn + 1)),
       );
     };
-    for (let turn = 1; turn <= 4; turn++) {
+    // At least 4 Turns, and on until someone has bought a University.
+    for (let turn = 1; turn <= 16; turn++) {
       // oxlint-disable-next-line no-await-in-loop -- Turns are played one after another
       await playTurn(turn);
+      if (turn >= 4 && bought) break;
     }
 
-    // Every client got the same view, one version per accepted roll.
+    // Every client got the same view, and sees the bought University's owner and Level.
     const [desktopView, phoneView] = await Promise.all(both.map(viewOf));
     expect(desktopView).toEqual(phoneView);
-    expect(desktopView?.version).toBe(4);
+    expect(desktopView?.version).toBeGreaterThanOrEqual(4);
+    expect(bought).not.toBeNull();
+    const { field, owner } = bought!;
+    expect(desktopView?.fields[field]).toMatchObject({ owner, level: 1 });
+    expect(desktopView?.fields[field]?.value).toBeGreaterThan(0);
 
     // Tapping a Field on the Board (found through the test hook) selects it.
     const zurich = await fieldCenter(phone, 5);
