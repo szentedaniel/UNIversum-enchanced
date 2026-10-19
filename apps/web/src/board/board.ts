@@ -217,7 +217,9 @@ export async function createBoard(host: HTMLElement, options: BoardOptions): Pro
       width / 2 - (bounds.x + bounds.w / 2) * scale,
       height / 2 - (bounds.y + bounds.h / 2) * scale,
     );
-    invalidate();
+    // Render now, not on the next frame: Pixi hit-tests taps against the
+    // transforms of the last render, so a tap right after a resize would miss.
+    app.render();
   }
   const resizeObserver = new ResizeObserver(fit);
   resizeObserver.observe(host);
