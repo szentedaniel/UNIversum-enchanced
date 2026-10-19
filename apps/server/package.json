@@ -1,0 +1,26 @@
+{
+  "name": "@universum/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#*": "./src/*"
+  },
+  "scripts": {
+    "dev": "node --watch --env-file-if-exists=../../.env src/main.ts",
+    "start": "node src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@colyseus/core": "catalog:",
+    "@colyseus/ws-transport": "catalog:",
+    "@universum/protocol": "workspace:*",
+    "@universum/rules": "workspace:*"
+  },
+  "devDependencies": {
+    "@colyseus/sdk": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
