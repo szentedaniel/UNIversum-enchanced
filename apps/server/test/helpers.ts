@@ -2,6 +2,10 @@
  * Room-server test helpers: an in-process server on a free port, and real
  * `@colyseus/sdk` clients that record every message they receive.
  */
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { matchMaker } from "@colyseus/core";
 import { Client, type Room } from "@colyseus/sdk";
 import {
   GAME_ROOM,
@@ -12,8 +16,11 @@ import {
   type RejectionMessage,
   type WelcomeMessage,
 } from "@universum/protocol";
+import { GameRoom } from "#room/game-room.ts";
 import type { Scheduler } from "#room/scheduler.ts";
-import { createGameServer } from "#server.ts";
+import { createGameServer, restoreRooms } from "#server.ts";
+import type { RoomStore } from "#store/room-store.ts";
+import { openSqliteRoomStore } from "#store/sqlite-room-store.ts";
 
 type Messages = {
   welcome: WelcomeMessage;
@@ -75,21 +82,52 @@ export class ManualScheduler implements Scheduler {
   }
 }
 
+export type TestServerOptions = {
+  /** The SQLite file; a new temp file by default. Pass the last server's to restart on it. */
+  databasePath?: string;
+  /** The clock; a new `ManualScheduler` at `T0` by default. */
+  scheduler?: ManualScheduler;
+  /** Wraps the SQLite store, e.g. to make writes fail. */
+  wrapStore?: (store: RoomStore) => RoomStore;
+};
+
 export type TestServer = {
   sdk: Client;
   /** Every Room's clock and wake-ups. */
   scheduler: ManualScheduler;
+  /** The SQLite file, to start the next server on after `stop()`. */
+  databasePath: string;
+  /** The store the server writes (read it to see what survives a restart). */
+  store: RoomStore;
+  /** How many Rooms the boot restored. */
+  restored: number;
   /** A Guest creates a Room. */
   create(options?: CreateOptions): Promise<TestClient>;
   /** A Guest joins a Room by its Room code. */
   join(code: string): Promise<TestClient>;
+  /**
+   * The live Room under `code`, if any. Only for what no client can see yet:
+   * a restored game's Seats have no connection until rejoin lands (#35).
+   */
+  room(code: string): GameRoom | undefined;
+  /** Shuts down the way a deploy does (clients still connected), then closes the store. */
   stop(): Promise<void>;
 };
 
-export async function startTestServer(): Promise<TestServer> {
-  const scheduler = new ManualScheduler();
-  const server = createGameServer({ gracefullyShutdown: false, scheduler });
+/**
+ * Starts the Room server in-process the way `main.ts` does: listen, then
+ * restore every unfinished Room from the store. One at a time per test file:
+ * Colyseus' matchmaker is a process-wide singleton.
+ */
+export async function startTestServer(options: TestServerOptions = {}): Promise<TestServer> {
+  const scheduler = options.scheduler ?? new ManualScheduler();
+  const databasePath =
+    options.databasePath ?? join(mkdtempSync(join(tmpdir(), "universum-server-")), "rooms.sqlite");
+  const sqlite = openSqliteRoomStore(databasePath);
+  const store = options.wrapStore?.(sqlite) ?? sqlite;
+  const server = createGameServer({ gracefullyShutdown: false, scheduler, store });
   await server.listen(0, "127.0.0.1");
+  const restored = await restoreRooms({ store, scheduler });
   const address = server.transport.server?.address();
   if (!address || typeof address === "string") throw new Error("the server has no TCP port");
   const sdk = new Client(`ws://127.0.0.1:${address.port}`);
@@ -101,13 +139,37 @@ export async function startTestServer(): Promise<TestServer> {
   return {
     sdk,
     scheduler,
-    create: async (options = {}) => track(new TestClient(await sdk.create(GAME_ROOM, options))),
+    databasePath,
+    store,
+    restored,
+    create: async (createOptions = {}) =>
+      track(new TestClient(await sdk.create(GAME_ROOM, createOptions))),
     join: async (code) => track(new TestClient(await sdk.joinById(code, {}))),
+    room(code) {
+      const room = matchMaker.getLocalRoomById(code);
+      return room instanceof GameRoom ? room : undefined;
+    },
     async stop() {
-      await Promise.all(clients.map((c) => c.leave()));
       await server.gracefullyShutdown(false);
+      await Promise.all(clients.map((c) => c.leave()));
+      sqlite.close();
     },
   };
+}
+
+/** Waits until `check` stops throwing (for effects no client is told about, like a deleted Room). */
+export async function eventually(check: () => void, timeoutMs = TIMEOUT_MS): Promise<void> {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      check();
+      return;
+    } catch (error) {
+      if (Date.now() > until) throw error;
+      // oxlint-disable-next-line no-await-in-loop -- polling until the effect lands
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
 }
 
 /** One Guest's connection. Messages are queued per type until a test takes them. */
