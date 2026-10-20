@@ -10,7 +10,7 @@ const me = (page: Page) => page.evaluate(() => window.universumTest?.room().me ?
 test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and play", async ({
   baseURL,
 }) => {
-  const desktopBrowser = await chromium.launch();
+  const desktopBrowser = await chromium.launch({ args: ["--mute-audio"] });
   const phoneBrowser = await webkit.launch();
   try {
     const desktopContext = await desktopBrowser.newContext({

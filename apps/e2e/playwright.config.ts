@@ -45,7 +45,11 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    { name: "desktop-chromium", use: { ...devices["Desktop Chrome"] }, testIgnore: MIXED },
+    {
+      name: "desktop-chromium",
+      use: { ...devices["Desktop Chrome"], launchOptions: { args: ["--mute-audio"] } },
+      testIgnore: MIXED,
+    },
     { name: "iphone-webkit", use: { ...devices["iPhone 15"] }, testIgnore: MIXED },
     // Multi-Guest tests launch their own desktop Chromium and iPhone WebKit
     // browsers, one context per Guest, so they run once, not per project.
