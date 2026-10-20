@@ -291,6 +291,9 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.metrics.trackRoom(this);
     if (restored) {
       this.log.info({ playing: this.game !== null, seats: this.seats.length }, "Room restored");
+      // A crash between the final save and `endGame` can leave a game-over
+      // state stored as unfinished: finish it now, so retention applies.
+      if (this.game?.phase.kind === "gameOver") this.endGame();
     } else {
       this.log.info({ ...this.settings, hasPassword: this.password !== null }, "Room created");
     }
@@ -323,10 +326,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       // A running game lives on with nobody connected (its Turns time out),
       // until it ends; a deadline that passed while the server was down fires at once.
       this.unlist();
-      // A crash between the final save and `endGame` can leave a game-over
-      // state stored as unfinished: finish it now, so retention applies.
-      if (this.game.phase.kind === "gameOver") this.endGame();
-      else this.scheduleDeadline(this.game);
+      this.scheduleDeadline(this.game);
     } else {
       // A Lobby holds each Seat for its 60 s, as if its Player had just dropped.
       for (const seat of this.seats) this.hold(seat, null);

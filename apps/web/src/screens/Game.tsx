@@ -229,7 +229,7 @@ export function Game() {
 
   const statusRow = (
     <>
-      <MinutePill endsAt={view.endsAt} />
+      <MinutePill endsAt={view.endsAt} clockOffset={push.clockOffset} />
       <EventToast
         key={rejected ? `r${rejection.seq}` : push.seq}
         tone={rejected ? "bad" : "neutral"}
