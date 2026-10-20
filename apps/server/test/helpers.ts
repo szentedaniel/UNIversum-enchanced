@@ -23,6 +23,8 @@ import {
   type RejectionMessage,
   type WelcomeMessage,
 } from "@universum/protocol";
+import type { apply } from "@universum/rules";
+import type { ErrorReporter } from "#observability/error-reporting.ts";
 import type { Logger } from "#observability/logger.ts";
 import { GameMetrics } from "#observability/metrics.ts";
 import { DEFAULT_LIMITS, type Limits } from "#limits.ts";
@@ -123,6 +125,10 @@ export type TestServerOptions = {
   wrapStore?: (store: RoomStore) => RoomStore;
   /** The server's logger (e.g. `createLogger` on a `captureLogs()` stream); silent by default. */
   log?: Logger;
+  /** The rules engine's `apply`, e.g. one that throws (an engine bug); the real one by default. */
+  engine?: typeof apply;
+  /** Where errors are reported; nowhere by default. */
+  reporter?: ErrorReporter;
 };
 
 export type TestServer = {
@@ -176,8 +182,10 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
   const sqlite = openSqliteRoomStore(databasePath);
   const store = options.wrapStore?.(sqlite) ?? sqlite;
   const metrics = new GameMetrics({ release: "test" });
-  const { log } = options;
+  const { log, engine, reporter } = options;
   const server = createGameServer({
+    engine,
+    reporter,
     gracefullyShutdown: false,
     scheduler,
     store,
