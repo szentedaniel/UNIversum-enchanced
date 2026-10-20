@@ -248,8 +248,10 @@ describe("Rent", () => {
     ]);
   });
 
-  it("R56: emits RentPaid, and the Turn passes", () => {
-    const applied = landOnOwned(LONDON, { [LONDON]: 2 });
+  it("R56: emits RentPaid, and the Turn passes when no Buyout is affordable", () => {
+    const start = withPlayer(newGame(), "p2", { cash: 1_000_000 });
+
+    const applied = landOnOwned(LONDON, { [LONDON]: 2 }, start);
 
     expect(applied.events.slice(-2)).toEqual([
       { type: "RentPaid", player: "p2", owner: "p1", field: LONDON, amount: 386_400 },
@@ -304,7 +306,7 @@ describe("Rent", () => {
 });
 
 describe("the view", () => {
-  it("carries each Field's Value and current Rent, with the Monopoly", () => {
+  it("R30: carries each Field's Value, current Rent with the Monopoly, and Bank sale value", () => {
     let state = newGame();
     state = withField(state, CHICAGO, { owner: "p1", level: 1 });
     state = withField(state, AUSTIN, { owner: "p1", level: 3 });
@@ -313,10 +315,22 @@ describe("the view", () => {
 
     const { fields } = publicView(state);
 
-    expect(fields[AUSTIN]).toEqual({ owner: "p1", level: 3, value: 544_000, rent: 647_360 });
-    expect(fields[SEATTLE]).toEqual({ owner: "p2", level: 2, value: 504_000, rent: 352_800 });
-    expect(fields[VIENNA]).toEqual({ owner: null, level: 0, value: 0, rent: 0 });
-    expect(fields[0]).toEqual({ owner: null, level: 0, value: 0, rent: 0 });
+    expect(fields[AUSTIN]).toEqual({
+      owner: "p1",
+      level: 3,
+      value: 544_000,
+      rent: 647_360,
+      sale: 489_600,
+    });
+    expect(fields[SEATTLE]).toEqual({
+      owner: "p2",
+      level: 2,
+      value: 504_000,
+      rent: 352_800,
+      sale: 453_600,
+    });
+    expect(fields[VIENNA]).toEqual({ owner: null, level: 0, value: 0, rent: 0, sale: 0 });
+    expect(fields[0]).toEqual({ owner: null, level: 0, value: 0, rent: 0, sale: 0 });
   });
 
   it("carries the offered Levels with their prices", () => {

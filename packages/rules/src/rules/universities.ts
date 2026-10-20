@@ -1,17 +1,18 @@
 /**
- * Universities: the buy/build offer, and Rent (R47–R51, R54, R56, R58, F24).
+ * Universities: the buy/build offer, Rent and the Buyout (R47–R52, R54–R56,
+ * R58, F3, F24).
  *
  * Landing on an unowned or own University offers every Level the Player can
  * afford; buying one or declining ends the Turn. Landing on another Player's
- * University charges Rent to the owner. The Buyout (#27) and the Sale when
- * cash can't cover the Rent (#29) hook in here.
+ * University charges Rent to the owner, then offers the Buyout if the Player
+ * can pay it. The Sale when cash can't cover the Rent (#29) hooks in here.
  */
 import { MAX_LEVEL, type FieldId } from "#board.ts";
 import type { IntentHandlers } from "#handlers.ts";
 import { rejection } from "#rejections.ts";
 import { charge } from "#rules/charge.ts";
 import type { Landing } from "#rules/landing.ts";
-import { rentOf, valueAt } from "#rules/pricing.ts";
+import { buyoutPriceOf, rentOf, valueAt } from "#rules/pricing.ts";
 import { passTurn } from "#rules/pass-turn.ts";
 import type { PlayerId } from "#state.ts";
 import { decide, emit, playerById, type Tx } from "#tx.ts";
@@ -24,8 +25,12 @@ declare module "#state.ts" {
     /**
      * The current Player may buy or build on the Field they landed on (R51),
      * or decline. `levels` lists only what they can afford, cheapest first.
+     * `buyout`: another Player's University can be bought out at this price
+     * (R52; `levels` is then empty). `museum`: the unowned Museum can be
+     * bought at this price (R53; `levels` is then empty). Either key is
+     * present only when that option is offered.
      */
-    offer: { field: FieldId; levels: LevelOffer[] };
+    offer: { field: FieldId; levels: LevelOffer[]; buyout?: number; museum?: number };
   }
 }
 
@@ -35,6 +40,8 @@ declare module "#intents.ts" {
     BuyLevel: { level: number };
     /** Turn the offer down; the Turn passes (R20, R54). */
     DeclineOffer: {};
+    /** Buy out another Player's University at the offered price (R52). */
+    Buyout: {};
   }
 }
 
@@ -45,6 +52,8 @@ declare module "#events.ts" {
     OfferDeclined: { player: PlayerId; field: FieldId };
     /** `player` paid `amount` Rent for `field` to its owner. */
     RentPaid: { player: PlayerId; owner: PlayerId; field: FieldId; amount: number };
+    /** `player` bought `field` at `level` from `owner`, paying `owner` the `price` (R52, F3). */
+    BoughtOut: { player: PlayerId; owner: PlayerId; field: FieldId; level: number; price: number };
   }
 }
 
@@ -63,7 +72,7 @@ export function levelOffers(field: FieldId, level: number, cash: number): LevelO
   return offers;
 }
 
-/** Landing on a University (R13, R48, R49, R56, R58). */
+/** Landing on a University (R13, R48, R49, R52, R56, R58). */
 export const landOnUniversity: Landing = (tx, playerId, field) => {
   const { owner, level } = tx.state.fields[field] ?? { owner: null, level: 0 };
   if (owner !== null && owner !== playerId) {
@@ -72,7 +81,12 @@ export const landOnUniversity: Landing = (tx, playerId, field) => {
       playerById(tx, owner).cash += amount;
       emit(tx, { type: "RentPaid", player: playerId, owner, field, amount });
     });
-    return; // The Buyout offer comes here (#27).
+    // Then the Buyout: below Level 4, and only if what is left covers it (R48, R52).
+    const buyout = buyoutPriceOf(tx.state, field);
+    if (!tx.decided && level < MAX_LEVEL && buyout <= playerById(tx, playerId).cash) {
+      decide(tx, { kind: "offer", field, levels: [], buyout });
+    }
+    return;
   }
   // Own or unowned: no Rent (R58), only the offer.
   const levels = levelOffers(field, level, playerById(tx, playerId).cash);
@@ -104,6 +118,25 @@ export const universityIntents = {
         level: offer.level,
         price: offer.price,
       });
+      passTurn(tx);
+      return undefined;
+    },
+  },
+  Buyout: {
+    actor: "player",
+    phases: ["offer"],
+    run(tx) {
+      const { field, buyout } = offerOf(tx);
+      const fieldState = tx.state.fields[field];
+      if (buyout === undefined || !fieldState?.owner) return rejection("NOT_OFFERED");
+      const { owner, level } = fieldState;
+      const player = playerById(tx, tx.state.currentPlayer);
+      player.cash -= buyout;
+      // The owner is paid whichever Seat they hold (F3 fixed).
+      playerById(tx, owner).cash += buyout;
+      // Only the owner changes: the Level stays, and so does a Doubler on it (R55).
+      tx.state.fields[field] = { owner: player.id, level };
+      emit(tx, { type: "BoughtOut", player: player.id, owner, field, level, price: buyout });
       passTurn(tx);
       return undefined;
     },
