@@ -1,9 +1,10 @@
-import type { FieldId, GameEvent, PhaseOf, PlayerIntent, PublicView } from "@universum/rules";
+import type { GameEvent, PhaseOf, PlayerIntent, PublicView } from "@universum/rules";
 import { FIELDS } from "@universum/rules/board";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { useStore } from "zustand";
 import { Board } from "#board/Board.tsx";
+import { FieldCard } from "#board/FieldCard.tsx";
 import { EventToast, MinutePill } from "#components/GameHud.tsx";
 import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
@@ -96,7 +97,6 @@ export function Game() {
   const offer = myTurn && view.phase.kind === "offer" && !pending ? view.phase : null;
   // One toast at a time: the first event of the push worth one.
   const toast = events.map((event) => describe(event, view)).find((text) => text !== null);
-  const selected = selectedField === null ? null : FIELDS[selectedField];
 
   function send(intent: PlayerIntent) {
     setSentAt(answeredAt);
@@ -133,8 +133,8 @@ export function Game() {
     </>
   );
 
-  // The card (later: the Field card or the pick tray) at the bottom.
-  const card = (
+  // The Turn card at the bottom; the Field card takes its place while open (later: the pick tray).
+  const turnCard = (
     <Card className="gap-2 p-3">
       <div className="flex items-baseline justify-between gap-2">
         <strong data-testid="turn-of" className="truncate text-lg font-black">
@@ -146,7 +146,6 @@ export function Game() {
           {m.game_turn({ turn: view.turn })}
         </span>
       </div>
-      {selected && <FieldDetails view={view} field={selected.id} />}
       {canRoll && (
         <Button size="lg" onClick={() => send({ type: "Roll", turn: view.turn })}>
           {m.game_roll()}
@@ -162,12 +161,14 @@ export function Game() {
       )}
     </Card>
   );
+  const card = selectedField === null ? turnCard : <FieldCard id={selectedField} view={view} />;
 
   if (wide) {
     return (
       <main className="board-backdrop fixed inset-0 overflow-hidden">
-        {/* The Board's fit area: clear of the corner cards, the status row and the card. */}
-        <div className="absolute inset-x-[110px] top-[110px] bottom-[200px]">
+        {/* The Board's box: clear of the corner cards, the status row and the card; the
+            fit area also keeps clear of the camera buttons on its right. */}
+        <div className="absolute inset-x-[110px] top-[110px] bottom-[200px] [--board-inset-left:3.75rem] [--board-inset-right:3.75rem]">
           <Board />
         </div>
         <ul className="contents" aria-label={m.game_players()}>
@@ -197,43 +198,19 @@ export function Game() {
         ))}
       </ul>
       <div className="mt-2 flex min-w-0 items-center justify-center gap-2 px-2">{statusRow}</div>
-      <div className="relative min-h-0 flex-1">
+      {/* The card overlays the Board's bottom (the right side in landscape). The Board
+          fits above it and below the camera buttons, into space reserved whether or not
+          a card is open, so opening the Field card never changes the zoom. */}
+      <div className="relative mt-2 min-h-0 flex-1 [--board-inset-bottom:14rem] [--board-inset-top:3.75rem] landscape:[--board-inset-bottom:0px] landscape:[--board-inset-right:17.5rem]">
         <Board />
+        <div className="absolute inset-x-2 bottom-0 landscape:left-auto landscape:w-64">{card}</div>
       </div>
-      <div className="px-2">{card}</div>
     </main>
   );
 }
 
 /** Desktop corner of each Seat, clockwise from top left. */
 const CORNERS = ["top-3 left-3", "top-3 right-3", "right-3 bottom-3", "bottom-3 left-3"];
-
-/** The tapped Field: its name, and for a University its owner, Level, Value and Rent. */
-function FieldDetails({ view, field }: { view: PublicView; field: FieldId }) {
-  const info = FIELDS[field];
-  const state = view.fields[field];
-  if (!info || !state) return null;
-  const owner = view.players.find((p) => p.id === state.owner);
-  return (
-    <div>
-      <p className="m-0 font-display text-xl" data-testid="selected-field">
-        {fieldName(info.key)}
-      </p>
-      {info.kind === "university" && (
-        <p className="tnum m-0 text-sm font-bold text-ink/70" data-testid="field-numbers">
-          {owner
-            ? [
-                playerName(owner.name),
-                m.field_level({ level: state.level }),
-                m.field_value({ amount: formatMoney(state.value) }),
-                m.field_rent({ amount: formatMoney(state.rent) }),
-              ].join(" · ")
-            : m.field_unowned()}
-        </p>
-      )}
-    </div>
-  );
-}
 
 /** The buy/build offer: one button per affordable Level with its price, and Decline. */
 function OfferPanel({

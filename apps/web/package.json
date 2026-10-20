@@ -11,6 +11,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "atlas": "node scripts/atlas.ts",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "paraglide": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy localStorage preferredLanguage baseLocale --silent",
     "postinstall": "pnpm run paraglide"
@@ -33,6 +34,7 @@
     "zustand": "catalog:"
   },
   "devDependencies": {
+    "@assetpack/core": "catalog:",
     "@inlang/paraglide-js": "catalog:",
     "@inlang/plugin-message-format": "catalog:",
     "@tailwindcss/vite": "catalog:",
@@ -41,6 +43,7 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "oxlint": "catalog:",
+    "sharp": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
