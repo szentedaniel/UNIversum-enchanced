@@ -7,12 +7,21 @@ import {
   TURN_LIMIT_MS,
   TURN_SLACK_MS,
 } from "#index.ts";
-import { accept, newGame, player, reject, rollOnto, T0, withPlayer } from "./helpers.ts";
+import {
+  accept,
+  deadlineOf,
+  newGame,
+  player,
+  reject,
+  rollOnto,
+  T0,
+  withPlayer,
+} from "./helpers.ts";
 
 /** 20 s on the ring plus about 3 s of slack for animations (F22). */
 const DEADLINE_AFTER = 23_000;
 
-const timeOut = (state: ReturnType<typeof newGame>, now = state.turnDeadline) =>
+const timeOut = (state: ReturnType<typeof newGame>, now = deadlineOf(state)) =>
   accept(state, { type: "TurnTimedOut", turn: state.turn }, SYSTEM, now);
 
 describe("the Turn timer", () => {
@@ -109,7 +118,7 @@ describe("TurnTimedOut", () => {
   it("a stale TurnTimedOut (an earlier Turn) is rejected and changes nothing", () => {
     const { state } = rollOnto(newGame(), START_FIELD);
 
-    expect(reject(state, { type: "TurnTimedOut", turn: 1 }, SYSTEM, state.turnDeadline)).toEqual({
+    expect(reject(state, { type: "TurnTimedOut", turn: 1 }, SYSTEM, deadlineOf(state))).toEqual({
       code: "STALE_TURN",
     });
   });
@@ -117,15 +126,15 @@ describe("TurnTimedOut", () => {
   it("a TurnTimedOut before the deadline is not offered", () => {
     const state = newGame();
 
-    expect(
-      reject(state, { type: "TurnTimedOut", turn: 1 }, SYSTEM, state.turnDeadline - 1),
-    ).toEqual({ code: "NOT_OFFERED" });
+    expect(reject(state, { type: "TurnTimedOut", turn: 1 }, SYSTEM, deadlineOf(state) - 1)).toEqual(
+      { code: "NOT_OFFERED" },
+    );
   });
 
   it("a Player cannot send TurnTimedOut", () => {
     const state = newGame();
 
-    expect(reject(state, { type: "TurnTimedOut", turn: 1 }, "p1", state.turnDeadline)).toEqual({
+    expect(reject(state, { type: "TurnTimedOut", turn: 1 }, "p1", deadlineOf(state))).toEqual({
       code: "NOT_YOUR_TURN",
     });
   });

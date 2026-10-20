@@ -103,7 +103,7 @@ export function Board() {
           const field = selectedPick(pick, uiStore.getState().singlePick);
           return renderer.setPick(singleMarks(pick, field));
         }
-        if (!sale) return renderer.setPick(null);
+        if (!sale || push.view.turnTimer === null) return renderer.setPick(null);
         const msLeft = push.view.turnTimer.endsAt - (Date.now() + push.clockOffset);
         const picks = salePicksFor(uiStore.getState().salePicks, sale.key);
         renderer.setPick(saleMarks(sale, push.view, picks, msLeft));

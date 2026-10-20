@@ -37,6 +37,15 @@ export function decide(tx: Tx, phase: Phase): void {
   tx.decided = true;
 }
 
+/**
+ * A phase the game never leaves because it is over (R80): a phase change with
+ * no deadline, so the Room schedules no wake-up for it.
+ */
+export function setFinalPhase(tx: Tx, phase: Phase): void {
+  setPhase(tx, phase);
+  tx.state.turnDeadline = null;
+}
+
 export function playerById(tx: Tx, playerId: PlayerId): PlayerState {
   const player = tx.state.players.find((p) => p.id === playerId);
   if (!player) throw new Error(`unknown Player ${playerId}`);

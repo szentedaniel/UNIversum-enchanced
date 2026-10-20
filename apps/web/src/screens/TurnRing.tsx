@@ -1,9 +1,9 @@
-import type { PublicView } from "@universum/rules";
+import type { TurnTimer } from "@universum/rules";
 import { useState } from "react";
 import { m } from "#text.ts";
 
 type Props = {
-  timer: PublicView["turnTimer"];
+  timer: TurnTimer;
   /** Server clock minus this client's clock, from the push (`Push.clockOffset`). */
   clockOffset: number;
 };

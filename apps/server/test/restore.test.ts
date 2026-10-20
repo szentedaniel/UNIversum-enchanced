@@ -6,6 +6,7 @@ import {
   eventually,
   ManualScheduler,
   startTestServer,
+  withDeadline,
   T0,
   type TestClient,
   type TestServer,
@@ -57,7 +58,7 @@ async function startedGame(server: TestServer) {
   const bob = await server.join(alice.code);
   alice.send({ type: "Start" });
   const [first] = await Promise.all([alice.next("game"), bob.next("game")]);
-  return { alice, bob, code: alice.code, view: first.view };
+  return { alice, bob, code: alice.code, view: withDeadline(first) };
 }
 
 describe("restore on boot", () => {
@@ -65,11 +66,13 @@ describe("restore on boot", () => {
     const before = await start();
     const { alice, bob, code } = await startedGame(before);
     alice.send({ type: "Roll", turn: 1 });
-    let [{ view }] = await Promise.all([alice.next("game"), bob.next("game")]);
+    let [rolled] = await Promise.all([alice.next("game"), bob.next("game")]);
+    let view = withDeadline(rolled);
     if (view.phase.kind === "offer") {
       // The roll stopped at a University offer: decline it, so the Turn passes.
       alice.send({ type: "DeclineOffer", turn: 1 });
-      [{ view }] = await Promise.all([alice.next("game"), bob.next("game")]);
+      [rolled] = await Promise.all([alice.next("game"), bob.next("game")]);
+      view = withDeadline(rolled);
     }
     const { version } = view;
     const game = before.room(code)?.game;

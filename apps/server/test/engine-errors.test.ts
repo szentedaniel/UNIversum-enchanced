@@ -2,7 +2,7 @@ import { apply, type Intent } from "@universum/rules";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ErrorContext, ErrorReporter } from "#observability/error-reporting.ts";
 import { createLogger } from "#observability/logger.ts";
-import { captureLogs, startTestServer, type TestServer } from "./helpers.ts";
+import { captureLogs, startTestServer, withDeadline, type TestServer } from "./helpers.ts";
 
 /** 20 s on the ring plus the 3 s slack (F22). */
 const DEADLINE_AFTER = 23_000;
@@ -42,7 +42,7 @@ async function startedGame(s: TestServer) {
   const bob = await s.join(alice.code);
   alice.send({ type: "Start" });
   const [first] = await Promise.all([alice.next("game"), bob.next("game")]);
-  return { alice, bob, code: alice.code, view: first.view };
+  return { alice, bob, code: alice.code, view: withDeadline(first) };
 }
 
 describe("an engine throw on an intent", () => {

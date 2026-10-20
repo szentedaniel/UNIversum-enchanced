@@ -10,6 +10,7 @@ import { FieldCard } from "#board/FieldCard.tsx";
 import { GameMenu } from "#components/GameMenu.tsx";
 import { EventToast, MinutePill } from "#components/GameHud.tsx";
 import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
+import { Podium } from "#components/Podium.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { Card } from "#components/ui/card.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
@@ -117,6 +118,8 @@ function describe(event: GameEvent, view: PublicView): string | null {
       });
     case "WentBankrupt":
       return m.event_went_bankrupt({ name: name(event.player) });
+    case "GameEnded":
+      return m.event_game_ended({ name: name(event.winner) });
     default:
       return null;
   }
@@ -137,6 +140,7 @@ const NOTICES = new Set<GameEvent["type"]>([
   "CardDrawn",
   "TaxPaid",
   "WentBankrupt",
+  "GameEnded",
 ]);
 
 const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
@@ -186,6 +190,7 @@ export function Game() {
   }
 
   const { view, events } = push;
+  const gameOver = view.phase.kind === "gameOver" ? view.phase : null;
   const current = view.players.find((p) => p.id === view.currentPlayer);
   const myTurn = view.currentPlayer === me;
   const answeredAt = Math.max(push.seq, rejection?.seq ?? 0);
@@ -225,7 +230,7 @@ export function Game() {
     ]
       .filter((text) => text !== null)
       .join(" · "),
-    ring: p.id === view.currentPlayer && (
+    ring: p.id === view.currentPlayer && view.turnTimer !== null && (
       <TurnRing
         key={`${view.turn}:${view.turnDeadline}`}
         timer={view.turnTimer}
@@ -237,7 +242,7 @@ export function Game() {
 
   const statusRow = (
     <>
-      <MinutePill endsAt={view.endsAt} />
+      <MinutePill endsAt={view.endsAt} clockOffset={push.clockOffset} />
       <EventToast
         key={rejected ? `r${rejection.seq}` : push.seq}
         tone={rejected ? "bad" : "neutral"}
@@ -319,8 +324,9 @@ export function Game() {
     </Card>
   );
   const mySeat = view.players.find((p) => p.id === me)?.seat ?? 0;
-  // The pick tray takes the bottom slot during this client's pick; else the Field card or the Turn card.
-  const card = sale ? (
+  // The Sale or pick tray takes the bottom slot during this client's decision;
+  // else the Field card or the Turn card. The result screen replaces both.
+  const card = gameOver ? null : sale ? (
     <SaleTray
       view={view}
       sale={sale}
@@ -359,6 +365,7 @@ export function Game() {
     return (
       <main className="board-backdrop fixed inset-0 overflow-hidden">
         <ReconnectOverlay />
+        {gameOver && <Podium view={view} phase={gameOver} />}
         {/* The Board's box: clear of the corner cards, the status row and the card; the
             fit area also keeps clear of the camera buttons on its right. */}
         <div className="absolute inset-x-[110px] top-[110px] bottom-[200px] [--board-inset-left:3.75rem] [--board-inset-right:3.75rem]">
@@ -386,6 +393,7 @@ export function Game() {
   return (
     <main className="board-backdrop fixed inset-0 flex flex-col overflow-hidden pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
       <ReconnectOverlay />
+      {gameOver && <Podium view={view} phase={gameOver} />}
       <ul className="m-0 flex list-none justify-center gap-1.5 px-2" aria-label={m.game_players()}>
         {players.map((player) => (
           <PlayerChip key={player.seat} player={player} className="w-0 max-w-28 flex-1" />

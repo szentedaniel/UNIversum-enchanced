@@ -14,13 +14,25 @@ export function formatClock(ms: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-/** The game's time left, from `view.endsAt` (server epoch ms), ticking every second. */
-export function MinutePill({ endsAt, className }: { endsAt: number; className?: string }) {
-  const [now, setNow] = useState(() => Date.now());
+/**
+ * The game's time left, from `view.endsAt` (server epoch ms), ticking every
+ * second on the server's clock, as the pushes carry it (`GameMessage.now`).
+ */
+export function MinutePill({
+  endsAt,
+  clockOffset = 0,
+  className,
+}: {
+  endsAt: number;
+  /** The server's clock minus this client's, from the push. */
+  clockOffset?: number;
+  className?: string;
+}) {
+  const [now, setNow] = useState(() => Date.now() + clockOffset);
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    const timer = setInterval(() => setNow(Date.now() + clockOffset), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [clockOffset]);
   return (
     <div
       data-testid="minute-pill"

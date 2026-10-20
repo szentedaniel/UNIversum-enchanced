@@ -315,6 +315,9 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.metrics.trackRoom(this);
     if (restored) {
       this.log.info({ playing: this.game !== null, seats: this.seats.length }, "Room restored");
+      // A crash between the final save and `endGame` can leave a game-over
+      // state stored as unfinished: finish it now, so retention applies.
+      if (this.game?.phase.kind === "gameOver") this.endGame();
     } else {
       this.log.info({ ...this.settings, hasPassword: this.password !== null }, "Room created");
     }
@@ -603,14 +606,19 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /**
-   * The game is over (#32 calls this when the game-over phase arrives): the
-   * Room records when, stops waking up for Turns, and is deleted with its
+   * The game is over (`commit` calls this when the game-over phase arrives):
+   * the Room records when, stops waking up for Turns, and is deleted with its
    * events 24 h later (spec: Retention).
    */
   endGame(): void {
     if (!this.game || this.endedAt !== null) return;
     this.endedAt = this.now();
-    this.save(this.seats, this.game, []);
+    try {
+      this.save(this.seats, this.game, []);
+    } catch (error) {
+      // The final state is already stored; a restore finishes the Room (see `restore`).
+      this.log.error({ err: error }, "Room end not saved");
+    }
     this.log.info("Room ended");
     // Seats were held until the game ends (spec: Seat hold).
     this.releaseHolds();
@@ -768,7 +776,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.game = state;
     const message: GameMessage = { view: publicView(state), events, now: this.now() };
     this.broadcast(MESSAGE.game, message);
-    this.scheduleDeadline(state);
+    if (state.phase.kind === "gameOver") this.endGame();
+    else this.scheduleDeadline(state);
   }
 
   /** Writes the Room's snapshot (and an intent's events) to the store; throws if the write fails. */
@@ -799,12 +808,14 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     }
   }
 
-  /** Keeps one wake-up per Room, for the current `turnDeadline`. */
+  /** Keeps one wake-up per Room, for the current `turnDeadline` (none once the game is over). */
   private scheduleDeadline(state: GameState): void {
     this.#cancelWakeUp?.();
+    this.#cancelWakeUp = null;
     this.#deadlineRetries = 0;
-    const { turn } = state;
-    this.#cancelWakeUp = this.scheduler.at(state.turnDeadline, () => this.timeOut(turn));
+    const { turn, turnDeadline } = state;
+    if (turnDeadline === null) return;
+    this.#cancelWakeUp = this.scheduler.at(turnDeadline, () => this.timeOut(turn));
   }
 
   /**

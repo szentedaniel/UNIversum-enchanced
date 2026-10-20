@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { apply, isRejection, migrate, publicView, STATE_VERSION, SYSTEM } from "#index.ts";
 import stateV1 from "./fixtures/state-v1.json" with { type: "json" };
-import { newGame, roll } from "./helpers.ts";
+import { deadlineOf, newGame, roll } from "./helpers.ts";
 
 /**
  * Stored snapshots, one per `stateVersion` the server has ever written
@@ -45,13 +45,13 @@ describe("state migrations", () => {
     const rolled = apply(
       migrated,
       { type: "Roll", turn: migrated.turn },
-      { actor: migrated.currentPlayer, now: migrated.turnDeadline - 1 },
+      { actor: migrated.currentPlayer, now: deadlineOf(migrated) - 1 },
     );
     expect(isRejection(rolled)).toBe(false);
     const timedOut = apply(
       migrated,
       { type: "TurnTimedOut", turn: migrated.turn },
-      { actor: SYSTEM, now: migrated.turnDeadline },
+      { actor: SYSTEM, now: deadlineOf(migrated) },
     );
     expect(isRejection(timedOut)).toBe(false);
   });
