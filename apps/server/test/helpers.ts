@@ -94,6 +94,17 @@ export class ManualScheduler implements Scheduler {
     if (!task) throw new Error(`nothing is scheduled at ${time}`);
     return task.run;
   }
+
+  /**
+   * Runs the task due at `time` now, as a Node timer that fired early would:
+   * it is done and never runs again, so a re-arm must schedule a new one.
+   */
+  fireEarly(time: number): void {
+    const task = this.#tasks.findLast((t) => t.time === time && !t.cancelled && !t.done);
+    if (!task) throw new Error(`nothing is scheduled at ${time}`);
+    task.done = true;
+    task.run();
+  }
 }
 
 /**

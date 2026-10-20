@@ -844,7 +844,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   private timeOut(turn: number): void {
     if (!this.game || this.endedAt !== null) return;
     const result = this.run(this.game, { type: "TurnTimedOut", turn }, SYSTEM);
-    if (result !== null && isRejection(result)) return;
+    if (result !== null && isRejection(result)) {
+      this.rearmEarly(turn);
+      return;
+    }
     if (result !== null && this.commit(result.state, result.events, "TurnTimedOut") === undefined) {
       return;
     }
@@ -852,6 +855,20 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.#deadlineRetries += 1;
     this.#cancelWakeUp?.();
     this.#cancelWakeUp = this.scheduler.at(this.now() + delay, () => this.timeOut(turn));
+  }
+
+  /**
+   * A wake-up can fire up to about a millisecond before `turnDeadline` (Node
+   * timers don't wait), and the engine then refuses `TurnTimedOut` as
+   * `NOT_OFFERED`. The deadline is still ahead, so wake up at it again; a
+   * wake-up for a Turn already over is left to the deadline `commit` set.
+   */
+  private rearmEarly(turn: number): void {
+    const game = this.game;
+    if (!game || game.turn !== turn || game.turnDeadline === null) return;
+    if (game.turnDeadline <= this.now()) return;
+    this.#cancelWakeUp?.();
+    this.#cancelWakeUp = this.scheduler.at(game.turnDeadline, () => this.timeOut(turn));
   }
 
   /** The Lobby-list entry: what any Guest may see, so never the password or its hash. */
