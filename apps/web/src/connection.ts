@@ -142,7 +142,10 @@ function listen(joined: Room): void {
     // Never back to an older state after a reconnect (spec: Client → State).
     const last = roomStore.getState().push;
     if (last && view.version < last.view.version) return;
-    roomStore.setState({ push: { view, events, seq: ++seq, clockOffset: now - Date.now() } });
+    const receivedAt = Date.now();
+    roomStore.setState({
+      push: { view, events, seq: ++seq, clockOffset: now - receivedAt, receivedAt },
+    });
   });
   joined.onMessage(MESSAGE.rejected, ({ code }: RejectionMessage) => {
     if (mine()) roomStore.setState({ rejection: { code, seq: ++seq } });

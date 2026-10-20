@@ -27,6 +27,8 @@ export type PlaybackSample = {
   actsAfter: number;
   /** Whether a control for the pushed decision is on screen. */
   decision: boolean;
+  /** Whether the decision gate was open: local Playback and `actsAfter` (ADR-0004). */
+  open: boolean;
   /** The current Player's ring's CSS animation delay in ms (`null` if not rendered). */
   ringDelayMs: number | null;
 };
@@ -102,6 +104,8 @@ declare global {
       fieldCenter(id: number): { x: number; y: number };
       camera(): Camera;
       view(): ViewSummary | null;
+      /** Whether the latest push's decision is open (local Playback and `actsAfter`). */
+      playback(): { seq: number | null; over: boolean };
       pick(): PickMarks | null;
       /** Shows a made-up view (a full PublicView) as if the server had pushed it. */
       showView(view: FullView): void;

@@ -9,7 +9,8 @@
 import type { PublicView } from "@universum/rules";
 import type { FieldId } from "@universum/rules/board";
 import type { Board } from "#board/board.ts";
-import { roomStore } from "#stores/room-store.ts";
+import { playbackStore, type PlaybackState } from "#playback/playback-store.ts";
+import { roomStore, type RoomState } from "#stores/room-store.ts";
 
 declare const TEST_HOOKS_ENABLED: boolean;
 
@@ -17,7 +18,9 @@ export type TestHooks = {
   fieldCenter(id: FieldId): { x: number; y: number };
   camera(): ReturnType<Board["camera"]>;
   view(): Board["view"];
-  room(): ReturnType<typeof roomStore.getState>;
+  room(): RoomState;
+  /** Whether the latest push's decision is open (local Playback and `actsAfter`, ADR-0004). */
+  playback(): PlaybackState;
   pick(): Board["pick"];
   showView(view: PublicView): void;
 };
@@ -36,6 +39,7 @@ export function exposeBoard(board: Board | null): void {
         camera: () => board.camera(),
         view: () => board.view,
         room: () => roomStore.getState(),
+        playback: () => playbackStore.getState(),
         pick: () => board.pick,
         showView(view) {
           const { push } = roomStore.getState();
@@ -45,6 +49,7 @@ export function exposeBoard(board: Board | null): void {
               events: [],
               seq: (push?.seq ?? 0) + 1,
               clockOffset: push?.clockOffset ?? 0,
+              receivedAt: Date.now(),
             },
           });
         },

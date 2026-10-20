@@ -5,8 +5,13 @@
  * tree-shakeable and a missing one fails to compile.
  */
 import type { RejectionCode } from "@universum/protocol/messages";
-import type { PlayerName } from "@universum/rules";
-import { CHANCE_CARD_MONEY, type ChanceCardId, type FieldKind } from "@universum/rules/board";
+import type { GameEvent, PlayerName, PublicView } from "@universum/rules";
+import {
+  CHANCE_CARD_MONEY,
+  FIELDS,
+  type ChanceCardId,
+  type FieldKind,
+} from "@universum/rules/board";
 import { m } from "#paraglide/messages.js";
 import { getLocale } from "#paraglide/runtime.js";
 
@@ -146,6 +151,109 @@ export const chanceCardText = (card: ChanceCardId): { title: string; text: strin
   title: CHANCE_CARD_TEXTS[card].title(),
   text: CHANCE_CARD_TEXTS[card].text(),
 });
+
+/**
+ * One Playback event as a line of text in the active language, or `null` for
+ * an event with nothing to say (a walk, a Doubler placed). The popup and the
+ * status row read this map; the server never sends text.
+ */
+export function eventText(event: GameEvent, view: PublicView): string | null {
+  const name = (id: string) => {
+    const player = view.players.find((p) => p.id === id);
+    return player ? playerName(player.name) : "";
+  };
+  switch (event.type) {
+    case "DiceRolled":
+      return m.event_dice_rolled({
+        name: name(event.player),
+        first: event.dice[0],
+        second: event.dice[1],
+      });
+    case "RoundBonusPaid":
+      return m.event_round_bonus({ name: name(event.player), amount: formatMoney(event.amount) });
+    case "TimedOut":
+      return m.event_timed_out({ name: name(event.player) });
+    case "TimeoutPenaltyPaid":
+      return m.event_timeout_penalty({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
+    case "TurnPassed":
+      return m.event_turn_passed({ name: name(event.player) });
+    case "LevelBought":
+      return m.event_level_bought({
+        name: name(event.player),
+        field: fieldName(FIELDS[event.field]?.key ?? ""),
+        level: event.level,
+        price: formatMoney(event.price),
+      });
+    case "OfferDeclined":
+      return m.event_offer_declined({
+        name: name(event.player),
+        field: fieldName(FIELDS[event.field]?.key ?? ""),
+      });
+    case "RentPaid":
+      return m.event_rent_paid({
+        name: name(event.player),
+        owner: name(event.owner),
+        amount: formatMoney(event.amount),
+      });
+    case "MuseumBought":
+      return m.event_museum_bought({
+        name: name(event.player),
+        field: fieldName(FIELDS[event.field]?.key ?? ""),
+        price: formatMoney(event.price),
+      });
+    case "BoughtOut":
+      return m.event_bought_out({
+        name: name(event.player),
+        owner: name(event.owner),
+        field: fieldName(FIELDS[event.field]?.key ?? ""),
+        price: formatMoney(event.price),
+      });
+    case "CardDrawn":
+      return m.event_card_drawn({ name: name(event.player), ...chanceCardText(event.card) });
+    case "ChanceMoneyReceived":
+      return m.event_chance_money_received({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
+    case "ChanceChargePaid":
+      return m.event_chance_charge_paid({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
+    case "TaxPaid":
+      return m.event_tax_paid({ name: name(event.player), amount: formatMoney(event.amount) });
+    case "QuarantineEntered":
+      return m.event_quarantine_entered({ name: name(event.player), rounds: event.rounds });
+    case "QuarantineRoundUsed":
+      return m.event_quarantine_round_used({
+        name: name(event.player),
+        rounds: event.roundsLeft,
+      });
+    case "QuarantineReleased":
+      return m.event_quarantine_released({ name: name(event.player) });
+    case "PcrTestBought":
+      return m.event_pcr_test_bought({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
+    case "PcrTestUsed":
+      return m.event_pcr_test_used({ name: name(event.player) });
+    case "FieldsSold":
+      return (event.auto ? m.event_auto_sold : m.event_fields_sold)({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
+    case "WentBankrupt":
+      return m.event_went_bankrupt({ name: name(event.player) });
+    case "GameEnded":
+      return m.event_game_ended({ name: name(event.winner) });
+    default:
+      return null;
+  }
+}
 
 /** A Room name; `null` (left empty by its creator) gets one made from the Room code. */
 export const roomNameText = (name: string | null, code: string): string =>

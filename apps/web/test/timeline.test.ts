@@ -151,9 +151,9 @@ describe("the Playback timeline", () => {
   });
 });
 
-describe("the toast's steps", () => {
-  const textOf = (event: GameEvent): string | null => (event.type === "Moved" ? null : event.type);
+const textOf = (event: GameEvent): string | null => (event.type === "Moved" ? null : event.type);
 
+describe("the toast's steps", () => {
   it("ADR-0004: the toast shows each step that has text, in order, from its start", () => {
     const steps = timelineOf(ROLL());
     const cues = toastCues(steps, textOf);

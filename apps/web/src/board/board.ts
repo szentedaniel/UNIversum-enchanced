@@ -6,7 +6,9 @@
  *
  * It renders on demand: nothing draws while nothing changes. Events animate
  * in order; a newer push first skips the running animations to their end.
- * Each event type that moves something gets a case in `animationFor`.
+ * The queue is the Playback's timeline: a `Moved` step walks over its own
+ * step's duration, every other step pauses for its own, so the Board runs
+ * exactly as long as the server's Playback and stays in step with the DOM.
  *
  * Camera (prototype variant E): it starts fitted to the fit area and returns
  * to fit at each Turn change unless the Player turned Follow on. Taps open the
@@ -32,6 +34,7 @@ import { INK } from "#board/colors.ts";
 import { attachGestures } from "#board/gestures.ts";
 import { FIELD_WIDTH, fieldPoint, type Point } from "#board/layout.ts";
 import type { PickMarks } from "#pick/sale.ts";
+import { timelineOf } from "#playback/timeline.ts";
 
 export type BoardOptions = {
   /** The Field's name in the active language. */
@@ -87,8 +90,6 @@ type Scene = {
   placePawn(player: PlayerId, at: Point): void;
 };
 
-const STEP_MS = 160;
-const DICE_MS = 450;
 const PAN_MS = 250;
 const FIT_MS = 300;
 /** Text is re-rasterised this long after the camera stops. */
@@ -129,9 +130,9 @@ const easeOut = (t: number) => 1 - (1 - t) ** 3;
 
 const pause = (duration: number): Animation => ({ duration, tick: () => {} });
 
-/** The pawn walks Field by Field. */
-const walk = (event: EventOf<"Moved">, scene: Scene): Animation => ({
-  duration: event.steps * STEP_MS,
+/** The pawn walks Field by Field over the step's duration (from the Playback's timeline). */
+const walk = (event: EventOf<"Moved">, scene: Scene, durationMs: number): Animation => ({
+  duration: durationMs,
   tick(progress) {
     const walked = progress * event.steps;
     const step = Math.min(Math.floor(walked), event.steps - 1);
@@ -140,18 +141,6 @@ const walk = (event: EventOf<"Moved">, scene: Scene): Animation => ({
     scene.placePawn(event.player, lerpPoint(from, to, walked - step));
   },
 });
-
-/** How each event animates; events without a case show only in the DOM. */
-function animationFor(event: GameEvent, scene: Scene): Animation | undefined {
-  switch (event.type) {
-    case "DiceRolled":
-      return pause(DICE_MS); // while the DOM shows the dice
-    case "Moved":
-      return walk(event, scene);
-    default:
-      return undefined;
-  }
-}
 
 // ------------------------------------------------------------ atlas
 
@@ -524,9 +513,14 @@ export async function createBoard(
       syncPawns(view);
       syncFields(view);
       if (events.length === 0) placeAll(view);
-      for (const event of events) {
-        const animation = animationFor(event, scene);
-        if (animation) queue.push(animation);
+      // The Playback's steps, each over its own duration: the pawn walks a
+      // `Moved` step, every other step is a pause that keeps the DOM in step.
+      for (const step of timelineOf(events)) {
+        queue.push(
+          step.event.type === "Moved"
+            ? walk(step.event, scene, step.durationMs)
+            : pause(step.durationMs),
+        );
       }
       queue.push({ duration: 0, tick: () => placeAll(view) });
       if (turnChanged && !follow) fitNow(true);

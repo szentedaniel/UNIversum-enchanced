@@ -18,6 +18,8 @@ export type Push = {
   seq: number;
   /** The server's clock minus this client's, when the push arrived (for the Turn timer). */
   clockOffset: number;
+  /** This client's clock when the push arrived: its local Playback starts here. */
+  receivedAt: number;
 };
 
 export type RoomState = {
