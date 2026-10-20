@@ -152,6 +152,7 @@ export const REJECTION_CODES = [
   "STALE_TURN",
   "NOT_YOUR_TURN",
   "NOT_OFFERED",
+  "SHORTFALL_NOT_COVERED",
   // Room server
   "MALFORMED",
   "INTERNAL",
