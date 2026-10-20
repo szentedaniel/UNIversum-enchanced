@@ -48,8 +48,16 @@ _Avoid_: Username, nickname
 One Player's go, from their roll (or Quarantine choice) until play passes to the next Player.
 _Avoid_: Move, round
 
+**Roll**:
+The two dice a Player throws to start their Turn (or to try to leave Quarantine); their total is how many Fields the Player moves.
+_Avoid_: Throw, dobás
+
+**Playback**:
+The showing, in order and on every screen, of everything one Player's action set off; the next decision, and its Turn timer, starts only once the Playback ends.
+_Avoid_: Animation, replay
+
 **Turn timer**:
-The countdown a Player has to finish their Turn before it ends for them.
+The countdown a Player has for one decision of their Turn, starting when the Playback before it ends.
 _Avoid_: Turn countdown
 
 **Timeout penalty**:
