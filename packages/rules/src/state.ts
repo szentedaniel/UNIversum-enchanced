@@ -5,7 +5,7 @@
  *
  * Bump `STATE_VERSION` whenever the shape changes, and ship a migration.
  */
-import type { FieldId } from "#board.ts";
+import type { ChanceCardId, FieldId } from "#board.ts";
 
 /** The version of the state's shape (not the per-intent `version`). */
 export const STATE_VERSION = 1;
@@ -104,6 +104,8 @@ export type GameState = {
   fields: FieldState[];
   /** The one Doubler token, or `null` before anyone places it. */
   doubler: DoublerState | null;
+  /** The last Chance card drawn, which the next draw skips; `null` until the first draw (R32, F17). */
+  lastChanceCard: ChanceCardId | null;
   /** The PRNG state. Never sent to clients (see `publicView`). */
   rng: number[];
 };

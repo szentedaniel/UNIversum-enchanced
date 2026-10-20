@@ -33,6 +33,7 @@ function viewWith(field: FieldView): PublicView {
       id === VESZPREM ? field : { owner: null, level: 0, value: 0, rent: 0, sale: 0 },
     ),
     doubler: null,
+    lastChanceCard: null,
   };
 }
 

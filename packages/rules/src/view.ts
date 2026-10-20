@@ -48,5 +48,6 @@ export function publicView(state: GameState): PublicView {
       sale: saleValueOf(state, id),
     })),
     doubler: state.doubler,
+    lastChanceCard: state.lastChanceCard,
   };
 }
