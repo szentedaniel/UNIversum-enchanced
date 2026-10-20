@@ -222,6 +222,8 @@ class RoomClient {
   away = false;
   plannedDrop = false;
   #actionKey: string | null = null;
+  #decidedTurn = -1;
+  #timeoutTurn: number | null = null;
   #cancelAction: (() => void) | null = null;
   #cancelDrop: (() => void) | null = null;
   #intentional = false;
@@ -336,20 +338,23 @@ class RoomClient {
     this.act(view);
   }
 
-  /** Schedule one decision per offered view, after 1–5 s, or let 5% time out. */
+  /** Schedule one decision per offered view, after 1–5 s; 5% of this Player's Turns time out. */
   act(view: GameMessage["view"]): void {
     const me = this.playerId;
     if (me === null || this.away || stopped || view.currentPlayer !== me) return;
+    // Decide once per Turn, not once per decision, so the profile's 5% is the share of Turns.
+    if (this.#decidedTurn !== view.turn) {
+      this.#decidedTurn = view.turn;
+      this.#timeoutTurn = Math.random() < config.profile.timeoutRate ? view.turn : null;
+      if (this.#timeoutTurn !== null) stats.timeouts += 1;
+    }
+    if (this.#timeoutTurn === view.turn) return;
     const key = `${view.turn}:${view.phase.kind}:${view.version}`;
     if (this.#actionKey === key) return;
     this.#cancelAction?.();
     this.#actionKey = key;
     if (offeredIntents(view, me).length === 0) return;
     stats.decisions += 1;
-    if (Math.random() < config.profile.timeoutRate) {
-      stats.timeouts += 1;
-      return;
-    }
     this.#cancelAction = later(inRange(config.profile.actionDelayMs), () => {
       if (this.away || this.lastView?.version !== view.version) return;
       const intent = chooseIntent(view, me, Math.random);
