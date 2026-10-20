@@ -206,6 +206,31 @@ describe("the error tunnel", () => {
     expect(text).toContain("bad token [Filtered]");
   });
 
+  it("leaves Sentry's own 32-hex ids alone while filtering a bare Guest token in a message", async () => {
+    const { envelopes, dsn } = await fakeTracker();
+    server = await startTestServer({ errorReporting: dsn });
+    const eventId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const traceId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const sessionId = "dddddddddddddddddddddddddddddddd";
+    const guestToken = "cccccccccccccccccccccccccccccccc";
+    const payload = eventPayload({
+      event_id: eventId,
+      contexts: { trace: { trace_id: traceId, span_id: "eeeeeeeeeeeeeeee" } },
+      sid: sessionId,
+      message: `guest ${guestToken} failed`,
+    });
+
+    const response = await post(server.port, envelope([{ type: "event", payload }]));
+
+    expect(response.status).toBe(200);
+    const text = envelopes[0]!.toString("utf8");
+    expect(text).toContain(`"event_id":"${eventId}"`);
+    expect(text).toContain(`"trace_id":"${traceId}"`);
+    expect(text).toContain(`"sid":"${sessionId}"`);
+    expect(text).not.toContain(guestToken);
+    expect(text).toContain("guest [Filtered] failed");
+  });
+
   it("drops an envelope without events, and refuses a malformed one", async () => {
     const { envelopes, dsn } = await fakeTracker();
     server = await startTestServer({ errorReporting: dsn });

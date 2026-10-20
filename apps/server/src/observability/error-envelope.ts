@@ -90,6 +90,21 @@ const SECRET_PAIR = /\b(reconnection_?token|guest_?token|token|password)=[^&#\s"
 const BARE_GUEST_TOKEN = /\b[0-9a-f]{32}\b/gi;
 
 /**
+ * Sentry's own 32-hex identifiers. They look exactly like a Guest token, but
+ * filtering them would mangle or lose every event, so the bare-token rule
+ * leaves their values alone (the `key=value` rule still applies).
+ */
+const SENTRY_ID_KEYS: Record<string, true> = {
+  event_id: true,
+  trace_id: true,
+  span_id: true,
+  parent_span_id: true,
+  sid: true,
+  replay_id: true,
+  profile_id: true,
+};
+
+/**
  * Removes the IP and every token, password and request header from an event
  * payload, in place. Returns `false` when the payload is not a JSON object
  * (then the whole item is dropped).
@@ -104,13 +119,15 @@ export function sanitizeEvent(payload: Buffer): Buffer | null {
  * Mutates `value` in place, so objects inside arrays (breadcrumbs) are cleaned
  * too. Strings are scrubbed as well: a token can sit inside a URL, a query
  * string or an exception message, not only under a key of its own.
+ * `bareTokens` is false below a Sentry id key (see `SENTRY_ID_KEYS`).
  */
-function stripValue(value: unknown): unknown {
+function stripValue(value: unknown, bareTokens = true): unknown {
   if (typeof value === "string") {
-    return value.replace(SECRET_PAIR, `$1=${FILTERED}`).replace(BARE_GUEST_TOKEN, FILTERED);
+    const pairs = value.replace(SECRET_PAIR, `$1=${FILTERED}`);
+    return bareTokens ? pairs.replace(BARE_GUEST_TOKEN, FILTERED) : pairs;
   }
   if (Array.isArray(value)) {
-    for (let i = 0; i < value.length; i += 1) value[i] = stripValue(value[i]);
+    for (let i = 0; i < value.length; i += 1) value[i] = stripValue(value[i], bareTokens);
     return value;
   }
   if (typeof value !== "object" || value === null) return value;
@@ -119,7 +136,7 @@ function stripValue(value: unknown): unknown {
       Reflect.deleteProperty(value, key);
       continue;
     }
-    Reflect.set(value, key, stripValue(entry));
+    Reflect.set(value, key, stripValue(entry, bareTokens && SENTRY_ID_KEYS[key] !== true));
   }
   return value;
 }
