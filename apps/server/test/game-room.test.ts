@@ -194,13 +194,19 @@ describe("playing", () => {
 
   it("buys a University: the offer lists Levels and prices, and everyone sees the new owner", async () => {
     const { clients, view: first } = await startedGame(2);
-    // The seed is random: play Turns until someone lands on an offer.
+    // The seed is random: play Turns until someone lands on a Level offer
+    // (declining Museum and Buyout offers on the way).
+    const levelOffer = (v: GameMessage["view"]) =>
+      v.phase.kind === "offer" && v.phase.levels.length > 0;
     let { view } = await play(clients, first, { type: "Roll" });
-    for (let tries = 0; view.phase.kind !== "offer" && tries < 30; tries++) {
+    for (let tries = 0; !levelOffer(view) && tries < 30; tries++) {
+      // oxlint-disable-next-line no-await-in-loop -- Turns are played one after another
+      if (view.phase.kind === "offer")
+        ({ view } = await play(clients, view, { type: "DeclineOffer" }));
       // oxlint-disable-next-line no-await-in-loop -- Turns are played one after another
       ({ view } = await play(clients, view, { type: "Roll" }));
     }
-    if (view.phase.kind !== "offer") throw new Error("no offer in 30 Turns");
+    if (view.phase.kind !== "offer" || !levelOffer(view)) throw new Error("no offer in 30 Turns");
     const { field, levels } = view.phase;
     const price = levels[0]!.price;
     expect(levels[0]!.level).toBe(1);
