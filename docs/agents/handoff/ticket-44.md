@@ -28,7 +28,9 @@ Branch `ticket/44-errors`. Builds on #25 (deadline), #34 (store), #37 (limiter),
 ## Browser-facing routes
 
 - `observability/error-envelope.ts`: split/sanitize/join Sentry envelopes. Item payload lengths
-  are **bytes**, not characters. `sanitizeEvent` strips whole keys named like
+  are **bytes**, not characters. The browser SDK sends its event item with **no `length` and no
+  trailing newline**, so a lengthless item's payload runs to the next newline or to the end of the
+  envelope. `sanitizeEvent` strips whole keys named like
   `guestToken`/`token`/`reconnectionToken`/`password`/`ip_address`, and request
   headers/cookies/env, at every depth (arrays included).
 - `http/browser-routes.ts` (`createBrowserRoutes({dsn, guard, log})`) serves:
