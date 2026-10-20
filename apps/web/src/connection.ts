@@ -20,6 +20,8 @@ import {
   LOBBY_ROOM,
   matchmakeRefusal,
   MESSAGE,
+  RECONNECT,
+  backoffDelay,
   type ClientIntent,
   type CreateOptions,
   type GameMessage,
@@ -32,19 +34,10 @@ import {
   type WelcomeMessage,
 } from "@universum/protocol/messages";
 import { guestToken } from "#guest-token.ts";
-import { backoffDelay } from "#lib/backoff.ts";
 import { initialRoomState, roomStore } from "#stores/room-store.ts";
 
 /** Vite (dev) and Caddy (production) forward this path to the Room server. */
 const COLYSEUS_PATH = "/colyseus";
-
-/** The SDK's quick reconnects (≈ 20 s at most), before the Guest-token rejoin takes over. */
-const SDK_RECONNECT_RETRIES = 8;
-/** Guest-token rejoins: the first after `REJOIN_BASE_MS`, doubling up to `REJOIN_MAX_MS`, each with jitter. */
-const REJOIN_BASE_MS = 500;
-const REJOIN_MAX_MS = 10_000;
-/** "Room not found" can be a server still restoring its Rooms: tried this many times before giving up. */
-const REJOIN_NOT_FOUND_TRIES = 5;
 
 const sdk = new Client(COLYSEUS_PATH);
 let room: Room | null = null;
@@ -134,8 +127,9 @@ async function attach(connect: () => Promise<Room>): Promise<string> {
 /** Makes `joined` this client's Room: every handler, registered before the next await (the server sends on join). */
 function listen(joined: Room): void {
   room = joined;
-  joined.reconnection.maxRetries = SDK_RECONNECT_RETRIES;
-  joined.reconnection.backoff = (attempt, delay) => backoffDelay(attempt, delay, 5_000);
+  joined.reconnection.maxRetries = RECONNECT.sdkRetries;
+  joined.reconnection.backoff = (attempt, delay) =>
+    backoffDelay(attempt, delay, RECONNECT.sdk.maxMs);
   const mine = () => room === joined;
   joined.onMessage(MESSAGE.welcome, (message: WelcomeMessage) => {
     if (mine()) roomStore.setState({ me: message.playerId });
@@ -180,7 +174,7 @@ function rejoin(code: string, attempt: number): void {
   clearTimeout(rejoinTimer);
   rejoinTimer = setTimeout(
     () => void tryRejoin(code, attempt),
-    backoffDelay(attempt, REJOIN_BASE_MS, REJOIN_MAX_MS),
+    backoffDelay(attempt, RECONNECT.guest.baseMs, RECONNECT.guest.maxMs),
   );
 }
 
@@ -199,7 +193,7 @@ async function tryRejoin(code: string, attempt: number): Promise<void> {
       rejection === "INTERNAL" ||
       rejection === "SERVER_BUSY" ||
       rejection === "RATE_LIMITED" ||
-      (rejection === "ROOM_NOT_FOUND" && attempt < REJOIN_NOT_FOUND_TRIES)
+      (rejection === "ROOM_NOT_FOUND" && attempt < RECONNECT.notFoundTries)
     ) {
       rejoin(code, attempt + 1);
     } else {
