@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { startInternalServer, type InternalServer } from "#internal-server.ts";
+import { GameMetrics } from "#observability/metrics.ts";
 
 let server: InternalServer | undefined;
 
@@ -28,5 +29,22 @@ describe("the internal port", () => {
     const response = await fetch(`http://127.0.0.1:${server.port}/matchmake/create/game`);
 
     expect(response.status).toBe(404);
+  });
+
+  it("/metrics serves the process and event-loop metrics and the build's release", async () => {
+    server = await startInternalServer({
+      port: 0,
+      host: "127.0.0.1",
+      metrics: new GameMetrics({ release: "0123abc" }),
+    });
+
+    const response = await fetch(`http://127.0.0.1:${server.port}/metrics`);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toMatch(/^text\/plain; version=0\.0\.4/);
+    expect(body).toContain('build_info{release="0123abc"} 1');
+    expect(body).toMatch(/^process_cpu_user_seconds_total \d/m);
+    expect(body).toMatch(/^nodejs_eventloop_lag_p99_seconds \d/m);
   });
 });
