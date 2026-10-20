@@ -2,7 +2,7 @@
  * @universum/rules: the pure rules engine (ADR-0003). No I/O, no timers, no
  * `Math.random`/`Date.now`, no Zod. Exported as `.ts` source with no build step.
  *
- * Public interface: `setupGame`, `apply`, `publicView`, the static Board data
+ * Public interface: `setupGame`, `apply`, `publicView`, `migrate`, the static Board data
  * and the types. Everything else is internal to the engine.
  */
 export * from "#board.ts";
@@ -22,6 +22,7 @@ export {
   type IntentType,
 } from "#intents.ts";
 export { RULES_REJECTION_CODES, type Rejection, type RulesRejectionCode } from "#rejections.ts";
+export { migrate, type StoredState } from "#migrate.ts";
 export { setupGame, type SetupInput } from "#setup.ts";
 export {
   STATE_VERSION,

@@ -1,9 +1,11 @@
 /**
  * Room passwords: scrypt with the `node:crypto` defaults and a salt per Room.
- * The hash stays in the Room instance's memory (the SQLite store keeps it
- * from #34); it never goes into the Lobby listing, a message or a log.
+ * The hash lives on the Room instance and in its stored snapshot (as base64,
+ * so a restored password Room still asks for it); it never goes into the Lobby
+ * listing, a message or a log.
  */
 import { randomBytes, scrypt, timingSafeEqual, type BinaryLike } from "node:crypto";
+import type { StoredPassword } from "#store/room-store.ts";
 
 const SALT_BYTES = 16;
 const KEY_BYTES = 64;
@@ -23,3 +25,14 @@ export async function hashPassword(password: string): Promise<PasswordHash> {
 export async function passwordMatches(stored: PasswordHash, password: string): Promise<boolean> {
   return timingSafeEqual(stored.hash, await derive(password, stored.salt));
 }
+
+/** The hash as the store keeps it (JSON-safe). */
+export const encodePassword = ({ salt, hash }: PasswordHash): StoredPassword => ({
+  salt: salt.toString("base64"),
+  hash: hash.toString("base64"),
+});
+
+export const decodePassword = ({ salt, hash }: StoredPassword): PasswordHash => ({
+  salt: Buffer.from(salt, "base64"),
+  hash: Buffer.from(hash, "base64"),
+});

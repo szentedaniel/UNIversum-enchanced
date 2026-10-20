@@ -23,15 +23,17 @@ services:
       HOST: 0.0.0.0
       PORT: "2567"
       DATA_DIR: /data
+      # /healthz and /readyz (#43 adds /metrics); compose-network only, never routed by Caddy.
+      INTERNAL_PORT: "9464"
     volumes:
       - data:/data
-    # TODO(#43): switch to /readyz on the internal port once it exists.
+    # Healthy once every unfinished Room is restored (/readyz on the internal port).
     healthcheck:
       test:
         - CMD
         - node
         - -e
-        - "fetch('http://127.0.0.1:2567/__healthcheck').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+        - "fetch('http://127.0.0.1:9464/readyz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
       interval: 10s
       timeout: 3s
       start_period: 30s
