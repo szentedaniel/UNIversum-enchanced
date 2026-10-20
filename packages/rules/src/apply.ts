@@ -2,6 +2,8 @@ import type { GameEvent } from "#events.ts";
 import type { AnyIntentHandler, IntentHandlers } from "#handlers.ts";
 import { SYSTEM, type Ctx, type Intent } from "#intents.ts";
 import { rejection, type Rejection } from "#rejections.ts";
+import { doublerIntents } from "#rules/doubler.ts";
+import { erasmusIntents } from "#rules/erasmus-travel.ts";
 import { museumIntents } from "#rules/museums.ts";
 import { quarantineChoiceIntents } from "#rules/quarantine-choice.ts";
 import { saleIntents } from "#rules/sale.ts";
@@ -21,6 +23,8 @@ const HANDLERS: IntentHandlers = {
   ...universityIntents,
   ...timeoutIntents,
   ...museumIntents,
+  ...doublerIntents,
+  ...erasmusIntents,
   ...quarantineChoiceIntents,
   ...saleIntents,
 };

@@ -25,6 +25,8 @@ describe("intentSchema", () => {
     [{ type: "SellFields", turn: 3, fields: [1] }],
     [{ type: "SellFields", turn: 3, fields: [0, 15, 31] }],
     [{ type: "AutoSell", turn: 3 }],
+    [{ type: "PlaceDoubler", turn: 3, field: 2 }],
+    [{ type: "TravelErasmus", turn: 3, field: 21 }],
   ])("accepts %j", (message) => {
     expect(intentSchema.safeParse(message)).toEqual({ success: true, data: message });
   });
@@ -58,6 +60,11 @@ describe("intentSchema", () => {
       { type: "SellFields", turn: 1, fields: Array.from({ length: 33 }, () => 1) },
     ],
     ["an Auto-sell naming Fields", { type: "AutoSell", turn: 1, fields: [1] }],
+    ["a Doubler placement without a Field", { type: "PlaceDoubler", turn: 1 }],
+    ["a Doubler placement off the Board", { type: "PlaceDoubler", turn: 1, field: 32 }],
+    ["a Doubler placement by name", { type: "PlaceDoubler", turn: 1, field: "budapest" }],
+    ["an Erasmus travel without a Field", { type: "TravelErasmus", turn: 1 }],
+    ["an Erasmus travel off the Board", { type: "TravelErasmus", turn: 1, field: -1 }],
   ])("refuses %s", (_, message) => {
     expect(intentSchema.safeParse(message).success).toBe(false);
   });
