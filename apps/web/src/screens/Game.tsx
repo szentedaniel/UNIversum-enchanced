@@ -12,9 +12,11 @@ import { Card } from "#components/ui/card.tsx";
 import { sendIntent } from "#connection.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
+import { saleFor } from "#pick/sale.ts";
+import { SaleTray } from "#screens/SaleTray.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { roomStore } from "#stores/room-store.ts";
-import { uiStore } from "#stores/ui-store.ts";
+import { salePicksFor, uiStore } from "#stores/ui-store.ts";
 import { chanceCardText, fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
 
 /** The newest event worth a toast, as text. */
@@ -102,6 +104,13 @@ function describe(event: GameEvent, view: PublicView): string | null {
       });
     case "PcrTestUsed":
       return m.event_pcr_test_used({ name: name(event.player) });
+    case "FieldsSold":
+      return (event.auto ? m.event_auto_sold : m.event_fields_sold)({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
+    case "WentBankrupt":
+      return m.event_went_bankrupt({ name: name(event.player) });
     default:
       return null;
   }
@@ -121,6 +130,7 @@ const NOTICES = new Set<GameEvent["type"]>([
   "RentPaid",
   "CardDrawn",
   "TaxPaid",
+  "WentBankrupt",
 ]);
 
 const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
@@ -133,6 +143,7 @@ export function Game() {
   const status = useStore(roomStore, (s) => s.status);
   const rejection = useStore(roomStore, (s) => s.rejection);
   const selectedField = useStore(uiStore, (s) => s.selectedField);
+  const salePicks = useStore(uiStore, (s) => s.salePicks);
   // No optimistic UI: after a tap the control stays hidden until the next push or a Rejection.
   const [sentAt, setSentAt] = useState<number | null>(null);
   const wide = useWide();
@@ -159,6 +170,8 @@ export function Game() {
   const offer = myTurn && view.phase.kind === "offer" && !pending ? view.phase : null;
   const quarantineChoice =
     myTurn && !pending && view.phase.kind === "quarantineChoice" ? view.phase : null;
+  const sale = saleFor(view, me);
+  const othersSale = !myTurn && view.phase.kind === "selling";
   // One toast at a time: the first notice of the push, else its first event worth one.
   const notice = events.find((event) => NOTICES.has(event.type));
   const toast = (notice ? [notice] : events)
@@ -179,6 +192,7 @@ export function Game() {
     you: p.id === me,
     bankrupt: p.bankrupt,
     status: [
+      p.bankrupt ? m.game_bankrupt() : null,
       p.quarantineRounds === null ? null : m.game_in_quarantine({ rounds: p.quarantineRounds }),
       p.hasPcrTest ? m.game_pcr_test_held() : null,
     ]
@@ -219,6 +233,11 @@ export function Game() {
           {m.game_turn({ turn: view.turn })}
         </span>
       </div>
+      {othersSale && (
+        <p className="m-0 text-sm font-bold text-ink/70" data-testid="sale-waiting">
+          {m.sale_waiting({ name: current ? playerName(current.name) : "" })}
+        </p>
+      )}
       {canRoll && (
         <Button size="lg" onClick={() => send({ type: "Roll", turn: view.turn })}>
           {m.game_roll()}
@@ -266,7 +285,25 @@ export function Game() {
       )}
     </Card>
   );
-  const card = selectedField === null ? turnCard : <FieldCard id={selectedField} view={view} />;
+  const mySeat = view.players.find((p) => p.id === me)?.seat ?? 0;
+  // The Sale tray takes the bottom slot during this client's Sale; else the Field card or the Turn card.
+  const card = sale ? (
+    <SaleTray
+      view={view}
+      sale={sale}
+      picks={salePicksFor(salePicks, sale.key)}
+      seat={mySeat}
+      clockOffset={push.clockOffset}
+      busy={pending}
+      onUnpick={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
+      onAutoSell={() => send({ type: "AutoSell", turn: view.turn })}
+      onSell={(fields) => send({ type: "SellFields", turn: view.turn, fields })}
+    />
+  ) : selectedField === null ? (
+    turnCard
+  ) : (
+    <FieldCard id={selectedField} view={view} />
+  );
 
   if (wide) {
     return (

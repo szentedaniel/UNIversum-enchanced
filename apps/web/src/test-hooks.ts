@@ -1,9 +1,12 @@
 /**
- * Test-only hooks for Playwright: the Board's `fieldCenter(id)`, camera and
- * current view, and the room store. `TEST_HOOKS_ENABLED` is a build-time
+ * Test-only hooks for Playwright: the Board's `fieldCenter(id)`, camera,
+ * current view and pick marks, and the room store. `showView` shows a made-up
+ * view as if the server had pushed it, for states a random game can't be
+ * steered into (a Sale). `TEST_HOOKS_ENABLED` is a build-time
  * constant (see vite.config.ts): false in production builds, so this code is
  * compiled out.
  */
+import type { PublicView } from "@universum/rules";
 import type { FieldId } from "@universum/rules/board";
 import type { Board } from "#board/board.ts";
 import { roomStore } from "#stores/room-store.ts";
@@ -15,6 +18,8 @@ export type TestHooks = {
   camera(): ReturnType<Board["camera"]>;
   view(): Board["view"];
   room(): ReturnType<typeof roomStore.getState>;
+  pick(): Board["pick"];
+  showView(view: PublicView): void;
 };
 
 declare global {
@@ -31,6 +36,18 @@ export function exposeBoard(board: Board | null): void {
         camera: () => board.camera(),
         view: () => board.view,
         room: () => roomStore.getState(),
+        pick: () => board.pick,
+        showView(view) {
+          const { push } = roomStore.getState();
+          roomStore.setState({
+            push: {
+              view,
+              events: [],
+              seq: (push?.seq ?? 0) + 1,
+              clockOffset: push?.clockOffset ?? 0,
+            },
+          });
+        },
       }
     : undefined;
 }
