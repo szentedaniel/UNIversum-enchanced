@@ -42,4 +42,4 @@ export {
 } from "#state.ts";
 export type { PendingCharge } from "#rules/charge.ts";
 export type { LevelOffer } from "#rules/universities.ts";
-export { publicView, type FieldView, type PublicView } from "#view.ts";
+export { publicView, type FieldView, type PickOption, type PublicView } from "#view.ts";
