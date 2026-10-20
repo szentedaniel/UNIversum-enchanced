@@ -66,7 +66,8 @@ Rooms; `restore_duration_seconds` is Prometheus's own boot gauge.
 - `src/metrics.ts` reads the hold in two windows: A = hold start → kill, B = `/readyz` + 2 min →
   hold end. Percentiles and maxima take the worse window, CPU is time-weighted, counters add up. If
   the hold is too short for B (the 2-minute smoke), B is `null`; heap growth is then `SKIP` and the
-  other metrics come from A. `rooms_restored` / `restore_duration_seconds` are read at the hold end,
+  other metrics come from A. Heap growth is `(heap at hold end − heap min(15 min, B) earlier)`, so
+  a restart never masks a leak and the 30-minute hold (B ≈ 8 min) measures all of B. `rooms_restored` / `restore_duration_seconds` are read at the hold end,
   `rooms{state="playing"}` at the kill, and `process_start_time_seconds` as a range (2 distinct
   values = only the planned restart).
 - Report: `renderReport` is pure; `writeReport` writes `loadtest-reports/loadtest-YYYYMMDD-HHmmss.md`
