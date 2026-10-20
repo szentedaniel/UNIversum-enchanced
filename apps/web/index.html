@@ -4,9 +4,97 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>UNIversum</title>
+    <style>
+      #old-browser {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: #262335;
+        color: #fff3e4;
+        font-family: system-ui, sans-serif;
+        text-align: center;
+      }
+
+      #old-browser[hidden],
+      #old-browser .old-browser-card[hidden] {
+        display: none;
+      }
+
+      #old-browser h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.75rem;
+      }
+
+      #old-browser p {
+        max-width: 32rem;
+        margin: 0;
+        font-size: 1rem;
+        line-height: 1.5;
+      }
+    </style>
   </head>
+
   <body>
     <div id="root"></div>
+    <section id="old-browser" data-testid="old-browser" hidden>
+      <div class="old-browser-card" lang="en" hidden>
+        <h1>Update your browser</h1>
+        <p>
+          UNIversum needs a newer browser. Please update Chrome, Edge, Firefox or Safari to play.
+        </p>
+      </div>
+      <div class="old-browser-card" lang="hu" hidden>
+        <h1>Frissítsd a böngésződet</h1>
+        <p>
+          Az UNIversumhoz újabb böngésző kell. Frissítsd a Chrome-ot, az Edge-et, a Firefoxot vagy a
+          Safarit a játékhoz.
+        </p>
+      </div>
+      <div class="old-browser-card" lang="de" hidden>
+        <h1>Aktualisiere deinen Browser</h1>
+        <p>
+          UNIversum braucht einen neueren Browser. Bitte aktualisiere Chrome, Edge, Firefox oder
+          Safari, um zu spielen.
+        </p>
+      </div>
+    </section>
+    <script>
+      // Vite 8 targets Chrome/Edge 111+, Firefox 114+, Safari/iOS 16.4+. A browser
+      // below that baseline gets the notice above instead of a broken page; this
+      // runs before the module bundle, which such a browser may not parse.
+      (function () {
+        var supported = true;
+        try {
+          supported =
+            typeof Array.prototype.at === "function" &&
+            typeof Object.hasOwn === "function" &&
+            typeof String.prototype.replaceAll === "function" &&
+            typeof structuredClone === "function" &&
+            new RegExp("(?<=a)b") instanceof RegExp &&
+            typeof CSS !== "undefined" &&
+            CSS.supports("color", "color-mix(in srgb, red, blue)");
+        } catch (error) {
+          supported = false;
+        }
+        if (supported) return;
+
+        var language = (navigator.language || "en").slice(0, 2);
+        if (language !== "hu" && language !== "de") language = "en";
+        document.documentElement.setAttribute("data-old-browser", language);
+        var notice = document.getElementById("old-browser");
+        var root = document.getElementById("root");
+        if (root) root.hidden = true;
+        if (!notice) return;
+        notice.hidden = false;
+        var cards = notice.getElementsByClassName("old-browser-card");
+        for (var i = 0; i < cards.length; i++) {
+          cards[i].hidden = cards[i].getAttribute("lang") !== language;
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
