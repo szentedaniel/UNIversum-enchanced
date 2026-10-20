@@ -81,11 +81,11 @@ export function PlayerChip({ player, className }: { player: PlayerSummary; class
       <div className="tnum text-sm leading-none font-black" aria-label={m.game_cash()}>
         {cash}
       </div>
-      {status && (
-        <div className="max-w-full truncate text-[10px] leading-tight font-black text-ink/80">
-          {status}
-        </div>
-      )}
+      {/* Always there, empty or not: a chip that grew would shrink the Board below
+          it and change its zoom (the camera keeps the zoom steady). */}
+      <div className="h-[1.25em] max-w-full truncate text-[10px] leading-tight font-black text-ink/80">
+        {status}
+      </div>
     </li>
   );
 }
