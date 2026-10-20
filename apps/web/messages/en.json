@@ -232,5 +232,21 @@
   "rejection_rate_limited": "Too many attempts. Please wait a moment.",
   "rejection_server_busy": "The server is busy right now. Please try again later.",
   "rejection_slow_down": "Not so fast! Some of your moves were ignored.",
-  "retry_in": "Try again in {seconds} s"
+  "retry_in": "Try again in {seconds} s",
+  "language": "Language",
+  "language_hu": "Magyar",
+  "language_en": "English",
+  "language_de": "Deutsch",
+  "menu": "Menu",
+  "menu_title": "Settings",
+  "sound_on": "Sound on",
+  "sound_off": "Sound off",
+  "offer_museum_hint": "Each Museum you own raises the Rent by this amount: {amount}",
+  "doubler_title": "You graduated!",
+  "doubler_prompt": "As a reward, pick a city where the Rent is DOUBLED from now on.",
+  "pick_field": "Pick a Field",
+  "erasmus_title": "You're going on Erasmus.",
+  "erasmus_prompt": "Pick a city you want to travel to.",
+  "game_over_won": "Victory",
+  "game_over_congratulations": "Congratulations!"
 }

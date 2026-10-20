@@ -155,6 +155,8 @@ export const formatMoney = (amount: number): string =>
   new Intl.NumberFormat(getLocale(), {
     style: "currency",
     currency: "HUF",
+    // "Ft" in every language (English would otherwise write "HUF").
+    currencyDisplay: "narrowSymbol",
     maximumFractionDigits: 0,
   }).format(amount);
 

@@ -12,6 +12,21 @@
 		}
 	}
 
+	# Error reporting (spec: Observability → Errors): the client's config and
+	# the envelope tunnel. Each needs its own handle, or it gets the app shell.
+	handle /client-config {
+		reverse_proxy server:2567 {
+			header_up X-Real-IP {remote_host}
+			header_up -X-Client-IP
+		}
+	}
+	handle /errors {
+		reverse_proxy server:2567 {
+			header_up X-Real-IP {remote_host}
+			header_up -X-Client-IP
+		}
+	}
+
 	# Source maps are never served (matched before the SPA fallback rewrites the path).
 	@sourcemaps path *.map
 	handle @sourcemaps {
