@@ -9,7 +9,7 @@ mkdirSync(config.dataDir, { recursive: true });
 const store = openSqliteRoomStore(config.databasePath);
 const internal = await startInternalServer({ port: config.internalPort, host: config.host });
 
-const server = createGameServer({ store });
+const server = createGameServer({ store, limits: config.limits });
 // Every Room has stopped (on SIGTERM/SIGINT) before the store closes.
 server.onShutdown(async () => {
   store.close();

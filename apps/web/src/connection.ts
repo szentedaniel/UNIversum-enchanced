@@ -9,7 +9,7 @@ import {
   GAME_ROOM,
   LOBBY_LIST_MESSAGE,
   LOBBY_ROOM,
-  matchmakeRejection,
+  matchmakeRefusal,
   MESSAGE,
   type ClientIntent,
   type CreateOptions,
@@ -31,12 +31,18 @@ const sdk = new Client(COLYSEUS_PATH);
 let room: Room | null = null;
 let seq = 0;
 
-/** A failed create or join, as a Rejection code the screens can show. */
+/**
+ * A failed create or join, as a Rejection code the screens can show, and
+ * for a refusal with a wait (`RATE_LIMITED`, `PASSWORD_LOCKED`) the seconds
+ * until the button may be pressed again.
+ */
 export class JoinError extends Error {
   readonly code: RejectionCode;
-  constructor(code: RejectionCode) {
+  readonly retryAfter: number | null;
+  constructor(code: RejectionCode, retryAfter: number | null = null) {
     super(code);
     this.code = code;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -85,7 +91,9 @@ async function attach(connect: () => Promise<Room>): Promise<string> {
     joined = await connect();
   } catch (error) {
     roomStore.setState({ status: "idle" });
-    throw new JoinError(error instanceof MatchMakeError ? matchmakeRejection(error) : "INTERNAL");
+    if (!(error instanceof MatchMakeError)) throw new JoinError("INTERNAL");
+    const { code, retryAfter } = matchmakeRefusal(error);
+    throw new JoinError(code, retryAfter);
   }
   // Register every handler before the next await: the server sends on join.
   room = joined;

@@ -191,5 +191,11 @@
   "camera_zoom_in": "Nagyítás",
   "camera_zoom_out": "Kicsinyítés",
   "camera_fit": "Az egész tábla",
-  "camera_follow": "Követés"
+  "camera_follow": "Követés",
+  "rejection_room_name_blocked": "Ez a szobanév nem engedélyezett. Kérlek, válassz másikat.",
+  "rejection_password_locked": "Túl sok hibás jelszó. Kérlek, várj egy kicsit.",
+  "rejection_rate_limited": "Túl sok próbálkozás. Kérlek, várj egy kicsit.",
+  "rejection_server_busy": "A szerver most túlterhelt. Kérlek, próbáld újra később.",
+  "rejection_slow_down": "Csak lassan! Néhány lépésedet figyelmen kívül hagytuk.",
+  "retry_in": "Újra {seconds} mp múlva"
 }

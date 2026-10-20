@@ -191,5 +191,11 @@
   "camera_zoom_in": "Vergrößern",
   "camera_zoom_out": "Verkleinern",
   "camera_fit": "Ganzes Spielbrett",
-  "camera_follow": "Folgen"
+  "camera_follow": "Folgen",
+  "rejection_room_name_blocked": "Dieser Raumname ist nicht erlaubt. Bitte wähle einen anderen.",
+  "rejection_password_locked": "Zu viele falsche Passwörter. Bitte warte ein wenig.",
+  "rejection_rate_limited": "Zu viele Versuche. Bitte warte einen Moment.",
+  "rejection_server_busy": "Der Server ist gerade ausgelastet. Bitte versuche es später noch einmal.",
+  "rejection_slow_down": "Nicht so schnell! Einige deiner Züge wurden ignoriert.",
+  "retry_in": "Erneut in {seconds} s"
 }
