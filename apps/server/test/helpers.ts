@@ -21,6 +21,8 @@ import {
   type RejectionMessage,
   type WelcomeMessage,
 } from "@universum/protocol";
+import type { Logger } from "#observability/logger.ts";
+import { GameMetrics } from "#observability/metrics.ts";
 import { GameRoom } from "#room/game-room.ts";
 import type { Scheduler } from "#room/scheduler.ts";
 import { createGameServer, restoreRooms } from "#server.ts";
@@ -94,6 +96,8 @@ export type TestServerOptions = {
   scheduler?: ManualScheduler;
   /** Wraps the SQLite store, e.g. to make writes fail. */
   wrapStore?: (store: RoomStore) => RoomStore;
+  /** The server's logger (e.g. `createLogger` on a `captureLogs()` stream); silent by default. */
+  log?: Logger;
 };
 
 export type TestServer = {
@@ -106,6 +110,8 @@ export type TestServer = {
   store: RoomStore;
   /** How many Rooms the boot restored. */
   restored: number;
+  /** This server's metrics (what `/metrics` serves): `await metrics.scrape()`. */
+  metrics: GameMetrics;
   /** A Guest creates a Room. */
   create(options?: CreateOptions): Promise<TestClient>;
   /** A Guest joins a Room by its Room code (the client repeats the code in the options). */
@@ -132,9 +138,11 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
     options.databasePath ?? join(mkdtempSync(join(tmpdir(), "universum-server-")), "rooms.sqlite");
   const sqlite = openSqliteRoomStore(databasePath);
   const store = options.wrapStore?.(sqlite) ?? sqlite;
-  const server = createGameServer({ gracefullyShutdown: false, scheduler, store });
+  const metrics = new GameMetrics({ release: "test" });
+  const { log } = options;
+  const server = createGameServer({ gracefullyShutdown: false, scheduler, store, metrics, log });
   await server.listen(0, "127.0.0.1");
-  const restored = await restoreRooms({ store, scheduler });
+  const restored = await restoreRooms({ store, scheduler, metrics, log });
   const address = server.transport.server?.address();
   if (!address || typeof address === "string") throw new Error("the server has no TCP port");
   const sdk = new Client(`ws://127.0.0.1:${address.port}`);
@@ -149,6 +157,7 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
     databasePath,
     store,
     restored,
+    metrics,
     create: async (createOptions = {}) =>
       track(new TestClient(await sdk.create(GAME_ROOM, createOptions))),
     join: async (code, joinOptions = {}) =>
@@ -165,6 +174,23 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
       await Promise.all(clients.map((c) => c.leave()));
       sqlite.close();
     },
+  };
+}
+
+/** A pino destination that keeps every line, to read back in a test. */
+export function captureLogs() {
+  const chunks: string[] = [];
+  return {
+    stream: { write: (line: string) => void chunks.push(line) },
+    /** Everything written, as one string. */
+    text: () => chunks.join(""),
+    /** Every line, parsed. */
+    lines: (): Record<string, unknown>[] =>
+      chunks
+        .join("")
+        .split("\n")
+        .filter((l) => l !== "")
+        .map((l) => JSON.parse(l) as Record<string, unknown>),
   };
 }
 
