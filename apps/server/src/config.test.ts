@@ -22,6 +22,16 @@ describe("loadConfig", () => {
     expect(config.prettyLogs).toBe(false);
   });
 
+  it("reports errors only when SENTRY_DSN is set, and refuses a DSN that isn't one", () => {
+    expect(loadConfig({}).sentryDsn).toBeNull();
+    expect(loadConfig({ SENTRY_DSN: "" }).sentryDsn).toBeNull();
+    expect(loadConfig({ SENTRY_DSN: "https://abc123@errors.example.org/7" }).sentryDsn).toBe(
+      "https://abc123@errors.example.org/7",
+    );
+    expect(() => loadConfig({ SENTRY_DSN: "errors.example.org" })).toThrow(/SENTRY_DSN/);
+    expect(() => loadConfig({ SENTRY_DSN: "https://errors.example.org/7" })).toThrow(/SENTRY_DSN/);
+  });
+
   it("lets LOG_LEVEL override the level, and refuses an unknown one", () => {
     expect(loadConfig({ NODE_ENV: "production", LOG_LEVEL: "debug" }).logLevel).toBe("debug");
     expect(loadConfig({ LOG_LEVEL: "warn" }).logLevel).toBe("warn");
@@ -76,6 +86,8 @@ describe("loadConfig", () => {
       intentBurstClose: 50,
       maxPayloadBytes: 1024,
       matchmakeBodyBytes: 2048,
+      errorEventsPerMinute: 10,
+      errorReportBytes: 204800,
     });
   });
 

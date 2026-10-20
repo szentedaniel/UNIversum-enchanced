@@ -1,5 +1,6 @@
 import { join, resolve } from "node:path";
 import { LOG_LEVELS, type LogLevel } from "#observability/logger.ts";
+import { parseDsn } from "#observability/dsn.ts";
 import { loadLimits, type Limits } from "#limits.ts";
 
 /** Typed server settings. Every value comes from the environment, with dev defaults. */
@@ -25,6 +26,12 @@ export type ServerConfig = {
   prettyLogs: boolean;
   /** The build's git SHA (`RELEASE`, a build arg of the image), shown as `build_info{release}`. */
   release: string;
+  /**
+   * The Sentry-protocol DSN (`SENTRY_DSN`) errors are reported to, or `null`
+   * when reporting is off (the default). Also the client's switch: it starts
+   * reporting only while this is set.
+   */
+  sentryDsn: string | null;
 };
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -43,8 +50,20 @@ export function loadConfig(env: Env = process.env): ServerConfig {
     logLevel: parseLogLevel(env["LOG_LEVEL"], production ? "info" : "debug"),
     prettyLogs: !production,
     release: env["RELEASE"] || "dev",
+    sentryDsn: parseSentryDsn(env["SENTRY_DSN"]),
     limits: loadLimits(env),
   };
+}
+
+/** The DSN, or `null` when reporting is off; anything else must be a DSN, never silently ignored. */
+function parseSentryDsn(raw: string | undefined): string | null {
+  if (raw === undefined || raw === "") return null;
+  if (!parseDsn(raw)) {
+    throw new Error(
+      `SENTRY_DSN must be a Sentry-protocol DSN (https://<public key>@<host>/<project id>), got ${JSON.stringify(raw)}`,
+    );
+  }
+  return raw;
 }
 
 function parseLogLevel(raw: string | undefined, fallback: LogLevel): LogLevel {

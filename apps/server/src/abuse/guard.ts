@@ -59,6 +59,7 @@ export class AbuseGuard {
   readonly #creationsPerMinute: RateLimiterMemory;
   readonly #creationsPerHour: RateLimiterMemory;
   readonly #joins: RateLimiterMemory;
+  readonly #errorEvents: RateLimiterMemory;
   readonly #passwordPerRoom: RateLimiterMemory;
   readonly #passwordPerIp: RateLimiterMemory;
   /** Lockouts per (Room code + IP), for the exponential back-off. */
@@ -75,6 +76,7 @@ export class AbuseGuard {
     this.#creationsPerMinute = limiter("create-min", limits.roomCreationsPerMinute, 60);
     this.#creationsPerHour = limiter("create-hour", limits.roomCreationsPerHour, 3600);
     this.#joins = limiter("join-min", limits.joinsPerMinute, 60);
+    this.#errorEvents = limiter("errors-min", limits.errorEventsPerMinute, 60);
     this.#passwordPerRoom = limiter("pw-room", limits.passwordFailuresPerMinute, 60);
     this.#passwordPerIp = limiter(
       "pw-ip",
@@ -108,6 +110,14 @@ export class AbuseGuard {
   refused<R>(limit: LimiterLimit, bucket: string, refusal: R): R {
     this.#onRefusal(limit, bucket);
     return refusal;
+  }
+
+  // ------------------------------------------------------------ error reports
+
+  /** Counts one error envelope; `RATE_LIMITED` once this IP is over its rate. */
+  async errorReportRefusal(bucket: string): Promise<Refusal | null> {
+    const wait = await this.#errorEvents.consume(bucket).then(() => 0, waitOf);
+    return wait > 0 ? this.refused("error_events", bucket, rateLimited(wait)) : null;
   }
 
   // ------------------------------------------------------------ sockets

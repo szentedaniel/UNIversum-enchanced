@@ -56,6 +56,8 @@ export type FullView = {
 
 declare global {
   interface Window {
+    /** Counted by a spec that stubs `HTMLMediaElement.play` before the app loads. */
+    dicePlays?: number;
     universumTest?: {
       fieldCenter(id: number): { x: number; y: number };
       camera(): Camera;

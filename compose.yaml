@@ -49,6 +49,8 @@ services:
     build:
       context: .
       target: web
+      args:
+        RELEASE: ${RELEASE:-dev}
     restart: unless-stopped
     depends_on:
       server:
