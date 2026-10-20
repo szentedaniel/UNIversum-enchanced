@@ -80,6 +80,15 @@ const SENSITIVE =
 /** Request fields that only ever carry headers, cookies or the environment, all of them stripped. */
 const REQUEST_PRIVATE: Record<string, true> = { headers: true, cookies: true, env: true };
 
+/** What a secret value inside a string becomes. */
+const FILTERED = "[Filtered]";
+
+/** `key=value` pairs (query strings, URLs) whose value is a secret; the key stays. */
+const SECRET_PAIR = /\b(reconnection_?token|guest_?token|token|password)=[^&#\s"'<>]*/gi;
+
+/** A bare Guest token: 32 hex characters (how the browser makes one), not part of a longer hex run. */
+const BARE_GUEST_TOKEN = /\b[0-9a-f]{32}\b/gi;
+
 /**
  * Removes the IP and every token, password and request header from an event
  * payload, in place. Returns `false` when the payload is not a JSON object
@@ -88,32 +97,29 @@ const REQUEST_PRIVATE: Record<string, true> = { headers: true, cookies: true, en
 export function sanitizeEvent(payload: Buffer): Buffer | null {
   const event = parseJsonObject(payload);
   if (event === null) return null;
-  strip(event);
-  return Buffer.from(JSON.stringify(event));
+  return Buffer.from(JSON.stringify(stripValue(event)));
 }
 
-function strip(record: Record<string, unknown>): void {
-  for (const [key, entry] of Object.entries(record)) {
-    if (SENSITIVE.test(key) || REQUEST_PRIVATE[key] === true) {
-      delete record[key];
-      continue;
-    }
-    stripValue(entry);
+/**
+ * Mutates `value` in place, so objects inside arrays (breadcrumbs) are cleaned
+ * too. Strings are scrubbed as well: a token can sit inside a URL, a query
+ * string or an exception message, not only under a key of its own.
+ */
+function stripValue(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.replace(SECRET_PAIR, `$1=${FILTERED}`).replace(BARE_GUEST_TOKEN, FILTERED);
   }
-}
-
-/** Mutates `value` in place, so objects inside arrays (breadcrumbs) are cleaned too. */
-function stripValue(value: unknown): void {
   if (Array.isArray(value)) {
-    for (const entry of value) stripValue(entry);
-    return;
+    for (let i = 0; i < value.length; i += 1) value[i] = stripValue(value[i]);
+    return value;
   }
-  if (typeof value !== "object" || value === null) return;
+  if (typeof value !== "object" || value === null) return value;
   for (const [key, entry] of Object.entries(value)) {
     if (SENSITIVE.test(key) || REQUEST_PRIVATE[key] === true) {
       Reflect.deleteProperty(value, key);
       continue;
     }
-    stripValue(entry);
+    Reflect.set(value, key, stripValue(entry));
   }
+  return value;
 }

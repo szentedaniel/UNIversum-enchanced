@@ -170,6 +170,42 @@ describe("the error tunnel", () => {
     expect(envelopes[0]!.toString("utf8")).not.toContain("203.0.113.9");
   });
 
+  it("filters tokens inside strings: URLs, query strings, breadcrumbs and messages", async () => {
+    const { envelopes, dsn } = await fakeTracker();
+    server = await startTestServer({ errorReporting: dsn });
+    const reconnectionToken = "reconnection-secret-123";
+    const guestToken = "abcdef0123456789abcdef0123456789";
+    const messageToken = "0123456789abcdef0123456789abcdef";
+    const payload = eventPayload({
+      message: `engine exploded with ${messageToken}`,
+      exception: { values: [{ type: "Error", value: `bad token ${messageToken}` }] },
+      breadcrumbs: [
+        {
+          category: "fetch",
+          data: {
+            url: `http://localhost/colyseus/matchmake/joinById/123456?reconnectionToken=${reconnectionToken}&other=keep`,
+          },
+        },
+      ],
+      request: {
+        url: `http://localhost/game/123456?guestToken=${guestToken}&lang=en`,
+        query_string: `guestToken=${guestToken}&lang=en`,
+      },
+    });
+
+    const response = await post(server.port, envelope([{ type: "event", payload }]));
+
+    expect(response.status).toBe(200);
+    const text = envelopes[0]!.toString("utf8");
+    for (const secret of [reconnectionToken, guestToken, messageToken]) {
+      expect(text).not.toContain(secret);
+    }
+    expect(text).toContain("reconnectionToken=[Filtered]&other=keep");
+    expect(text).toContain("guestToken=[Filtered]&lang=en");
+    expect(text).toContain("engine exploded with [Filtered]");
+    expect(text).toContain("bad token [Filtered]");
+  });
+
   it("drops an envelope without events, and refuses a malformed one", async () => {
     const { envelopes, dsn } = await fakeTracker();
     server = await startTestServer({ errorReporting: dsn });
