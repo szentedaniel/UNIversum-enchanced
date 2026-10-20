@@ -25,3 +25,12 @@ export const TIMEOUT_PENALTY_THRESHOLD = 100_000;
 
 /** Every Museum's Value, whoever owns it (F2): its price, Tax and Wealth use it. */
 export const MUSEUM_VALUE = 400_000;
+
+/** Quarantine rounds a Player sits out after landing on the Quarantine Field (R39). */
+export const QUARANTINE_ROUNDS = 3;
+
+/** The price of a PCR test bought in Quarantine (R43). */
+export const PCR_TEST_PRICE = 200_000;
+
+/** The only roll that frees a Player in Quarantine, and how far it moves them (R24, R42). */
+export const QUARANTINE_ESCAPE_ROLL = 12;

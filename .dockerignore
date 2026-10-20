@@ -16,3 +16,4 @@ apps/e2e/test-results
 .agents
 v1
 docs
+apps/web/public/atlas

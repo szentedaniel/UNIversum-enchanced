@@ -6,6 +6,7 @@
 import { TIMEOUT_PENALTY_THRESHOLD } from "#constants.ts";
 import type { IntentHandlers } from "#handlers.ts";
 import { rejection } from "#rejections.ts";
+import { quarantineChoiceTimeout } from "#rules/quarantine-choice.ts";
 import { passTurn } from "#rules/turn.ts";
 import type { PhaseKind, PlayerId } from "#state.ts";
 import { emit, playerById, type Tx } from "#tx.ts";
@@ -32,7 +33,9 @@ declare module "#events.ts" {
  * the Turn. The Sale (#29: Auto-sell, then the penalty) and the Quarantine
  * choice (#30: one round used up, no penalty) add their entries here.
  */
-const TIMEOUT_OUTCOMES: Partial<Record<PhaseKind, (tx: Tx) => void>> = {};
+const TIMEOUT_OUTCOMES: Partial<Record<PhaseKind, (tx: Tx) => void>> = {
+  quarantineChoice: quarantineChoiceTimeout,
+};
 
 export const timeoutIntents = {
   TurnTimedOut: {

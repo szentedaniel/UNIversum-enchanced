@@ -1,22 +1,5 @@
 import { chromium, devices, expect, test, webkit, type Page } from "@playwright/test";
 
-// The renderer's test-only hooks (apps/web/src/test-hooks.ts).
-type ViewSummary = {
-  turn: number;
-  version: number;
-  currentPlayer: string;
-  phase: { kind: string; field?: number; levels?: { level: number; price: number }[] };
-  fields: { owner: string | null; level: number; value: number; rent: number }[];
-};
-declare global {
-  interface Window {
-    universumTest?: {
-      fieldCenter(id: number): { x: number; y: number };
-      view(): ViewSummary | null;
-    };
-  }
-}
-
 const viewOf = (page: Page) => page.evaluate(() => window.universumTest?.view() ?? null);
 
 const fieldCenter = (page: Page, id: number) =>
@@ -84,6 +67,8 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     const playTurn = async (turn: number) => {
       const [roller, waiter] = turn % 2 === 1 ? [desktop, phone] : [phone, desktop];
       await expect(waiter.getByRole("button", { name: "Roll" })).toHaveCount(0);
+      // Not `exact`: a Player who landed on Quarantine gets "Roll for 12"
+      // instead, which also ends the Turn (or, on a 12, may stop at an offer).
       await press(roller, "Roll");
       // The roll ends the Turn, or stops at a University offer.
       await expect
@@ -123,14 +108,16 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     expect(desktopView?.fields[field]).toMatchObject({ owner, level: 1 });
     expect(desktopView?.fields[field]?.value).toBeGreaterThan(0);
 
-    // Tapping a Field on the Board (found through the test hook) selects it. The
-    // last push's toast can still re-flow the screen and resize the Board, so a
-    // tap that misses is retried with a fresh Field centre.
+    // Tapping a Field on the Board (found through the test hook) opens its card.
+    // The last push's toast can still re-flow the screen and resize the Board,
+    // so a tap that misses is retried with a fresh Field centre.
     await expect(async () => {
       const zurich = await fieldCenter(phone, 5);
       expect(zurich).toBeDefined();
       await phone.touchscreen.tap(zurich!.x, zurich!.y);
-      await expect(phone.getByTestId("selected-field")).toHaveText("Zurich", { timeout: 1_000 });
+      await expect(phone.getByTestId("field-card").getByRole("heading")).toHaveText("Zurich", {
+        timeout: 1_000,
+      });
     }).toPass();
   } finally {
     await Promise.all([desktopBrowser.close(), phoneBrowser.close()]);
