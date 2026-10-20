@@ -1,11 +1,11 @@
 # Implementer protocol
 
-How an implementer agent (omp, Claude Code, or a human) builds one ticket of spec #22. The orchestrator (Claude Code) plans, dispatches one ticket per implementer, verifies the result and merges it. The implementer builds; it never merges, pushes or closes issues.
+How an implementer agent (omp, Claude Code, or a human) builds one ticket of a spec (spec #22, v2 modernization, or a later one such as #49, Playback; the ticket's _Parent_ names it). The orchestrator (Claude Code) plans, dispatches one ticket per implementer, verifies the result and merges it. The implementer builds; it never merges, pushes or closes issues.
 
 ## 1. Read before writing code
 
 1. The ticket: `gh issue view <N> --comments`. The **Implementation context** comment lists what the ticket builds on, the files involved, the hazards, and which handoff docs to read.
-2. The spec: `gh issue view 22 --json body --jq .body`. Its _Testing Decisions_ section defines what a good test is here.
+2. The spec: `gh issue view <spec> --json body --jq .body`, where `<spec>` is the ticket's _Parent_. Its _Testing Decisions_ section defines what a good test is here. Spec #22 still holds the base rules, protocol and Clocks decisions that later specs extend.
 3. `GLOSSARY.md` (domain terms; use them in code and messages) and `docs/adr/`.
 4. `docs/agents/handoff/INDEX.md`, then every handoff doc the ticket's context comment names. `ticket-24.md` holds the extension points (where to add a phase, intent, event, Rejection code, protocol schema, Room handler, Board animation, message, test helper). `libs.md` holds verified library facts and gotchas. Grep installed packages under `node_modules/` instead of guessing an API.
 
@@ -15,7 +15,7 @@ How an implementer agent (omp, Claude Code, or a human) builds one ticket of spe
 - Use paths inside your worktree only. Never edit the main checkout or another worktree.
 - Run `pnpm install`, then `pnpm --filter @universum/web run paraglide` (generated message code is gitignored; regenerate after any merge or message-file change).
 - Other tickets are built in parallel and merged into `v2-modernization` as they finish. Keep edits to shared files (rules `apply.ts` HANDLERS, unions, `landing.ts`, protocol schemas, message files, `Game.tsx`) small and additive.
-- If you add a key to the rules `GameState`, update `packages/rules/test/fixtures/state-v1.json` so the shape-guard test passes (nothing is deployed yet; no migration needed).
+- If you change the shape of the rules `GameState`, bump `STATE_VERSION`, add a migration step in `packages/rules/src/migrate.ts` and commit a new snapshot `packages/rules/test/fixtures/state-v<N>.json`, as `packages/rules/test/migrate.test.ts` describes. Never edit an existing snapshot: running games are stored at that version.
 
 ## 3. Build test-first
 
