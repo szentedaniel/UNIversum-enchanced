@@ -92,6 +92,23 @@ describe("metrics", () => {
 });
 
 describe("logs", () => {
+  it("say which Rooms came back at boot, as Lobbies or running games", async () => {
+    server = await startTestServer();
+    const lobby = await server.create({ maxPlayers: 2 });
+    const { databasePath } = server;
+    await server.stop();
+    const capture = captureLogs();
+
+    server = await startTestServer({
+      databasePath,
+      log: createLogger({ level: "info", stream: capture.stream }),
+    });
+
+    expect(capture.lines().filter((l) => l["msg"] === "Room restored")).toEqual([
+      expect.objectContaining({ level: 30, roomCode: lobby.code, playing: false, seats: 1 }),
+    ]);
+  });
+
   it("tell the Room and Seat story with roomCode and the public Player id, and never a secret or IP", async () => {
     const capture = captureLogs();
     server = await startTestServer({

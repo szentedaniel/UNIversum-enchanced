@@ -179,10 +179,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.log = this.log.child({ roomCode: this.roomId });
     this.metrics.trackRoom(this);
     if (restored) {
-      this.log.info(
-        { state: this.game ? "playing" : "lobby", seats: this.seats.length },
-        "Room restored",
-      );
+      this.log.info({ playing: this.game !== null, seats: this.seats.length }, "Room restored");
     } else {
       this.log.info({ ...this.settings, hasPassword: this.password !== null }, "Room created");
     }

@@ -33,6 +33,9 @@ RUN mkdir -p /data && chown node:node /data
 USER node
 WORKDIR /app/apps/server
 EXPOSE 2567
+# The git SHA (compose passes RELEASE), served as build_info{release}. Last, so it busts no cache.
+ARG RELEASE=dev
+ENV RELEASE=$RELEASE
 # The same entry as `pnpm dev` (minus --watch) and `pnpm --filter @universum/server start`.
 CMD ["node", "src/main.ts"]
 
