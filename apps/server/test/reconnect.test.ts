@@ -6,6 +6,7 @@ import {
   ManualScheduler,
   newGuestToken,
   startTestServer,
+  withDeadline,
   T0,
   type TestServer,
 } from "./helpers.ts";
@@ -131,7 +132,7 @@ async function startedGame(server: TestServer) {
   const ids = [(await alice.next("welcome")).playerId, (await bob.next("welcome")).playerId];
   alice.send({ type: "Start" });
   const [first] = await Promise.all([alice.next("game"), bob.next("game")]);
-  return { alice, bob, tokens, ids, code: alice.code, view: first.view };
+  return { alice, bob, tokens, ids, code: alice.code, view: withDeadline(first) };
 }
 
 describe("a Seat in a running game while its Player is away", () => {

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { startTestServer, type TestServer } from "./helpers.ts";
+import { startTestServer, withDeadline, type TestServer } from "./helpers.ts";
 
 /** 20 s on the ring plus the 3 s slack (F22). */
 const DEADLINE_AFTER = 23_000;
@@ -21,7 +21,7 @@ async function startedGame() {
   alice.send({ type: "Start" });
   const [first] = await Promise.all([alice.next("game"), bob.next("game")]);
   const ids = await Promise.all([alice, bob].map(async (c) => (await c.next("welcome")).playerId));
-  return { alice, bob, ids, view: first.view };
+  return { alice, bob, ids, view: withDeadline(first) };
 }
 
 describe("the Turn deadline", () => {
