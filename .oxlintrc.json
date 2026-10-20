@@ -25,7 +25,14 @@
   "rules": {
     "import/no-cycle": "error",
     // House style: explicit `.ts`/`.tsx` extensions, also where Vite resolves imports.
-    "import/extensions": ["error", "always", { "ignorePackages": true, "checkTypeImports": true }],
+    "import/extensions": [
+      "error",
+      "always",
+      {
+        "ignorePackages": true,
+        "checkTypeImports": true
+      }
+    ],
     "typescript/consistent-type-imports": "error",
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error"
@@ -44,7 +51,9 @@
         "jsx-a11y",
         "vitest"
       ],
-      "env": { "browser": true },
+      "env": {
+        "browser": true
+      },
       "rules": {
         "react/rules-of-hooks": "error",
         "react/exhaustive-deps": "error",
@@ -57,12 +66,17 @@
         // Same for inline `style={{ … }}` (Player colours and sizes are runtime values).
         "react-perf/jsx-no-new-object-as-prop": "off",
         // Side-effect imports are only for CSS.
-        "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
+        "import/no-unassigned-import": [
+          "error",
+          {
+            "allow": ["**/*.css"]
+          }
+        ],
         // PixiJS `Graphics.fill({ … })` is not `Array.prototype.fill`.
         "unicorn/no-array-fill-with-reference-type": "off",
         // The web app holds no rule logic and no Zod (spec: Modules). It may
-        // import only types and the static Board data from rules, and only the
-        // Zod-free `messages` subpath from protocol.
+        // import only types and the static Board and Playback data from rules,
+        // and only the Zod-free `messages` subpath from protocol.
         "no-restricted-imports": [
           "error",
           {
@@ -70,7 +84,7 @@
               {
                 "name": "@universum/rules",
                 "allowTypeImports": true,
-                "message": "The web app may import only types from @universum/rules; static Board data comes from @universum/rules/board."
+                "message": "The web app may import only types from @universum/rules; static Board data comes from @universum/rules/board and the Playback durations from @universum/rules/playback."
               },
               {
                 "name": "@universum/protocol",
@@ -83,8 +97,12 @@
             ],
             "patterns": [
               {
-                "group": ["@universum/rules/*", "!@universum/rules/board"],
-                "message": "From @universum/rules the web app may import only types and @universum/rules/board."
+                "group": [
+                  "@universum/rules/*",
+                  "!@universum/rules/board",
+                  "!@universum/rules/playback"
+                ],
+                "message": "From @universum/rules the web app may import only types, @universum/rules/board and @universum/rules/playback."
               },
               {
                 "group": ["@universum/protocol/*", "!@universum/protocol/messages"],

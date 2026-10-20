@@ -33,10 +33,11 @@ async function restrictedImportLines(source: string): Promise<number[]> {
     .toSorted((a, b) => a - b);
 }
 
-it("lets the web app import rules types, the board data and the protocol messages", async () => {
+it("lets the web app import rules types, the board and playback data and the protocol messages", async () => {
   const source = `
 import type { State } from "@universum/rules";
 import { FIELD_COUNT } from "@universum/rules/board";
+import { PLAYBACK_MS, playbackOf } from "@universum/rules/playback";
 import { INTENT_MESSAGE } from "@universum/protocol/messages";
 import type { IntentMessage } from "@universum/protocol/messages";
 export type { Board } from "@universum/rules";
@@ -45,7 +46,7 @@ export type { Board } from "@universum/rules";
 });
 
 it("blocks rule logic, the Zod protocol and Zod itself in the web app", async () => {
-  // One forbidden import per line, lines 1 to 8.
+  // One forbidden import per line, lines 1 to 9.
   const source = `import { apply } from "@universum/rules";
 import { migrate } from "@universum/rules/migrations";
 import { INTENT_MESSAGE } from "@universum/protocol";
@@ -54,6 +55,7 @@ import { intentSchema } from "@universum/protocol/schemas";
 import { z } from "zod";
 import { string } from "zod/mini";
 export { setup } from "@universum/rules";
+import { playbackOf } from "@universum/rules";
 `;
-  expect(await restrictedImportLines(source)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  expect(await restrictedImportLines(source)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
 });
