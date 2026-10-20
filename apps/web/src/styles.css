@@ -137,6 +137,21 @@
     touch-action: none;
   }
 
+  .board-canvas {
+    position: absolute;
+    inset: 0;
+  }
+
+  /* The camera fits the Board into this box: the Board minus the space the
+     screen reserves (--board-inset-*) for the camera buttons and the Field
+     card or pick tray, so opening a card never changes the zoom. */
+  .board-fit-area {
+    position: absolute;
+    inset: var(--board-inset-top, 0px) var(--board-inset-right, 0px) var(--board-inset-bottom, 0px)
+      var(--board-inset-left, 0px);
+    pointer-events: none;
+  }
+
   /* The Turn timer (screens/TurnRing.tsx) around the current Player's figure
      (components/TimerRing.tsx): a primary arc that empties over the Turn limit. */
   .turn-ring {

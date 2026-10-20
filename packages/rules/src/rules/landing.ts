@@ -7,6 +7,10 @@
  * Chance and Tax (#28), Quarantine (#30), Doubler and Erasmus (#31).
  */
 import { FIELDS, type FieldId, type FieldKind } from "#board.ts";
+import { landOnChance } from "#rules/chance.ts";
+import { landOnMuseum } from "#rules/museums.ts";
+import { enterQuarantine } from "#rules/quarantine.ts";
+import { landOnTax } from "#rules/tax.ts";
 import { landOnUniversity } from "#rules/universities.ts";
 import type { PlayerId } from "#state.ts";
 import { playerById, type Tx } from "#tx.ts";
@@ -18,10 +22,10 @@ const nothing: Landing = () => {};
 const LANDINGS: Record<FieldKind, Landing> = {
   start: nothing,
   university: landOnUniversity,
-  museum: nothing,
-  chance: nothing,
-  tax: nothing,
-  quarantine: nothing,
+  museum: landOnMuseum,
+  chance: landOnChance,
+  tax: landOnTax,
+  quarantine: enterQuarantine,
   doubler: nothing,
   erasmus: nothing,
 };

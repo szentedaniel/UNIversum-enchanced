@@ -41,6 +41,12 @@ export type FieldInfo = {
 /** The highest Level of a University (R25). */
 export const MAX_LEVEL = 4;
 
+/**
+ * A Museum's price and Value, the same for every owner (R53, F2 fixed). Museums
+ * have no Levels.
+ */
+export const MUSEUM_VALUE = 400_000;
+
 /** Value by Level as tenths of the base price: 1.0 B, 1.2 B, 1.6 B, 2.2 B (R27). */
 const VALUE_TENTHS = [0, 10, 12, 16, 22] as const;
 
@@ -100,3 +106,19 @@ export const FIELDS: readonly FieldInfo[] = [
 
 /** The Start Field, where the Round bonus is paid. */
 export const START_FIELD: FieldId = 0;
+
+/**
+ * The 3 Chance cards, in v1's order (R32): a PCR test, a +200,000 scholarship
+ * and a −200,000 fee for failing every exam. The web app maps each id to its
+ * Paraglide title and text.
+ */
+export const CHANCE_CARDS = ["pcrTest", "scholarship", "failedExams"] as const;
+
+export type ChanceCardId = (typeof CHANCE_CARDS)[number];
+
+/** What each Chance card pays (+) or charges (−) the Player who draws it (R34). */
+export const CHANCE_CARD_MONEY: Readonly<Record<ChanceCardId, number>> = {
+  pcrTest: 0,
+  scholarship: 200_000,
+  failedExams: -200_000,
+};

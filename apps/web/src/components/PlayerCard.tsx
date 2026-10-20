@@ -18,12 +18,14 @@ export type PlayerSummary = {
   current: boolean;
   you: boolean;
   bankrupt: boolean;
+  /** Short state notes, e.g. "In Quarantine: 2 · PCR test"; empty for none. */
+  status?: string;
   /** The Turn timer, on the current Player only (see TimerRing). */
   ring?: ReactNode;
 };
 
 export function PlayerCard({ player, className }: { player: PlayerSummary; className?: string }) {
-  const { seat, name, cash, fields, current, you, bankrupt, ring } = player;
+  const { seat, name, cash, fields, current, you, bankrupt, status, ring } = player;
   return (
     <li
       data-testid="player-card"
@@ -49,13 +51,14 @@ export function PlayerCard({ player, className }: { player: PlayerSummary; class
           {m.game_fields({ count: fields })}
           {you && ` · ${m.lobby_you()}`}
         </div>
+        {status && <div className="truncate text-xs font-black text-ink/80">{status}</div>}
       </div>
     </li>
   );
 }
 
 export function PlayerChip({ player, className }: { player: PlayerSummary; className?: string }) {
-  const { seat, name, cash, current, you, bankrupt, ring } = player;
+  const { seat, name, cash, current, you, bankrupt, status, ring } = player;
   return (
     <li
       data-testid="player-chip"
@@ -77,6 +80,11 @@ export function PlayerChip({ player, className }: { player: PlayerSummary; class
       </div>
       <div className="tnum text-sm leading-none font-black" aria-label={m.game_cash()}>
         {cash}
+      </div>
+      {/* Always there, empty or not: a chip that grew would shrink the Board below
+          it and change its zoom (the camera keeps the zoom steady). */}
+      <div className="h-[1.25em] max-w-full truncate text-[10px] leading-tight font-black text-ink/80">
+        {status}
       </div>
     </li>
   );

@@ -36,9 +36,12 @@ export function setupGame({ seats, settings, seed, now }: SetupInput): GameState
       cash: START_CASH,
       position: 0,
       bankrupt: false,
+      quarantineRounds: null,
+      hasPcrTest: false,
     })),
     fields: FIELDS.map(() => ({ owner: null, level: 0 })),
     doubler: null,
+    lastChanceCard: null,
     rng: rngFromSeed(seed),
   };
 }

@@ -1,9 +1,10 @@
-import type { FieldId, GameEvent, PhaseOf, PlayerIntent, PublicView } from "@universum/rules";
+import type { GameEvent, PhaseOf, PlayerIntent, PublicView } from "@universum/rules";
 import { FIELDS } from "@universum/rules/board";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { useStore } from "zustand";
 import { Board } from "#board/Board.tsx";
+import { FieldCard } from "#board/FieldCard.tsx";
 import { EventToast, MinutePill } from "#components/GameHud.tsx";
 import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
@@ -14,7 +15,7 @@ import { cn } from "#lib/utils.ts";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { roomStore } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
-import { fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
+import { chanceCardText, fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
 
 /** The newest event worth a toast, as text. */
 function describe(event: GameEvent, view: PublicView): string | null {
@@ -58,10 +59,72 @@ function describe(event: GameEvent, view: PublicView): string | null {
         owner: name(event.owner),
         amount: formatMoney(event.amount),
       });
+    case "MuseumBought":
+      return m.event_museum_bought({
+        name: name(event.player),
+        field: fieldName(FIELDS[event.field]?.key ?? ""),
+        price: formatMoney(event.price),
+      });
+    case "BoughtOut":
+      return m.event_bought_out({
+        name: name(event.player),
+        owner: name(event.owner),
+        field: fieldName(FIELDS[event.field]?.key ?? ""),
+        price: formatMoney(event.price),
+      });
+    case "CardDrawn":
+      return m.event_card_drawn({ name: name(event.player), ...chanceCardText(event.card) });
+    case "ChanceMoneyReceived":
+      return m.event_chance_money_received({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
+    case "ChanceChargePaid":
+      return m.event_chance_charge_paid({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
+    case "TaxPaid":
+      return m.event_tax_paid({ name: name(event.player), amount: formatMoney(event.amount) });
+    case "QuarantineEntered":
+      return m.event_quarantine_entered({ name: name(event.player), rounds: event.rounds });
+    case "QuarantineRoundUsed":
+      return m.event_quarantine_round_used({
+        name: name(event.player),
+        rounds: event.roundsLeft,
+      });
+    case "QuarantineReleased":
+      return m.event_quarantine_released({ name: name(event.player) });
+    case "PcrTestBought":
+      return m.event_pcr_test_bought({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
+    case "PcrTestUsed":
+      return m.event_pcr_test_used({ name: name(event.player) });
     default:
       return null;
   }
 }
+
+/**
+ * Steps with no choice that a Player must notice (spec: acknowledgements are
+ * events, not clicks). They take the toast ahead of routine events in the
+ * same push, such as the dice that led there.
+ */
+const NOTICES = new Set<GameEvent["type"]>([
+  "QuarantineEntered",
+  "QuarantineRoundUsed",
+  "QuarantineReleased",
+  "PcrTestBought",
+  "PcrTestUsed",
+  "RentPaid",
+  "CardDrawn",
+  "TaxPaid",
+]);
+
+const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
+  view.players.find((p) => p.id === playerId)?.quarantineRounds ?? 0;
 
 export function Game() {
   const { code = "" } = useParams();
@@ -94,9 +157,13 @@ export function Game() {
   const pending = sentAt !== null && answeredAt <= sentAt;
   const canRoll = myTurn && view.phase.kind === "awaitingRoll" && !pending;
   const offer = myTurn && view.phase.kind === "offer" && !pending ? view.phase : null;
-  // One toast at a time: the first event of the push worth one.
-  const toast = events.map((event) => describe(event, view)).find((text) => text !== null);
-  const selected = selectedField === null ? null : FIELDS[selectedField];
+  const quarantineChoice =
+    myTurn && !pending && view.phase.kind === "quarantineChoice" ? view.phase : null;
+  // One toast at a time: the first notice of the push, else its first event worth one.
+  const notice = events.find((event) => NOTICES.has(event.type));
+  const toast = (notice ? [notice] : events)
+    .map((event) => describe(event, view))
+    .find((text) => text !== null);
 
   function send(intent: PlayerIntent) {
     setSentAt(answeredAt);
@@ -111,6 +178,12 @@ export function Game() {
     current: p.id === view.currentPlayer,
     you: p.id === me,
     bankrupt: p.bankrupt,
+    status: [
+      p.quarantineRounds === null ? null : m.game_in_quarantine({ rounds: p.quarantineRounds }),
+      p.hasPcrTest ? m.game_pcr_test_held() : null,
+    ]
+      .filter((text) => text !== null)
+      .join(" · "),
     ring: p.id === view.currentPlayer && (
       <TurnRing
         key={`${view.turn}:${view.turnDeadline}`}
@@ -133,8 +206,8 @@ export function Game() {
     </>
   );
 
-  // The card (later: the Field card or the pick tray) at the bottom.
-  const card = (
+  // The Turn card at the bottom; the Field card takes its place while open (later: the pick tray).
+  const turnCard = (
     <Card className="gap-2 p-3">
       <div className="flex items-baseline justify-between gap-2">
         <strong data-testid="turn-of" className="truncate text-lg font-black">
@@ -146,7 +219,6 @@ export function Game() {
           {m.game_turn({ turn: view.turn })}
         </span>
       </div>
-      {selected && <FieldDetails view={view} field={selected.id} />}
       {canRoll && (
         <Button size="lg" onClick={() => send({ type: "Roll", turn: view.turn })}>
           {m.game_roll()}
@@ -157,17 +229,51 @@ export function Game() {
           view={view}
           offer={offer}
           onBuy={(level) => send({ type: "BuyLevel", turn: view.turn, level })}
+          onBuyMuseum={() => send({ type: "BuyMuseum", turn: view.turn })}
+          onBuyout={() => send({ type: "Buyout", turn: view.turn })}
           onDecline={() => send({ type: "DeclineOffer", turn: view.turn })}
         />
       )}
+      {quarantineChoice && (
+        <section className="flex flex-col gap-2" aria-label={m.field_quarantine()}>
+          <p className="m-0 text-sm font-bold text-ink/70">
+            {m.game_quarantine_rounds({ rounds: quarantineRoundsOf(view, view.currentPlayer) })}
+          </p>
+          <Button size="lg" onClick={() => send({ type: "RollForTwelve", turn: view.turn })}>
+            {m.game_roll_for_twelve()}
+          </Button>
+          <div className="flex flex-wrap gap-2">
+            {quarantineChoice.canBuyPcrTest && (
+              <Button
+                variant="plain"
+                className="flex-1"
+                onClick={() => send({ type: "BuyPcrTest", turn: view.turn })}
+              >
+                {m.game_buy_pcr_test({ price: formatMoney(quarantineChoice.pcrTestPrice) })}
+              </Button>
+            )}
+            {quarantineChoice.canUsePcrTest && (
+              <Button
+                variant="accent"
+                className="flex-1"
+                onClick={() => send({ type: "UsePcrTest", turn: view.turn })}
+              >
+                {m.game_use_pcr_test()}
+              </Button>
+            )}
+          </div>
+        </section>
+      )}
     </Card>
   );
+  const card = selectedField === null ? turnCard : <FieldCard id={selectedField} view={view} />;
 
   if (wide) {
     return (
       <main className="board-backdrop fixed inset-0 overflow-hidden">
-        {/* The Board's fit area: clear of the corner cards, the status row and the card. */}
-        <div className="absolute inset-x-[110px] top-[110px] bottom-[200px]">
+        {/* The Board's box: clear of the corner cards, the status row and the card; the
+            fit area also keeps clear of the camera buttons on its right. */}
+        <div className="absolute inset-x-[110px] top-[110px] bottom-[200px] [--board-inset-left:3.75rem] [--board-inset-right:3.75rem]">
           <Board />
         </div>
         <ul className="contents" aria-label={m.game_players()}>
@@ -197,10 +303,13 @@ export function Game() {
         ))}
       </ul>
       <div className="mt-2 flex min-w-0 items-center justify-center gap-2 px-2">{statusRow}</div>
-      <div className="relative min-h-0 flex-1">
+      {/* The card overlays the Board's bottom (the right side in landscape). The Board
+          fits above it and below the camera buttons, into space reserved whether or not
+          a card is open, so opening the Field card never changes the zoom. */}
+      <div className="relative mt-2 min-h-0 flex-1 [--board-inset-bottom:14rem] [--board-inset-top:3.75rem] landscape:[--board-inset-bottom:0px] landscape:[--board-inset-right:17.5rem]">
         <Board />
+        <div className="absolute inset-x-2 bottom-0 landscape:left-auto landscape:w-64">{card}</div>
       </div>
-      <div className="px-2">{card}</div>
     </main>
   );
 }
@@ -208,48 +317,33 @@ export function Game() {
 /** Desktop corner of each Seat, clockwise from top left. */
 const CORNERS = ["top-3 left-3", "top-3 right-3", "right-3 bottom-3", "bottom-3 left-3"];
 
-/** The tapped Field: its name, and for a University its owner, Level, Value and Rent. */
-function FieldDetails({ view, field }: { view: PublicView; field: FieldId }) {
-  const info = FIELDS[field];
-  const state = view.fields[field];
-  if (!info || !state) return null;
-  const owner = view.players.find((p) => p.id === state.owner);
-  return (
-    <div>
-      <p className="m-0 font-display text-xl" data-testid="selected-field">
-        {fieldName(info.key)}
-      </p>
-      {info.kind === "university" && (
-        <p className="tnum m-0 text-sm font-bold text-ink/70" data-testid="field-numbers">
-          {owner
-            ? [
-                playerName(owner.name),
-                m.field_level({ level: state.level }),
-                m.field_value({ amount: formatMoney(state.value) }),
-                m.field_rent({ amount: formatMoney(state.rent) }),
-              ].join(" · ")
-            : m.field_unowned()}
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** The buy/build offer: one button per affordable Level with its price, and Decline. */
+/**
+ * The offer: one button per affordable Level with its price, or the Museum
+ * buy, or the Buyout, and Decline. The phase lists what is on offer.
+ */
 function OfferPanel({
   view,
   offer,
   onBuy,
+  onBuyMuseum,
+  onBuyout,
   onDecline,
 }: {
   view: PublicView;
   offer: PhaseOf<"offer">;
   onBuy: (level: number) => void;
+  onBuyMuseum: () => void;
+  onBuyout: () => void;
   onDecline: () => void;
 }) {
   const field = fieldName(FIELDS[offer.field]?.key ?? "");
   const own = view.fields[offer.field]?.owner === view.currentPlayer;
-  const title = own ? m.offer_build({ field }) : m.offer_buy({ field });
+  const title =
+    offer.buyout !== undefined
+      ? m.offer_buyout_title({ field })
+      : own
+        ? m.offer_build({ field })
+        : m.offer_buy({ field });
   return (
     <section className="flex flex-col gap-2" aria-label={title} data-testid="offer">
       <h2 className="m-0 font-display text-xl font-normal">{title}</h2>
@@ -259,6 +353,16 @@ function OfferPanel({
             {m.offer_level({ level, price: formatMoney(price) })}
           </Button>
         ))}
+        {offer.museum !== undefined && (
+          <Button className="tnum" onClick={onBuyMuseum}>
+            {m.offer_museum({ price: formatMoney(offer.museum) })}
+          </Button>
+        )}
+        {offer.buyout !== undefined && (
+          <Button className="tnum" onClick={onBuyout}>
+            {m.offer_buyout({ price: formatMoney(offer.buyout) })}
+          </Button>
+        )}
         <Button variant="plain" onClick={onDecline}>
           {m.offer_decline()}
         </Button>
