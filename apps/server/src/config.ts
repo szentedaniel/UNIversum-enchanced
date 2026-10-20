@@ -1,4 +1,5 @@
 import { join, resolve } from "node:path";
+import { loadLimits, type Limits } from "#limits.ts";
 
 /** Typed server settings. Every value comes from the environment, with dev defaults. */
 export type ServerConfig = {
@@ -8,6 +9,8 @@ export type ServerConfig = {
   host: string;
   /** Folder for the SQLite data (`DATA_DIR`). Gitignored in dev; a local volume in compose. */
   dataDir: string;
+  /** Abuse-protection limits (`LIMIT_*`, see `limits.ts`). */
+  limits: Limits;
   /** The SQLite file of the RoomStore, inside `dataDir`. */
   databasePath: string;
   /**
@@ -29,6 +32,7 @@ export function loadConfig(env: Env = process.env): ServerConfig {
     dataDir,
     databasePath: join(dataDir, "rooms.sqlite"),
     internalPort: parsePort("INTERNAL_PORT", env["INTERNAL_PORT"], 9464),
+    limits: loadLimits(env),
   };
 }
 

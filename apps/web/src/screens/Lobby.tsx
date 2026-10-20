@@ -8,7 +8,7 @@ import { ScreenHeader } from "#components/ScreenHeader.tsx";
 import { SeatCard } from "#components/SeatCard.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
-import { PasswordForm, RejectionText, useJoin } from "#screens/join.tsx";
+import { PasswordForm, RejectionText, retryAtOf, useCountdown, useJoin } from "#screens/join.tsx";
 import { roomStore } from "#stores/room-store.ts";
 import { m, playerName, roomNameText } from "#text.ts";
 
@@ -76,6 +76,8 @@ export function Lobby() {
   const clockOffset = useStore(roomStore, (s) => s.lobbyClockOffset);
   const started = useStore(roomStore, (s) => s.code === code && s.push !== null);
   const [error, setError] = useState<RejectionCode | null>(null);
+  const [retryAt, setRetryAt] = useState<number | null>(null);
+  const wait = useCountdown(retryAt);
   const passwordJoin = useJoin();
   const { ask } = passwordJoin;
 
@@ -84,7 +86,10 @@ export function Lobby() {
     ensureJoined(code).catch((e: unknown) => {
       const rejection = e instanceof JoinError ? e.code : "INTERNAL";
       if (rejection === "WRONG_PASSWORD") ask(code);
-      else setError(rejection);
+      else {
+        setError(rejection);
+        setRetryAt(retryAtOf(e));
+      }
     });
   }, [code, ask]);
 
@@ -95,7 +100,7 @@ export function Lobby() {
   if (error) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-4 text-center">
-        <RejectionText code={error} />
+        <RejectionText code={error} wait={wait} />
         <Link to="/rooms" className={buttonVariants({ variant: "plain" })}>
           {m.back_to_list()}
         </Link>
@@ -112,6 +117,7 @@ export function Lobby() {
           <PasswordForm
             className="sticker rounded-ui bg-card p-4 text-card-foreground"
             busy={passwordJoin.busy}
+            wait={passwordJoin.wait}
             onSubmit={(pw) => void passwordJoin.join(code, pw)}
           />
           {passwordJoin.error && <RejectionText code={passwordJoin.error} />}

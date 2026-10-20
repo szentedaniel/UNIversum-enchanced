@@ -18,7 +18,7 @@ import {
   GAME_ROOM,
   LOBBY_LIST_MESSAGE,
   LOBBY_ROOM,
-  matchmakeRejection,
+  matchmakeRefusal,
   MESSAGE,
   type ClientIntent,
   type CreateOptions,
@@ -51,17 +51,23 @@ let room: Room | null = null;
 let seq = 0;
 let rejoinTimer: ReturnType<typeof setTimeout> | undefined;
 
-/** A failed create or join, as a Rejection code the screens can show. */
+/**
+ * A failed create or join, as a Rejection code the screens can show, and
+ * for a refusal with a wait (`RATE_LIMITED`, `PASSWORD_LOCKED`) the seconds
+ * until the button may be pressed again.
+ */
 export class JoinError extends Error {
   readonly code: RejectionCode;
-  constructor(code: RejectionCode) {
+  readonly retryAfter: number | null;
+  constructor(code: RejectionCode, retryAfter: number | null = null) {
     super(code);
     this.code = code;
+    this.retryAfter = retryAfter;
   }
 }
 
 const rejectionOf = (error: unknown): RejectionCode =>
-  error instanceof MatchMakeError ? matchmakeRejection(error) : "INTERNAL";
+  error instanceof MatchMakeError ? matchmakeRefusal(error).code : "INTERNAL";
 
 const joinOptions = (code: string, password?: string): JoinOptions =>
   password === undefined
@@ -117,7 +123,9 @@ async function attach(connect: () => Promise<Room>): Promise<string> {
     joined = await connect();
   } catch (error) {
     roomStore.setState({ status: "idle" });
-    throw new JoinError(rejectionOf(error));
+    if (!(error instanceof MatchMakeError)) throw new JoinError("INTERNAL");
+    const { code, retryAfter } = matchmakeRefusal(error);
+    throw new JoinError(code, retryAfter);
   }
   listen(joined);
   return joined.roomId;
@@ -185,9 +193,12 @@ async function tryRejoin(code: string, attempt: number): Promise<void> {
   } catch (error) {
     if (!stillWanted()) return;
     const rejection = rejectionOf(error);
-    // A server that is down (INTERNAL) or still restoring its Rooms is tried again.
+    // A server that is down (INTERNAL), busy, rate-limiting or still restoring
+    // its Rooms is tried again (the back-off soon outlasts any short `retryAfter`).
     if (
       rejection === "INTERNAL" ||
+      rejection === "SERVER_BUSY" ||
+      rejection === "RATE_LIMITED" ||
       (rejection === "ROOM_NOT_FOUND" && attempt < REJOIN_NOT_FOUND_TRIES)
     ) {
       rejoin(code, attempt + 1);

@@ -15,7 +15,8 @@
     "@colyseus/core": "catalog:",
     "@colyseus/ws-transport": "catalog:",
     "@universum/protocol": "workspace:*",
-    "@universum/rules": "workspace:*"
+    "@universum/rules": "workspace:*",
+    "rate-limiter-flexible": "catalog:"
   },
   "devDependencies": {
     "@colyseus/sdk": "catalog:",
