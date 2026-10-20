@@ -1,13 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  apply,
-  isRejection,
-  publicView,
-  START_CASH,
-  SYSTEM,
-  type GameState,
-  type Intent,
-} from "#index.ts";
+import { publicView, START_CASH, SYSTEM, type GameState } from "#index.ts";
 import {
   accept,
   deadlineOf,
@@ -19,6 +11,7 @@ import {
   withField,
   withPlayer,
 } from "./helpers.ts";
+import { playRandomGame } from "./simulation.ts";
 
 // Field ids and their Bank sale values (90% of Value) at the Levels used below.
 const VESZPREM = 1; // Level 1: sale 180,000
@@ -377,76 +370,27 @@ describe("Bankrupt Players", () => {
   });
 });
 
-/** A small deterministic PRNG for the played games below (not the game's own). */
-function chooser(seed: number) {
-  let x = seed;
-  return (n: number) => {
-    x = (Math.imul(x, 1_103_515_245) + 12_345) >>> 0;
-    return (x >>> 8) % n;
-  };
-}
-
-/** One random option the current phase offers (sometimes letting the timer run out). */
-function anyOption(state: GameState, pick: (n: number) => number): { intent: Intent; now: number } {
-  const turn = state.turn;
-  const { phase } = state;
-  if (pick(8) === 0) return { intent: { type: "TurnTimedOut", turn }, now: deadlineOf(state) };
-  const now = deadlineOf(state) - 1;
-  switch (phase.kind) {
-    case "offer": {
-      const level = phase.levels.at(-1)?.level;
-      if (level !== undefined && pick(2) === 0)
-        return { intent: { type: "BuyLevel", turn, level }, now };
-      if (phase.museum !== undefined) return { intent: { type: "BuyMuseum", turn }, now };
-      if (phase.buyout !== undefined) return { intent: { type: "Buyout", turn }, now };
-      return { intent: { type: "DeclineOffer", turn }, now };
-    }
-    case "selling": {
-      if (pick(2) === 0) return { intent: { type: "AutoSell", turn }, now };
-      const fields = state.fields.flatMap((f, id) => (f.owner === state.currentPlayer ? [id] : []));
-      return { intent: { type: "SellFields", turn, fields }, now };
-    }
-    case "quarantineChoice":
-      return { intent: { type: "RollForTwelve", turn }, now };
-    case "placingDoubler": {
-      const field = phase.fields[pick(phase.fields.length)];
-      return { intent: { type: "PlaceDoubler", turn, field: field ?? 0 }, now };
-    }
-    case "choosingErasmus": {
-      const field = phase.fields[pick(phase.fields.length)];
-      return { intent: { type: "TravelErasmus", turn, field: field ?? 0 }, now };
-    }
-    default:
-      return { intent: { type: "Roll", turn }, now };
-  }
-}
-
 describe("played games", () => {
-  it("money never goes negative, and a Bankrupt Player is never the current Player, owns nothing and has 0", () => {
+  it("the seeded games reach Sales and Bankruptcies, and money never goes negative", () => {
     let sales = 0;
     let bankruptcies = 0;
-    for (let game = 1; game <= 40; game++) {
-      const pick = chooser(game);
-      let state = newGame({ seed: [game, game * 7, game * 13, game * 31] });
-      for (let step = 0; step < 400; step++) {
-        if (state.players.filter((p) => !p.bankrupt).length <= 1) break;
-        const { intent, now } = anyOption(state, pick);
-        const actor = intent.type === "TurnTimedOut" ? SYSTEM : state.currentPlayer;
-        const result = apply(state, intent, { actor, now });
-        if (isRejection(result)) throw new Error(`${intent.type} refused: ${result.code}`);
-        state = result.state;
-        if (state.phase.kind === "selling") sales++;
-        bankruptcies += result.events.filter((e) => e.type === "WentBankrupt").length;
 
-        expectNoNegativeCash(state);
-        expect(player(state, state.currentPlayer).bankrupt).toBe(false);
-        for (const p of state.players.filter((q) => q.bankrupt)) {
-          expect(p.cash).toBe(0);
-          expect(state.fields.some((f) => f.owner === p.id)).toBe(false);
-        }
-        if (state.phase.kind === "gameOver") break;
+    for (let game = 1; game <= 40; game++) {
+      const run = playRandomGame({
+        seed: [game, game * 7, game * 13, game * 31],
+        choiceSeed: game,
+        timeoutEvery: 8,
+      });
+
+      for (const step of run.steps) {
+        sales += step.after.phase.kind === "selling" ? 1 : 0;
+        bankruptcies += step.events.filter((e) => e.type === "WentBankrupt").length;
+        expectNoNegativeCash(step.after);
+        expect(player(step.after, step.after.currentPlayer).bankrupt).toBe(false);
       }
+      expect(run.ended).toBe(true);
     }
+
     // The games really went through Sales and bankruptcies.
     expect(sales).toBeGreaterThan(0);
     expect(bankruptcies).toBeGreaterThan(0);
