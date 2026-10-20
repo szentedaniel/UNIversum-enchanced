@@ -6,6 +6,7 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import type { RunOptions } from "#args.ts";
+import { sleep } from "#wait.ts";
 
 export const REPO_ROOT = resolve(import.meta.dirname, "..", "..", "..");
 export const LOADTEST_COMPOSE = `${REPO_ROOT}/compose.loadtest.yaml`;
@@ -143,10 +144,4 @@ export class Compose {
     });
     return promise;
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  const { promise, resolve: finish } = Promise.withResolvers<void>();
-  setTimeout(finish, ms);
-  return promise;
 }

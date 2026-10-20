@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { loadConfig } from "#config.ts";
+import { loadConfig, timingIgnored } from "#config.ts";
 import { startInternalServer } from "#internal-server.ts";
 import { installCrashHandlers } from "#observability/crash-handlers.ts";
 import { parseDsn } from "#observability/dsn.ts";
@@ -16,6 +16,9 @@ const log = createLogger({
   level: config.logLevel,
   stream: config.prettyLogs ? (await import("pino-pretty")).default() : undefined,
 });
+if (timingIgnored()) {
+  log.warn("GAME_TURN_LIMIT_MS and GAME_MINUTE_MS are ignored in production");
+}
 const metrics = new GameMetrics({ release: config.release });
 
 // Sentry stays off unless SENTRY_DSN is set: no reporter means nothing is sent.

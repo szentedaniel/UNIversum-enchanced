@@ -37,6 +37,7 @@ import {
   type GameEvent,
   type GameState,
   type Intent,
+  type PlayerId,
   type PlayerIntent,
   type Rejection,
 } from "@universum/rules";
@@ -236,7 +237,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   /** Set when the process shuts down: Seats and the stored Room must then stay as they are. */
   #shuttingDown = false;
   /** Seats held for absent Players, by public Player id (spec: Seat hold). */
-  readonly #holds = new Map<string, Hold>();
+  readonly #holds = new Map<PlayerId, Hold>();
   /** The server's abuse protection; `createGameServer` sets it. */
   guard!: AbuseGuard;
   /** Intent flood control, per connected client. */
@@ -520,7 +521,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /** The Player is back: the Seat is no longer held (nothing is released). */
-  private unhold(playerId: string): void {
+  private unhold(playerId: PlayerId): void {
     const hold = this.#holds.get(playerId);
     if (!hold) return;
     hold.cancel();
@@ -529,7 +530,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /** A Lobby Seat's 60 s ran out: it is freed. */
-  private expire(playerId: string): void {
+  private expire(playerId: PlayerId): void {
     const hold = this.#holds.get(playerId);
     if (!hold) return;
     this.#holds.delete(playerId);
@@ -563,7 +564,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /** Frees a Lobby Seat: the others see it open; an emptied Lobby is deleted when it disposes. */
-  private freeSeat(playerId: string): void {
+  private freeSeat(playerId: PlayerId): void {
     this.log.info({ playerId }, "Seat freed");
     this.unhold(playerId);
     this.seats = this.seats.filter((s) => s.playerId !== playerId);

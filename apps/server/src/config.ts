@@ -58,11 +58,22 @@ export function loadConfig(env: Env = process.env): ServerConfig {
     release: env["RELEASE"] || "dev",
     sentryDsn: parseSentryDsn(env["SENTRY_DSN"]),
     limits: loadLimits(env),
-    timing: {
-      turnLimitMs: parseOptionalMs("GAME_TURN_LIMIT_MS", env["GAME_TURN_LIMIT_MS"]),
-      minuteMs: parseOptionalMs("GAME_MINUTE_MS", env["GAME_MINUTE_MS"]),
-    },
+    // Test-only clock overrides: production uses the rules constants, so a
+    // restart with another value can never leave stored deadlines out of step
+    // with the Turn ring.
+    timing: production
+      ? {}
+      : {
+          turnLimitMs: parseOptionalMs("GAME_TURN_LIMIT_MS", env["GAME_TURN_LIMIT_MS"]),
+          minuteMs: parseOptionalMs("GAME_MINUTE_MS", env["GAME_MINUTE_MS"]),
+        },
   };
+}
+
+/** Whether a production server was handed the test-only clock overrides, so boot can warn that it ignores them. */
+export function timingIgnored(env: Env = process.env): boolean {
+  if (env["NODE_ENV"] !== "production") return false;
+  return env["GAME_TURN_LIMIT_MS"] !== undefined || env["GAME_MINUTE_MS"] !== undefined;
 }
 
 /** A positive whole number of milliseconds, or `undefined` when the variable is unset. */

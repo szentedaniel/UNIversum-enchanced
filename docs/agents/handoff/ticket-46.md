@@ -2,7 +2,7 @@
 
 Branch `ticket/46-loadtest`. Code: `apps/loadtest/src`, compose override `compose.loadtest.yaml`,
 reports in gitignored `loadtest-reports/`. The sign-off run itself is #47's (Linux host; see the
-spec's *Load test* section); this ticket builds the tool and proves it with a scaled smoke.
+spec's _Load test_ section); this ticket builds the tool and proves it with a scaled smoke.
 
 ## Running
 
