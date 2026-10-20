@@ -1,68 +1,52 @@
-import type { PlayerView } from "@universum/rules";
+import type { PlayerView, Standing } from "@universum/rules";
 import { describe, expect, it } from "vitest";
 import { podiumOrder, type PodiumEntry } from "#pick/podium.ts";
 
-// The result screen ranks the Players from the view only: the winner the
-// server named, each Player's Wealth and whether they are Bankrupt (R80).
+// The result screen shows the server's standings (R80). The client only maps
+// each ordered Player id to the view's Player; it holds no ranking logic.
 
-function player(
-  id: string,
-  seat: number,
-  { cash, wealth, bankrupt = false }: { cash: number; wealth: number; bankrupt?: boolean },
-): PlayerView {
+function player(id: string, seat: number): PlayerView {
   return {
     id,
     name: { adjective: "happy", noun: "tiger" },
     seat,
-    cash,
-    wealth,
+    cash: 0,
+    wealth: 0,
     position: 0,
-    bankrupt,
+    bankrupt: false,
     quarantineRounds: null,
     hasPcrTest: false,
   };
 }
 
+const standing = (playerId: string, wealth: number): Standing => ({ player: playerId, wealth });
+
 const names = (view: readonly PodiumEntry[]) => view.map((entry) => entry.player.id);
 
 describe("the podium order", () => {
-  it("puts the winner first, even when another Player is Wealthier", () => {
-    const players = [
-      player("p1", 0, { cash: 3_000_000, wealth: 3_000_000 }),
-      player("p2", 1, { cash: 1_000_000, wealth: 1_000_000 }),
-    ];
+  it("follows the server's standings, winner first even when another Player is Wealthier", () => {
+    const players = [player("p1", 0), player("p2", 1)];
+    const standings = [standing("p2", 1_000_000), standing("p1", 3_000_000)];
 
-    expect(names(podiumOrder(players, "p2"))).toEqual(["p2", "p1"]);
+    expect(names(podiumOrder(players, standings))).toEqual(["p2", "p1"]);
   });
 
-  it("ranks the rest by Wealth, then more cash, then the earlier Seat", () => {
-    const players = [
-      player("p1", 0, { cash: 100_000, wealth: 100_000 }),
-      player("p2", 1, { cash: 2_000_000, wealth: 2_000_000 }),
-      player("p3", 2, { cash: 1_600_000, wealth: 2_000_000 }),
-      player("p4", 3, { cash: 2_000_000, wealth: 2_000_000 }),
-    ];
+  it("maps every standing to the view's Player, in order, with one place each", () => {
+    const players = [player("p3", 2), player("p1", 0), player("p2", 1)];
+    const standings = [standing("p1", 2_000_000), standing("p2", 1_600_000), standing("p3", 0)];
 
-    expect(names(podiumOrder(players, "p1"))).toEqual(["p1", "p2", "p4", "p3"]);
+    expect(podiumOrder(players, standings)).toEqual([
+      { player: players[1], place: 1 },
+      { player: players[2], place: 2 },
+      { player: players[0], place: 3 },
+    ]);
   });
 
-  it("puts Bankrupt Players last, greyed, whatever their cash shows", () => {
-    const players = [
-      player("p1", 0, { cash: 100_000, wealth: 100_000 }),
-      player("p2", 1, { cash: 0, wealth: 0, bankrupt: true }),
-      player("p3", 2, { cash: 0, wealth: 0, bankrupt: true }),
-    ];
+  it("skips a standing id the view does not carry", () => {
+    const players = [player("p1", 0)];
 
-    expect(names(podiumOrder(players, "p1"))).toEqual(["p1", "p2", "p3"]);
-  });
-
-  it("numbers every place from 1", () => {
-    const players = [
-      player("p1", 0, { cash: 100_000, wealth: 100_000 }),
-      player("p2", 1, { cash: 50_000, wealth: 50_000 }),
-      player("p3", 2, { cash: 0, wealth: 0, bankrupt: true }),
-    ];
-
-    expect(podiumOrder(players, "p1").map((entry) => entry.place)).toEqual([1, 2, 3]);
+    expect(podiumOrder(players, [standing("p1", 1), standing("gone", 0)])).toEqual([
+      { player: players[0], place: 1 },
+    ]);
   });
 });

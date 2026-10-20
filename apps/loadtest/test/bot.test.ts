@@ -32,6 +32,7 @@ const view = (phase: View["phase"], extra: Partial<View> = {}): View => ({
   lastChanceCard: null,
   autoSell: null,
   pickOptions: null,
+  standings: null,
   ...extra,
 });
 

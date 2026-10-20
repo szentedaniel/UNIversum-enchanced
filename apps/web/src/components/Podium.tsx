@@ -27,7 +27,7 @@ const HEIGHTS = ["h-24", "h-36", "h-16"];
 const OVERLAY_BG = "#262335e6";
 
 export function Podium({ view, phase }: { view: PublicView; phase: PhaseOf<"gameOver"> }) {
-  const ranked = podiumOrder(view.players, phase.winner);
+  const ranked = podiumOrder(view.players, view.standings ?? []);
   const winner = ranked[0];
   const [first, second, third] = ranked;
   // The podium stands 2-1-3, as on a real one.

@@ -86,6 +86,14 @@ function showGameOver(page: Page) {
     view.phase = { kind: "gameOver", winner: "p4", reason: "timeUp" };
     view.turnDeadline = null;
     view.turnTimer = null;
+    // What the server's publicView carries at gameOver: winner first, then
+    // Wealth, the Bankrupt Player last (R80).
+    view.standings = [
+      { player: "p4", wealth: 4_100_000 },
+      { player: "p2", wealth: 3_000_000 },
+      { player: "p1", wealth: 2_000_000 },
+      { player: "p3", wealth: 0 },
+    ];
     hooks.showView(view);
   });
 }

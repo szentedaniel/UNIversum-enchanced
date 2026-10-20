@@ -2,6 +2,7 @@ import type { FieldId } from "#board.ts";
 import { FIELD_COUNT } from "#board.ts";
 import { ROUND_BONUS, TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
 import { autoSellPicks } from "#rules/charge.ts";
+import { standingsOf, type Standing } from "#rules/game-end.ts";
 import { baseRentOf, rentOf, saleValueOf, valueOf, wealthOf } from "#rules/pricing.ts";
 import type { FieldState, GameState, PlayerState } from "#state.ts";
 
@@ -58,6 +59,8 @@ export type PublicView = Omit<GameState, "rng" | "fields" | "players"> & {
   autoSell: FieldId[] | null;
   /** During a Doubler or Erasmus pick, each option's effect; `null` outside one. */
   pickOptions: PickOption[] | null;
+  /** The final standings in podium order; `null` until the game is over (R80). */
+  standings: Standing[] | null;
 };
 
 /** The effect of every Field a Doubler or Erasmus pick offers (R59–R61, R64, R65). */
@@ -127,5 +130,6 @@ export function publicView(state: GameState, timing: ViewTiming = {}): PublicVie
         ? autoSellPicks(state, state.currentPlayer, state.phase.shortfall)
         : null,
     pickOptions: pickOptions(state),
+    standings: standingsOf(state),
   };
 }

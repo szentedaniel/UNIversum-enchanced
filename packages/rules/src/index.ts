@@ -41,7 +41,7 @@ export {
   type Settings,
 } from "#state.ts";
 export type { PendingCharge } from "#rules/charge.ts";
-export type { GameEndReason } from "#rules/game-end.ts";
+export type { GameEndReason, Standing } from "#rules/game-end.ts";
 export type { LevelOffer } from "#rules/universities.ts";
 export {
   publicView,
