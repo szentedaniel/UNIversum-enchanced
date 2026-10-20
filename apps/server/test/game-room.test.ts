@@ -46,9 +46,14 @@ async function play(
   return first!;
 }
 
+/** The roll the phase offers: the dice, or the roll for 12 from Quarantine. */
+const rollFor = (view: GameMessage["view"]) => ({
+  type: view.phase.kind === "quarantineChoice" ? "RollForTwelve" : "Roll",
+});
+
 /** The current Player rolls, and declines the offer the roll stops at, if any, so the Turn passes. */
 async function playTurn(clients: TestClient[], view: GameMessage["view"]): Promise<GameMessage> {
-  const rolled = await play(clients, view, { type: "Roll" });
+  const rolled = await play(clients, view, rollFor(view));
   if (rolled.view.phase.kind !== "offer") return rolled;
   return play(clients, rolled.view, { type: "DeclineOffer" });
 }
@@ -198,7 +203,7 @@ describe("playing", () => {
     let { view } = await play(clients, first, { type: "Roll" });
     for (let tries = 0; view.phase.kind !== "offer" && tries < 30; tries++) {
       // oxlint-disable-next-line no-await-in-loop -- Turns are played one after another
-      ({ view } = await play(clients, view, { type: "Roll" }));
+      ({ view } = await play(clients, view, rollFor(view)));
     }
     if (view.phase.kind !== "offer") throw new Error("no offer in 30 Turns");
     const { field, levels } = view.phase;
