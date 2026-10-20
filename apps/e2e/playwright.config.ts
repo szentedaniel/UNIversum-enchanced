@@ -9,6 +9,21 @@ const WEB_PORT = Number(process.env["E2E_WEB_PORT"] ?? 5183);
 const repoRoot = new URL("../..", import.meta.url).pathname;
 const MIXED = /two-guests\.spec\.ts$/;
 
+// Every test Guest comes from 127.0.0.1, so the per-IP limits are raised (spec: e2e raises them
+// by env, as the load test does); flood limits, payload sizes and the Lobby cap stay as in production.
+const RAISED = String(1_000_000);
+const PER_IP_LIMITS = Object.fromEntries(
+  [
+    "ROOM_CREATIONS_PER_MINUTE",
+    "ROOM_CREATIONS_PER_HOUR",
+    "OPEN_LOBBIES_PER_IP",
+    "JOINS_PER_MINUTE",
+    "SEAT_RESERVATIONS_PER_IP",
+    "SOCKETS_PER_IP",
+    "PASSWORD_FAILURES_PER_IP",
+  ].map((name) => [`LIMIT_${name}`, RAISED]),
+);
+
 export default defineConfig({
   testDir: "tests",
   forbidOnly: CI,
@@ -30,7 +45,7 @@ export default defineConfig({
     {
       command: "pnpm --filter @universum/server start",
       cwd: repoRoot,
-      env: { PORT: String(SERVER_PORT) },
+      env: { PORT: String(SERVER_PORT), ...PER_IP_LIMITS },
       url: `http://127.0.0.1:${SERVER_PORT}/__healthcheck`,
       reuseExistingServer: !CI,
     },

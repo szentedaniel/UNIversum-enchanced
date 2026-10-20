@@ -147,5 +147,11 @@
   "back_to_list": "Back to the Lobby list",
   "rejection_room_full": "This Lobby is full.",
   "rejection_room_name_invalid": "A Room name has 3 to 24 characters: letters, digits, spaces and - _ . , ! ? ' &",
-  "rejection_wrong_password": "Wrong password."
+  "rejection_wrong_password": "Wrong password.",
+  "rejection_room_name_blocked": "That Room name isn't allowed. Please choose another one.",
+  "rejection_password_locked": "Too many wrong passwords. Please wait a little.",
+  "rejection_rate_limited": "Too many attempts. Please wait a moment.",
+  "rejection_server_busy": "The server is busy right now. Please try again later.",
+  "rejection_slow_down": "Not so fast! Some of your moves were ignored.",
+  "retry_in": "Try again in {seconds} s"
 }

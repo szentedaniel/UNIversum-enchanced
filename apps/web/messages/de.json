@@ -147,5 +147,11 @@
   "back_to_list": "Zurück zur Lobby-Liste",
   "rejection_room_full": "Diese Lobby ist voll.",
   "rejection_room_name_invalid": "Ein Raumname hat 3 bis 24 Zeichen: Buchstaben, Ziffern, Leerzeichen und - _ . , ! ? ' &",
-  "rejection_wrong_password": "Falsches Passwort."
+  "rejection_wrong_password": "Falsches Passwort.",
+  "rejection_room_name_blocked": "Dieser Raumname ist nicht erlaubt. Bitte wähle einen anderen.",
+  "rejection_password_locked": "Zu viele falsche Passwörter. Bitte warte ein wenig.",
+  "rejection_rate_limited": "Zu viele Versuche. Bitte warte einen Moment.",
+  "rejection_server_busy": "Der Server ist gerade ausgelastet. Bitte versuche es später noch einmal.",
+  "rejection_slow_down": "Nicht so schnell! Einige deiner Züge wurden ignoriert.",
+  "retry_in": "Erneut in {seconds} s"
 }

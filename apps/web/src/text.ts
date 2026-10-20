@@ -117,6 +117,11 @@ const REJECTIONS: Record<RejectionCode, Message> = {
   ROOM_FULL: m.rejection_room_full,
   ROOM_NAME_INVALID: m.rejection_room_name_invalid,
   WRONG_PASSWORD: m.rejection_wrong_password,
+  ROOM_NAME_BLOCKED: m.rejection_room_name_blocked,
+  PASSWORD_LOCKED: m.rejection_password_locked,
+  RATE_LIMITED: m.rejection_rate_limited,
+  SERVER_BUSY: m.rejection_server_busy,
+  SLOW_DOWN: m.rejection_slow_down,
 };
 
 export const rejectionText = (code: RejectionCode): string => REJECTIONS[code]();
