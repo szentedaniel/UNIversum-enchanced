@@ -15,6 +15,7 @@
     "@colyseus/core": "catalog:",
     "@colyseus/ws-transport": "catalog:",
     "@prometheus-io/client": "catalog:",
+    "@sentry/node": "catalog:",
     "@universum/protocol": "workspace:*",
     "@universum/rules": "workspace:*",
     "pino": "catalog:",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@colyseus/sdk": "catalog:",
+    "@sentry/core": "catalog:",
     "@types/node": "catalog:",
     "pino-pretty": "catalog:",
     "typescript": "catalog:",

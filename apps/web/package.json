@@ -21,6 +21,7 @@
     "@colyseus/sdk": "catalog:",
     "@fontsource-variable/nunito": "catalog:",
     "@fontsource/sigmar-one": "catalog:",
+    "@sentry/react": "catalog:",
     "@universum/protocol": "workspace:*",
     "@universum/rules": "workspace:*",
     "class-variance-authority": "catalog:",
