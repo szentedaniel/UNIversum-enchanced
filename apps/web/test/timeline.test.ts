@@ -1,7 +1,7 @@
 import type { GameEvent } from "@universum/rules";
 import { PLAYBACK_MS, playbackOf } from "@universum/rules/playback";
 import { describe, expect, it } from "vitest";
-import { timelineOf, type PlaybackStep } from "#playback/timeline.ts";
+import { stepAt, timelineOf, type PlaybackStep } from "#playback/timeline.ts";
 import { cueAt, toastCues } from "#playback/toast.ts";
 
 // The local Playback (ADR-0004): one push's events become ordered steps, each
@@ -34,6 +34,16 @@ const CHANCE = (): GameEvent[] => [
   { type: "Moved", player: "p1", from: 12, to: 14, steps: 2 },
   { type: "CardDrawn", player: "p1", card: "scholarship" },
   { type: "ChanceMoneyReceived", player: "p1", amount: 300_000 },
+  { type: "TurnPassed", player: "p2", turn: 2 },
+];
+
+/** A Roll onto Chance: the card's Charge is paid, and its shortfall forces a Sale. */
+const CHANCE_CHARGE = (): GameEvent[] => [
+  { type: "DiceRolled", player: "p1", dice: [6, 6] },
+  { type: "Moved", player: "p1", from: 5, to: 17, steps: 12 },
+  { type: "CardDrawn", player: "p1", card: "failedExams" },
+  { type: "ChanceChargePaid", player: "p1", amount: 200_000 },
+  { type: "FieldsSold", player: "p1", fields: [3], amount: 100_000, auto: true },
   { type: "TurnPassed", player: "p2", turn: 2 },
 ];
 
@@ -106,6 +116,26 @@ describe("the Playback timeline", () => {
     expect(total(steps)).toBe(playbackOf(CHANCE()));
   });
 
+  it("ADR-0004: after a Chance charge, its forced Sale follows the card in order", () => {
+    const steps = timelineOf(CHANCE_CHARGE());
+    const card = steps.find((step) => step.event.type === "CardDrawn");
+    const charge = steps.find((step) => step.event.type === "ChanceChargePaid");
+    const sale = steps.find((step) => step.event.type === "FieldsSold");
+
+    if (!card || !charge || !sale) throw new Error("the timeline lost the charge or its Sale");
+    expect(steps.map((step) => step.kind)).toEqual([
+      "dice",
+      "none",
+      "card",
+      "toast",
+      "toast",
+      "none",
+    ]);
+    expect(charge.startMs).toBe(card.startMs + card.durationMs);
+    expect(sale.startMs).toBe(charge.startMs + charge.durationMs);
+    expect(total(steps)).toBe(playbackOf(CHANCE_CHARGE()));
+  });
+
   it("ADR-0004: a timeout plays the timeout, the Auto-sell and the penalty in order", () => {
     const steps = timelineOf(TIMEOUT());
 
@@ -130,6 +160,7 @@ describe("the Playback timeline", () => {
       ROLL(),
       PAST_START(),
       CHANCE(),
+      CHANCE_CHARGE(),
       TIMEOUT(),
       [],
       [{ type: "OfferDeclined", player: "p1", field: 3 } satisfies GameEvent],
@@ -148,6 +179,42 @@ describe("the Playback timeline", () => {
       ["OfferDeclined", 0, 0],
       ["DiceRolled", 0, PLAYBACK_MS.DiceRolled],
     ]);
+  });
+});
+
+describe("the Playback playhead", () => {
+  it("ADR-0004: the dice show for their own step only, before the walk", () => {
+    const steps = timelineOf(ROLL());
+    const walkMs = 7 * PLAYBACK_MS.Moved;
+
+    expect(stepAt(steps, 0)?.kind).toBe("dice");
+    expect(stepAt(steps, PLAYBACK_MS.DiceRolled - 1)?.kind).toBe("dice");
+    expect(stepAt(steps, PLAYBACK_MS.DiceRolled)?.event.type).toBe("Moved");
+    expect(stepAt(steps, PLAYBACK_MS.DiceRolled + walkMs - 1)?.event.type).toBe("Moved");
+    expect(stepAt(steps, PLAYBACK_MS.DiceRolled + walkMs)?.event.type).toBe("RentPaid");
+    expect(stepAt(steps, playbackOf(ROLL()) - 1)?.event.type).toBe("RentPaid");
+    expect(stepAt(steps, playbackOf(ROLL()))).toBeNull();
+  });
+
+  it("ADR-0004: the card is the current step for its 7 s, the effect after it", () => {
+    const steps = timelineOf(CHANCE_CHARGE());
+    const card = steps.find((step) => step.kind === "card");
+
+    if (!card) throw new Error("the timeline lost the card");
+    expect(stepAt(steps, card.startMs)?.kind).toBe("card");
+    expect(stepAt(steps, card.startMs + card.durationMs - 1)?.kind).toBe("card");
+    expect(stepAt(steps, card.startMs + card.durationMs)?.event.type).toBe("ChanceChargePaid");
+  });
+
+  it("ADR-0004: a zero-length step is never current, and a finished Playback shows nothing", () => {
+    const steps = timelineOf([
+      { type: "OfferDeclined", player: "p1", field: 3 } satisfies GameEvent,
+      { type: "DiceRolled", player: "p2", dice: [1, 2] } satisfies GameEvent,
+    ]);
+
+    expect(stepAt(steps, 0)?.event.type).toBe("DiceRolled");
+    expect(stepAt(steps, PLAYBACK_MS.DiceRolled)).toBeNull();
+    expect(stepAt([], 0)).toBeNull();
   });
 });
 
