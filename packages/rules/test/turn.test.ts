@@ -101,15 +101,16 @@ describe("the roll", () => {
   });
 
   it("returns the events in order: DiceRolled, Moved, RoundBonusPaid, TurnPassed", () => {
-    const state = withPlayer(newGame(), "p1", { position: 31 });
+    // Ends exactly on Start, the one Field with no effect of its own.
+    const [a, b] = diceOf(roll(newGame()));
+    const from = 32 - (a + b);
+    const state = withPlayer(newGame(), "p1", { position: from });
 
     const applied = roll(state);
-    const [a, b] = diceOf(applied);
-    const to = (31 + a + b) % 32;
 
     expect(applied.events).toEqual([
       { type: "DiceRolled", player: "p1", dice: [a, b] },
-      { type: "Moved", player: "p1", from: 31, to, steps: a + b },
+      { type: "Moved", player: "p1", from, to: 0, steps: a + b },
       { type: "RoundBonusPaid", player: "p1", amount: 250_000 },
       { type: "TurnPassed", player: "p2", turn: 2 },
     ]);

@@ -115,3 +115,5 @@ apps/e2e/playwright-report/
 apps/e2e/blob-report/
 # Scratch files written by apps/web/test/import-fence.test.ts
 apps/web/test/fence-*/
+# Board atlas, built from apps/web/assets by apps/web/scripts/atlas.ts
+apps/web/public/atlas/

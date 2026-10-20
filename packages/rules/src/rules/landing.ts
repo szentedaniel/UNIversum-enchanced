@@ -8,6 +8,7 @@
  */
 import { FIELDS, type FieldId, type FieldKind } from "#board.ts";
 import { landOnMuseum } from "#rules/museums.ts";
+import { enterQuarantine } from "#rules/quarantine.ts";
 import { landOnUniversity } from "#rules/universities.ts";
 import type { PlayerId } from "#state.ts";
 import { playerById, type Tx } from "#tx.ts";
@@ -22,7 +23,7 @@ const LANDINGS: Record<FieldKind, Landing> = {
   museum: landOnMuseum,
   chance: nothing,
   tax: nothing,
-  quarantine: nothing,
+  quarantine: enterQuarantine,
   doubler: nothing,
   erasmus: nothing,
 };

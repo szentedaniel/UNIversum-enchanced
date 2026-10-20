@@ -4,5 +4,5 @@
     // vite/client: tests import app modules that import assets (src/players.ts).
     "types": ["node", "vite/client"]
   },
-  "include": ["vite.config.ts", "test"]
+  "include": ["vite.config.ts", "scripts", "test"]
 }

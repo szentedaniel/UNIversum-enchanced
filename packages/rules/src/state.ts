@@ -41,6 +41,13 @@ export type PlayerState = {
   /** The Field the Player stands on. */
   position: FieldId;
   bankrupt: boolean;
+  /**
+   * Quarantine rounds left, or `null` when not in Quarantine (R39). At 0 the
+   * Player is still in Quarantine until the start of their next Turn (R45).
+   */
+  quarantineRounds: number | null;
+  /** Holds a PCR test (from a Chance card); at most one (F23). */
+  hasPcrTest: boolean;
 };
 
 export type FieldState = {

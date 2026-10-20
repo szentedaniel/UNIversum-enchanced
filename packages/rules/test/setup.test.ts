@@ -19,12 +19,17 @@ describe("game setup", () => {
     ]);
   });
 
-  // The PCR test and Quarantine parts of R7 land with Quarantine (#30).
-  it("R7: every Player starts with 2,500,000 on Start and not Bankrupt", () => {
+  it("R7: every Player starts with 2,500,000 on Start, no PCR test, not in Quarantine and not Bankrupt", () => {
     const state = newGame();
 
     for (const p of state.players) {
-      expect(p).toMatchObject({ cash: 2_500_000, position: 0, bankrupt: false });
+      expect(p).toMatchObject({
+        cash: 2_500_000,
+        position: 0,
+        hasPcrTest: false,
+        quarantineRounds: null,
+        bankrupt: false,
+      });
     }
   });
 

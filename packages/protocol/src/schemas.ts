@@ -30,6 +30,9 @@ const PLAYER_INTENT_SCHEMAS = [
   z.strictObject({ type: z.literal("DeclineOffer"), turn }),
   z.strictObject({ type: z.literal("Buyout"), turn }),
   z.strictObject({ type: z.literal("BuyMuseum"), turn }),
+  z.strictObject({ type: z.literal("RollForTwelve"), turn }),
+  z.strictObject({ type: z.literal("BuyPcrTest"), turn }),
+  z.strictObject({ type: z.literal("UsePcrTest"), turn }),
 ] as const;
 
 const ROOM_INTENT_SCHEMAS = [z.strictObject({ type: z.literal("Start") })] as const;
