@@ -1,7 +1,8 @@
 import type { FieldId } from "#board.ts";
-import { TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
+import { FIELD_COUNT } from "#board.ts";
+import { ROUND_BONUS, TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
 import { autoSellPicks } from "#rules/charge.ts";
-import { rentOf, saleValueOf, valueOf } from "#rules/pricing.ts";
+import { baseRentOf, rentOf, saleValueOf, valueOf } from "#rules/pricing.ts";
 import type { FieldState, GameState } from "#state.ts";
 
 /** A Field as clients see it: its state plus the numbers the UI shows. */
@@ -13,6 +14,19 @@ export type FieldView = FieldState & {
   /** What the Bank pays for it in a Sale: 90% of Value (360,000 for a Museum). */
   sale: number;
 };
+
+/**
+ * The effect of one offered Field in a Doubler or Erasmus pick: the numbers
+ * the tray shows next to the choice, so the client holds no rules.
+ */
+export type PickOption =
+  /** Doubler: the Rent now and after the token is placed here (R61). */
+  | { kind: "doubler"; field: FieldId; rent: number; rentAfter: number }
+  /**
+   * Erasmus: the Fields ahead, whether the route passes Start, and the Round
+   * bonus it pays then (R65); `bonus` is `null` when Start is not passed.
+   */
+  | { kind: "erasmus"; field: FieldId; steps: number; passesStart: boolean; bonus: number | null };
 
 /**
  * The one view every client in the Room sees. It never contains the PRNG
@@ -29,7 +43,41 @@ export type PublicView = Omit<GameState, "rng" | "fields"> & {
   turnTimer: { endsAt: number; limitMs: number };
   /** During a Sale, the Fields Auto-sell would sell (R68); `null` outside a Sale. */
   autoSell: FieldId[] | null;
+  /** During a Doubler or Erasmus pick, each option's effect; `null` outside one. */
+  pickOptions: PickOption[] | null;
 };
+
+/** The effect of every Field a Doubler or Erasmus pick offers (R59–R61, R64, R65). */
+function pickOptions(state: GameState): PickOption[] | null {
+  const { phase } = state;
+  if (phase.kind === "placingDoubler") {
+    return phase.fields.map((field) => {
+      // Placed again on the Field that already carries it, the count stacks.
+      const countAfter = state.doubler?.field === field ? state.doubler.count + 1 : 1;
+      return {
+        kind: "doubler",
+        field,
+        rent: rentOf(state, field),
+        rentAfter: baseRentOf(state, field) * (countAfter + 1),
+      };
+    });
+  }
+  if (phase.kind === "choosingErasmus") {
+    const from = state.players.find((player) => player.id === state.currentPlayer)?.position ?? 0;
+    return phase.fields.map((field) => {
+      const steps = (field - from + FIELD_COUNT) % FIELD_COUNT;
+      const passesStart = from + steps >= FIELD_COUNT;
+      return {
+        kind: "erasmus",
+        field,
+        steps,
+        passesStart,
+        bonus: passesStart ? ROUND_BONUS : null,
+      };
+    });
+  }
+  return null;
+}
 
 export function publicView(state: GameState): PublicView {
   return {
@@ -56,5 +104,6 @@ export function publicView(state: GameState): PublicView {
       state.phase.kind === "selling"
         ? autoSellPicks(state, state.currentPlayer, state.phase.shortfall)
         : null,
+    pickOptions: pickOptions(state),
   };
 }
