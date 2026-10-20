@@ -1,6 +1,7 @@
 import { MatchMakeError } from "@colyseus/sdk";
 import { matchmakeRejection, type RejectionCode } from "@universum/protocol";
-import { migrate } from "@universum/rules";
+import { migrate, type GameState } from "@universum/rules";
+import stateV1 from "../../../packages/rules/test/fixtures/state-v1.json" with { type: "json" };
 import { afterEach, describe, expect, it } from "vitest";
 import {
   eventually,
@@ -69,7 +70,9 @@ describe("restore on boot", () => {
     let [rolled] = await Promise.all([alice.next("game"), bob.next("game")]);
     let view = withDeadline(rolled);
     if (view.phase.kind === "offer") {
-      // The roll stopped at a University offer: decline it, so the Turn passes.
+      // The roll stopped at a University offer: decline it (once the roll's
+      // Playback has ended), so the Turn passes.
+      before.scheduler.advanceTo(view.actsAfter);
       alice.send({ type: "DeclineOffer", turn: 1 });
       [rolled] = await Promise.all([alice.next("game"), bob.next("game")]);
       view = withDeadline(rolled);
@@ -113,7 +116,8 @@ describe("restore on boot", () => {
 
     const game = after.room(code)?.game;
     expect(game).toMatchObject({ version: 1, turn: 2, currentPlayer: view.players[1]?.id });
-    expect(game?.turnDeadline).toBe(restartedAt + DEADLINE_AFTER);
+    // The timeout ran at restartedAt; its Playback then the Turn limit count from there.
+    expect(game?.turnDeadline).toBe((game?.actsAfter ?? 0) + DEADLINE_AFTER);
   });
 
   it("a Lobby comes back with its code, settings and Seats, and a new Guest can join it", async () => {
@@ -172,6 +176,42 @@ describe("restore on boot", () => {
 
     expect(after.room(code)).toBeDefined();
     expect(list.get(code)).toBeUndefined();
+  });
+
+  it("ADR-0004: a Room stored at version 1 restores and plays on", async () => {
+    const before = await start();
+    const code = "600150";
+    // The rules package's committed v1 snapshot, as an older deploy stored it.
+    before.store.save(
+      {
+        code,
+        settings: { maxPlayers: 4, minuteLimit: 50 },
+        roomName: null,
+        creatorId: null,
+        password: null,
+        seats: stateV1.players.map(({ id, name }) => ({ playerId: id, name })),
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- a stored state from before the shape change
+        game: stateV1 as unknown as GameState,
+        endedAt: null,
+      },
+      [],
+    );
+
+    const after = await restart(before, T0);
+
+    expect(after.restored).toBe(1);
+    const game = after.room(code)?.game;
+    // Migrated on boot: the deadline it had, and no wait before acting.
+    expect(game).toMatchObject({
+      stateVersion: 2,
+      turn: 2,
+      actsAfter: stateV1.turnDeadline - DEADLINE_AFTER,
+    });
+    expect(game?.turnDeadline).toBe(stateV1.turnDeadline);
+
+    // It plays on: the Turn times out at the deadline it kept.
+    after.scheduler.advanceTo(stateV1.turnDeadline);
+    expect(after.room(code)?.game).toMatchObject({ version: 3, turn: 3 });
   });
 
   it("a stored game the server can't migrate stays stored and is not restored", async () => {

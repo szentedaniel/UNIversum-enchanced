@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { apply, isRejection, migrate, publicView, STATE_VERSION, SYSTEM } from "#index.ts";
+import {
+  apply,
+  isRejection,
+  migrate,
+  publicView,
+  STATE_VERSION,
+  SYSTEM,
+  TURN_LIMIT_MS,
+  TURN_SLACK_MS,
+} from "#index.ts";
 import stateV1 from "./fixtures/state-v1.json" with { type: "json" };
+import stateV2 from "./fixtures/state-v2.json" with { type: "json" };
 import { deadlineOf, newGame, roll } from "./helpers.ts";
 
 /**
@@ -13,7 +23,10 @@ import { deadlineOf, newGame, roll } from "./helpers.ts";
  * the new shape, `JSON.stringify(playTurn(newGame()).state, null, 2)` (a
  * game one Turn in, waiting for the dice), as `state-v<new>.json` here.
  */
-const fixtures: { version: number; state: unknown }[] = [{ version: 1, state: stateV1 }];
+const fixtures: { version: number; state: unknown }[] = [
+  { version: 1, state: stateV1 },
+  { version: 2, state: stateV2 },
+];
 
 /** The keys of an object, and of its first array item or nested object, as paths. */
 function shape(value: unknown, path = ""): string[] {
@@ -54,6 +67,29 @@ describe("state migrations", () => {
       { actor: SYSTEM, now: deadlineOf(migrated) },
     );
     expect(isRejection(timedOut)).toBe(false);
+  });
+
+  it("ADR-0004: a version-1 state keeps its deadline and needs no wait", () => {
+    const stored = stateV1 as { turnDeadline: number };
+    const migrated = migrate(stateV1);
+
+    expect(migrated.turnDeadline).toBe(stored.turnDeadline);
+    expect(migrated.actsAfter).toBe(stored.turnDeadline - TURN_LIMIT_MS - TURN_SLACK_MS);
+    // The Playback of the decision already ended: the Player may act at once.
+    const rolled = apply(
+      migrated,
+      { type: "Roll", turn: migrated.turn },
+      { actor: migrated.currentPlayer, now: migrated.actsAfter },
+    );
+    expect(isRejection(rolled)).toBe(false);
+  });
+
+  it("ADR-0004: a version-1 state with no deadline takes endsAt as its Playback's end", () => {
+    const stored = { ...stateV1, turnDeadline: null };
+
+    const migrated = migrate(stored);
+
+    expect(migrated.actsAfter).toBe(stored.endsAt);
   });
 
   it("a state at the current version comes back unchanged", () => {

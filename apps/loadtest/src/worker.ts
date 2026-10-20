@@ -324,11 +324,17 @@ class RoomClient {
       this.group.onGameOver();
       return;
     }
-    this.act(view);
+    // The server's clock minus this worker's, at receipt, for the Playback wait.
+    this.act(view, message.now - Date.now());
   }
 
-  /** Schedule one decision per offered view, after 1–5 s; 5% of this Player's Turns time out. */
-  act(view: GameMessage["view"]): void {
+  /**
+   * Schedule one decision per offered view, after 1–5 s; 5% of this Player's
+   * Turns time out. The wait starts when the Playback ends by the server's
+   * clock (ADR-0004), never before it, so no intent is refused as
+   * PLAYBACK_RUNNING.
+   */
+  act(view: GameMessage["view"], serverOffset: number): void {
     const me = this.playerId;
     if (me === null || this.away || stopped || view.currentPlayer !== me) return;
     // Decide once per Turn, not once per decision, so the profile's 5% is the share of Turns.
@@ -344,7 +350,8 @@ class RoomClient {
     this.#actionKey = key;
     if (offeredIntents(view, me).length === 0) return;
     stats.decisions += 1;
-    this.#cancelAction = later(inRange(config.profile.actionDelayMs), () => {
+    const playbackLeftMs = Math.max(0, view.actsAfter - (Date.now() + serverOffset));
+    this.#cancelAction = later(playbackLeftMs + inRange(config.profile.actionDelayMs), () => {
       if (this.away || this.lastView?.version !== view.version) return;
       const intent = chooseIntent(view, me, Math.random);
       if (intent !== null) this.send(intent);

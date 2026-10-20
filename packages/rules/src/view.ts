@@ -8,7 +8,9 @@ import type { FieldState, GameState, PlayerState } from "#state.ts";
 
 /**
  * The Turn timer the ring shows: it runs for `limitMs` and empties at
- * `endsAt`, which is the slack before `turnDeadline` (the slack is never shown).
+ * `endsAt`, which is the slack before `turnDeadline` (the slack is never
+ * shown). `endsAt - limitMs` is the state's `actsAfter`: the ring stays full
+ * until the Playback ends, then empties over the Turn limit (ADR-0004).
  */
 export type TurnTimer = { endsAt: number; limitMs: number };
 
@@ -102,6 +104,7 @@ export function publicView(state: GameState, timing: ViewTiming = {}): PublicVie
     turn: state.turn,
     currentPlayer: state.currentPlayer,
     phase: state.phase,
+    actsAfter: state.actsAfter,
     turnDeadline: state.turnDeadline,
     turnTimer:
       state.turnDeadline === null

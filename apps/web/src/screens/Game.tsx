@@ -146,6 +146,25 @@ const NOTICES = new Set<GameEvent["type"]>([
 const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
   view.players.find((p) => p.id === playerId)?.quarantineRounds ?? 0;
 
+/**
+ * Whether the server's clock has reached the Playback's end, so the latest
+ * push's decision is open (ADR-0004). Re-renders once when it passes; a new
+ * push with a later `actsAfter` hides the controls again.
+ */
+function usePlaybackOver(actsAfter: number, clockOffset: number): boolean {
+  // The server's clock, re-read when the Playback ends (or at once, when it
+  // already has). A new push with a later `actsAfter` leaves this behind it,
+  // so the controls close again.
+  const [now, setNow] = useState(() => Date.now() + clockOffset);
+  useEffect(() => {
+    // A few ms past the boundary, so the tap never races the server's clock.
+    const delayMs = Math.max(0, actsAfter - (Date.now() + clockOffset)) + 20;
+    const timer = window.setTimeout(() => setNow(Date.now() + clockOffset), delayMs);
+    return () => clearTimeout(timer);
+  }, [actsAfter, clockOffset]);
+  return now >= actsAfter;
+}
+
 export function Game() {
   const { code = "" } = useParams();
   const push = useStore(roomStore, (s) => (s.code === code ? s.push : null));
@@ -161,6 +180,7 @@ export function Game() {
   const [sentAt, setSentAt] = useState<number | null>(null);
   const wide = useWide();
   const [joinError, setJoinError] = useState<RejectionCode | null>(null);
+  const playbackOver = usePlaybackOver(push?.view.actsAfter ?? 0, push?.clockOffset ?? 0);
 
   // The dice sound starts on the server's roll, never on a tap (spec: no optimistic UI).
   useEffect(() => {
@@ -197,15 +217,21 @@ export function Game() {
   const myTurn = view.currentPlayer === me;
   const answeredAt = Math.max(push.seq, rejection?.seq ?? 0);
   const pending = sentAt !== null && answeredAt <= sentAt;
-  const canRoll = myTurn && view.phase.kind === "awaitingRoll" && !pending;
-  const offer = myTurn && view.phase.kind === "offer" && !pending ? view.phase : null;
+  // Decision controls wait out the Playback, from the server's clock only (ADR-0004).
+  const canRoll = myTurn && playbackOver && view.phase.kind === "awaitingRoll" && !pending;
+  const offer =
+    myTurn && playbackOver && view.phase.kind === "offer" && !pending ? view.phase : null;
   const quarantineChoice =
-    myTurn && !pending && view.phase.kind === "quarantineChoice" ? view.phase : null;
-  const sale = saleFor(view, me);
-  const singlePick = singlePickFor(view, me);
-  const othersSale = !myTurn && view.phase.kind === "selling";
+    myTurn && playbackOver && !pending && view.phase.kind === "quarantineChoice"
+      ? view.phase
+      : null;
+  const sale = playbackOver ? saleFor(view, me) : null;
+  const singlePick = playbackOver ? singlePickFor(view, me) : null;
+  const othersSale = !myTurn && playbackOver && view.phase.kind === "selling";
   const othersPick =
-    !myTurn && (view.phase.kind === "placingDoubler" || view.phase.kind === "choosingErasmus");
+    !myTurn &&
+    playbackOver &&
+    (view.phase.kind === "placingDoubler" || view.phase.kind === "choosingErasmus");
   // One toast at a time: the first notice of the push, else its first event worth one.
   const notice = events.find((event) => NOTICES.has(event.type));
   const toast = (notice ? [notice] : events)

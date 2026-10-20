@@ -58,8 +58,20 @@ export function newGame(options: GameOptions = {}): GameState {
   });
 }
 
-/** Applies an intent that must be accepted, and returns the new state and its events. */
-export function accept(state: GameState, intent: Intent, actor: Actor, now = T0): Applied {
+/** The earliest moment a Player intent may be applied: the end of the last Playback. */
+const readyAt = (state: GameState): number => Math.max(T0, state.actsAfter);
+
+/**
+ * Applies an intent that must be accepted, and returns the new state and its
+ * events. The default `now` is when the last Playback ended, so a test that
+ * does not care about the clock acts as soon as the engine allows it.
+ */
+export function accept(
+  state: GameState,
+  intent: Intent,
+  actor: Actor,
+  now = readyAt(state),
+): Applied {
   const result = apply(state, intent, { actor, now });
   if ("code" in result)
     throw new Error(`expected ${intent.type} to be accepted, got ${result.code}`);
@@ -67,14 +79,19 @@ export function accept(state: GameState, intent: Intent, actor: Actor, now = T0)
 }
 
 /** Applies an intent that must be rejected, and returns the Rejection. */
-export function reject(state: GameState, intent: Intent, actor: Actor, now = T0): Rejection {
+export function reject(
+  state: GameState,
+  intent: Intent,
+  actor: Actor,
+  now = readyAt(state),
+): Rejection {
   const result = apply(state, intent, { actor, now });
   if (!("code" in result)) throw new Error(`expected ${intent.type} to be rejected`);
   return result;
 }
 
 /** The current Player rolls; the intent carries the current Turn number. */
-export function roll(state: GameState, now = T0): Applied {
+export function roll(state: GameState, now = readyAt(state)): Applied {
   return accept(state, { type: "Roll", turn: state.turn }, state.currentPlayer, now);
 }
 
@@ -82,7 +99,7 @@ export function roll(state: GameState, now = T0): Applied {
  * The current Player throws the dice the phase offers: the plain roll, or the
  * roll for 12 on the Quarantine choice. For tests that play many Turns.
  */
-export function rollOffered(state: GameState, now = T0): Applied {
+export function rollOffered(state: GameState, now = readyAt(state)): Applied {
   const type = state.phase.kind === "quarantineChoice" ? "RollForTwelve" : "Roll";
   return accept(state, { type, turn: state.turn }, state.currentPlayer, now);
 }
@@ -118,7 +135,7 @@ export function diceOf(applied: Applied): readonly [number, number] {
  * dice's sum before it (the dice depend only on the PRNG state, not on where
  * the Player stands). A start before Start makes the move pay the Round bonus.
  */
-export function rollOnto(state: GameState, field: FieldId, now = T0): Applied {
+export function rollOnto(state: GameState, field: FieldId, now = readyAt(state)): Applied {
   const [a, b] = diceOf(roll(state, now));
   const position = (field - (a + b) + 32) % 32;
   return roll(withPlayer(state, state.currentPlayer, { position }), now);
@@ -137,26 +154,34 @@ export function withField(state: GameState, field: FieldId, patch: Partial<Field
  * offer or pick the landing leads to, so the Turn passes. Returns the roll's
  * own result and the state after the Turn.
  */
-export function playTurn(state: GameState, now = T0): { rolled: Applied; state: GameState } {
+export function playTurn(
+  state: GameState,
+  now = readyAt(state),
+): { rolled: Applied; state: GameState } {
   const rolled = rollOffered(state, now);
   let current = rolled;
+  // Each decision opens only when the previous Playback ends (ADR-0004).
+  let at = current.state.actsAfter;
   // A landing can lead through more than one decision (Erasmus travel, then the offer).
   for (let guard = 0; guard < 10; guard++) {
     const { phase, turn, currentPlayer } = current.state;
     if (phase.kind === "offer") {
-      current = accept(current.state, { type: "DeclineOffer", turn }, currentPlayer, now);
+      current = accept(current.state, { type: "DeclineOffer", turn }, currentPlayer, at);
+      at = current.state.actsAfter;
       continue;
     }
     if (phase.kind === "placingDoubler") {
       const field = phase.fields[0];
       if (field === undefined) return { rolled, state: current.state };
-      current = accept(current.state, { type: "PlaceDoubler", turn, field }, currentPlayer, now);
+      current = accept(current.state, { type: "PlaceDoubler", turn, field }, currentPlayer, at);
+      at = current.state.actsAfter;
       continue;
     }
     if (phase.kind === "choosingErasmus") {
       const field = phase.fields[0];
       if (field === undefined) return { rolled, state: current.state };
-      current = accept(current.state, { type: "TravelErasmus", turn, field }, currentPlayer, now);
+      current = accept(current.state, { type: "TravelErasmus", turn, field }, currentPlayer, at);
+      at = current.state.actsAfter;
       continue;
     }
     return { rolled, state: current.state };

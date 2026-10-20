@@ -3,6 +3,7 @@
  * every accepted intent; after a deploy that changes the state's shape it runs
  * every stored state through `migrate` on boot, before restoring the Room.
  */
+import { TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
 import { STATE_VERSION, type GameState } from "#state.ts";
 
 /** A stored state as JSON, before it is known to have the current shape. */
@@ -17,7 +18,21 @@ export type StoredState = Record<string, unknown>;
  * bump `STATE_VERSION`, add the step here and commit a fixture of the new
  * shape (see test/migrate.test.ts).
  */
-const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> = {};
+const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> = {
+  // Version 2 adds `actsAfter` (ADR-0004). A running game carries on with no
+  // wait: its current decision started when its deadline was counted, so the
+  // Playback has already ended by then. A game that is over has no deadline;
+  // its Playback is over too, so `endsAt` is a safe "now".
+  1: (state) => {
+    const deadline = state["turnDeadline"];
+    return {
+      ...state,
+      stateVersion: 2,
+      actsAfter:
+        typeof deadline === "number" ? deadline - TURN_LIMIT_MS - TURN_SLACK_MS : state["endsAt"],
+    };
+  },
+};
 
 /**
  * Brings a stored state up to `STATE_VERSION`, one step at a time. Throws on a

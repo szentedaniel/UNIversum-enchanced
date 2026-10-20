@@ -4,7 +4,6 @@
  * pure from the outside. Rule areas talk to the engine only through these
  * helpers, so cross-cutting changes (deadlines for every phase, #25) land here.
  */
-import { turnDeadlineFrom } from "#constants.ts";
 import type { GameEvent } from "#events.ts";
 import type { Ctx } from "#intents.ts";
 import type { GameState, Phase, PlayerId, PlayerState } from "#state.ts";
@@ -16,6 +15,13 @@ export type Tx = {
   ctx: Ctx;
   /** Set by `decide`: the intent stops at a Player decision instead of passing the Turn. */
   decided: boolean;
+  /**
+   * Set by `setPhase`: the intent reached a phase, so `apply` fixes the new
+   * decision's deadline once the event list (and so the Playback) is complete.
+   */
+  phaseSet: boolean;
+  /** Set by `setFinalPhase`: the phase reached is final, so it has no deadline. */
+  finalPhase: boolean;
 };
 
 export function emit(tx: Tx, event: GameEvent): void {
@@ -23,12 +29,12 @@ export function emit(tx: Tx, event: GameEvent): void {
 }
 
 /**
- * Moves the game to `phase`. Every phase change goes through here, so every
- * decision gets a fresh deadline (R17).
+ * Moves the game to `phase`. Every phase change goes through here, so `apply`
+ * knows to fix the deadline once the intent's Playback is known (R17, ADR-0004).
  */
 export function setPhase(tx: Tx, phase: Phase): void {
   tx.state.phase = phase;
-  tx.state.turnDeadline = turnDeadlineFrom(tx.ctx.now, tx.ctx.turnLimitMs);
+  tx.phaseSet = true;
 }
 
 /** Stops the intent at a Player decision: the phase lists the options. */
@@ -43,7 +49,7 @@ export function decide(tx: Tx, phase: Phase): void {
  */
 export function setFinalPhase(tx: Tx, phase: Phase): void {
   setPhase(tx, phase);
-  tx.state.turnDeadline = null;
+  tx.finalPhase = true;
 }
 
 export function playerById(tx: Tx, playerId: PlayerId): PlayerState {

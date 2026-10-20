@@ -75,6 +75,7 @@
   "rejection_stale_turn": "Ez a lépés már nem lehetséges.",
   "rejection_not_your_turn": "Most nem te következel.",
   "rejection_not_offered": "Ez most nem lehetséges.",
+  "rejection_playback_running": "Még tart a lejátszás. Várd meg a végét.",
   "rejection_malformed": "Valami hiba történt. Kérlek, töltsd újra az oldalt.",
   "rejection_internal": "Valami hiba történt. Kérlek, töltsd újra az oldalt.",
   "rejection_room_not_found": "Nincs nyitott szoba ezzel a kóddal.",

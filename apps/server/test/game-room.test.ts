@@ -39,6 +39,9 @@ async function play(
   view: GameMessage["view"],
   intent: Record<string, unknown>,
 ): Promise<GameMessage> {
+  // The next decision opens when the previous Playback ends (ADR-0004); the
+  // test clock never moves by itself.
+  server.scheduler.advanceTo(view.actsAfter);
   const pushes = clients.map((c) => c.next("game"));
   const current = view.players.findIndex((p) => p.id === view.currentPlayer);
   clients[current]!.send({ ...intent, turn: view.turn });
@@ -252,6 +255,7 @@ describe("playing", () => {
     bob.send({ type: "Roll", turn: 1 }); // Turn 2 is Bob's: his intent is for an old Turn
     expect(await bob.next("rejected")).toEqual({ code: "STALE_TURN" });
 
+    server.scheduler.advanceTo(view.actsAfter); // Bob's decision opens now
     bob.send({ type: "Roll", turn: 2 });
     const next = await alice.next("game");
     expect(next.view.version).toBe(view.version + 1);

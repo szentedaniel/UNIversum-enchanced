@@ -5,6 +5,8 @@ export type ViewSummary = {
   turn: number;
   version: number;
   currentPlayer: string;
+  /** When the latest push's Playback ends, by the server's clock (ADR-0004). */
+  actsAfter: number;
   phase: {
     kind: string;
     field?: number;
@@ -17,6 +19,17 @@ export type ViewSummary = {
   fields: { owner: string | null; level: number; value: number; rent: number }[];
 };
 export type Camera = { scale: number; x: number; y: number };
+/** One animation frame's sample of the Playback hold (ADR-0004), as two-guests.spec.ts records it. */
+export type PlaybackSample = {
+  version: number;
+  /** The client's estimate of the server's clock, and when the push's Playback ends. */
+  now: number;
+  actsAfter: number;
+  /** Whether a control for the pushed decision is on screen. */
+  decision: boolean;
+  /** The current Player's ring's CSS animation delay in ms (`null` if not rendered). */
+  ringDelayMs: number | null;
+};
 export type PickMarks = { pickable: number[]; picked: number[]; ringed: number[] };
 /** A Player as a full pushed view carries them (PlayerView). */
 export type ViewPlayer = {
@@ -71,6 +84,7 @@ export type FullView = {
   doubler: { field: number; count: number } | null;
   autoSell: number[] | null;
   pickOptions: FullPickOption[] | null;
+  actsAfter: number;
   turnDeadline: number | null;
   turnTimer: { endsAt: number; limitMs: number } | null;
   standings: { player: string; wealth: number }[] | null;
@@ -80,6 +94,10 @@ declare global {
   interface Window {
     /** Counted by a spec that stubs `HTMLMediaElement.play` before the app loads. */
     dicePlays?: number;
+    /** Samples recorded per animation frame while the Playback probe runs. */
+    playbackProbe?: PlaybackSample[];
+    /** Stops the probe started by `two-guests.spec.ts`. */
+    stopPlaybackProbe?: () => void;
     universumTest?: {
       fieldCenter(id: number): { x: number; y: number };
       camera(): Camera;

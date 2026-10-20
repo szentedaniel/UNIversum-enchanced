@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   apply,
   isRejection,
+  playbackOf,
   publicView,
   setupGame,
   START_CASH,
@@ -38,13 +39,14 @@ describe("the Turn timer", () => {
     expect(newGame({ now: T0 }).turnDeadline).toBe(T0 + DEADLINE_AFTER);
   });
 
-  it("R17: every decision restarts the timer: the next Player's roll is due 23 s after the move", () => {
+  it("R17: every decision restarts the timer: the next Player's roll is due 23 s after the move's Playback", () => {
     const later = T0 + 7_000;
 
     const applied = rollOnto(newGame(), START_FIELD, later);
 
     expect(applied.state.phase.kind).toBe("awaitingRoll");
-    expect(applied.state.turnDeadline).toBe(later + DEADLINE_AFTER);
+    expect(applied.state.actsAfter).toBe(later + playbackOf(applied.events));
+    expect(applied.state.turnDeadline).toBe(applied.state.actsAfter + DEADLINE_AFTER);
   });
 
   it("R17: a Rejection leaves the deadline alone", () => {
@@ -85,7 +87,7 @@ describe("the Turn timer", () => {
       { actor: "p1", now: T0 + 1_000, turnLimitMs: 5_000 },
     );
     if (isRejection(rolled)) throw new Error(`Roll was rejected with ${rolled.code}`);
-    expect(rolled.state.turnDeadline).toBe(T0 + 1_000 + 5_000 + TURN_SLACK_MS);
+    expect(rolled.state.turnDeadline).toBe(rolled.state.actsAfter + 5_000 + TURN_SLACK_MS);
   });
 });
 
@@ -98,12 +100,13 @@ describe("TurnTimedOut", () => {
     expect(applied.state.phase).toEqual({ kind: "awaitingRoll" });
   });
 
-  it("R18: the next Player's Turn gets a fresh deadline from the moment of the timeout", () => {
+  it("R18: the next Player's Turn gets a fresh deadline from the end of the timeout's Playback", () => {
     const at = T0 + DEADLINE_AFTER + 40;
 
     const applied = timeOut(newGame(), at);
 
-    expect(applied.state.turnDeadline).toBe(at + DEADLINE_AFTER);
+    expect(applied.state.actsAfter).toBe(at + playbackOf(applied.events));
+    expect(applied.state.turnDeadline).toBe(applied.state.actsAfter + DEADLINE_AFTER);
   });
 
   it("R19: with more than 100,000 cash the Timeout penalty is 10% of cash", () => {

@@ -8,7 +8,7 @@
 import type { ChanceCardId, FieldId } from "#board.ts";
 
 /** The version of the state's shape (not the per-intent `version`). */
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
 /** A Player's public id: what every client sees instead of a Guest token. */
 export type PlayerId = string;
@@ -90,10 +90,16 @@ export type GameState = {
   currentPlayer: PlayerId;
   phase: Phase;
   /**
-   * When the current decision times out (epoch ms): `now + TURN_LIMIT_MS +
-   * TURN_SLACK_MS`, reset by every phase change (R17, F22). The Room server
-   * wakes up then and sends `TurnTimedOut`. `null` once the game is over:
-   * nothing can time out any more.
+   * When the Playback of the last accepted intent ends (epoch ms), ADR-0004:
+   * `now + playbackOf(events)`. Nobody may act before it, and the current
+   * decision's deadline is counted from it.
+   */
+  actsAfter: number;
+  /**
+   * When the current decision times out (epoch ms): `actsAfter + TURN_LIMIT_MS
+   * + TURN_SLACK_MS`, fixed at the end of the intent (R17, F22). The Room
+   * server wakes up then and sends `TurnTimedOut`. `null` once the game is
+   * over: nothing can time out any more.
    */
   turnDeadline: number | null;
   settings: Settings;

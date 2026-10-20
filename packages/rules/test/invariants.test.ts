@@ -162,14 +162,19 @@ describe("played games", () => {
     );
   });
 
-  it("every decision phase has a fresh 20 s deadline; the final phase has none", () => {
+  it("ADR-0004: every decision's deadline is its Playback's end plus 20 s and the slack; the final phase has none", () => {
     assert(
       property(gameArb, (game) => {
         for (const step of playRandomGame(game).steps) {
+          const { after } = step;
+          // The Playback ends no earlier than the intent that set it.
+          expect(after.actsAfter).toBeGreaterThanOrEqual(step.now);
           const expected =
-            step.after.phase.kind === "gameOver" ? null : step.now + TURN_LIMIT_MS + TURN_SLACK_MS;
+            after.phase.kind === "gameOver"
+              ? null
+              : after.actsAfter + TURN_LIMIT_MS + TURN_SLACK_MS;
 
-          expect(step.after.turnDeadline).toBe(expected);
+          expect(after.turnDeadline).toBe(expected);
         }
       }),
       RUN,

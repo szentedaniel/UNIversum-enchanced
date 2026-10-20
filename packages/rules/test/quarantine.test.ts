@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SYSTEM, type GameState, type PlayerState, type Seed } from "#index.ts";
+import { playbackOf, SYSTEM, type GameState, type PlayerState, type Seed } from "#index.ts";
 import {
   accept,
   deadlineOf,
@@ -122,8 +122,9 @@ describe("a quarantined Turn", () => {
   it("R41: the Quarantine choice is a decision with a fresh deadline", () => {
     const state = quarantinedTurn({}, SEED, T0);
 
-    // p1's Turn timed out at T0 + 23 s; p2's choice is due 23 s after that.
-    expect(state.turnDeadline).toBe(T0 + 23_000 + 23_000);
+    // p1's Turn timed out at T0 + 23 s; p2's choice is due 23 s after that Playback.
+    expect(state.actsAfter).toBeGreaterThan(T0 + 23_000);
+    expect(state.turnDeadline).toBe(state.actsAfter + 23_000);
   });
 
   it("R41: the plain roll is not offered on the Quarantine choice", () => {
@@ -137,7 +138,7 @@ describe("a quarantined Turn", () => {
 
 type ChoiceIntent = "RollForTwelve" | "BuyPcrTest" | "UsePcrTest";
 
-const send = (state: GameState, type: ChoiceIntent, now = T0) =>
+const send = (state: GameState, type: ChoiceIntent, now = state.actsAfter) =>
   accept(state, { type, turn: state.turn }, state.currentPlayer, now);
 
 describe("the roll for 12", () => {
@@ -201,7 +202,8 @@ describe("the PCR test", () => {
   it("R43: the normal roll after a PCR test gets a fresh deadline", () => {
     const applied = send(quarantinedTurn(), "BuyPcrTest", T0 + 50_000);
 
-    expect(applied.state.turnDeadline).toBe(T0 + 50_000 + 23_000);
+    expect(applied.state.actsAfter).toBe(T0 + 50_000 + playbackOf(applied.events));
+    expect(applied.state.turnDeadline).toBe(applied.state.actsAfter + 23_000);
   });
 
   it("R41/R43: buying is refused without 200,000 cash", () => {

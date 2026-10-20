@@ -16,7 +16,10 @@ type Props = {
 export function TurnRing({ timer, clockOffset }: Props) {
   // Read the clock once, when this deadline's ring mounts; CSS animates the rest.
   const [style] = useState(() => {
-    const leftMs = Math.min(timer.limitMs, Math.max(0, timer.endsAt - (Date.now() + clockOffset)));
+    // The ring stays full until the Playback ends (`endsAt - limitMs`), then
+    // empties over the Turn limit. A ring mounted after it began (a reload, a
+    // reconnect) starts partway through with a negative delay.
+    const leftMs = Math.max(0, timer.endsAt - (Date.now() + clockOffset));
     return {
       animationDuration: `${timer.limitMs}ms`,
       animationDelay: `${leftMs - timer.limitMs}ms`,

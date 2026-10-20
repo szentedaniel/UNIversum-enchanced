@@ -75,6 +75,7 @@
   "rejection_stale_turn": "Dieser Zug ist nicht mehr möglich.",
   "rejection_not_your_turn": "Du bist nicht am Zug.",
   "rejection_not_offered": "Das ist gerade nicht möglich.",
+  "rejection_playback_running": "Die Wiedergabe läuft noch. Warte, bis sie endet.",
   "rejection_malformed": "Etwas ist schiefgelaufen. Bitte lade die Seite neu.",
   "rejection_internal": "Etwas ist schiefgelaufen. Bitte lade die Seite neu.",
   "rejection_room_not_found": "Es gibt keinen offenen Raum mit diesem Code.",

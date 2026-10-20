@@ -37,6 +37,7 @@ export function setupGame({
     turn: 1,
     currentPlayer: first.playerId,
     phase: awaitingRoll(),
+    actsAfter: now,
     turnDeadline: turnDeadlineFrom(now, turnLimitMs),
     settings: { maxPlayers: settings.maxPlayers, minuteLimit: settings.minuteLimit },
     endsAt: now + settings.minuteLimit * minuteMs,

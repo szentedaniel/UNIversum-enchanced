@@ -112,6 +112,7 @@ const REJECTIONS: Record<RejectionCode, Message> = {
   STALE_TURN: m.rejection_stale_turn,
   NOT_YOUR_TURN: m.rejection_not_your_turn,
   NOT_OFFERED: m.rejection_not_offered,
+  PLAYBACK_RUNNING: m.rejection_playback_running,
   SHORTFALL_NOT_COVERED: m.rejection_shortfall_not_covered,
   MALFORMED: m.rejection_malformed,
   INTERNAL: m.rejection_internal,
