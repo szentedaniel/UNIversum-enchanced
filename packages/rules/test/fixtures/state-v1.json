@@ -1,6 +1,6 @@
 {
   "stateVersion": 1,
-  "version": 1,
+  "version": 2,
   "turn": 2,
   "currentPlayer": "p2",
   "phase": {
@@ -22,7 +22,9 @@
       "seat": 0,
       "cash": 2500000,
       "position": 9,
-      "bankrupt": false
+      "bankrupt": false,
+      "quarantineRounds": null,
+      "hasPcrTest": false
     },
     {
       "id": "p2",
@@ -33,7 +35,9 @@
       "seat": 1,
       "cash": 2500000,
       "position": 0,
-      "bankrupt": false
+      "bankrupt": false,
+      "quarantineRounds": null,
+      "hasPcrTest": false
     },
     {
       "id": "p3",
@@ -44,7 +48,9 @@
       "seat": 2,
       "cash": 2500000,
       "position": 0,
-      "bankrupt": false
+      "bankrupt": false,
+      "quarantineRounds": null,
+      "hasPcrTest": false
     },
     {
       "id": "p4",
@@ -55,7 +61,9 @@
       "seat": 3,
       "cash": 2500000,
       "position": 0,
-      "bankrupt": false
+      "bankrupt": false,
+      "quarantineRounds": null,
+      "hasPcrTest": false
     }
   ],
   "fields": [

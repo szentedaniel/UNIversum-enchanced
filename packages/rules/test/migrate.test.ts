@@ -10,8 +10,8 @@ import { newGame, roll } from "./helpers.ts";
  *
  * When the state's shape changes: bump `STATE_VERSION`, add the migration
  * from the old version to `MIGRATIONS` (migrate.ts), and commit a snapshot of
- * the new shape, `JSON.stringify(roll(newGame()).state, null, 2)`, as
- * `state-v<new>.json` here.
+ * the new shape, `JSON.stringify(playTurn(newGame()).state, null, 2)` (a
+ * game one Turn in, waiting for the dice), as `state-v<new>.json` here.
  */
 const fixtures: { version: number; state: unknown }[] = [{ version: 1, state: stateV1 }];
 
