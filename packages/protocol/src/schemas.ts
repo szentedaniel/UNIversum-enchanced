@@ -11,6 +11,7 @@ import { MAX_LEVEL, type PlayerIntent } from "@universum/rules";
 import { z } from "zod";
 import {
   DEFAULT_SETTINGS,
+  GUEST_TOKEN_PATTERN,
   MINUTE_LIMITS,
   PASSWORD_MAX_BYTES,
   PLAYER_COUNTS,
@@ -60,11 +61,15 @@ const password = z
 /** A raw Room name; the server's Room name check normalises and judges it. This only bounds the work. */
 const ROOM_NAME_MAX_RAW_LENGTH = 256;
 
+/** See `GUEST_TOKEN_PATTERN`. */
+const guestToken = z.string().regex(GUEST_TOKEN_PATTERN);
+
 export const createOptionsSchema = z.object({
   maxPlayers: z.literal(PLAYER_COUNTS).default(DEFAULT_SETTINGS.maxPlayers),
   minuteLimit: z.literal(MINUTE_LIMITS).default(DEFAULT_SETTINGS.minuteLimit),
   roomName: z.string().max(ROOM_NAME_MAX_RAW_LENGTH).optional(),
   password: password.optional(),
+  guestToken: guestToken.optional(),
 });
 
 export type CreateOptionsInputMatch = Assert<
@@ -77,6 +82,7 @@ export type CreateOptionsOutputMatch = Assert<
 export const joinOptionsSchema = z.object({
   code: z.string().regex(/^\d{6}$/),
   password: password.optional(),
+  guestToken: guestToken.optional(),
 });
 
 export type JoinOptionsMatch = Assert<

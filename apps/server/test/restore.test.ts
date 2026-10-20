@@ -126,7 +126,10 @@ describe("restore on boot", () => {
     expect(after.restored).toBe(1);
     expect(restored.code).toBe(alice.code);
     expect(restored.settings).toEqual({ maxPlayers: 3, minuteLimit: 15 });
-    expect(restored.seats.slice(0, 2)).toEqual(lobby.seats);
+    // Held for their Guests, who have not taken them back yet (#35).
+    expect(restored.seats.slice(0, 2)).toEqual(
+      lobby.seats.map((seat) => ({ ...seat, heldUntil: T0 + 60_000 })),
+    );
     expect(restored.seats).toHaveLength(3);
   });
 

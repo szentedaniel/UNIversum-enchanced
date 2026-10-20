@@ -65,6 +65,12 @@ export type WelcomeMessage = {
 
 export type LobbySeat = { playerId: PlayerId; name: PlayerName };
 
+/**
+ * A Lobby Seat as the Lobby shows it. `heldUntil`: its Player dropped, and the
+ * Seat is freed at this server time (epoch ms) unless they come back.
+ */
+export type LobbySeatView = LobbySeat & { heldUntil?: number };
+
 export type LobbyMessage = {
   code: string;
   /** `null`: the creator left it empty, and the client shows a generated one. */
@@ -72,7 +78,9 @@ export type LobbyMessage = {
   hasPassword: boolean;
   settings: RoomSettings;
   /** Taken Seats in join order; the rest of `settings.maxPlayers` are open. */
-  seats: LobbySeat[];
+  seats: LobbySeatView[];
+  /** The server's clock when it sent this (epoch ms), for the held Seats' countdowns. */
+  now: number;
 };
 
 export type GameMessage = {
@@ -118,14 +126,34 @@ export function utf8Length(text: string): number {
  * defaults. An empty Room name gets a generated one; an empty password means
  * none. Settings are fixed at creation (R1, R3, R11).
  */
-export type CreateOptions = Partial<RoomSettings> & { roomName?: string; password?: string };
+export type CreateOptions = Partial<RoomSettings> & {
+  roomName?: string;
+  password?: string;
+  guestToken?: string;
+};
+
+/**
+ * The browser's Guest token: 128 random bits as 32 lowercase hex digits,
+ * created once and kept in `localStorage`. Sent only in create and join
+ * options; the Room keeps only its hash, against the Seat, so the same
+ * browser can take its Seat back from a new connection.
+ */
+export const GUEST_TOKEN_PATTERN = /^[0-9a-f]{32}$/;
 
 /**
  * Options for `client.joinById(code, options)`. The Room code is repeated
  * here because the password is checked before a Seat is reserved, where the
- * server does not yet know which Room is meant. Guest token (#35) lands here.
+ * server does not yet know which Room is meant. A Guest token that matches a
+ * Seat takes that Seat back (no password asked, even in a running game).
  */
-export type JoinOptions = { code: string; password?: string };
+export type JoinOptions = { code: string; password?: string; guestToken?: string };
+
+/**
+ * WebSocket close codes the Room server sends (Colyseus uses 4000–4010).
+ * `seatTaken`: the same Guest took the Seat back from another connection (a
+ * new tab); the closed one must not try to win it back.
+ */
+export const CLOSE_CODE = { seatTaken: 4100 } as const;
 
 /** One Lobby on the Lobby list: the LobbyRoom listing's `metadata`. Never a password or hash. */
 export type LobbyListingMetadata = {
