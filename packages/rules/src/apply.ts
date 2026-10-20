@@ -4,6 +4,7 @@ import { SYSTEM, type Ctx, type Intent } from "#intents.ts";
 import { rejection, type Rejection } from "#rejections.ts";
 import { museumIntents } from "#rules/museums.ts";
 import { quarantineChoiceIntents } from "#rules/quarantine-choice.ts";
+import { saleIntents } from "#rules/sale.ts";
 import { timeoutIntents } from "#rules/timeout.ts";
 import { turnIntents } from "#rules/turn.ts";
 import { universityIntents } from "#rules/universities.ts";
@@ -21,6 +22,7 @@ const HANDLERS: IntentHandlers = {
   ...timeoutIntents,
   ...museumIntents,
   ...quarantineChoiceIntents,
+  ...saleIntents,
 };
 
 export type Applied = { state: GameState; events: GameEvent[] };

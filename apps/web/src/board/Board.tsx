@@ -1,12 +1,13 @@
-import { FIELDS } from "@universum/rules/board";
+import { FIELDS, type FieldId } from "@universum/rules/board";
 import { LocateFixed, Maximize, Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { createBoard, type Board as BoardRenderer } from "#board/board.ts";
 import { fieldFacts } from "#board/field-facts.ts";
 import { Button } from "#components/ui/button.tsx";
+import { AUTO_SELL_WARNING_MS, saleFor, saleMarks } from "#pick/sale.ts";
 import { roomStore } from "#stores/room-store.ts";
-import { uiStore } from "#stores/ui-store.ts";
+import { salePicksFor, uiStore } from "#stores/ui-store.ts";
 import { exposeBoard } from "#test-hooks.ts";
 import { fieldName, formatCompactMoney, m } from "#text.ts";
 
@@ -14,10 +15,27 @@ import { fieldName, formatCompactMoney, m } from "#text.ts";
 const OBSTACLES = "[data-board-obstacle]";
 const ZOOM_STEP = 1.5;
 
+/** This client's open Sale, from the latest push. */
+function currentSale() {
+  const { push, me } = roomStore.getState();
+  return push ? saleFor(push.view, me) : null;
+}
+
+/**
+ * A tap on the Board: during this client's Sale it toggles the (pickable)
+ * Field and never commits; otherwise it opens the Field card.
+ */
+function onFieldTap(id: FieldId | null): void {
+  const sale = currentSale();
+  if (!sale) return uiStore.getState().selectField(id);
+  if (id !== null) uiStore.getState().toggleSalePick(sale.key, id);
+}
+
 /**
  * The one React component around the PixiJS Board. It feeds the renderer
- * every push from `roomStore` and the open Field card from `uiStore` (both
- * outside React), sends Field taps to `uiStore`, and holds the camera buttons.
+ * every push from `roomStore` and the open Field card and Sale picks from
+ * `uiStore` (both outside React), sends Field taps to `uiStore`, and holds the
+ * camera buttons.
  *
  * The camera fits the Board into `.board-fit-area`: the Board minus the
  * `--board-inset-*` space that the screen reserves for these buttons and the
@@ -37,6 +55,7 @@ export function Board() {
     const unsubscribe: (() => void)[] = [];
     let cancelled = false;
     let revealFrame = 0;
+    let warningTimer = 0;
 
     async function mount(element: HTMLElement, area: HTMLElement) {
       const renderer = await createBoard(element, area, {
@@ -45,7 +64,7 @@ export function Board() {
           const rent = fieldFacts(view, id)?.rent ?? null;
           return rent === null ? null : formatCompactMoney(rent);
         },
-        onFieldTap: (id) => uiStore.getState().selectField(id),
+        onFieldTap,
         onFollowChange: (on) => uiStore.getState().setFollow(on),
       });
       if (cancelled) {
@@ -55,13 +74,32 @@ export function Board() {
       created = renderer;
       const first = roomStore.getState().push;
       if (first) renderer.update(first.view, []);
+
+      /** Marks this client's Sale on the Board, and wakes up again when the last seconds start. */
+      const syncPick = () => {
+        clearTimeout(warningTimer);
+        const { push } = roomStore.getState();
+        const sale = currentSale();
+        if (!push || !sale) return renderer.setPick(null);
+        // The tray replaces the Field card during the Sale.
+        if (uiStore.getState().selectedField !== null) uiStore.getState().selectField(null);
+        const msLeft = push.view.turnTimer.endsAt - (Date.now() + push.clockOffset);
+        const picks = salePicksFor(uiStore.getState().salePicks, sale.key);
+        renderer.setPick(saleMarks(sale, push.view, picks, msLeft));
+        if (msLeft > AUTO_SELL_WARNING_MS) {
+          warningTimer = window.setTimeout(syncPick, msLeft - AUTO_SELL_WARNING_MS + 50);
+        }
+      };
+      syncPick();
       unsubscribe.push(
         roomStore.subscribe(
           (state) => state.push,
           (push) => {
             if (push) renderer.update(push.view, push.events);
+            syncPick();
           },
         ),
+        uiStore.subscribe((state) => state.salePicks, syncPick),
         uiStore.subscribe(
           (state) => state.selectedField,
           (id) => {
@@ -92,6 +130,7 @@ export function Board() {
     return () => {
       cancelled = true;
       cancelAnimationFrame(revealFrame);
+      clearTimeout(warningTimer);
       for (const stop of unsubscribe) stop();
       exposeBoard(null);
       created?.destroy();

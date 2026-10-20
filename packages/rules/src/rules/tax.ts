@@ -7,7 +7,6 @@ import { charge } from "#rules/charge.ts";
 import type { Landing } from "#rules/landing.ts";
 import { valueOf } from "#rules/pricing.ts";
 import type { GameState, PlayerId } from "#state.ts";
-import { emit } from "#tx.ts";
 
 declare module "#events.ts" {
   interface EventMap {
@@ -36,7 +35,6 @@ export function fieldsValue(state: GameState, playerId: PlayerId): number {
 /** Landing on Tax: the amount is computed once, here (R36, spec story 78). */
 export const landOnTax: Landing = (tx, playerId) => {
   const amount = Math.round((fieldsValue(tx.state, playerId) * TAX_PERCENT) / 100);
-  charge(tx, playerId, amount, (paid) => {
-    emit(tx, { type: "TaxPaid", player: playerId, amount: paid });
-  });
+  // A Sale for it pays this same amount afterwards: Tax is not recomputed (F20).
+  charge(tx, playerId, { kind: "tax", amount });
 };

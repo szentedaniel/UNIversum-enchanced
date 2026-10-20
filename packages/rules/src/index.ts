@@ -40,5 +40,6 @@ export {
   type Seed,
   type Settings,
 } from "#state.ts";
+export type { PendingCharge } from "#rules/charge.ts";
 export type { LevelOffer } from "#rules/universities.ts";
 export { publicView, type FieldView, type PublicView } from "#view.ts";
