@@ -19,6 +19,10 @@ export type UiState = {
   salePicks: { key: string; fields: FieldId[] };
   /** A tap in a Sale: picks the Field, or unpicks it. Never commits. */
   toggleSalePick(key: string, field: FieldId): void;
+  /** The Field chosen in a Doubler or Erasmus pick whose decision is `key`; one at most. */
+  singlePick: { key: string; field: FieldId | null };
+  /** A tap in a single pick: selects the Field, replacing the earlier choice. Never commits. */
+  choosePick(key: string, field: FieldId | null): void;
 };
 
 export const uiStore = createStore<UiState>()(
@@ -35,6 +39,8 @@ export const uiStore = createStore<UiState>()(
           fields: toggledPicks(salePicks.key === key ? salePicks.fields : [], field),
         },
       })),
+    singlePick: { key: "", field: null },
+    choosePick: (key, field) => set({ singlePick: { key, field } }),
   })),
 );
 

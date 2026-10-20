@@ -18,13 +18,24 @@ export type ViewSummary = {
 };
 export type Camera = { scale: number; x: number; y: number };
 export type PickMarks = { pickable: number[]; picked: number[]; ringed: number[] };
+export type FullPickOption =
+  | { kind: "doubler"; field: number; rent: number; rentAfter: number }
+  | {
+      kind: "erasmus";
+      field: number;
+      steps: number;
+      passesStart: boolean;
+      bonus: number | null;
+    };
 /** The parts of a full pushed view (PublicView) that specs change before `showView`. */
 export type FullView = {
   currentPlayer: string;
   phase: unknown;
   players: { id: string; bankrupt: boolean }[];
   fields: { owner: string | null; level: number; value: number; rent: number; sale: number }[];
+  doubler: { field: number; count: number } | null;
   autoSell: number[] | null;
+  pickOptions: FullPickOption[] | null;
   turnDeadline: number;
   turnTimer: { endsAt: number; limitMs: number };
 };

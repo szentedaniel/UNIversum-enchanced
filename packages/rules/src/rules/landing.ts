@@ -8,6 +8,8 @@
  */
 import { FIELDS, type FieldId, type FieldKind } from "#board.ts";
 import { landOnChance } from "#rules/chance.ts";
+import { landOnDoubler } from "#rules/doubler.ts";
+import { landOnErasmus } from "#rules/erasmus.ts";
 import { landOnMuseum } from "#rules/museums.ts";
 import { enterQuarantine } from "#rules/quarantine.ts";
 import { landOnTax } from "#rules/tax.ts";
@@ -26,8 +28,8 @@ const LANDINGS: Record<FieldKind, Landing> = {
   chance: landOnChance,
   tax: landOnTax,
   quarantine: enterQuarantine,
-  doubler: nothing,
-  erasmus: nothing,
+  doubler: landOnDoubler,
+  erasmus: landOnErasmus,
 };
 
 /** Runs the effect of the Field the Player stands on. */
@@ -35,5 +37,7 @@ export function landOn(tx: Tx, playerId: PlayerId): void {
   const field = playerById(tx, playerId).position;
   const info = FIELDS[field];
   if (!info) throw new Error(`no Field ${field}`);
-  LANDINGS[info.kind](tx, playerId, field);
+  const landing = LANDINGS[info.kind];
+  if (!landing) throw new Error(`no landing for ${info.kind}: ${Object.keys(LANDINGS).join()}`);
+  landing(tx, playerId, field);
 }
