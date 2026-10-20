@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { publicView, START_CASH, SYSTEM, type GameState } from "#index.ts";
+import {
+  apply,
+  isRejection,
+  publicView,
+  START_CASH,
+  SYSTEM,
+  type GameState,
+  type Intent,
+} from "#index.ts";
 import { accept, newGame, player, reject, rollOnto, T0, withField, withPlayer } from "./helpers.ts";
 
 // Field ids and their Bank sale values (90% of Value) at the Levels used below.
@@ -356,5 +364,72 @@ describe("Bankrupt Players", () => {
     const out = landOnRent(0, {}).state;
 
     expect(player(out, out.currentPlayer).bankrupt).toBe(false);
+  });
+});
+
+/** A small deterministic PRNG for the played games below (not the game's own). */
+function chooser(seed: number) {
+  let x = seed;
+  return (n: number) => {
+    x = (Math.imul(x, 1_103_515_245) + 12_345) >>> 0;
+    return (x >>> 8) % n;
+  };
+}
+
+/** One random option the current phase offers (sometimes letting the timer run out). */
+function anyOption(state: GameState, pick: (n: number) => number): { intent: Intent; now: number } {
+  const turn = state.turn;
+  const { phase } = state;
+  if (pick(8) === 0) return { intent: { type: "TurnTimedOut", turn }, now: state.turnDeadline };
+  const now = state.turnDeadline - 1;
+  switch (phase.kind) {
+    case "offer": {
+      const level = phase.levels.at(-1)?.level;
+      if (level !== undefined && pick(2) === 0)
+        return { intent: { type: "BuyLevel", turn, level }, now };
+      if (phase.museum !== undefined) return { intent: { type: "BuyMuseum", turn }, now };
+      if (phase.buyout !== undefined) return { intent: { type: "Buyout", turn }, now };
+      return { intent: { type: "DeclineOffer", turn }, now };
+    }
+    case "selling": {
+      if (pick(2) === 0) return { intent: { type: "AutoSell", turn }, now };
+      const fields = state.fields.flatMap((f, id) => (f.owner === state.currentPlayer ? [id] : []));
+      return { intent: { type: "SellFields", turn, fields }, now };
+    }
+    case "quarantineChoice":
+      return { intent: { type: "RollForTwelve", turn }, now };
+    default:
+      return { intent: { type: "Roll", turn }, now };
+  }
+}
+
+describe("played games", () => {
+  it("money never goes negative, and a Bankrupt Player is never the current Player, owns nothing and has 0", () => {
+    let sales = 0;
+    let bankruptcies = 0;
+    for (let game = 1; game <= 40; game++) {
+      const pick = chooser(game);
+      let state = newGame({ seed: [game, game * 7, game * 13, game * 31] });
+      for (let step = 0; step < 400; step++) {
+        if (state.players.filter((p) => !p.bankrupt).length <= 1) break;
+        const { intent, now } = anyOption(state, pick);
+        const actor = intent.type === "TurnTimedOut" ? SYSTEM : state.currentPlayer;
+        const result = apply(state, intent, { actor, now });
+        if (isRejection(result)) throw new Error(`${intent.type} refused: ${result.code}`);
+        state = result.state;
+        if (state.phase.kind === "selling") sales++;
+        bankruptcies += result.events.filter((e) => e.type === "WentBankrupt").length;
+
+        expectNoNegativeCash(state);
+        expect(player(state, state.currentPlayer).bankrupt).toBe(false);
+        for (const p of state.players.filter((q) => q.bankrupt)) {
+          expect(p.cash).toBe(0);
+          expect(state.fields.some((f) => f.owner === p.id)).toBe(false);
+        }
+      }
+    }
+    // The games really went through Sales and bankruptcies.
+    expect(sales).toBeGreaterThan(0);
+    expect(bankruptcies).toBeGreaterThan(0);
   });
 });
