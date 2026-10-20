@@ -58,6 +58,19 @@ function describe(event: GameEvent, view: PublicView): string | null {
         owner: name(event.owner),
         amount: formatMoney(event.amount),
       });
+    case "MuseumBought":
+      return m.event_museum_bought({
+        name: name(event.player),
+        field: fieldName(FIELDS[event.field]?.key ?? ""),
+        price: formatMoney(event.price),
+      });
+    case "BoughtOut":
+      return m.event_bought_out({
+        name: name(event.player),
+        owner: name(event.owner),
+        field: fieldName(FIELDS[event.field]?.key ?? ""),
+        price: formatMoney(event.price),
+      });
     default:
       return null;
   }
@@ -157,6 +170,8 @@ export function Game() {
           view={view}
           offer={offer}
           onBuy={(level) => send({ type: "BuyLevel", turn: view.turn, level })}
+          onBuyMuseum={() => send({ type: "BuyMuseum", turn: view.turn })}
+          onBuyout={() => send({ type: "Buyout", turn: view.turn })}
           onDecline={() => send({ type: "DeclineOffer", turn: view.turn })}
         />
       )}
@@ -235,21 +250,33 @@ function FieldDetails({ view, field }: { view: PublicView; field: FieldId }) {
   );
 }
 
-/** The buy/build offer: one button per affordable Level with its price, and Decline. */
+/**
+ * The offer: one button per affordable Level with its price, or the Museum
+ * buy, or the Buyout, and Decline. The phase lists what is on offer.
+ */
 function OfferPanel({
   view,
   offer,
   onBuy,
+  onBuyMuseum,
+  onBuyout,
   onDecline,
 }: {
   view: PublicView;
   offer: PhaseOf<"offer">;
   onBuy: (level: number) => void;
+  onBuyMuseum: () => void;
+  onBuyout: () => void;
   onDecline: () => void;
 }) {
   const field = fieldName(FIELDS[offer.field]?.key ?? "");
   const own = view.fields[offer.field]?.owner === view.currentPlayer;
-  const title = own ? m.offer_build({ field }) : m.offer_buy({ field });
+  const title =
+    offer.buyout !== undefined
+      ? m.offer_buyout_title({ field })
+      : own
+        ? m.offer_build({ field })
+        : m.offer_buy({ field });
   return (
     <section className="flex flex-col gap-2" aria-label={title} data-testid="offer">
       <h2 className="m-0 font-display text-xl font-normal">{title}</h2>
@@ -259,6 +286,16 @@ function OfferPanel({
             {m.offer_level({ level, price: formatMoney(price) })}
           </Button>
         ))}
+        {offer.museum !== undefined && (
+          <Button className="tnum" onClick={onBuyMuseum}>
+            {m.offer_museum({ price: formatMoney(offer.museum) })}
+          </Button>
+        )}
+        {offer.buyout !== undefined && (
+          <Button className="tnum" onClick={onBuyout}>
+            {m.offer_buyout({ price: formatMoney(offer.buyout) })}
+          </Button>
+        )}
         <Button variant="plain" onClick={onDecline}>
           {m.offer_decline()}
         </Button>
