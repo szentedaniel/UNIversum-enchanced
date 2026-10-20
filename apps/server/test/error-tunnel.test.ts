@@ -153,6 +153,23 @@ describe("the error tunnel", () => {
     }
   });
 
+  it("forwards the browser SDK's envelope: no item length and no trailing newline", async () => {
+    const { envelopes, dsn } = await fakeTracker();
+    server = await startTestServer({ errorReporting: dsn });
+    const header = JSON.stringify({ event_id: "abc123", dsn: "https://public@errors.invalid/1" });
+    const item = JSON.stringify({ type: "event" });
+    const payload = JSON.stringify(eventPayload());
+
+    const response = await post(server.port, `${header}\n${item}\n${payload}`);
+
+    expect(response.status).toBe(200);
+    expect(envelopes).toHaveLength(1);
+    const forwarded = readEnvelope(envelopes[0]!);
+    expect(forwarded.items).toHaveLength(1);
+    expect(forwarded.items[0]?.payload).toMatchObject({ message: "boom" });
+    expect(envelopes[0]!.toString("utf8")).not.toContain("203.0.113.9");
+  });
+
   it("drops an envelope without events, and refuses a malformed one", async () => {
     const { envelopes, dsn } = await fakeTracker();
     server = await startTestServer({ errorReporting: dsn });

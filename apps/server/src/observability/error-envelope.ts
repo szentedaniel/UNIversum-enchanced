@@ -48,10 +48,12 @@ export function splitEnvelope(body: Buffer): Envelope | null {
       offset += length;
       if (body[offset] === 0x0a) offset += 1;
     } else {
+      // No length: the payload runs to the next newline, or to the end of the
+      // envelope (the browser SDK omits the last item's trailing newline).
       const end = body.indexOf(0x0a, offset);
-      if (end < 0) return null;
-      payload = body.subarray(offset, end);
-      offset = end + 1;
+      const payloadEnd = end < 0 ? body.length : end;
+      payload = body.subarray(offset, payloadEnd);
+      offset = payloadEnd + (end < 0 ? 0 : 1);
     }
     items.push({ header: itemHeader, payload });
   }
