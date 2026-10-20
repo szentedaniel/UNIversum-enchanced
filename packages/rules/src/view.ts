@@ -24,9 +24,10 @@ export type PublicView = Omit<GameState, "rng" | "fields"> & {
   fields: FieldView[];
   /**
    * The Turn timer ring: it runs for `limitMs` and empties at `endsAt`, which
-   * is the slack before `turnDeadline` (the slack is never shown).
+   * is the slack before `turnDeadline` (the slack is never shown). `null`
+   * once the game is over.
    */
-  turnTimer: { endsAt: number; limitMs: number };
+  turnTimer: { endsAt: number; limitMs: number } | null;
   /** During a Sale, the Fields Auto-sell would sell (R68); `null` outside a Sale. */
   autoSell: FieldId[] | null;
 };
@@ -39,7 +40,10 @@ export function publicView(state: GameState): PublicView {
     currentPlayer: state.currentPlayer,
     phase: state.phase,
     turnDeadline: state.turnDeadline,
-    turnTimer: { endsAt: state.turnDeadline - TURN_SLACK_MS, limitMs: TURN_LIMIT_MS },
+    turnTimer:
+      state.turnDeadline === null
+        ? null
+        : { endsAt: state.turnDeadline - TURN_SLACK_MS, limitMs: TURN_LIMIT_MS },
     settings: state.settings,
     endsAt: state.endsAt,
     players: state.players,

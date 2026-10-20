@@ -41,6 +41,12 @@ export type GameOptions = {
   now?: number;
 };
 
+/** The current phase's deadline; a game that has ended has none. */
+export function deadlineOf(state: GameState): number {
+  if (state.turnDeadline === null) throw new Error("the game has no deadline");
+  return state.turnDeadline;
+}
+
 /** A freshly started game with default settings (4 Players, 50-minute Minute limit). */
 export function newGame(options: GameOptions = {}): GameState {
   const players = options.players ?? options.settings?.maxPlayers ?? 4;

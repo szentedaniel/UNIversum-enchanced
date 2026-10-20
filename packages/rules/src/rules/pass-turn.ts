@@ -4,6 +4,7 @@
  * Museums, …) can pass the Turn without an import cycle through `landing.ts`.
  */
 import { beginTurn } from "#rules/quarantine.ts";
+import { checkGameEnd } from "#rules/game-end.ts";
 import type { PlayerId } from "#state.ts";
 import { emit, type Tx } from "#tx.ts";
 
@@ -25,10 +26,11 @@ export const awaitingRoll = () => ({ kind: "awaitingRoll" }) as const;
 
 /**
  * Passes the Turn to the next non-Bankrupt Player in Seat order (R14).
- * The game-end check (R15, #32) runs here, before the Turn passes; the new
- * Turn then starts in `beginTurn` (the dice, or the Quarantine choice).
+ * The game-end check (R15, #32) runs here first, before the Turn passes; the
+ * new Turn then starts in `beginTurn` (the dice, or the Quarantine choice).
  */
 export function passTurn(tx: Tx): void {
+  if (checkGameEnd(tx)) return;
   const { players } = tx.state;
   const current = players.findIndex((p) => p.id === tx.state.currentPlayer);
   for (let step = 1; step <= players.length; step++) {
