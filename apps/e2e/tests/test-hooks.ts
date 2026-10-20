@@ -40,11 +40,32 @@ export type FullPickOption =
       passesStart: boolean;
       bonus: number | null;
     };
+/** A decision phase as the full pushed view (PublicView) carries it. */
+export type FullPhase =
+  | { kind: "awaitingRoll" }
+  | {
+      kind: "quarantineChoice";
+      canBuyPcrTest: boolean;
+      canUsePcrTest: boolean;
+      pcrTestPrice: number;
+    }
+  | {
+      kind: "offer";
+      field: number;
+      levels?: { level: number; price: number }[];
+      museum?: number;
+      buyout?: number;
+    }
+  | { kind: "selling"; shortfall: number; resume: unknown }
+  | { kind: "placingDoubler"; fields: number[] }
+  | { kind: "choosingErasmus"; fields: number[] }
+  | { kind: "gameOver"; winner: string; reason: string };
 /** The parts of a full pushed view (PublicView) that specs change before `showView`. */
 export type FullView = {
   turn: number;
+  version: number;
   currentPlayer: string;
-  phase: unknown;
+  phase: FullPhase;
   players: ViewPlayer[];
   fields: { owner: string | null; level: number; value: number; rent: number; sale: number }[];
   doubler: { field: number; count: number } | null;
@@ -69,7 +90,13 @@ declare global {
       room(): {
         me: string | null;
         status: string;
-        push: { view: FullView; clockOffset: number } | null;
+        push: {
+          view: FullView;
+          /** The events of the push, in order. */
+          events: { type: string }[];
+          seq: number;
+          clockOffset: number;
+        } | null;
       };
     };
   }
