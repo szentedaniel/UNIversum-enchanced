@@ -76,10 +76,31 @@ describe("played games", () => {
 
         expect(run.ended).toBe(true);
         expect(run.steps.length).toBeGreaterThan(0);
+        // Every move advances the clock ~23 s, so even a 50-minute game ends
+        // well inside a few hundred intents.
+        expect(run.steps.length).toBeLessThan(500);
         expect(run.state.phase.kind).toBe("gameOver");
       }),
       RUN,
     );
+  });
+
+  it("the same seeds replay the same game, so a failing seed is reproducible", () => {
+    const options = {
+      seed: [1, 2, 3, 4] as const,
+      choiceSeed: 7,
+      timeoutEvery: 5,
+      players: 4 as const,
+      settings: { minuteLimit: 30 as const },
+    };
+
+    const first = playRandomGame(options);
+    const second = playRandomGame(options);
+
+    expect(second.steps.map((step) => [step.intent, step.now])).toEqual(
+      first.steps.map((step) => [step.intent, step.now]),
+    );
+    expect(second.state).toEqual(first.state);
   });
 
   it("money never goes negative", () => {
