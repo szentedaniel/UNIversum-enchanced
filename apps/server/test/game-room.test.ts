@@ -53,6 +53,11 @@ async function playTurn(clients: TestClient[], view: GameMessage["view"]): Promi
   return play(clients, rolled.view, { type: "DeclineOffer" });
 }
 
+/** True when the view stops at an offer of Levels (not a Museum buy or a Buyout). */
+function levelOffer(view: GameMessage["view"]): boolean {
+  return view.phase.kind === "offer" && view.phase.levels.length > 0;
+}
+
 describe("creating and joining a Room", () => {
   it("R4: creates a Room under a 6-digit Room code, with 4 Players and 50 minutes by default", async () => {
     const alice = await server.create();
@@ -196,15 +201,11 @@ describe("playing", () => {
     const { clients, view: first } = await startedGame(2);
     // The seed is random: play Turns until someone lands on a Level offer
     // (declining Museum and Buyout offers on the way).
-    const levelOffer = (v: GameMessage["view"]) =>
-      v.phase.kind === "offer" && v.phase.levels.length > 0;
     let { view } = await play(clients, first, { type: "Roll" });
-    for (let tries = 0; !levelOffer(view) && tries < 30; tries++) {
+    for (let tries = 0; !levelOffer(view) && tries < 60; tries++) {
+      const intent = view.phase.kind === "offer" ? { type: "DeclineOffer" } : { type: "Roll" };
       // oxlint-disable-next-line no-await-in-loop -- Turns are played one after another
-      if (view.phase.kind === "offer")
-        ({ view } = await play(clients, view, { type: "DeclineOffer" }));
-      // oxlint-disable-next-line no-await-in-loop -- Turns are played one after another
-      ({ view } = await play(clients, view, { type: "Roll" }));
+      ({ view } = await play(clients, view, intent));
     }
     if (view.phase.kind !== "offer" || !levelOffer(view)) throw new Error("no offer in 30 Turns");
     const { field, levels } = view.phase;
