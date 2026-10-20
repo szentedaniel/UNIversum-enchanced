@@ -97,6 +97,9 @@ pnpm loadtest -- --rooms 20 --ramp 1m --hold 2m --restart-at 1m \
   --http-port 9146 --prometheus-port 9190 --grafana-port 9300 --project loadtest-smoke
 ```
 
+The `--` is optional (`pnpm loadtest --rooms 20 …` works too); pnpm forwards it to the script and
+the parser ignores it.
+
 `pnpm loadtest -- --help` lists every option, including `--find-knee` (adds 100 Rooms/min until a
 threshold breaks and reports the last passing count; it never gates), `--no-build` and `--keep`.
 CI only type-checks and lints `apps/loadtest`; it never runs the load.

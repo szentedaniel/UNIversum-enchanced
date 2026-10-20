@@ -102,10 +102,17 @@ describe("load-test arguments", () => {
     expect(() => run(["--rooms"])).toThrow(/--rooms needs a value/);
   });
 
+  it("ignores the bare -- that pnpm forwards", () => {
+    expect(run(["--", "--rooms", "20"]).profile.rooms).toBe(20);
+    expect(run(["--"]).profile.rooms).toBe(DEFAULT_PROFILE.rooms);
+    expect(run(["--rooms", "20", "--"]).profile.rooms).toBe(20);
+  });
+
   it("prints help", () => {
     const parsed = parseArgs(["--help"], {});
     expect(parsed.kind).toBe("help");
-    expect(HELP).toContain("pnpm loadtest -- --rooms");
+    expect(HELP).toContain("pnpm loadtest [--] [options]");
+    expect(HELP).toContain("pnpm loadtest --rooms 20");
     expect(HELP).toContain("--find-knee");
   });
 });
