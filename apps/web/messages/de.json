@@ -229,5 +229,21 @@
   "rejection_rate_limited": "Zu viele Versuche. Bitte warte einen Moment.",
   "rejection_server_busy": "Der Server ist gerade ausgelastet. Bitte versuche es später noch einmal.",
   "rejection_slow_down": "Nicht so schnell! Einige deiner Züge wurden ignoriert.",
-  "retry_in": "Erneut in {seconds} s"
+  "retry_in": "Erneut in {seconds} s",
+  "language": "Sprache",
+  "language_hu": "Magyar",
+  "language_en": "English",
+  "language_de": "Deutsch",
+  "menu": "Menü",
+  "menu_title": "Einstellungen",
+  "sound_on": "Ton an",
+  "sound_off": "Ton aus",
+  "offer_museum_hint": "Jedes Museum in deinem Besitz erhöht die Miete um diesen Betrag: {amount}",
+  "doubler_title": "Du hast dein Diplom gemacht!",
+  "doubler_prompt": "Wähle als Belohnung eine Stadt, in der die Miete ab jetzt VERDOPPELT wird.",
+  "pick_field": "Wähle ein Feld",
+  "erasmus_title": "Du gehst auf Erasmus.",
+  "erasmus_prompt": "Wähle eine Stadt, in die du reisen möchtest.",
+  "game_over_won": "Sieg",
+  "game_over_congratulations": "Herzlichen Glückwunsch!"
 }

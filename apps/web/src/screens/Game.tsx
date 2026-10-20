@@ -4,8 +4,10 @@ import type { RejectionCode } from "@universum/protocol/messages";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useStore } from "zustand";
+import { playDice } from "#audio.ts";
 import { Board } from "#board/Board.tsx";
 import { FieldCard } from "#board/FieldCard.tsx";
+import { GameMenu } from "#components/GameMenu.tsx";
 import { EventToast, MinutePill } from "#components/GameHud.tsx";
 import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
@@ -154,6 +156,11 @@ export function Game() {
   const wide = useWide();
   const [joinError, setJoinError] = useState<RejectionCode | null>(null);
 
+  // The dice sound starts on the server's roll, never on a tap (spec: no optimistic UI).
+  useEffect(() => {
+    if (push?.events.some((event) => event.type === "DiceRolled")) playDice();
+  }, [push]);
+
   // Opened by its address (a reload, a new tab, a later visit): take the Seat back by Guest token.
   useEffect(() => {
     ensureJoined(code).catch((e: unknown) => {
@@ -237,6 +244,7 @@ export function Game() {
       >
         {rejected ? rejectionText(rejection.code) : toast}
       </EventToast>
+      <GameMenu />
     </>
   );
 
