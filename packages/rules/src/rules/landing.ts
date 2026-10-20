@@ -37,7 +37,5 @@ export function landOn(tx: Tx, playerId: PlayerId): void {
   const field = playerById(tx, playerId).position;
   const info = FIELDS[field];
   if (!info) throw new Error(`no Field ${field}`);
-  const landing = LANDINGS[info.kind];
-  if (!landing) throw new Error(`no landing for ${info.kind}: ${Object.keys(LANDINGS).join()}`);
-  landing(tx, playerId, field);
+  LANDINGS[info.kind](tx, playerId, field);
 }
