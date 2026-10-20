@@ -32,13 +32,22 @@ import {
   publicView,
   setupGame,
   SYSTEM,
+  type Actor,
+  type Applied,
   type GameEvent,
   type GameState,
+  type Intent,
   type PlayerIntent,
+  type Rejection,
 } from "@universum/rules";
 import { FloodMeter } from "#abuse/flood.ts";
 import { REQUEST_ID_HEADER, type AbuseGuard } from "#abuse/guard.ts";
 import { ipBucket } from "#abuse/ip.ts";
+import {
+  noReporter,
+  type ErrorContext,
+  type ErrorReporter,
+} from "#observability/error-reporting.ts";
 import { silentLogger, type Logger } from "#observability/logger.ts";
 import type { GameMetrics, RoomGauges } from "#observability/metrics.ts";
 import { guestTokenIn, hashGuestToken } from "#room/guest-token.ts";
@@ -92,6 +101,13 @@ function bucketOf(client: Client): string {
     ? auth.bucket
     : "unknown";
 }
+
+/** This many engine throws in a row in one Room are logged at `fatal` (spec: Engine throws). */
+const ENGINE_THROWS_FATAL = 3;
+/** A Turn deadline the engine or the store failed on is tried again after this, doubling each time… */
+const DEADLINE_RETRY_MS = 5_000;
+/** …up to this. */
+const DEADLINE_RETRY_MAX_MS = 60_000;
 
 /** The HTTP status Colyseus answers a refused create or join with. */
 const STATUS: Partial<Record<RejectionCode, number>> = {
@@ -199,6 +215,14 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   metrics!: GameMetrics;
   /** The server's logger; `onCreate` narrows it to lines carrying this Room's `roomCode`. */
   log: Logger = silentLogger;
+  /** Where errors are reported; `createGameServer` sets it. */
+  reporter: ErrorReporter = noReporter;
+  /** The rules engine's `apply`; `createGameServer` sets it (tests pass one that throws). */
+  engine: typeof apply = apply;
+  /** Engine throws in a row in this Room; the third is logged at `fatal` (spec: Engine throws). */
+  #throwsInARow = 0;
+  /** Failed tries of the current Turn deadline, for the retry back-off. */
+  #deadlineRetries = 0;
   /** Cancels the one pending wake-up (the Turn deadline, or deletion once the game ended). */
   #cancelWakeUp: (() => void) | null = null;
   /** Set when the process shuts down: Seats and the stored Room must then stay as they are. */
@@ -643,9 +667,15 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     const intent = parsed.success ? parsed.data : null;
     let refused: RejectionCode | void = "MALFORMED";
     if (intent !== null) {
-      refused = isRoomIntent(intent)
-        ? ROOM_INTENTS[intent.type](this, seat, intent)
-        : this.play(seat, intent);
+      try {
+        refused = isRoomIntent(intent)
+          ? ROOM_INTENTS[intent.type](this, seat, intent)
+          : this.play(seat, intent);
+      } catch (error) {
+        // A bug outside the engine's own call (say, in game setup): same as an engine throw.
+        this.failed(error, "Intent failed", intent.type);
+        refused = "INTERNAL";
+      }
     }
     const fields = { playerId: seat.playerId, intent: intent?.type };
     if (refused) {
@@ -683,15 +713,43 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   /** Runs a Player intent through the rules engine. */
   private play(seat: SeatRecord, intent: PlayerIntent): RejectionCode | void {
     if (!this.game) return "NOT_OFFERED";
-    let result;
-    try {
-      result = apply(this.game, intent, { actor: seat.playerId, now: this.now() });
-    } catch {
-      // The Room keeps its last good state (logging and reporting: #44).
-      return "INTERNAL";
-    }
+    const result = this.run(this.game, intent, seat.playerId);
+    if (result === null) return "INTERNAL";
     if (isRejection(result)) return result.code;
-    return this.commit(result.state, result.events);
+    return this.commit(result.state, result.events, intent.type);
+  }
+
+  /**
+   * Runs the rules engine. A throw (an engine bug) is logged and reported,
+   * and gives `null`: the Room keeps its last good state (spec: Engine throws).
+   */
+  private run(game: GameState, intent: Intent, actor: Actor): Applied | Rejection | null {
+    try {
+      const result = this.engine(game, intent, { actor, now: this.now() });
+      this.#throwsInARow = 0;
+      return result;
+    } catch (error) {
+      this.#throwsInARow += 1;
+      this.failed(error, "Engine threw", intent.type);
+      if (this.#throwsInARow === ENGINE_THROWS_FATAL) {
+        this.log.fatal({ throwsInARow: this.#throwsInARow }, "Engine keeps throwing");
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Logs an error at `error` and reports it, with the Room code, the game's
+   * `version` and `phase`, and the intent type: never the snapshot or payload.
+   */
+  private failed(error: unknown, message: string, intent: string): void {
+    const context: ErrorContext = { intent };
+    if (this.game) {
+      context.version = this.game.version;
+      context.phase = this.game.phase.kind;
+    }
+    this.log.error({ err: error, ...context }, message);
+    this.reporter.report(error, { roomCode: this.roomId, ...context });
   }
 
   /**
@@ -699,11 +757,12 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    * the view and events to everyone, and wake up at its Turn deadline. A
    * failed write changes nothing and tells no one (the sender gets INTERNAL).
    */
-  private commit(state: GameState, events: GameEvent[]): RejectionCode | void {
+  private commit(state: GameState, events: GameEvent[], intent = "Start"): RejectionCode | void {
     try {
       this.save(this.seats, state, events);
-    } catch {
-      // The Room keeps its last good state (logging and reporting: #44).
+    } catch (error) {
+      // The Room keeps its last good state.
+      this.failed(error, "Room not saved", intent);
       return "INTERNAL";
     }
     this.game = state;
@@ -743,25 +802,28 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   /** Keeps one wake-up per Room, for the current `turnDeadline`. */
   private scheduleDeadline(state: GameState): void {
     this.#cancelWakeUp?.();
+    this.#deadlineRetries = 0;
     const { turn } = state;
     this.#cancelWakeUp = this.scheduler.at(state.turnDeadline, () => this.timeOut(turn));
   }
 
   /**
    * The deadline of Turn `turn` has passed: the engine applies the Timeout
-   * outcome. A stale wake-up (the Turn moved on) is rejected and ignored.
+   * outcome. A stale wake-up (the Turn moved on) is rejected and ignored. If
+   * the engine throws or the write fails, the Room keeps its state and tries
+   * again a little later, so Turn deadlines keep it moving (spec: Engine throws).
    */
   private timeOut(turn: number): void {
     if (!this.game || this.endedAt !== null) return;
-    let result;
-    try {
-      result = apply(this.game, { type: "TurnTimedOut", turn }, { actor: SYSTEM, now: this.now() });
-    } catch {
-      // The Room keeps its last good state (logging and reporting: #44).
+    const result = this.run(this.game, { type: "TurnTimedOut", turn }, SYSTEM);
+    if (result !== null && isRejection(result)) return;
+    if (result !== null && this.commit(result.state, result.events, "TurnTimedOut") === undefined) {
       return;
     }
-    // A failed write leaves the Turn as it was (retry and reporting: #44).
-    if (!isRejection(result)) this.commit(result.state, result.events);
+    const delay = Math.min(DEADLINE_RETRY_MS * 2 ** this.#deadlineRetries, DEADLINE_RETRY_MAX_MS);
+    this.#deadlineRetries += 1;
+    this.#cancelWakeUp?.();
+    this.#cancelWakeUp = this.scheduler.at(this.now() + delay, () => this.timeOut(turn));
   }
 
   /** The Lobby-list entry: what any Guest may see, so never the password or its hash. */

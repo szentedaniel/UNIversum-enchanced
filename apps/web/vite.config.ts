@@ -28,12 +28,17 @@ function boardAtlas(): Plugin {
 export default defineConfig(({ mode }) => {
   // Settings come from the root .env (see .env.example) or the environment.
   const env = { ...loadEnv(mode, repoRoot, ""), ...process.env };
+  const server = `http://127.0.0.1:${env["PORT"] ?? "2567"}`;
   const proxy = {
     [COLYSEUS_PATH]: {
-      target: `http://127.0.0.1:${env["PORT"] ?? "2567"}`,
+      target: server,
       ws: true,
       rewrite: (path: string) => path.slice(COLYSEUS_PATH.length) || "/",
     },
+    // Error reporting (spec: Observability → Errors): the client config and
+    // the Sentry envelope tunnel, served by the Room server behind Caddy too.
+    "/client-config": { target: server },
+    "/errors": { target: server },
   };
 
   return {
@@ -54,6 +59,8 @@ export default defineConfig(({ mode }) => {
       // Test-only hooks for Playwright (src/test-hooks.ts): on in dev, compiled
       // out of production builds unless TEST_HOOKS=1 (CI's e2e build).
       TEST_HOOKS_ENABLED: JSON.stringify(mode !== "production" || env["TEST_HOOKS"] === "1"),
+      // The git SHA, the same `release` as the server's (see Dockerfile/compose).
+      CLIENT_RELEASE: JSON.stringify(env["RELEASE"] || "dev"),
     },
     server: { proxy },
     preview: { proxy },

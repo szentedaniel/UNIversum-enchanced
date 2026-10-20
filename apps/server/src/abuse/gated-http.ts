@@ -17,6 +17,7 @@ import { matchMaker } from "@colyseus/core";
 import { GAME_ROOM, refusalMessage, type Refusal } from "@universum/protocol";
 import { REQUEST_ID_HEADER, type AbuseGuard, type RequestKind } from "#abuse/guard.ts";
 import { clientIp, ipBucket } from "#abuse/ip.ts";
+import type { BrowserRoutes } from "#http/browser-routes.ts";
 
 const MATCHMAKE = /^\/matchmake\/(\w+)\/([^/?#]+)/;
 
@@ -45,7 +46,7 @@ function refuse(req: IncomingMessage, res: ServerResponse, status: number, refus
 }
 
 /** The whole body, or `null` once it grows past `max` bytes. */
-function readBody(req: IncomingMessage, max: number): Promise<string | null> {
+export function readBody(req: IncomingMessage, max: number): Promise<string | null> {
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
     let size = 0;
@@ -70,12 +71,16 @@ function readBody(req: IncomingMessage, max: number): Promise<string | null> {
  */
 async function gate(
   guard: AbuseGuard,
+  routes: BrowserRoutes | undefined,
   req: IncomingMessage & { body?: unknown },
   res: ServerResponse,
   next: () => void,
 ): Promise<void> {
   const ip = clientIp(req.headers, req.socket.remoteAddress);
   if (ip !== undefined && req.headers["x-real-ip"] === undefined) req.headers["x-real-ip"] = ip;
+  // Browser routes (`/client-config`, `/errors`) come before matchmaking and
+  // are not part of Colyseus's router.
+  if (routes && (await routes.handle(req, res))) return;
   const match = req.method === "POST" ? MATCHMAKE.exec(req.url ?? "") : null;
   if (!match) return next();
   const [, method = "", room = ""] = match;
@@ -101,7 +106,7 @@ async function gate(
 }
 
 /** A `node:http` server for the WebSocket transport, gated by `guard`. */
-export function createGatedHttpServer(guard: AbuseGuard): Server {
+export function createGatedHttpServer(guard: AbuseGuard, routes?: BrowserRoutes): Server {
   const server = createServer();
   const emit = server.emit.bind(server) as (event: string | symbol, ...args: unknown[]) => boolean;
   // Intercepting `emit` puts the gate in front of every listener, whatever
@@ -109,7 +114,7 @@ export function createGatedHttpServer(guard: AbuseGuard): Server {
   server.emit = ((event: string | symbol, ...args: unknown[]): boolean => {
     const [req, second] = args;
     if (event === "request" && req instanceof IncomingMessage && second instanceof ServerResponse) {
-      gate(guard, req, second, () => emit(event, ...args)).catch(() => {
+      gate(guard, routes, req, second, () => emit(event, ...args)).catch(() => {
         if (!second.headersSent) refuse(req, second, 500, { code: "INTERNAL" });
       });
       return true;

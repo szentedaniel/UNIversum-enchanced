@@ -57,6 +57,10 @@ The server logs NDJSON (pino) on stdout: `info` in the image, `debug` under `pnp
 which is never published nor routed by Caddy. To build with the git SHA as the release
 (`build_info{release}`): `RELEASE=$(git rev-parse --short HEAD) docker compose build`.
 
+Error reporting is off unless `SENTRY_DSN` is set in `.env` (any Sentry-protocol tracker). The
+server then reports engine failures and crashes, and the browser sends its errors through `/errors`;
+the tunnel strips the IP and every token before forwarding. With no DSN, neither SDK sends anything.
+
 ### Monitoring (opt-in)
 
 ```sh
