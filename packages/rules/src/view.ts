@@ -4,6 +4,12 @@ import { autoSellPicks } from "#rules/charge.ts";
 import { rentOf, saleValueOf, valueOf, wealthOf } from "#rules/pricing.ts";
 import type { FieldState, GameState, PlayerState } from "#state.ts";
 
+/**
+ * The Turn timer the ring shows: it runs for `limitMs` and empties at
+ * `endsAt`, which is the slack before `turnDeadline` (the slack is never shown).
+ */
+export type TurnTimer = { endsAt: number; limitMs: number };
+
 /** A Player as clients see them: their state plus the numbers the UI shows. */
 export type PlayerView = PlayerState & {
   /** Cash plus the Value of their Fields; the podium ranks by it (R77). */
@@ -29,12 +35,8 @@ export type FieldView = FieldState & {
 export type PublicView = Omit<GameState, "rng" | "fields" | "players"> & {
   fields: FieldView[];
   players: PlayerView[];
-  /**
-   * The Turn timer ring: it runs for `limitMs` and empties at `endsAt`, which
-   * is the slack before `turnDeadline` (the slack is never shown). `null`
-   * once the game is over.
-   */
-  turnTimer: { endsAt: number; limitMs: number } | null;
+  /** The Turn timer ring; `null` once the game is over. */
+  turnTimer: TurnTimer | null;
   /** During a Sale, the Fields Auto-sell would sell (R68); `null` outside a Sale. */
   autoSell: FieldId[] | null;
 };

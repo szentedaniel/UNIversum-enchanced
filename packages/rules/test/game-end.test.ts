@@ -48,18 +48,18 @@ describe("game end", () => {
   });
 });
 
+/** p2's and p3's cash: p1 ends the Turn on a 400,000 Museum, for 900,000 Wealth. */
+function threePlayers(p2: number, p3: number): GameState {
+  const state = withPlayer(withPlayer(newGame({ players: 3 }), "p2", { cash: p2 }), "p3", {
+    cash: p3,
+  });
+  return withPlayer(state, "p1", { cash: 500_000 });
+}
+
 describe("the Minute limit", () => {
   const ENDS_AT = T0 + 50 * 60_000;
 
   const timeUp = (state: GameState): Applied => endTurn(state, ENDS_AT);
-
-  /** p2's wealth, p3's wealth: p1 ends the Turn on a 400,000 Museum, for 900,000. */
-  function threePlayers(p2: number, p3: number): GameState {
-    const state = withPlayer(withPlayer(newGame({ players: 3 }), "p2", { cash: p2 }), "p3", {
-      cash: p3,
-    });
-    return withPlayer(state, "p1", { cash: 500_000 });
-  }
 
   it("R77: the game ends after the Turn in progress, and the most Wealthy non-Bankrupt Player wins", () => {
     const applied = timeUp(threePlayers(1_500_000, 1_000_000));
@@ -203,19 +203,19 @@ describe("a Bankrupt Player leaving", () => {
   });
 });
 
-describe("after the game ends", () => {
-  /** p1 rolling onto Berlin at Level 4 ends the Turn, and p2, p3 and p4 are Bankrupt. */
-  const ended = (): Applied => {
-    const bankrupt = { bankrupt: true, cash: 0 };
-    return endTurn(
-      withPlayer(
-        withPlayer(withPlayer(newGame({ players: 4 }), "p2", bankrupt), "p3", bankrupt),
-        "p4",
-        bankrupt,
-      ),
-    );
-  };
+/** p1 rolling onto a Museum they own ends the Turn, and p2, p3 and p4 are Bankrupt. */
+function ended(): Applied {
+  const bankrupt = { bankrupt: true, cash: 0 };
+  return endTurn(
+    withPlayer(
+      withPlayer(withPlayer(newGame({ players: 4 }), "p2", bankrupt), "p3", bankrupt),
+      "p4",
+      bankrupt,
+    ),
+  );
+}
 
+describe("after the game ends", () => {
   it("R80: no Player intent is accepted any more", () => {
     const { state } = ended();
 

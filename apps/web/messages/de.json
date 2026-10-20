@@ -219,5 +219,13 @@
   "rejection_rate_limited": "Zu viele Versuche. Bitte warte einen Moment.",
   "rejection_server_busy": "Der Server ist gerade ausgelastet. Bitte versuche es später noch einmal.",
   "rejection_slow_down": "Nicht so schnell! Einige deiner Züge wurden ignoriert.",
-  "retry_in": "Erneut in {seconds} s"
+  "retry_in": "Erneut in {seconds} s",
+  "podium_wins": "{name} gewinnt!",
+  "podium_reason_last_player": "Der letzte verbliebene Spieler.",
+  "podium_reason_time_up": "Die Zeit ist um.",
+  "podium_reason_super_monopoly": "Alle vier Museen: ein Supermonopol!",
+  "podium_reason_monopolies": "Drei Monopole.",
+  "podium_place": "Platz {place}",
+  "podium_wealth": "Vermögen: {amount}",
+  "event_game_ended": "{name} hat das Spiel gewonnen!"
 }

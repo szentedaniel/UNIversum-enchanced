@@ -80,7 +80,7 @@ export function Board() {
         clearTimeout(warningTimer);
         const { push } = roomStore.getState();
         const sale = currentSale();
-        if (!push || !sale) return renderer.setPick(null);
+        if (!push || !sale || push.view.turnTimer === null) return renderer.setPick(null);
         // The tray replaces the Field card during the Sale.
         if (uiStore.getState().selectedField !== null) uiStore.getState().selectField(null);
         const msLeft = push.view.turnTimer.endsAt - (Date.now() + push.clockOffset);

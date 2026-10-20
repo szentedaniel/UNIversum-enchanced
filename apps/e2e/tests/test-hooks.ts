@@ -18,15 +18,29 @@ export type ViewSummary = {
 };
 export type Camera = { scale: number; x: number; y: number };
 export type PickMarks = { pickable: number[]; picked: number[]; ringed: number[] };
+/** A Player as a full pushed view carries them (PlayerView). */
+export type ViewPlayer = {
+  id: string;
+  seat: number;
+  name: { adjective: string; noun: string };
+  cash: number;
+  wealth: number;
+  position: number;
+  bankrupt: boolean;
+  quarantineRounds: number | null;
+  hasPcrTest: boolean;
+};
+
 /** The parts of a full pushed view (PublicView) that specs change before `showView`. */
 export type FullView = {
+  turn: number;
   currentPlayer: string;
   phase: unknown;
-  players: { id: string; bankrupt: boolean }[];
+  players: ViewPlayer[];
   fields: { owner: string | null; level: number; value: number; rent: number; sale: number }[];
   autoSell: number[] | null;
-  turnDeadline: number;
-  turnTimer: { endsAt: number; limitMs: number };
+  turnDeadline: number | null;
+  turnTimer: { endsAt: number; limitMs: number } | null;
 };
 
 declare global {
