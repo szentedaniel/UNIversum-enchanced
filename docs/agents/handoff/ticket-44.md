@@ -32,7 +32,11 @@ Branch `ticket/44-errors`. Builds on #25 (deadline), #34 (store), #37 (limiter),
   trailing newline**, so a lengthless item's payload runs to the next newline or to the end of the
   envelope. `sanitizeEvent` strips whole keys named like
   `guestToken`/`token`/`reconnectionToken`/`password`/`ip_address`, and request
-  headers/cookies/env, at every depth (arrays included).
+  headers/cookies/env, at every depth (arrays included). It also scrubs string
+  **values**: any `key=value` pair named `reconnectionToken`/`guestToken`/`token`/`password`
+  (case-insensitive) keeps its key and gets `[Filtered]`, and any bare 32-hex Guest token is
+  replaced with `[Filtered]`; this covers breadcrumb URLs, `request.url`,
+  `request.query_string` and exception messages.
 - `http/browser-routes.ts` (`createBrowserRoutes({dsn, guard, log})`) serves:
   - `GET /client-config` → `{ errorReporting: boolean }` (always 200; 405 otherwise).
   - `POST /errors` → 404 when `dsn` is null; else 10/min per IP
