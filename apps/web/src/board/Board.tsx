@@ -30,15 +30,20 @@ function currentPick() {
 
 /**
  * A tap on the Board: during this client's pick it selects the (pickable)
- * Field and never commits; otherwise it opens the Field card.
+ * Field and never commits; in inspect mode it opens any Field's card instead;
+ * otherwise it opens the Field card.
  */
 function onFieldTap(id: FieldId | null): void {
   const sale = currentSale();
+  const pick = sale ? null : currentPick();
+  if ((sale || pick) && uiStore.getState().inspect) {
+    uiStore.getState().selectField(id);
+    return;
+  }
   if (sale) {
     if (id !== null) uiStore.getState().toggleSalePick(sale.key, id);
     return;
   }
-  const pick = currentPick();
   if (pick) {
     if (id !== null) uiStore.getState().choosePick(pick.key, id);
     return;
@@ -89,6 +94,24 @@ export function Board() {
       created = renderer;
       const first = roomStore.getState().push;
       if (first) renderer.update(first.view, []);
+      /** The decision the marks belong to; a new one starts without focus or inspect mode. */
+      let pickKey: string | null = null;
+
+      /** Rings and reveals the focused Field: the open card's, else the checklist row's. */
+      const applySelection = () => {
+        const { selectedField, pickFocus } = uiStore.getState();
+        const id = selectedField ?? pickFocus;
+        renderer.setSelected(id);
+        cancelAnimationFrame(revealFrame);
+        if (id === null) return;
+        // After React has laid out the card/tray: pan only if the Field is hidden.
+        revealFrame = requestAnimationFrame(() => {
+          const obstacles = [...document.querySelectorAll(OBSTACLES)].map((el) =>
+            el.getBoundingClientRect(),
+          );
+          renderer.reveal(id, obstacles);
+        });
+      };
 
       /** Marks this client's open pick on the Board, and wakes up again when the last seconds start. */
       const syncPick = () => {
@@ -96,9 +119,14 @@ export function Board() {
         const { push } = roomStore.getState();
         const sale = currentSale();
         const pick = currentPick();
+        const key = sale?.key ?? pick?.key ?? null;
+        if (key !== pickKey) {
+          pickKey = key;
+          uiStore.getState().focusPick(null);
+          uiStore.getState().setInspect(false);
+          if (uiStore.getState().selectedField !== null) uiStore.getState().selectField(null);
+        }
         if (!push || (!sale && !pick)) return renderer.setPick(null);
-        // The tray replaces the Field card during a pick.
-        if (uiStore.getState().selectedField !== null) uiStore.getState().selectField(null);
         if (pick) {
           const field = selectedPick(pick, uiStore.getState().singlePick);
           return renderer.setPick(singleMarks(pick, field));
@@ -122,19 +150,18 @@ export function Board() {
         ),
         uiStore.subscribe((state) => state.salePicks, syncPick),
         uiStore.subscribe((state) => state.singlePick, syncPick),
+        uiStore.subscribe((state) => state.selectedField, applySelection, {
+          fireImmediately: true,
+        }),
+        uiStore.subscribe((state) => state.pickFocus, applySelection),
         uiStore.subscribe(
-          (state) => state.selectedField,
-          (id) => {
-            renderer.setSelected(id);
-            cancelAnimationFrame(revealFrame);
-            if (id === null) return;
-            // After React has laid out the card: pan only if the Field is hidden.
-            revealFrame = requestAnimationFrame(() => {
-              const obstacles = [...document.querySelectorAll(OBSTACLES)].map((el) =>
-                el.getBoundingClientRect(),
-              );
-              renderer.reveal(id, obstacles);
-            });
+          (state) => state.inspect,
+          (on) => {
+            renderer.setInspect(on);
+            // Leaving inspect mode closes the Field card; the tray returns.
+            if (!on && uiStore.getState().selectedField !== null) {
+              uiStore.getState().selectField(null);
+            }
           },
           { fireImmediately: true },
         ),
