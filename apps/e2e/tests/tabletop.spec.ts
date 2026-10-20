@@ -99,6 +99,41 @@ test("Lobby and game screens: Seat cards, then Player cards or chips around the 
       // The current Player's card is larger.
       expect(first!.width).toBeGreaterThan(second!.width);
     }
+
+    // A landscape phone (852×393) is too short for the desktop layout: the Board
+    // keeps a tall fit area and the Field card becomes a strip at the bottom
+    // (story 103), never a side column.
+    await page.setViewportSize({ width: 852, height: 393 });
+    // The layout switches on the media-query change, then the camera re-fits.
+    await expect(page.getByTestId("player-chip")).toHaveCount(2);
+    const fit = await page.locator(".board-fit-area").boundingBox();
+    expect(fit!.height).toBeGreaterThanOrEqual(200);
+    let scale = -1;
+    await expect
+      .poll(async () => {
+        const now = await page.evaluate(() => window.universumTest?.camera().scale ?? 0);
+        const still = now > 0 && now === scale;
+        scale = now;
+        return still;
+      })
+      .toBe(true);
+
+    // Tap a Field the compact card does not cover: pick one whose centre is on
+    // the canvas (the turn card sits over the Board's bottom in this layout).
+    const target = await page.evaluate(() => {
+      const hooks = window.universumTest!;
+      for (let id = 0; id < 32; id++) {
+        const at = hooks.fieldCenter(id);
+        if (document.elementFromPoint(at.x, at.y)?.tagName === "CANVAS") return at;
+      }
+      return null;
+    });
+    expect(target).not.toBeNull();
+    if (isMobile) await page.touchscreen.tap(target!.x, target!.y);
+    else await page.mouse.click(target!.x, target!.y);
+    const card = await page.getByTestId("field-card").boundingBox();
+    expect(card!.y + card!.height).toBeGreaterThan(393 - 20);
+    expect(card!.width).toBeGreaterThan(300);
   } finally {
     await other.close();
   }

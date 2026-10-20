@@ -15,8 +15,9 @@
 @import "@fontsource/sigmar-one/latin-ext.css";
 @import "@fontsource-variable/nunito/wght.css";
 
-/* "Desktop" layouts: wide and landscape (corner Player cards, side camera). */
-@custom-variant wide (@media (min-width: 48rem) and (orientation: landscape));
+/* "Desktop" layouts: wide and landscape with enough height for the corner
+   cards (a landscape phone is shorter than 36rem and keeps the phone layout). */
+@custom-variant wide (@media (min-width: 48rem) and (orientation: landscape) and (min-height: 36rem));
 
 :root {
   --background: #ffe8cc;

@@ -419,12 +419,16 @@ export function Game() {
         ))}
       </ul>
       <div className="mt-2 flex min-w-0 items-center justify-center gap-2 px-2">{statusRow}</div>
-      {/* The card overlays the Board's bottom (the right side in landscape). The Board
-          fits above it and below the camera buttons, into space reserved whether or not
-          a card is open, so opening the Field card never changes the zoom. */}
-      <div className="relative mt-2 min-h-0 flex-1 [--board-inset-bottom:14rem] [--board-inset-top:3.75rem] landscape:[--board-inset-bottom:0px] landscape:[--board-inset-right:17.5rem]">
+      {/* The card overlays the Board's bottom. The Board fits above it and below
+          the camera buttons, into space reserved whether or not a card is open,
+          so opening the Field card never changes the zoom. A landscape phone is
+          short: the card stays a compact strip at the bottom and the Board fits
+          the whole space above the top row instead. */}
+      <div className="relative mt-2 min-h-0 flex-1 [--board-inset-bottom:14rem] [--board-inset-top:3.75rem] landscape:[--board-inset-bottom:0px] landscape:[--board-inset-right:3.5rem] landscape:[--board-inset-top:0px]">
         <Board />
-        <div className="absolute inset-x-2 bottom-0 landscape:left-auto landscape:w-64">{card}</div>
+        <div className="absolute inset-x-2 bottom-0 landscape:mx-auto landscape:max-w-md">
+          {card}
+        </div>
       </div>
     </main>
   );
