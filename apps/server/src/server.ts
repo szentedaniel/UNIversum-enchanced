@@ -1,7 +1,12 @@
-import { LobbyRoom, matchMaker, Server } from "@colyseus/core";
+import { LobbyRoom, matchMaker, Server, type AuthContext } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
-import { GAME_ROOM, LOBBY_ROOM } from "@universum/protocol";
+import { GAME_ROOM, LOBBY_ROOM, refusalMessage } from "@universum/protocol";
+import { createGatedHttpServer } from "#abuse/gated-http.ts";
+import { AbuseGuard } from "#abuse/guard.ts";
+import { ipBucket } from "#abuse/ip.ts";
+import { DEFAULT_LIMITS, type Limits } from "#limits.ts";
 import { migrate } from "@universum/rules";
+import { createIpTagger, limiterRefused } from "#observability/limiter-refusals.ts";
 import { colyseusLogger, silentLogger, type Logger } from "#observability/logger.ts";
 import { GameMetrics } from "#observability/metrics.ts";
 import { GameRoom, restoreOptions } from "#room/game-room.ts";
@@ -20,23 +25,41 @@ export type GameServerOptions = {
   metrics?: GameMetrics;
   /** The server's logger, also handed to Colyseus; silent by default. */
   log?: Logger;
+  /** Abuse-protection limits (`config.limits`); the spec's defaults when left out. */
+  limits?: Limits;
 };
 
 /** The Colyseus server with every Room type defined, not yet listening. */
 export function createGameServer(options: GameServerOptions): Server {
+  const { store, metrics = new GameMetrics({ release: "dev" }), log = silentLogger } = options;
+  const ipTag = createIpTagger();
+  const guard = new AbuseGuard(options.limits ?? DEFAULT_LIMITS, (limit, bucket) =>
+    limiterRefused({ log, metrics, ipTag }, limit, bucket),
+  );
+  const transport = new WebSocketTransport({
+    server: createGatedHttpServer(guard),
+    maxPayload: guard.limits.maxPayloadBytes,
+    beforeUpgrade: (_request, context) => {
+      const refusal = guard.socketRefusal(ipBucket(context.ip));
+      return refusal ? new Response(refusalMessage(refusal), { status: 429 }) : undefined;
+    },
+  });
   const server = new Server({
-    transport: new WebSocketTransport(),
+    transport,
     greet: false,
     gracefullyShutdown: options.gracefullyShutdown ?? true,
-    logger: colyseusLogger(options.log ?? silentLogger),
+    logger: colyseusLogger(log),
   });
   const scheduler = options.scheduler ?? systemScheduler;
-  const { store, metrics = new GameMetrics({ release: "dev" }), log = silentLogger } = options;
   server
     .define(
       GAME_ROOM,
       class extends GameRoom {
+        static override onAuth(_token: string, roomOptions: unknown, context: AuthContext) {
+          return GameRoom.authorize(guard, roomOptions, context);
+        }
         override scheduler = scheduler;
+        override guard = guard;
         override store = store;
         override metrics = metrics;
         override log = log;

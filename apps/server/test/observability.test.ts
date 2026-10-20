@@ -91,6 +91,43 @@ describe("metrics", () => {
   });
 });
 
+describe("limiter refusals", () => {
+  it("count by limit and log the limit with an IP tag, never the IP", async () => {
+    const capture = captureLogs();
+    server = await startTestServer({
+      limits: { roomCreationsPerMinute: 1 },
+      log: createLogger({ level: "info", stream: capture.stream }),
+    });
+    const guest = server.from("203.0.113.77");
+    await guest.create();
+
+    await expect(guest.create()).rejects.toThrow();
+
+    const scrape = await server.metrics.scrape();
+    expect(sample(scrape, 'limiter_refusals_total{limit="room_creations_per_minute"}')).toBe(1);
+    expect(sample(scrape, 'limiter_refusals_total{limit="joins_per_minute"}')).toBe(0);
+    expect(capture.lines().filter((l) => l["msg"] === "limit refused")).toEqual([
+      expect.objectContaining({
+        limit: "room_creations_per_minute",
+        ipTag: expect.stringMatching(/^[0-9a-f]{8}$/),
+      }),
+    ]);
+    expect(capture.text()).not.toContain("203.0.113");
+  });
+
+  it("count an intent flood once it is slowed down", async () => {
+    server = await startTestServer({ limits: { intentsPerSecond: 2 } });
+    const alice = await server.create({ maxPlayers: 2 });
+
+    for (let i = 0; i < 4; i++) alice.send({ type: "Start" });
+    await alice.until("rejected", (r) => r.code === "SLOW_DOWN");
+
+    const scrape = await server.metrics.scrape();
+    expect(sample(scrape, 'limiter_refusals_total{limit="intent_flood"}')).toBe(1);
+    expect(sample(scrape, 'rejections_total{code="SLOW_DOWN"}')).toBe(1);
+  });
+});
+
 describe("logs", () => {
   it("say which Rooms came back at boot, as Lobbies or running games", async () => {
     server = await startTestServer();

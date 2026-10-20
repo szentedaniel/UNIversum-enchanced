@@ -18,11 +18,14 @@ import {
   type LobbyListing,
   type LobbyListingMetadata,
   type LobbyMessage,
+  matchmakeRefusal,
+  type Refusal,
   type RejectionMessage,
   type WelcomeMessage,
 } from "@universum/protocol";
 import type { Logger } from "#observability/logger.ts";
 import { GameMetrics } from "#observability/metrics.ts";
+import { DEFAULT_LIMITS, type Limits } from "#limits.ts";
 import { GameRoom } from "#room/game-room.ts";
 import type { Scheduler } from "#room/scheduler.ts";
 import { createGameServer, restoreRooms } from "#server.ts";
@@ -89,7 +92,29 @@ export class ManualScheduler implements Scheduler {
   }
 }
 
+/**
+ * Test servers keep the production limits, except the per-IP ones every test
+ * Guest shares (they all come from 127.0.0.1), which are raised as e2e does.
+ */
+export const TEST_LIMITS: Limits = {
+  ...DEFAULT_LIMITS,
+  roomCreationsPerMinute: 10_000,
+  roomCreationsPerHour: 10_000,
+  openLobbiesPerIp: 10_000,
+  joinsPerMinute: 10_000,
+  seatReservationsPerIp: 10_000,
+  socketsPerIp: 10_000,
+};
+
+/** A Guest on its own IP (sent as `X-Real-IP`, as Caddy does). */
+export type TestGuest = {
+  create(options?: CreateOptions): Promise<TestClient>;
+  join(code: string, options?: Omit<JoinOptions, "code">): Promise<TestClient>;
+};
+
 export type TestServerOptions = {
+  /** Abuse-protection limits over `TEST_LIMITS`. */
+  limits?: Partial<Limits>;
   /** The SQLite file; a new temp file by default. Pass the last server's to restart on it. */
   databasePath?: string;
   /** The clock; a new `ManualScheduler` at `T0` by default. */
@@ -102,6 +127,7 @@ export type TestServerOptions = {
 
 export type TestServer = {
   sdk: Client;
+  port: number;
   /** Every Room's clock and wake-ups. */
   scheduler: ManualScheduler;
   /** The SQLite file, to start the next server on after `stop()`. */
@@ -123,6 +149,17 @@ export type TestServer = {
    * a restored game's Seats have no connection until rejoin lands (#35).
    */
   room(code: string): GameRoom | undefined;
+  /** A Guest whose requests come from `ip`. */
+  from(ip: string): TestGuest;
+  /**
+   * A raw matchmaking request from `ip` that never opens its WebSocket (the
+   * Seat, if any, stays reserved until it lapses). `null`: accepted.
+   */
+  matchmake(
+    path: string,
+    body: unknown,
+    options?: { ip?: string; rawBody?: string },
+  ): Promise<Refusal | null>;
   /** Shuts down the way a deploy does (clients still connected), then closes the store. */
   stop(): Promise<void>;
 };
@@ -140,30 +177,60 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
   const store = options.wrapStore?.(sqlite) ?? sqlite;
   const metrics = new GameMetrics({ release: "test" });
   const { log } = options;
-  const server = createGameServer({ gracefullyShutdown: false, scheduler, store, metrics, log });
+  const server = createGameServer({
+    gracefullyShutdown: false,
+    scheduler,
+    store,
+    limits: { ...TEST_LIMITS, ...options.limits },
+    metrics,
+    log,
+  });
   await server.listen(0, "127.0.0.1");
   const restored = await restoreRooms({ store, scheduler, metrics, log });
   const address = server.transport.server?.address();
   if (!address || typeof address === "string") throw new Error("the server has no TCP port");
-  const sdk = new Client(`ws://127.0.0.1:${address.port}`);
+  const { port } = address;
+  const sdk = new Client(`ws://127.0.0.1:${port}`);
   const clients: { leave(): Promise<void> }[] = [];
   const track = <T extends { leave(): Promise<void> }>(client: T) => {
     clients.push(client);
     return client;
   };
+  const guest = (client: Client): TestGuest => ({
+    create: async (createOptions = {}) =>
+      track(new TestClient(await client.create(GAME_ROOM, createOptions))),
+    join: async (code, joinOptions = {}) =>
+      track(
+        new TestClient(await client.joinById(code, { code, ...joinOptions } satisfies JoinOptions)),
+      ),
+  });
   return {
     sdk,
+    port,
     scheduler,
     databasePath,
     store,
     restored,
     metrics,
-    create: async (createOptions = {}) =>
-      track(new TestClient(await sdk.create(GAME_ROOM, createOptions))),
-    join: async (code, joinOptions = {}) =>
-      track(
-        new TestClient(await sdk.joinById(code, { code, ...joinOptions } satisfies JoinOptions)),
-      ),
+    ...guest(sdk),
+    from: (ip) => guest(new Client(`ws://127.0.0.1:${port}`, { headers: { "x-real-ip": ip } })),
+    async matchmake(path, body, { ip, rawBody } = {}) {
+      const response = await fetch(`http://127.0.0.1:${port}/matchmake/${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(ip && { "x-real-ip": ip }) },
+        body: rawBody ?? JSON.stringify(body),
+      });
+      if (response.ok) return null;
+      const answer: unknown = await response.json();
+      const error =
+        typeof answer === "object" &&
+        answer !== null &&
+        "error" in answer &&
+        typeof answer.error === "string"
+          ? answer.error
+          : "";
+      return matchmakeRefusal({ code: response.status, message: error });
+    },
     watchLobbyList: async () => track(new TestLobbyList(await sdk.joinOrCreate(LOBBY_ROOM))),
     room(code) {
       const room = matchMaker.getLocalRoomById(code);

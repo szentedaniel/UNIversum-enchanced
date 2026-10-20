@@ -58,8 +58,10 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     }
 
     // Turns: the first Seat (the creator) rolls first, then play alternates. The
-    // first University offer is bought at Level 1; later offers are declined.
+    // first University offer is bought at Level 1 and the first Museum offer is
+    // taken; later offers (and every Buyout) are declined.
     let bought: { field: number; owner: string } | null = null;
+    let museum = null as { field: number; owner: string } | null;
     const press = (page: Page, name: string | RegExp) => {
       const button = page.getByRole("button", { name });
       return page === phone ? button.tap() : button.click();
@@ -70,7 +72,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
       // Not `exact`: a Player who landed on Quarantine gets "Roll for 12"
       // instead, which also ends the Turn (or, on a 12, may stop at an offer).
       await press(roller, "Roll");
-      // The roll ends the Turn, or stops at a University offer.
+      // The roll ends the Turn, or stops at an offer.
       await expect
         .poll(async () => {
           const view = await viewOf(roller);
@@ -81,11 +83,19 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
       if (view?.phase.kind === "offer") {
         await expect(roller.getByTestId("offer")).toBeVisible();
         await expect(waiter.getByTestId("offer")).toHaveCount(0);
-        if (bought) {
-          await press(roller, "Decline");
-        } else {
+        const { field, levels = [], museum: museumPrice, buyout } = view.phase;
+        const taken = { field: field!, owner: view.currentPlayer };
+        if (!bought && levels.length > 0) {
           await press(roller, /^Level 1 · /);
-          bought = { field: view.phase.field!, owner: view.currentPlayer };
+          bought = taken;
+        } else if (!museum && museumPrice !== undefined) {
+          await press(roller, /^Buy · /);
+          museum = taken;
+        } else {
+          if (buyout !== undefined) {
+            await expect(roller.getByRole("button", { name: /^Buy out · / })).toBeVisible();
+          }
+          await press(roller, "Decline");
         }
       }
       await Promise.all(
@@ -107,6 +117,12 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     const { field, owner } = bought!;
     expect(desktopView?.fields[field]).toMatchObject({ owner, level: 1 });
     expect(desktopView?.fields[field]?.value).toBeGreaterThan(0);
+    if (museum) {
+      expect(desktopView?.fields[museum.field]).toMatchObject({
+        owner: museum.owner,
+        value: 400_000,
+      });
+    }
 
     // Tapping a Field on the Board (found through the test hook) opens its card.
     // The last push's toast can still re-flow the screen and resize the Board,

@@ -28,6 +28,8 @@ const PLAYER_INTENT_SCHEMAS = [
   z.strictObject({ type: z.literal("Roll"), turn }),
   z.strictObject({ type: z.literal("BuyLevel"), turn, level: z.int().min(1).max(MAX_LEVEL) }),
   z.strictObject({ type: z.literal("DeclineOffer"), turn }),
+  z.strictObject({ type: z.literal("Buyout"), turn }),
+  z.strictObject({ type: z.literal("BuyMuseum"), turn }),
   z.strictObject({ type: z.literal("RollForTwelve"), turn }),
   z.strictObject({ type: z.literal("BuyPcrTest"), turn }),
   z.strictObject({ type: z.literal("UsePcrTest"), turn }),

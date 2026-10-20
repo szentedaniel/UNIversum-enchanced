@@ -6,7 +6,7 @@
  */
 import type { RejectionCode } from "@universum/protocol/messages";
 import type { PlayerName } from "@universum/rules";
-import type { FieldKind } from "@universum/rules/board";
+import { CHANCE_CARD_MONEY, type ChanceCardId, type FieldKind } from "@universum/rules/board";
 import { m } from "#paraglide/messages.js";
 import { getLocale } from "#paraglide/runtime.js";
 
@@ -118,9 +118,32 @@ const REJECTIONS: Record<RejectionCode, Message> = {
   ROOM_FULL: m.rejection_room_full,
   ROOM_NAME_INVALID: m.rejection_room_name_invalid,
   WRONG_PASSWORD: m.rejection_wrong_password,
+  ROOM_NAME_BLOCKED: m.rejection_room_name_blocked,
+  PASSWORD_LOCKED: m.rejection_password_locked,
+  RATE_LIMITED: m.rejection_rate_limited,
+  SERVER_BUSY: m.rejection_server_busy,
+  SLOW_DOWN: m.rejection_slow_down,
 };
 
 export const rejectionText = (code: RejectionCode): string => REJECTIONS[code]();
+
+const CHANCE_CARD_TEXTS: Record<ChanceCardId, { title: Message; text: Message }> = {
+  pcrTest: { title: m.chance_pcr_test_title, text: m.chance_pcr_test_text },
+  scholarship: {
+    title: m.chance_scholarship_title,
+    text: () => m.chance_scholarship_text({ amount: formatMoney(CHANCE_CARD_MONEY.scholarship) }),
+  },
+  failedExams: {
+    title: m.chance_failed_exams_title,
+    text: () => m.chance_failed_exams_text({ amount: formatMoney(-CHANCE_CARD_MONEY.failedExams) }),
+  },
+};
+
+/** A Chance card's title and text in the active language. */
+export const chanceCardText = (card: ChanceCardId): { title: string; text: string } => ({
+  title: CHANCE_CARD_TEXTS[card].title(),
+  text: CHANCE_CARD_TEXTS[card].text(),
+});
 
 /** A Room name; `null` (left empty by its creator) gets one made from the Room code. */
 export const roomNameText = (name: string | null, code: string): string =>

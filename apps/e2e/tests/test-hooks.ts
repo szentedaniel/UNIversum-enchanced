@@ -5,7 +5,15 @@ export type ViewSummary = {
   turn: number;
   version: number;
   currentPlayer: string;
-  phase: { kind: string; field?: number; levels?: { level: number; price: number }[] };
+  phase: {
+    kind: string;
+    field?: number;
+    levels?: { level: number; price: number }[];
+    /** The Museum's price on a Museum offer. */
+    museum?: number;
+    /** The Buyout price on a Buyout offer. */
+    buyout?: number;
+  };
   fields: { owner: string | null; level: number; value: number; rent: number }[];
 };
 export type Camera = { scale: number; x: number; y: number };

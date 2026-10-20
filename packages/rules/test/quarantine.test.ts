@@ -154,9 +154,10 @@ describe("the roll for 12", () => {
       "DiceRolled",
       "QuarantineReleased",
       "Moved",
-      "TurnPassed",
     ]);
-    expect(applied.state.currentPlayer).toBe("p1");
+    // Field 20 is an unowned Museum: the normal landing stops at its offer.
+    expect(applied.state.phase).toMatchObject({ kind: "offer", field: QUARANTINE + 12 });
+    expect(applied.state.currentPlayer).toBe("p2");
   });
 
   it("R42: any other roll uses up a round; the Player stays put and the Turn passes", () => {

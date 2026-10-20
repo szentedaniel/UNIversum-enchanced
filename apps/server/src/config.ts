@@ -1,5 +1,6 @@
 import { join, resolve } from "node:path";
 import { LOG_LEVELS, type LogLevel } from "#observability/logger.ts";
+import { loadLimits, type Limits } from "#limits.ts";
 
 /** Typed server settings. Every value comes from the environment, with dev defaults. */
 export type ServerConfig = {
@@ -9,6 +10,8 @@ export type ServerConfig = {
   host: string;
   /** Folder for the SQLite data (`DATA_DIR`). Gitignored in dev; a local volume in compose. */
   dataDir: string;
+  /** Abuse-protection limits (`LIMIT_*`, see `limits.ts`). */
+  limits: Limits;
   /** The SQLite file of the RoomStore, inside `dataDir`. */
   databasePath: string;
   /**
@@ -40,6 +43,7 @@ export function loadConfig(env: Env = process.env): ServerConfig {
     logLevel: parseLogLevel(env["LOG_LEVEL"], production ? "info" : "debug"),
     prettyLogs: !production,
     release: env["RELEASE"] || "dev",
+    limits: loadLimits(env),
   };
 }
 

@@ -22,7 +22,7 @@ const internal = await startInternalServer({
   metrics,
 });
 
-const server = createGameServer({ store, metrics, log });
+const server = createGameServer({ store, limits: config.limits, metrics, log });
 server.onBeforeShutdown(() => log.info("Server shutting down"));
 // Every Room has stopped (on SIGTERM/SIGINT) before the store closes.
 server.onShutdown(async () => {

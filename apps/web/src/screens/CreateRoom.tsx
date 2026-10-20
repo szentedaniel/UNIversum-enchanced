@@ -15,7 +15,7 @@ import { Card } from "#components/ui/card.tsx";
 import { Input } from "#components/ui/input.tsx";
 import { Label } from "#components/ui/label.tsx";
 import { createRoom, JoinError, leaveRoom } from "#connection.ts";
-import { AlertText, RejectionText } from "#screens/join.tsx";
+import { AlertText, RejectionText, retryAtOf, useCountdown, waitLabel } from "#screens/join.tsx";
 import { m } from "#text.ts";
 
 /** `/create`: the Room's settings, fixed from here on (R1, R3, R11). */
@@ -31,6 +31,8 @@ export function CreateRoom() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<RejectionCode | null>(null);
+  const [retryAt, setRetryAt] = useState<number | null>(null);
+  const wait = useCountdown(retryAt);
   const tooLong = utf8Length(password) > PASSWORD_MAX_BYTES;
 
   useEffect(() => {
@@ -39,9 +41,10 @@ export function CreateRoom() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (tooLong) return;
+    if (tooLong || wait > 0) return;
     setBusy(true);
     setError(null);
+    setRetryAt(null);
     try {
       const code = await createRoom({
         roomName,
@@ -52,6 +55,7 @@ export function CreateRoom() {
       await navigate(`/room/${code}`);
     } catch (e) {
       setError(e instanceof JoinError ? e.code : "INTERNAL");
+      setRetryAt(retryAtOf(e));
       setBusy(false);
     }
   }
@@ -113,8 +117,8 @@ export function CreateRoom() {
               />
             </div>
             {tooLong && <AlertText>{m.password_too_long()}</AlertText>}
-            <Button type="submit" size="lg" disabled={busy || tooLong}>
-              {m.home_create()}
+            <Button type="submit" size="lg" disabled={busy || tooLong || wait > 0}>
+              {waitLabel(wait, m.home_create())}
             </Button>
             {error && <RejectionText code={error} />}
           </form>

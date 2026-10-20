@@ -17,7 +17,8 @@
     "@prometheus-io/client": "catalog:",
     "@universum/protocol": "workspace:*",
     "@universum/rules": "workspace:*",
-    "pino": "catalog:"
+    "pino": "catalog:",
+    "rate-limiter-flexible": "catalog:"
   },
   "devDependencies": {
     "@colyseus/sdk": "catalog:",

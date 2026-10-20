@@ -15,19 +15,20 @@ export type RoomGauges = {
 export type MeteredRoom = { gauges(): RoomGauges };
 
 /**
- * The limiters whose refusals `limiter_refusals_total{limit}` counts: a closed
- * set, so the label never carries anything else. #37 owns these names; change
- * them here to match its limiters.
+ * The abuse limits whose refusals `limiter_refusals_total{limit}` counts (the
+ * `AbuseGuard` reports them): a closed set, so the label never carries
+ * anything else.
  */
 export const LIMITER_LIMITS = [
-  "room_creations",
-  "open_lobbies",
-  "joins",
-  "seat_reservations",
+  "room_creations_per_minute",
+  "room_creations_per_hour",
+  "joins_per_minute",
   "sockets",
+  "seat_reservations",
+  "open_lobbies",
+  "live_lobbies",
   "password_room",
   "password_ip",
-  "lobby_cap",
   "intent_flood",
 ] as const;
 export type LimiterLimit = (typeof LIMITER_LIMITS)[number];
@@ -205,7 +206,7 @@ export class GameMetrics {
     this.#seatReconnects.inc();
   }
 
-  /** An abuse limit refused a request (#37 calls this, through `limiterRefused`). */
+  /** An abuse limit refused a request (through `limiterRefused`). */
   limiterRefused(limit: LimiterLimit): void {
     this.#limiterRefusals.inc({ limit });
   }

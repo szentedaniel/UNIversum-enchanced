@@ -46,16 +46,16 @@ describe("a limiter refusal", () => {
       ipTag: createIpTagger(() => T0),
     };
 
-    limiterRefused(observe, "joins", "203.0.113.7");
-    limiterRefused(observe, "joins", "203.0.113.7");
+    limiterRefused(observe, "joins_per_minute", "203.0.113.7");
+    limiterRefused(observe, "joins_per_minute", "203.0.113.7");
 
-    expect(await metrics.scrape()).toContain('limiter_refusals_total{limit="joins"} 2');
+    expect(await metrics.scrape()).toContain('limiter_refusals_total{limit="joins_per_minute"} 2');
     expect(await metrics.scrape()).toContain('limiter_refusals_total{limit="sockets"} 0');
     expect(capture.lines()).toEqual([
       expect.objectContaining({
         level: 30,
         msg: "limit refused",
-        limit: "joins",
+        limit: "joins_per_minute",
         ipTag: observe.ipTag("203.0.113.7"),
       }),
       expect.objectContaining({ msg: "limit refused" }),

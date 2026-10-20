@@ -73,3 +73,11 @@ file, not the UI. A plain `docker compose up` starts neither, and `docker compos
 Manual check after packaging changes: run `docker compose up --build`, open http://localhost in two
 browsers (e.g. a desktop browser and a phone on the LAN at `http://<this machine's IP>`), create a
 Room in one, join it with the Room code in the other, start, and play a few Turns.
+
+## Third-party content
+
+The Room name word filter (`apps/server/src/room/blocked-words.ts`) is seeded from the
+[List of Dirty, Naughty, Obscene and Otherwise Bad Words](https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words)
+(LDNOOBW contributors, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)). Changes: some
+entries were removed and hu/de words, stems and a whitelist were added (listed in that file and in
+`word-filter.ts`).
