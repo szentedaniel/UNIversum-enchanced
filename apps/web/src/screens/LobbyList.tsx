@@ -6,13 +6,13 @@ import { ScreenHeader } from "#components/ScreenHeader.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { Card } from "#components/ui/card.tsx";
 import { leaveRoom, watchLobbyList } from "#connection.ts";
-import { JoinByCode, PasswordForm, RejectionText, useJoin } from "#screens/join.tsx";
+import { JoinByCode, PasswordForm, RejectionText, useJoin, waitLabel } from "#screens/join.tsx";
 import { m, roomNameText } from "#text.ts";
 
 /** `/rooms`: every open Lobby, live; a started game leaves the list. */
 export function LobbyList() {
   const [lobbies, setLobbies] = useState<LobbyListing[] | null>(null);
-  const { code: tried, asking, error, busy, join, ask } = useJoin();
+  const { code: tried, asking, error, busy, wait, join, ask } = useJoin();
 
   // Coming back to the list leaves any Room (its Lobby Seat is freed).
   useEffect(() => {
@@ -76,17 +76,21 @@ export function LobbyList() {
                         <Button
                           variant="accent"
                           className="mt-auto"
-                          disabled={busy}
+                          disabled={busy || wait > 0}
                           onClick={() =>
                             lobby.hasPassword ? ask(lobby.code) : void join(lobby.code)
                           }
                         >
-                          {m.home_join()}
+                          {waitLabel(wait, m.home_join())}
                         </Button>
                       )
                     )}
                     {current && asking && !full && (
-                      <PasswordForm busy={busy} onSubmit={(pw) => void join(lobby.code, pw)} />
+                      <PasswordForm
+                        busy={busy}
+                        wait={wait}
+                        onSubmit={(pw) => void join(lobby.code, pw)}
+                      />
                     )}
                     {current && error && <RejectionText code={error} />}
                   </Card>

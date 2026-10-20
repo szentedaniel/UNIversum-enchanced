@@ -5,6 +5,13 @@ import type { GameEvent, GameState } from "@universum/rules";
 export type StoredPassword = { salt: string; hash: string };
 
 /**
+ * A taken Seat as stored. `tokenHash`: the hash of its Guest's token, so the
+ * Guest can take the Seat back after a restart; `null` (or missing, in Rooms
+ * stored before Guest tokens) when the Guest sent none.
+ */
+export type StoredSeat = LobbySeat & { tokenHash?: string | null };
+
+/**
  * One Room as the store keeps it (one row per Room). The snapshot is the
  * source of truth: a restored Room is rebuilt from it alone.
  *
@@ -21,7 +28,7 @@ export type StoredRoom<G = GameState> = {
   /** The Room password's salt and scrypt hash (base64), or `null` for a Room without one. */
   password: StoredPassword | null;
   /** Taken Seats in join order. */
-  seats: LobbySeat[];
+  seats: StoredSeat[];
   /** The running game, or `null` while the Room is a Lobby. */
   game: G | null;
   /** When the game ended (epoch ms), or `null` while it is unfinished. */

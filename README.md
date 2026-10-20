@@ -52,6 +52,32 @@ docker compose down            # stop; add -v to also delete the saved Rooms
 
 Overrides go in `.env` (see `.env.example`), e.g. `HTTP_PORT=8080` when port 80 is taken.
 
+The server logs NDJSON (pino) on stdout: `info` in the image, `debug` under `pnpm dev` (pretty-printed),
+`LOG_LEVEL` overrides. Metrics are on the internal port at `/metrics` (with `/healthz` and `/readyz`),
+which is never published nor routed by Caddy. To build with the git SHA as the release
+(`build_info{release}`): `RELEASE=$(git rev-parse --short HEAD) docker compose build`.
+
+### Monitoring (opt-in)
+
+```sh
+docker compose --profile monitoring up -d   # + Prometheus (5 s scrape) and Grafana
+```
+
+Grafana opens the provisioned "UNIversum server" dashboard at http://127.0.0.1:3000 (read-only
+without login; admin password `GRAFANA_ADMIN_PASSWORD`, default `admin`), Prometheus is at
+http://127.0.0.1:9090. Both listen on loopback only; `GRAFANA_PORT` / `PROMETHEUS_PORT` move them.
+Prometheus keeps 15 days. The dashboard is `monitoring/grafana/dashboards/universum.json`: edit the
+file, not the UI. A plain `docker compose up` starts neither, and `docker compose down` needs
+`--profile monitoring` to stop them.
+
 Manual check after packaging changes: run `docker compose up --build`, open http://localhost in two
 browsers (e.g. a desktop browser and a phone on the LAN at `http://<this machine's IP>`), create a
 Room in one, join it with the Room code in the other, start, and play a few Turns.
+
+## Third-party content
+
+The Room name word filter (`apps/server/src/room/blocked-words.ts`) is seeded from the
+[List of Dirty, Naughty, Obscene and Otherwise Bad Words](https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words)
+(LDNOOBW contributors, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)). Changes: some
+entries were removed and hu/de words, stems and a whitelist were added (listed in that file and in
+`word-filter.ts`).

@@ -14,12 +14,16 @@
   "dependencies": {
     "@colyseus/core": "catalog:",
     "@colyseus/ws-transport": "catalog:",
+    "@prometheus-io/client": "catalog:",
     "@universum/protocol": "workspace:*",
-    "@universum/rules": "workspace:*"
+    "@universum/rules": "workspace:*",
+    "pino": "catalog:",
+    "rate-limiter-flexible": "catalog:"
   },
   "devDependencies": {
     "@colyseus/sdk": "catalog:",
     "@types/node": "catalog:",
+    "pino-pretty": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

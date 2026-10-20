@@ -4,6 +4,10 @@
   "connecting": "Kapcsolódás…",
   "connection_lost": "Megszakadt a kapcsolat a játékkal.",
   "back_home": "Vissza a főoldalra",
+  "reconnecting": "Újrakapcsolódás…",
+  "reconnecting_hint": "A helyedet megtartjuk.",
+  "seat_taken_elsewhere": "Ez a játék egy másik lapon van megnyitva.",
+  "seat_reconnecting": "Újrakapcsolódik {time}",
   "home_create": "Szoba létrehozása",
   "home_or_join": "vagy csatlakozz egy szobához a kódjával",
   "home_code_label": "Szobakód",
@@ -209,5 +213,11 @@
   "sale_remove": "{field} eltávolítása",
   "sale_auto_sell": "Automatikus",
   "sale_sell": "{count} eladása: {amount}",
-  "sale_waiting": "{name} mezőket ad el"
+  "sale_waiting": "{name} mezőket ad el",
+  "rejection_room_name_blocked": "Ez a szobanév nem engedélyezett. Kérlek, válassz másikat.",
+  "rejection_password_locked": "Túl sok hibás jelszó. Kérlek, várj egy kicsit.",
+  "rejection_rate_limited": "Túl sok próbálkozás. Kérlek, várj egy kicsit.",
+  "rejection_server_busy": "A szerver most túlterhelt. Kérlek, próbáld újra később.",
+  "rejection_slow_down": "Csak lassan! Néhány lépésedet figyelmen kívül hagytuk.",
+  "retry_in": "Újra {seconds} mp múlva"
 }

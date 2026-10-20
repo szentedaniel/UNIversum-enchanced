@@ -1,7 +1,14 @@
-import { LobbyRoom, matchMaker, Server } from "@colyseus/core";
+import { LobbyRoom, matchMaker, Server, type AuthContext } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
-import { GAME_ROOM, LOBBY_ROOM } from "@universum/protocol";
+import { GAME_ROOM, LOBBY_ROOM, refusalMessage } from "@universum/protocol";
+import { createGatedHttpServer } from "#abuse/gated-http.ts";
+import { AbuseGuard } from "#abuse/guard.ts";
+import { ipBucket } from "#abuse/ip.ts";
+import { DEFAULT_LIMITS, type Limits } from "#limits.ts";
 import { migrate } from "@universum/rules";
+import { createIpTagger, limiterRefused } from "#observability/limiter-refusals.ts";
+import { colyseusLogger, silentLogger, type Logger } from "#observability/logger.ts";
+import { GameMetrics } from "#observability/metrics.ts";
 import { GameRoom, restoreOptions } from "#room/game-room.ts";
 import { systemScheduler, type Scheduler } from "#room/scheduler.ts";
 import { deleteAfterRetention } from "#store/retention.ts";
@@ -14,23 +21,48 @@ export type GameServerOptions = {
   gracefullyShutdown?: boolean;
   /** The clock and wake-ups every Room uses (tests pass a manual one). */
   scheduler?: Scheduler;
+  /** Every Room's metrics (`/metrics` on the internal port); a fresh set by default. */
+  metrics?: GameMetrics;
+  /** The server's logger, also handed to Colyseus; silent by default. */
+  log?: Logger;
+  /** Abuse-protection limits (`config.limits`); the spec's defaults when left out. */
+  limits?: Limits;
 };
 
 /** The Colyseus server with every Room type defined, not yet listening. */
 export function createGameServer(options: GameServerOptions): Server {
+  const { store, metrics = new GameMetrics({ release: "dev" }), log = silentLogger } = options;
+  const ipTag = createIpTagger();
+  const guard = new AbuseGuard(options.limits ?? DEFAULT_LIMITS, (limit, bucket) =>
+    limiterRefused({ log, metrics, ipTag }, limit, bucket),
+  );
+  const transport = new WebSocketTransport({
+    server: createGatedHttpServer(guard),
+    maxPayload: guard.limits.maxPayloadBytes,
+    beforeUpgrade: (_request, context) => {
+      const refusal = guard.socketRefusal(ipBucket(context.ip));
+      return refusal ? new Response(refusalMessage(refusal), { status: 429 }) : undefined;
+    },
+  });
   const server = new Server({
-    transport: new WebSocketTransport(),
+    transport,
     greet: false,
     gracefullyShutdown: options.gracefullyShutdown ?? true,
+    logger: colyseusLogger(log),
   });
   const scheduler = options.scheduler ?? systemScheduler;
-  const { store } = options;
   server
     .define(
       GAME_ROOM,
       class extends GameRoom {
+        static override onAuth(_token: string, roomOptions: unknown, context: AuthContext) {
+          return GameRoom.authorize(guard, roomOptions, context);
+        }
         override scheduler = scheduler;
+        override guard = guard;
         override store = store;
+        override metrics = metrics;
+        override log = log;
       },
     )
     .enableRealtimeListing();
@@ -41,8 +73,10 @@ export function createGameServer(options: GameServerOptions): Server {
 export type RestoreOptions = {
   store: RoomStore;
   scheduler?: Scheduler;
+  /** Gets `rooms_restored` and `restore_duration_seconds`. */
+  metrics?: GameMetrics;
   /** Told about each stored Room that can't be restored (it stays stored). */
-  onError?: (code: string, error: unknown) => void;
+  log?: Logger;
 };
 
 /**
@@ -54,8 +88,10 @@ export type RestoreOptions = {
 export async function restoreRooms({
   store,
   scheduler = systemScheduler,
-  onError = () => {},
+  metrics,
+  log = silentLogger,
 }: RestoreOptions): Promise<number> {
+  const started = performance.now();
   let restored = 0;
   for (const stored of store.unfinished()) {
     try {
@@ -64,11 +100,12 @@ export async function restoreRooms({
       await matchMaker.createRoom(GAME_ROOM, restoreOptions({ ...stored, game }));
       restored += 1;
     } catch (error) {
-      onError(stored.code, error);
+      log.error({ roomCode: stored.code, err: error }, "Room not restored (it stays stored)");
     }
   }
   for (const { code, endedAt } of store.ended()) {
     deleteAfterRetention(store, scheduler, code, endedAt);
   }
+  metrics?.restored(restored, (performance.now() - started) / 1000);
   return restored;
 }

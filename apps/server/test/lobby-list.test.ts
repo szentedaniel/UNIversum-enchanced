@@ -189,10 +189,8 @@ describe("password Lobbies", () => {
   it("refuses a join that skips the password check by sending create options", async () => {
     const alice = await server.create({ password: "pw" });
 
-    // Options that are not join options skip onAuth's check, but onJoin holds them to the password.
-    await expect(server.sdk.joinById(alice.code, { maxPlayers: 4 })).rejects.toThrow(
-      "WRONG_PASSWORD",
-    );
+    // A joinById must carry join options: create options are refused before any Seat (MALFORMED).
+    expect(await refusal(server.sdk.joinById(alice.code, { maxPlayers: 4 }))).toBe("MALFORMED");
     // A join naming another Room code is checked against that Room, not this one.
     expect(await refusal(server.sdk.joinById(alice.code, { code: "100000" }))).toBe(
       "ROOM_NOT_FOUND",

@@ -38,7 +38,12 @@ declare global {
       pick(): PickMarks | null;
       /** Shows a made-up view (a full PublicView) as if the server had pushed it. */
       showView(view: FullView): void;
-      room(): { me: string | null; push: { view: FullView; clockOffset: number } | null };
+      /** The room store (only the fields the specs read). */
+      room(): {
+        me: string | null;
+        status: string;
+        push: { view: FullView; clockOffset: number } | null;
+      };
     };
   }
 }

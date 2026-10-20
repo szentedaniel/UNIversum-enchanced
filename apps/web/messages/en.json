@@ -4,6 +4,10 @@
   "connecting": "Connecting…",
   "connection_lost": "The connection to the game was lost.",
   "back_home": "Back to home",
+  "reconnecting": "Reconnecting…",
+  "reconnecting_hint": "Your Seat is kept for you.",
+  "seat_taken_elsewhere": "This game is open in another tab.",
+  "seat_reconnecting": "Reconnecting {time}",
   "home_create": "Create Room",
   "home_or_join": "or join a Room with its code",
   "home_code_label": "Room code",
@@ -209,5 +213,11 @@
   "sale_remove": "Remove {field}",
   "sale_auto_sell": "Auto-sell",
   "sale_sell": "Sell {count} for {amount}",
-  "sale_waiting": "{name} is selling Fields"
+  "sale_waiting": "{name} is selling Fields",
+  "rejection_room_name_blocked": "That Room name isn't allowed. Please choose another one.",
+  "rejection_password_locked": "Too many wrong passwords. Please wait a little.",
+  "rejection_rate_limited": "Too many attempts. Please wait a moment.",
+  "rejection_server_busy": "The server is busy right now. Please try again later.",
+  "rejection_slow_down": "Not so fast! Some of your moves were ignored.",
+  "retry_in": "Try again in {seconds} s"
 }

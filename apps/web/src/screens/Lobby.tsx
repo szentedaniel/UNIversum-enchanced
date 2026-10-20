@@ -3,11 +3,12 @@ import { Check, Copy, Lock, LockOpen, Timer, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useStore } from "zustand";
+import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ScreenHeader } from "#components/ScreenHeader.tsx";
 import { SeatCard } from "#components/SeatCard.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
-import { PasswordForm, RejectionText, useJoin } from "#screens/join.tsx";
+import { PasswordForm, RejectionText, retryAtOf, useCountdown, useJoin } from "#screens/join.tsx";
 import { roomStore } from "#stores/room-store.ts";
 import { m, playerName, roomNameText } from "#text.ts";
 
@@ -49,13 +50,34 @@ function RoomCodeSticker({ code }: { code: string }) {
   );
 }
 
+/** "Reconnecting 0:42": the time left until a held Seat is freed, by the server's clock. */
+function HeldCountdown({ until, clockOffset }: { until: number; clockOffset: number }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, []);
+
+  const seconds = Math.max(0, Math.ceil((until - (now + clockOffset)) / 1000));
+  const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  return (
+    <span data-testid="seat-held" className="tnum">
+      {m.seat_reconnecting({ time })}
+    </span>
+  );
+}
+
 export function Lobby() {
   const { code = "" } = useParams();
   const navigate = useNavigate();
   const lobby = useStore(roomStore, (s) => (s.code === code ? s.lobby : null));
   const me = useStore(roomStore, (s) => s.me);
+  const clockOffset = useStore(roomStore, (s) => s.lobbyClockOffset);
   const started = useStore(roomStore, (s) => s.code === code && s.push !== null);
   const [error, setError] = useState<RejectionCode | null>(null);
+  const [retryAt, setRetryAt] = useState<number | null>(null);
+  const wait = useCountdown(retryAt);
   const passwordJoin = useJoin();
   const { ask } = passwordJoin;
 
@@ -64,7 +86,10 @@ export function Lobby() {
     ensureJoined(code).catch((e: unknown) => {
       const rejection = e instanceof JoinError ? e.code : "INTERNAL";
       if (rejection === "WRONG_PASSWORD") ask(code);
-      else setError(rejection);
+      else {
+        setError(rejection);
+        setRetryAt(retryAtOf(e));
+      }
     });
   }, [code, ask]);
 
@@ -75,7 +100,7 @@ export function Lobby() {
   if (error) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-4 text-center">
-        <RejectionText code={error} />
+        <RejectionText code={error} wait={wait} />
         <Link to="/rooms" className={buttonVariants({ variant: "plain" })}>
           {m.back_to_list()}
         </Link>
@@ -92,6 +117,7 @@ export function Lobby() {
           <PasswordForm
             className="sticker rounded-ui bg-card p-4 text-card-foreground"
             busy={passwordJoin.busy}
+            wait={passwordJoin.wait}
             onSubmit={(pw) => void passwordJoin.join(code, pw)}
           />
           {passwordJoin.error && <RejectionText code={passwordJoin.error} />}
@@ -115,6 +141,7 @@ export function Lobby() {
   return (
     <div className="min-h-dvh pb-8">
       <ScreenHeader back="/rooms" label={m.back_to_list()} />
+      <ReconnectOverlay />
       <main className="mx-auto max-w-5xl px-4 pt-6">
         <div className="flex flex-col items-center gap-3 text-center">
           <h1 className="m-0 text-3xl font-black md:text-4xl">
@@ -131,6 +158,11 @@ export function Lobby() {
               you={seat.playerId === me}
               // Seats are in join order; while the creator stays, theirs is the first.
               creator={i === 0}
+              held={
+                seat.heldUntil === undefined ? undefined : (
+                  <HeldCountdown until={seat.heldUntil} clockOffset={clockOffset} />
+                )
+              }
             />
           ))}
           {open.map((i) => (
