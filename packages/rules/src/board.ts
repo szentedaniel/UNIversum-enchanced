@@ -109,3 +109,10 @@ export const START_FIELD: FieldId = 0;
 export const CHANCE_CARDS = ["pcrTest", "scholarship", "failedExams"] as const;
 
 export type ChanceCardId = (typeof CHANCE_CARDS)[number];
+
+/** What each Chance card pays (+) or charges (−) the Player who draws it (R34). */
+export const CHANCE_CARD_MONEY: Readonly<Record<ChanceCardId, number>> = {
+  pcrTest: 0,
+  scholarship: 200_000,
+  failedExams: -200_000,
+};

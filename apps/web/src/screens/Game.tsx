@@ -14,7 +14,7 @@ import { cn } from "#lib/utils.ts";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { roomStore } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
-import { fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
+import { chanceCardText, fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
 
 /** The newest event worth a toast, as text. */
 function describe(event: GameEvent, view: PublicView): string | null {
@@ -58,6 +58,20 @@ function describe(event: GameEvent, view: PublicView): string | null {
         owner: name(event.owner),
         amount: formatMoney(event.amount),
       });
+    case "CardDrawn":
+      return m.event_card_drawn({ name: name(event.player), ...chanceCardText(event.card) });
+    case "ChanceMoneyReceived":
+      return m.event_chance_money_received({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
+    case "ChanceChargePaid":
+      return m.event_chance_charge_paid({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
+    case "TaxPaid":
+      return m.event_tax_paid({ name: name(event.player), amount: formatMoney(event.amount) });
     default:
       return null;
   }

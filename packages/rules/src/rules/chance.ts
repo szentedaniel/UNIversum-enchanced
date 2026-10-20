@@ -3,8 +3,7 @@
  * 3 cards from the game's PRNG, never the last card drawn, and the card takes
  * effect at once with no confirmation (R33).
  */
-import { CHANCE_CARDS, type ChanceCardId } from "#board.ts";
-import { CHANCE_MONEY } from "#constants.ts";
+import { CHANCE_CARD_MONEY, CHANCE_CARDS, type ChanceCardId } from "#board.ts";
 import { randomInt } from "#rng.ts";
 import { charge } from "#rules/charge.ts";
 import type { Landing } from "#rules/landing.ts";
@@ -39,12 +38,13 @@ function drawCard(tx: Tx): ChanceCardId {
 const EFFECTS: Record<ChanceCardId, (tx: Tx, player: PlayerId) => void> = {
   pcrTest: () => {},
   scholarship: (tx, playerId) => {
-    playerById(tx, playerId).cash += CHANCE_MONEY;
-    emit(tx, { type: "ChanceMoneyReceived", player: playerId, amount: CHANCE_MONEY });
+    const amount = CHANCE_CARD_MONEY.scholarship;
+    playerById(tx, playerId).cash += amount;
+    emit(tx, { type: "ChanceMoneyReceived", player: playerId, amount });
   },
   // A Charge like any other (F6: v1 never took this money).
   failedExams: (tx, playerId) => {
-    charge(tx, playerId, CHANCE_MONEY, (amount) => {
+    charge(tx, playerId, -CHANCE_CARD_MONEY.failedExams, (amount) => {
       emit(tx, { type: "ChanceChargePaid", player: playerId, amount });
     });
   },
