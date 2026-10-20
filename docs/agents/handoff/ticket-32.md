@@ -17,7 +17,8 @@ Branch `ticket/32-game-end`. Merged with #31 (Doubler/Erasmus).
 - **`scheduleDeadline` no-ops on a null deadline**, so an ended Room never wakes up; `timeOut` also returns when `endedAt` is set.
 - A game-over state stored as unfinished (a crash between the final save and `endGame`) is finished in `onCreate` after the "Room restored" log; `restore` reschedules nothing for it.
 - **Metrics:** `gauges()` reports `state: null` once `endedAt` is set, so `rooms{state="playing"}` drops an ended Room (it stays tracked until its deletion; `players_connected` still counts its connected Seats).
-- **Tests** (`test/game-end.test.ts`): the Minute-limit path is driven by `scheduler.advanceTo(start + 50 min)` (the Turn deadline fires then). test/helpers.ts `withDeadline(message)` narrows a started game's `turnDeadline` for the other server tests.
+- **Tests** (`test/game-end.test.ts`): the Minute-limit path is driven by `scheduler.advanceTo(start + 50 min)` (the Turn deadline fires then). test/helpers.ts `withDeadline(message)` narrows a started game's `turnDeadline` for the other server tests (used by every `startedGame` helper, #44's `engine-errors.test.ts` included).
+- **Merged with #44 (engine failures):** `commit(state, events, intent)` carries the intent label for the error log/report, and `timeOut` retries an engine throw or a failed write with a doubling back-off. Both stop at a game-over Room: `commit`'s `gameOver` branch calls `endGame()` (no retry scheduled), `scheduleDeadline` skips the null deadline, and `timeOut` returns once `endedAt` is set. Keep that order if you touch either. `endGame`'s own save failure is logged directly, not through `failed`, because the final state is already stored.
 
 ## Web (`apps/web`)
 
@@ -26,7 +27,7 @@ Branch `ticket/32-game-end`. Merged with #31 (Doubler/Erasmus).
 - **`Game.tsx`** hides the bottom card while the podium is up; the Turn ring only renders when `view.turnTimer !== null` (the same guard is in `SaleTray`, `PickTray` and `Board.tsx`'s sale marks).
 - **`MinutePill`** takes `clockOffset` (from `push.clockOffset`) and ticks on the server's clock.
 - Messages (en/hu/de): `podium_wins`, `podium_reason_{last_player,time_up,super_monopoly,monopolies}`, `podium_place`, `podium_wealth`, `event_game_ended`.
-- **E2E** `podium.spec.ts` (both single-browser projects) shows a made-up 4-Player game-over view through `showView`; `FullView` in `apps/e2e/tests/test-hooks.ts` now carries `turn`, `players[].seat/name/cash/wealth`, `doubler`, `pickOptions` and nullable `turnDeadline`/`turnTimer`.
+- **E2E** `podium.spec.ts` (both single-browser projects) shows a made-up 4-Player game-over view through `showView`; `FullView` in `apps/e2e/tests/test-hooks.ts` now carries `turn`, `players[].seat/name/cash/wealth`, `doubler`, `pickOptions` and nullable `turnDeadline`/`turnTimer`. Merged with #41: the message files carry both the language/menu/sound keys and the podium keys, and every key exists in all three languages.
 
 ## Gotchas seen while merging
 
