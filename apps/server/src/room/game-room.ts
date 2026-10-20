@@ -117,7 +117,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (!parsed.success) throw refuse(400, "MALFORMED");
     const { roomName, password, maxPlayers, minuteLimit } = parsed.data;
     const name = checkRoomName(roomName ?? "");
-    if (!name.ok) throw refuse(400, "ROOM_NAME_INVALID");
+    if (!name.ok) throw refuse(400, name.code);
     this.settings = { maxPlayers, minuteLimit };
     this.displayName = name.name;
     this.password = password ? await hashPassword(password) : null;

@@ -86,7 +86,8 @@ export type GameMessage = {
   now: number;
 };
 
-export type RejectionMessage = { code: RejectionCode };
+/** `retryAfter`: whole seconds to wait before trying again (`RATE_LIMITED`, `PASSWORD_LOCKED`). */
+export type RejectionMessage = { code: RejectionCode; retryAfter?: number };
 
 // ---------------------------------------------------------------- Room options
 
@@ -159,6 +160,12 @@ export const REJECTION_CODES = [
   "ROOM_FULL",
   "ROOM_NAME_INVALID",
   "WRONG_PASSWORD",
+  // abuse protection (#37)
+  "ROOM_NAME_BLOCKED",
+  "PASSWORD_LOCKED",
+  "RATE_LIMITED",
+  "SERVER_BUSY",
+  "SLOW_DOWN",
 ] as const;
 
 export type RejectionCode = (typeof REJECTION_CODES)[number];
@@ -174,14 +181,48 @@ export type RulesCodesAreListed = Assert<
 /** Colyseus's matchmaker error for a Room code it does not know, or a Room it has locked (started). */
 export const MATCHMAKE_INVALID_ROOM_ID = 522;
 
+/** A refused create or join: the Rejection code, and how many seconds to wait when that helps. */
+export type Refusal = RejectionMessage;
+
 /**
- * The Rejection code of a failed create or join (`MatchMakeError`). The Room
- * server throws its matchmaking errors with a Rejection code as the message;
- * Colyseus's own "no such Room" becomes `ROOM_NOT_FOUND`; anything else is
- * `INTERNAL`.
+ * The error message the Room server refuses a create or join with: the bare
+ * code, or JSON when there is a wait to carry (only the HTTP status and this
+ * message reach the client).
  */
+export function refusalMessage(refusal: Refusal): string {
+  return refusal.retryAfter === undefined ? refusal.code : JSON.stringify(refusal);
+}
+
+const isRejectionCode = (value: unknown): value is RejectionCode =>
+  REJECTION_CODES.some((c) => c === value);
+
+/**
+ * The Refusal of a failed create or join (`MatchMakeError`): the Room server's
+ * own message (`refusalMessage`); Colyseus's "no such Room" becomes
+ * `ROOM_NOT_FOUND`; anything else is `INTERNAL`.
+ */
+export function matchmakeRefusal(error: { code: number; message: string }): Refusal {
+  if (isRejectionCode(error.message)) return { code: error.message };
+  if (error.message.startsWith("{")) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(error.message);
+    } catch {
+      return { code: "INTERNAL" };
+    }
+    if (typeof parsed !== "object" || parsed === null || !("code" in parsed)) {
+      return { code: "INTERNAL" };
+    }
+    if (!isRejectionCode(parsed.code)) return { code: "INTERNAL" };
+    const wait = "retryAfter" in parsed ? parsed.retryAfter : undefined;
+    return typeof wait === "number" && Number.isInteger(wait) && wait > 0
+      ? { code: parsed.code, retryAfter: wait }
+      : { code: parsed.code };
+  }
+  return { code: error.code === MATCHMAKE_INVALID_ROOM_ID ? "ROOM_NOT_FOUND" : "INTERNAL" };
+}
+
+/** The Rejection code of a failed create or join (see `matchmakeRefusal`). */
 export function matchmakeRejection(error: { code: number; message: string }): RejectionCode {
-  const code = REJECTION_CODES.find((c) => c === error.message);
-  if (code) return code;
-  return error.code === MATCHMAKE_INVALID_ROOM_ID ? "ROOM_NOT_FOUND" : "INTERNAL";
+  return matchmakeRefusal(error).code;
 }
