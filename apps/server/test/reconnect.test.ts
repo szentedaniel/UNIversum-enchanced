@@ -97,8 +97,9 @@ describe("a Lobby Seat while its Player is away", () => {
     await alice.next("lobby");
     await alice.drop();
 
-    // Held: the Lobby stays.
-    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    // Held: the Lobby stays, also a moment before the 60 s run out.
+    await eventually(() => expect(server.room(alice.code)?.clients.length).toBe(0));
+    server.scheduler.advanceTo(T0 + LOBBY_HOLD - 1);
     expect(server.store.isCodeInUse(alice.code)).toBe(true);
     expect(server.room(alice.code)).toBeDefined();
 

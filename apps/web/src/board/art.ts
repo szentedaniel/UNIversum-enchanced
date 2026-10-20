@@ -224,14 +224,14 @@ export function createFieldArt(field: FieldInfo, label: string, frames: Frames):
     const { ownerSeat, level, hasDoubler } = look;
     if (field.kind === "university" && ownerSeat !== null && level > 0) {
       const building = new Container({ x: W / 4, y: -B, zIndex: 10 });
-      const floor = (part: string, y: number) => {
-        const sprite = new Sprite({ texture: frames(`${part}_p${ownerSeat}`), anchor: 0.5, y });
+      const buildingPart = (frame: string, y: number) => {
+        const sprite = new Sprite({ texture: frames(`${frame}_p${ownerSeat}`), anchor: 0.5, y });
         sprite.scale.x = -1; // v1 mirrors every house part
         building.addChild(sprite);
       };
       for (let i = 0; i < level; i++)
-        floor(i === 0 ? "house_base" : "house_storey", -32 * i - (i === 0 ? 1 : 0));
-      floor("house_roof", -32 * level + 16);
+        buildingPart(i === 0 ? "house_base" : "house_storey", -32 * i - (i === 0 ? 1 : 0));
+      buildingPart("house_roof", -32 * level + 16);
       add(building);
     }
     if (field.kind === "museum") {

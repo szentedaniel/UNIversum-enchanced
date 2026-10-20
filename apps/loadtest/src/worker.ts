@@ -28,6 +28,7 @@ import { chooseIntent, isGameOver, offeredIntents } from "#bot.ts";
 import { THRESHOLDS } from "#config.ts";
 import { dropPlanForGame, gameSeed, seededRandom, type DropPlan, type RoomPlan } from "#profile.ts";
 import { emptyWorkerStats, type WorkerStats } from "#stats.ts";
+import { sleep, withTimeout } from "#wait.ts";
 import type { MainToWorker, WorkerConfig, WorkerToMain } from "#worker-protocol.ts";
 
 const port = parentPort;
@@ -64,18 +65,6 @@ const later = (delayMs: number, run: () => void): (() => void) => {
 
 const inRange = (range: readonly [number, number]): number =>
   range[0] + Math.random() * (range[1] - range[0]);
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  const { promise: timedOut, reject } = Promise.withResolvers<never>();
-  const timer = setTimeout(() => reject(new Error("timed out")), ms);
-  return Promise.race([promise, timedOut]).finally(() => clearTimeout(timer));
-}
-
-function sleep(ms: number): Promise<void> {
-  const { promise, resolve } = Promise.withResolvers<void>();
-  setTimeout(resolve, ms);
-  return promise;
-}
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

@@ -37,6 +37,7 @@ import {
   type GameEvent,
   type GameState,
   type Intent,
+  type PlayerId,
   type PlayerIntent,
   type Rejection,
 } from "@universum/rules";
@@ -207,6 +208,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   displayName: string | null = null;
   /** Never sent or logged; `null` for a Room without a password. */
   password: PasswordHash | null = null;
+  /** The creator's public Player id (the Lobby's crown), or `null` until they take a Seat. */
+  creatorId: PlayerId | null = null;
   /** Taken Seats in join order (R6). */
   seats: SeatRecord[] = [];
   /** The running game, or `null` while the Room is a Lobby. */
@@ -236,7 +239,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   /** Set when the process shuts down: Seats and the stored Room must then stay as they are. */
   #shuttingDown = false;
   /** Seats held for absent Players, by public Player id (spec: Seat hold). */
-  readonly #holds = new Map<string, Hold>();
+  readonly #holds = new Map<PlayerId, Hold>();
   /** The server's abuse protection; `createGameServer` sets it. */
   guard!: AbuseGuard;
   /** Intent flood control, per connected client. */
@@ -344,6 +347,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     claimRoomCode(stored.code);
     this.settings = stored.settings;
     this.displayName = stored.roomName;
+    this.creatorId = stored.creatorId;
     this.password = stored.password && decodePassword(stored.password);
     this.seats = stored.seats.map(({ playerId, name, tokenHash = null }) => ({
       playerId,
@@ -388,6 +392,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       sessionId: client.sessionId,
       tokenHash: token && hashGuestToken(token),
     };
+    if (auth?.creates && this.seats.length === 0) this.creatorId = seat.playerId;
     // Saved first: a Seat the store doesn't have isn't taken (the join fails).
     this.save([...this.seats, seat], this.game, []);
     this.seats.push(seat);
@@ -520,7 +525,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /** The Player is back: the Seat is no longer held (nothing is released). */
-  private unhold(playerId: string): void {
+  private unhold(playerId: PlayerId): void {
     const hold = this.#holds.get(playerId);
     if (!hold) return;
     hold.cancel();
@@ -529,7 +534,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /** A Lobby Seat's 60 s ran out: it is freed. */
-  private expire(playerId: string): void {
+  private expire(playerId: PlayerId): void {
     const hold = this.#holds.get(playerId);
     if (!hold) return;
     this.#holds.delete(playerId);
@@ -563,7 +568,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /** Frees a Lobby Seat: the others see it open; an emptied Lobby is deleted when it disposes. */
-  private freeSeat(playerId: string): void {
+  private freeSeat(playerId: PlayerId): void {
     this.log.info({ playerId }, "Seat freed");
     this.unhold(playerId);
     this.seats = this.seats.filter((s) => s.playerId !== playerId);
@@ -805,6 +810,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
           code: this.roomId,
           settings: this.settings,
           roomName: this.displayName,
+          creatorId: this.creatorId,
           password: this.password && encodePassword(this.password),
           seats: seats.map(({ playerId, name, tokenHash }) => ({ playerId, name, tokenHash })),
           game,
@@ -844,7 +850,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   private timeOut(turn: number): void {
     if (!this.game || this.endedAt !== null) return;
     const result = this.run(this.game, { type: "TurnTimedOut", turn }, SYSTEM);
-    if (result !== null && isRejection(result)) return;
+    if (result !== null && isRejection(result)) {
+      this.rearmEarly(turn);
+      return;
+    }
     if (result !== null && this.commit(result.state, result.events, "TurnTimedOut") === undefined) {
       return;
     }
@@ -852,6 +861,20 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.#deadlineRetries += 1;
     this.#cancelWakeUp?.();
     this.#cancelWakeUp = this.scheduler.at(this.now() + delay, () => this.timeOut(turn));
+  }
+
+  /**
+   * A wake-up can fire up to about a millisecond before `turnDeadline` (Node
+   * timers don't wait), and the engine then refuses `TurnTimedOut` as
+   * `NOT_OFFERED`. The deadline is still ahead, so wake up at it again; a
+   * wake-up for a Turn already over is left to the deadline `commit` set.
+   */
+  private rearmEarly(turn: number): void {
+    const game = this.game;
+    if (!game || game.turn !== turn || game.turnDeadline === null) return;
+    if (game.turnDeadline <= this.now()) return;
+    this.#cancelWakeUp?.();
+    this.#cancelWakeUp = this.scheduler.at(game.turnDeadline, () => this.timeOut(turn));
   }
 
   /** The Lobby-list entry: what any Guest may see, so never the password or its hash. */
@@ -871,6 +894,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     const lobby: LobbyMessage = {
       code: this.roomId,
       roomName: this.displayName,
+      creatorId: this.creatorId,
       hasPassword: this.password !== null,
       settings: this.settings,
       // Public Player ids and names only: never a session id or token hash.

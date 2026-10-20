@@ -107,10 +107,27 @@ describe("the Minute limit", () => {
     expect(applied.state.phase).toEqual({ kind: "gameOver", winner: "p1", reason: "timeUp" });
   });
 
+  it("R80: the view carries the final standings: winner, then Wealth order, Bankrupt last", () => {
+    const state = withPlayer(threePlayers(1_500_000, 1_000_000), "p3", {
+      bankrupt: true,
+      cash: 0,
+    });
+
+    const applied = timeUp(state);
+
+    expect(applied.state.phase).toMatchObject({ winner: "p2", reason: "timeUp" });
+    expect(publicView(applied.state).standings).toEqual([
+      { player: "p2", wealth: 1_500_000 },
+      { player: "p1", wealth: 900_000 },
+      { player: "p3", wealth: 0 },
+    ]);
+  });
+
   it("the Minute limit does not end the game before it runs out", () => {
     const applied = endTurn(threePlayers(1_500_000, 1_000_000), ENDS_AT - 1);
 
     expect(applied.state.phase).toEqual({ kind: "awaitingRoll" });
+    expect(publicView(applied.state).standings).toBeNull();
   });
 });
 
@@ -145,6 +162,20 @@ describe("Monopolies", () => {
       winner: "p2",
       reason: "superMonopoly",
     });
+  });
+
+  it("R80: the standings put the named winner first, even when another Player is Wealthier", () => {
+    const state = withPlayer(owning("p2", [], [4, 12, 20, 28]), "p3", { cash: 9_000_000 });
+
+    const applied = endTurnOn(state, BERLIN, 4);
+
+    expect(applied.state.phase).toMatchObject({ winner: "p2", reason: "superMonopoly" });
+    expect(publicView(applied.state).standings?.map((standing) => standing.player)).toEqual([
+      "p2",
+      "p3",
+      "p1",
+      "p4",
+    ]);
   });
 
   it("R79: a Player holding 3 Monopolies wins at the Turn change", () => {

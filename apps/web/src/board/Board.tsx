@@ -190,7 +190,9 @@ export function Board() {
     <div className="board" data-testid="board">
       <div ref={hostRef} className="board-canvas" />
       <div ref={fitRef} className="board-fit-area" aria-hidden="true" />
-      <div className="absolute top-2 right-2 flex gap-2 wide:top-1/2 wide:-translate-y-1/2 wide:flex-col">
+      {/* On a landscape phone the row moves to the right edge (the fit area keeps
+          clear of it), so the Board gets the whole height above the top row. */}
+      <div className="absolute top-2 right-2 flex gap-2 wide:top-1/2 wide:-translate-y-1/2 wide:flex-col landscape:top-1/2 landscape:-translate-y-1/2 landscape:flex-col">
         <Button
           variant="plain"
           size="icon"

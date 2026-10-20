@@ -73,6 +73,7 @@ export type FullView = {
   pickOptions: FullPickOption[] | null;
   turnDeadline: number | null;
   turnTimer: { endsAt: number; limitMs: number } | null;
+  standings: { player: string; wealth: number }[] | null;
 };
 
 declare global {

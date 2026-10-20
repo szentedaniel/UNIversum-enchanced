@@ -33,8 +33,11 @@ const SCHEMA = `
 `;
 
 /** The `state` JSON; Room fields added after a Room was stored may be missing. */
-type Snapshot = Omit<StoredRoom<unknown>, "code" | "endedAt" | "roomName" | "password"> &
-  Partial<Pick<StoredRoom<unknown>, "roomName" | "password">>;
+type Snapshot = Omit<
+  StoredRoom<unknown>,
+  "code" | "endedAt" | "roomName" | "creatorId" | "password"
+> &
+  Partial<Pick<StoredRoom<unknown>, "roomName" | "creatorId" | "password">>;
 
 export function openSqliteRoomStore(path: string): SqliteRoomStore {
   const db = new DatabaseSync(path);
@@ -74,11 +77,19 @@ export function openSqliteRoomStore(path: string): SqliteRoomStore {
     unfinished() {
       return selectUnfinished.all().map((row) => {
         const snapshot: Snapshot = JSON.parse(String(row["state"]));
-        const { settings, seats, game, roomName = null, password = null } = snapshot;
+        const {
+          settings,
+          seats,
+          game,
+          roomName = null,
+          creatorId = null,
+          password = null,
+        } = snapshot;
         return {
           code: String(row["code"]),
           settings,
           roomName,
+          creatorId,
           password,
           seats,
           game,

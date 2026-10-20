@@ -17,7 +17,18 @@ export type Scheduler = {
 export const systemScheduler: Scheduler = {
   now: () => Date.now(),
   at(time, task) {
-    const timer = setTimeout(task, Math.max(0, time - Date.now()));
+    // Node timers can fire a millisecond early: wait again for the rest rather
+    // than hand the task a clock that has not reached `time` yet.
+    let timer: ReturnType<typeof setTimeout>;
+    const run = () => {
+      const left = time - Date.now();
+      if (left > 0) {
+        timer = setTimeout(run, left);
+        return;
+      }
+      task();
+    };
+    timer = setTimeout(run, Math.max(0, time - Date.now()));
     return () => clearTimeout(timer);
   },
 };

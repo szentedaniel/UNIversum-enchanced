@@ -156,8 +156,8 @@ export function Lobby() {
               seat={i}
               name={playerName(seat.name)}
               you={seat.playerId === me}
-              // Seats are in join order; while the creator stays, theirs is the first.
-              creator={i === 0}
+              // The creator's Seat, wherever it is after frees and re-joins.
+              creator={seat.playerId === lobby.creatorId}
               held={
                 seat.heldUntil === undefined ? undefined : (
                   <HeldCountdown until={seat.heldUntil} clockOffset={clockOffset} />

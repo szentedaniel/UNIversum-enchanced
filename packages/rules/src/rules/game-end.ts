@@ -39,15 +39,37 @@ function finish(tx: Tx, winner: PlayerId, reason: GameEndReason): void {
   emit(tx, { type: "GameEnded", winner, reason });
 }
 
+/** Most Wealth first (R77), then more cash, then the earlier Seat (F25). */
+function byWealth(state: GameState, a: PlayerState, b: PlayerState): number {
+  return wealthOf(state, b.id) - wealthOf(state, a.id) || b.cash - a.cash || a.seat - b.seat;
+}
+
 /**
  * The richest of `players`: most Wealth (R77), then more cash, then the
  * earlier Seat (F25). `players` is never empty where this is called.
  */
 function richest(tx: Tx, players: readonly PlayerState[]): PlayerState | undefined {
-  return players.toSorted(
-    (a, b) =>
-      wealthOf(tx.state, b.id) - wealthOf(tx.state, a.id) || b.cash - a.cash || a.seat - b.seat,
-  )[0];
+  return players.toSorted((a, b) => byWealth(tx.state, a, b))[0];
+}
+
+/** One Player's final place; `publicView.standings` lists these in podium order. */
+export type Standing = { player: PlayerId; wealth: number };
+
+/**
+ * The final standings (R80) the result screen shows: the winner first, then
+ * every other non-Bankrupt Player by Wealth (ties: more cash, then the earlier
+ * Seat), then the Bankrupt Players. `null` until the game is over.
+ */
+export function standingsOf(state: GameState): Standing[] | null {
+  const { phase } = state;
+  if (phase.kind !== "gameOver") return null;
+  const others = state.players.filter((player) => player.id !== phase.winner);
+  const ordered = [
+    ...state.players.filter((player) => player.id === phase.winner),
+    ...others.filter((player) => !player.bankrupt).toSorted((a, b) => byWealth(state, a, b)),
+    ...others.filter((player) => player.bankrupt).toSorted((a, b) => byWealth(state, a, b)),
+  ];
+  return ordered.map((player) => ({ player: player.id, wealth: wealthOf(state, player.id) }));
 }
 
 /** The 8 University Groups, in Board order. */

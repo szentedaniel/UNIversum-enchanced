@@ -18,6 +18,7 @@ const lobby = (code: string): StoredRoom => ({
   code,
   settings,
   roomName: null,
+  creatorId: null,
   password: null,
   seats,
   game: null,
@@ -57,6 +58,7 @@ describe("the SQLite RoomStore", () => {
     const named = {
       ...lobby("333333"),
       roomName: "Friday game",
+      creatorId: "p1",
       password: { salt: "c2FsdA==", hash: "aGFzaA==" },
     };
     store.save(named, []);

@@ -16,6 +16,7 @@ import { PrometheusClient } from "#prometheus.ts";
 import { writeReport, type KneeResult, type RunReport } from "#report.ts";
 import { emptyWorkerStats, mergeWorkerStats, type WorkerStats } from "#stats.ts";
 import { verdict, type RestartMeasurements, type Verdict } from "#verdict.ts";
+import { sleep, withTimeout } from "#wait.ts";
 import type { MainToWorker, WorkerConfig, WorkerToMain } from "#worker-protocol.ts";
 
 type WorkerHandle = {
@@ -456,18 +457,6 @@ async function waitUntil(atMs: number): Promise<void> {
     // oxlint-disable-next-line no-await-in-loop -- sleeping until a scheduled wall-clock moment
     await sleep(Math.min(1_000, atMs - Date.now()));
   }
-}
-
-async function sleep(ms: number): Promise<void> {
-  const { promise, resolve } = Promise.withResolvers<void>();
-  setTimeout(resolve, ms);
-  return promise;
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  const { promise: timedOut, reject } = Promise.withResolvers<never>();
-  const timer = setTimeout(() => reject(new Error("timed out")), ms);
-  return Promise.race([promise, timedOut]).finally(() => clearTimeout(timer));
 }
 
 function log(line: string): void {
