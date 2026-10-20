@@ -1,3 +1,4 @@
+/// <reference types="node" />
 /**
  * The R-id coverage check (spec: definition of done item 1). Every rule in the
  * parity yardstick, R1–R80 of `docs/research/rules-inventory-v1.md`, is either

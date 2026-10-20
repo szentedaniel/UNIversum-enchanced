@@ -11,7 +11,7 @@
     "./board": "./src/board.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit -p tsconfig.src.json && tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "pure-rand": "catalog:"
