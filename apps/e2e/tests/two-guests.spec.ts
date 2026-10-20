@@ -1,6 +1,11 @@
-import { chromium, devices, expect, test, webkit, type Page } from "@playwright/test";
+import { chromium, devices, expect, test, webkit, type Locator, type Page } from "@playwright/test";
+import type { FullView } from "./test-hooks.ts";
 
 const viewOf = (page: Page) => page.evaluate(() => window.universumTest?.view() ?? null);
+
+/** The full pushed view, with every phase's options (the Board's view is a summary). */
+const pushView = (page: Page): Promise<FullView | null> =>
+  page.evaluate(() => window.universumTest?.room().push?.view ?? null);
 
 const fieldCenter = (page: Page, id: number) =>
   page.evaluate((field) => window.universumTest?.fieldCenter(field), id);
@@ -66,6 +71,15 @@ const stopPlaybackProbe = (page: Page) =>
     window.stopPlaybackProbe?.();
     return window.playbackProbe ?? [];
   });
+
+/** The Player's Fields, cheapest Bank sale value first (Auto-sell's order). */
+function ownFields(view: FullView, player: string): number[] {
+  return view.fields
+    .map((field, id) => ({ field, id }))
+    .filter(({ field }) => field.owner === player)
+    .toSorted((a, b) => a.field.sale - b.field.sale || a.id - b.id)
+    .map(({ id }) => id);
+}
 
 test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and play", async ({
   baseURL,
@@ -141,7 +155,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     };
     /** After a Roll: neither screen shows the next decision's controls until actsAfter, and it then does. */
     const expectPlaybackHold = async (roller: Page, versionBefore: number) => {
-      const view = await viewOf(roller);
+      const view = await pushView(roller);
       const rolledVersion = view?.version ?? 0;
       expect(rolledVersion).toBeGreaterThan(versionBefore);
       const ids = await Promise.all(both.map(me));
@@ -175,49 +189,151 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
         // The ring waits full: its animation starts only when the Playback ends.
         expect(held.some((sample) => (sample.ringDelayMs ?? 0) > 100)).toBe(true);
       }
+      // The decision's control appears once the Playback ends, by auto-wait.
       const phase = view?.phase.kind;
       if (phase === "offer") await expect(current.getByTestId("offer")).toBeVisible();
+      else if (phase === "selling") await expect(current.getByTestId("sale-tray")).toBeVisible();
+      else if (phase === "placingDoubler" || phase === "choosingErasmus")
+        await expect(current.getByTestId("pick-tray")).toBeVisible();
       else if (phase === "quarantineChoice")
         await expect(current.getByRole("button", { name: "Roll for 12" })).toBeVisible();
       else await expect(current.getByRole("button", { name: /^Roll/ })).toBeVisible();
     };
+
+    /** A control a Locator finds: tap on a phone, click on a desktop. */
+    const pressControl = (page: Page, control: Locator) =>
+      page === phone ? control.tap() : control.click();
+
+    /**
+     * Taps a Field through the test-only `fieldCenter` hook and waits until the
+     * pick took effect: a tap right after a layout change can miss (#26 retries).
+     */
+    const tapPickField = async (page: Page, field: number) => {
+      await expect(async () => {
+        const point = await page.evaluate(
+          (id) => window.universumTest?.fieldCenter(id) ?? null,
+          field,
+        );
+        if (point === null) throw new Error("the Board is not ready");
+        if (page === phone) await page.touchscreen.tap(point.x, point.y);
+        else await page.mouse.click(point.x, point.y);
+        await expect
+          .poll(
+            () =>
+              page.evaluate(
+                (id) => window.universumTest?.pick()?.picked.includes(id) ?? false,
+                field,
+              ),
+            { timeout: 1_500 },
+          )
+          .toBe(true);
+      }).toPass({ timeout: 10_000 });
+    };
+
+    /**
+     * Resolves the decision a Roll stopped at through the controls the view
+     * offers. Every control appears only once its Playback ends (ADR-0004), so
+     * Playwright's auto-wait is what waits it out.
+     */
+    const resolveDecision = async (roller: Page, view: FullView) => {
+      const [waiter] = roller === desktop ? [phone] : [desktop];
+      const { phase } = view;
+      switch (phase.kind) {
+        case "offer": {
+          await expect(roller.getByTestId("offer")).toBeVisible();
+          await expect(waiter.getByTestId("offer")).toHaveCount(0);
+          const { field, levels = [], museum: museumPrice, buyout } = phase;
+          const taken = { field, owner: view.currentPlayer };
+          if (!bought && levels.length > 0) {
+            await press(roller, /^Level 1 · /);
+            bought = taken;
+          } else if (!museum && museumPrice !== undefined) {
+            await press(roller, /^Buy · /);
+            museum = taken;
+          } else {
+            if (buyout !== undefined) {
+              await expect(roller.getByRole("button", { name: /^Buy out · / })).toBeVisible();
+            }
+            await press(roller, "Decline");
+          }
+          break;
+        }
+        case "placingDoubler":
+        case "choosingErasmus": {
+          const tray = roller.getByTestId("pick-tray");
+          await expect(tray).toBeVisible();
+          const field = phase.fields[0];
+          if (field === undefined) throw new Error(`${phase.kind} offered no Field`);
+          await tapPickField(roller, field);
+          await pressControl(
+            roller,
+            phase.kind === "placingDoubler"
+              ? tray.getByRole("button", { name: /^Put the Doubler on / })
+              : tray.getByRole("button", { name: /^Travel to / }),
+          );
+          break;
+        }
+        case "selling": {
+          const tray = roller.getByTestId("sale-tray");
+          await expect(tray).toBeVisible();
+          const sell = tray.getByRole("button", { name: /^Sell / });
+          for (const field of ownFields(view, view.currentPlayer)) {
+            // oxlint-disable-next-line no-await-in-loop -- the meter decides the next pick
+            if (await sell.isEnabled()) break;
+            // oxlint-disable-next-line no-await-in-loop -- one Field at a time
+            const already = await roller.evaluate(
+              (id) => window.universumTest?.pick()?.picked.includes(id) ?? false,
+              field,
+            );
+            if (!already) {
+              // oxlint-disable-next-line no-await-in-loop -- one pick at a time updates the meter
+              await tapPickField(roller, field);
+            }
+          }
+          await pressControl(roller, sell);
+          break;
+        }
+        case "quarantineChoice":
+          await press(roller, "Roll for 12");
+          break;
+        case "awaitingRoll":
+        case "gameOver":
+          break;
+      }
+    };
+
     const playTurn = async (turn: number, checkHold = false) => {
       const [roller, waiter] = turn % 2 === 1 ? [desktop, phone] : [phone, desktop];
       await expect(waiter.getByRole("button", { name: "Roll" })).toHaveCount(0);
-      const versionBefore = (await viewOf(roller))?.version ?? 0;
+      const versionBefore = (await pushView(roller))?.version ?? 0;
       if (checkHold) await Promise.all(both.map(startPlaybackProbe));
       // Not `exact`: a Player who landed on Quarantine gets "Roll for 12"
-      // instead, which also ends the Turn (or, on a 12, may stop at an offer).
+      // instead, which also ends the Turn (or, on a 12, may stop at a decision).
       await press(roller, "Roll");
-      // The roll ends the Turn, or stops at an offer.
+      // The Roll's own push: the Turn ended, or a decision it set off opened.
       await expect
-        .poll(async () => {
-          const view = await viewOf(roller);
-          return view?.turn === turn + 1 || view?.phase.kind === "offer";
-        })
-        .toBe(true);
-      const view = await viewOf(roller);
+        .poll(async () => (await pushView(roller))?.version ?? -1)
+        .toBeGreaterThan(versionBefore);
       if (checkHold) await expectPlaybackHold(roller, versionBefore);
-      if (view?.phase.kind === "offer") {
-        await expect(roller.getByTestId("offer")).toBeVisible();
-        await expect(waiter.getByTestId("offer")).toHaveCount(0);
-        const { field, levels = [], museum: museumPrice, buyout } = view.phase;
-        const taken = { field: field!, owner: view.currentPlayer };
-        if (!bought && levels.length > 0) {
-          await press(roller, /^Level 1 · /);
-          bought = taken;
-        } else if (!museum && museumPrice !== undefined) {
-          await press(roller, /^Buy · /);
-          museum = taken;
-        } else {
-          if (buyout !== undefined) {
-            await expect(roller.getByRole("button", { name: /^Buy out · / })).toBeVisible();
-          }
-          await press(roller, "Decline");
-        }
+
+      // A Roll can stop at more than one decision in a Turn (a pick, then the
+      // offer its travel leads to; a Sale, then a Buyout): resolve each until
+      // the Turn passes.
+      let view = await pushView(roller);
+      for (let guard = 0; guard < 6 && view && view.turn === turn; guard++) {
+        if (view.phase.kind === "awaitingRoll" || view.phase.kind === "gameOver") break;
+        const version = view.version;
+        // oxlint-disable-next-line no-await-in-loop -- decisions of one Turn, in order
+        await resolveDecision(roller, view);
+        // oxlint-disable-next-line no-await-in-loop -- the answer to the last decision
+        await expect
+          .poll(async () => (await pushView(roller))?.version ?? -1)
+          .toBeGreaterThan(version);
+        // oxlint-disable-next-line no-await-in-loop -- the push after the last decision
+        view = await pushView(roller);
       }
       await Promise.all(
-        both.map((page) => expect.poll(async () => (await viewOf(page))?.turn).toBe(turn + 1)),
+        both.map((page) => expect.poll(async () => (await pushView(page))?.turn).toBe(turn + 1)),
       );
     };
     // At least 4 Turns, and on until someone has bought a University.
