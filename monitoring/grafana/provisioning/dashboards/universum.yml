@@ -1,0 +1,11 @@
+apiVersion: 1
+
+# The dashboard JSON lives in the repo (monitoring/grafana/dashboards); edits
+# made in the Grafana UI are not saved back, so change the file instead.
+providers:
+  - name: universum
+    type: file
+    allowUiUpdates: false
+    disableDeletion: true
+    options:
+      path: /var/lib/grafana/dashboards

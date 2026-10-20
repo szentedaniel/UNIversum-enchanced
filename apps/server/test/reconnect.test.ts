@@ -258,6 +258,35 @@ describe("a restored Lobby", () => {
   });
 });
 
+describe("observability", () => {
+  it("counts drops and reconnects, and gauges the held Seats", async () => {
+    const server = await start();
+    const { alice, tokens, code } = await startedGame(server);
+    const sample = async (series: string) => {
+      const line = (await server.metrics.scrape())
+        .split("\n")
+        .find((l) => l.startsWith(`${series} `));
+      return Number(line?.slice(series.length + 1));
+    };
+
+    await alice.drop();
+    await expect.poll(() => sample("seat_drops_total")).toBe(1);
+    expect(await sample("seats_held_disconnected")).toBe(1);
+
+    const back = await server.reconnect(alice);
+    await back.next("game");
+    expect(await sample("seat_reconnects_total")).toBe(1);
+    expect(await sample("seats_held_disconnected")).toBe(0);
+
+    await back.drop();
+    await expect.poll(() => sample("seat_drops_total")).toBe(2);
+    const again = await server.join(code, { guestToken: tokens[0] });
+    await again.next("game");
+    expect(await sample("seat_reconnects_total")).toBe(2);
+    expect(await sample("seats_held_disconnected")).toBe(0);
+  });
+});
+
 describe("Guest tokens", () => {
   it("never reach another client, as the token or as its hash", async () => {
     const server = await start();

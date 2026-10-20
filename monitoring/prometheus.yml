@@ -1,0 +1,10 @@
+# Prometheus for the `monitoring` compose profile: scrapes the Room server's
+# internal port (compose network only; Caddy never routes it) every 5 s.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: universum-server
+    static_configs:
+      - targets: ["server:9464"]

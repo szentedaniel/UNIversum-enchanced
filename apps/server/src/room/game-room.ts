@@ -39,6 +39,8 @@ import {
 import { FloodMeter } from "#abuse/flood.ts";
 import { REQUEST_ID_HEADER, type AbuseGuard } from "#abuse/guard.ts";
 import { ipBucket } from "#abuse/ip.ts";
+import { silentLogger, type Logger } from "#observability/logger.ts";
+import type { GameMetrics, RoomGauges } from "#observability/metrics.ts";
 import { guestTokenIn, hashGuestToken } from "#room/guest-token.ts";
 import { newPlayerId, newSeed } from "#room/ids.ts";
 import { newPlayerName } from "#room/player-names.ts";
@@ -79,6 +81,17 @@ type Hold = { release: (() => void) | null; until: number | null; cancel: () => 
  * join the Room code (the Room is not full, the password matched).
  */
 type SeatAuth = { bucket: string; reservation: string; creates: boolean; code?: string };
+
+/** The IP bucket `onAuth` admitted a client under (see `SeatAuth`), for the refusal log's IP tag. */
+function bucketOf(client: Client): string {
+  const auth: unknown = client.auth;
+  return typeof auth === "object" &&
+    auth !== null &&
+    "bucket" in auth &&
+    typeof auth.bucket === "string"
+    ? auth.bucket
+    : "unknown";
+}
 
 /** The HTTP status Colyseus answers a refused create or join with. */
 const STATUS: Partial<Record<RejectionCode, number>> = {
@@ -161,7 +174,7 @@ function restoreFrom(options: unknown): StoredRoom | null {
  * Extension points: `commit` (the one place a game state is accepted: store,
  * broadcast, deadline), `endGame` (#32), `onJoin`/`onLeave` (Guest token and
  * Seat hold #35), `ROOM_INTENTS` (Room-level intents), `onIntent` (flood
- * control #37).
+ * control #37), `seatReconnected` (#35: log + metric when a held Seat is back).
  */
 export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   settings!: RoomSettings;
@@ -182,6 +195,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   scheduler: Scheduler = systemScheduler;
   /** Where the Room is saved; `createGameServer` sets it. */
   store!: RoomStore;
+  /** The server's metrics; `createGameServer` sets it. */
+  metrics!: GameMetrics;
+  /** The server's logger; `onCreate` narrows it to lines carrying this Room's `roomCode`. */
+  log: Logger = silentLogger;
   /** Cancels the one pending wake-up (the Turn deadline, or deletion once the game ended). */
   #cancelWakeUp: (() => void) | null = null;
   /** Set when the process shuts down: Seats and the stored Room must then stay as they are. */
@@ -270,6 +287,13 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.seatReservationTimeout = this.guard.limits.seatReservationSeconds;
     if (!this.game) this.guard.lobbyOpened(this.roomId);
     this.metadata = this.listing();
+    this.log = this.log.child({ roomCode: this.roomId });
+    this.metrics.trackRoom(this);
+    if (restored) {
+      this.log.info({ playing: this.game !== null, seats: this.seats.length }, "Room restored");
+    } else {
+      this.log.info({ ...this.settings, hasPassword: this.password !== null }, "Room created");
+    }
     this.onMessage(MESSAGE.intent, (client: Client, message: unknown) => {
       if (this.admit(client)) this.onIntent(client, message);
     });
@@ -332,6 +356,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     // Saved first: a Seat the store doesn't have isn't taken (the join fails).
     this.save([...this.seats, seat], this.game, []);
     this.seats.push(seat);
+    this.log.info({ playerId: seat.playerId }, "Seat taken");
     client.send(MESSAGE.welcome, { playerId: seat.playerId } satisfies WelcomeMessage);
     this.broadcastLobby();
   }
@@ -351,6 +376,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     // Rejected when the hold is released: that is how it ends, not an error.
     reconnection.catch(() => {});
     this.hold(seat, () => reconnection.reject());
+    this.metrics.seatDropped();
+    this.log.info({ playerId: seat.playerId }, "Seat dropped");
     if (!this.game) this.broadcastLobby();
   }
 
@@ -359,6 +386,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     const seat = this.seatOf(client);
     if (!seat) return;
     this.unhold(seat.playerId);
+    this.seatReconnected(seat);
     this.sendCurrent(client);
   }
 
@@ -366,9 +394,19 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.#flood.delete(client.sessionId);
     // In a running game the Seat stays (its Turns time out); a Lobby frees it.
     // On shutdown nothing changes: the Room comes back as it was.
-    if (this.game || this.#shuttingDown) return;
+    if (this.#shuttingDown) return;
     const seat = this.seatOf(client);
-    if (seat) this.freeSeat(seat.playerId);
+    if (!seat) return; // taken back from another connection, or already freed
+    if (this.game) {
+      // Left a running game on purpose: the Seat stays (its Turns time out), as for a drop.
+      // (After a drop, `onLeave` only runs once the game has ended or the Seat was taken back.)
+      if (this.endedAt === null) {
+        this.metrics.seatDropped();
+        this.log.info({ playerId: seat.playerId }, "Seat dropped");
+      }
+      return;
+    }
+    this.freeSeat(seat.playerId);
   }
 
   /**
@@ -412,6 +450,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     // Its `onDrop` and `onLeave` find no Seat any more, so they change nothing.
     this.clients.find((c) => c.sessionId === previous)?.leave(CLOSE_CODE.seatTaken);
     client.send(MESSAGE.welcome, { playerId: seat.playerId } satisfies WelcomeMessage);
+    this.seatReconnected(seat);
     this.sendCurrent(client);
   }
 
@@ -486,6 +525,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
 
   /** Frees a Lobby Seat: the others see it open; an emptied Lobby is deleted when it disposes. */
   private freeSeat(playerId: string): void {
+    this.log.info({ playerId }, "Seat freed");
     this.unhold(playerId);
     this.seats = this.seats.filter((s) => s.playerId !== playerId);
     if (this.seats.length === 0) return; // emptied: deleted when the Room disposes, right after
@@ -500,6 +540,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
 
   override onDispose(): void {
     this.guard.lobbyClosed(this.roomId);
+    this.metrics.untrackRoom(this);
+    this.log.info("Room closed");
     this.#cancelWakeUp?.();
     // Colyseus gives up the held reconnections itself; only the 60 s wake-ups are left.
     for (const hold of this.#holds.values()) hold.cancel();
@@ -526,6 +568,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     });
     const refused = this.commit(game, []);
     if (refused) return refused;
+    this.log.info("Room started");
     // The game outlives its connections: Seats are held until it ends.
     this.autoDispose = false;
     this.unlist();
@@ -544,6 +587,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (!this.game || this.endedAt !== null) return;
     this.endedAt = this.now();
     this.save(this.seats, this.game, []);
+    this.log.info("Room ended");
     // Seats were held until the game ends (spec: Seat hold).
     this.releaseHolds();
     this.#cancelWakeUp?.();
@@ -583,6 +627,9 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       this.#flood.set(client.sessionId, meter);
     }
     const verdict = meter.record(performance.now());
+    if (verdict === "warn" || verdict === "close") {
+      this.guard.refused("intent_flood", bucketOf(client), null);
+    }
     if (verdict === "warn") this.reject(client, "SLOW_DOWN");
     if (verdict === "close") client.leave(CloseCode.WITH_ERROR);
     return verdict === "accept";
@@ -591,13 +638,46 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   private onIntent(client: Client, message: unknown): void {
     const seat = this.seats.find((s) => s.sessionId === client.sessionId);
     if (!seat) return;
+    const started = performance.now();
     const parsed = intentSchema.safeParse(message);
-    if (!parsed.success) return this.reject(client, "MALFORMED");
-    const intent = parsed.data;
-    const refused = isRoomIntent(intent)
-      ? ROOM_INTENTS[intent.type](this, seat, intent)
-      : this.play(seat, intent);
-    if (refused) this.reject(client, refused);
+    const intent = parsed.success ? parsed.data : null;
+    let refused: RejectionCode | void = "MALFORMED";
+    if (intent !== null) {
+      refused = isRoomIntent(intent)
+        ? ROOM_INTENTS[intent.type](this, seat, intent)
+        : this.play(seat, intent);
+    }
+    const fields = { playerId: seat.playerId, intent: intent?.type };
+    if (refused) {
+      this.log.debug({ ...fields, code: refused }, "Rejection");
+      this.reject(client, refused);
+    } else {
+      this.log.debug(fields, "intent accepted");
+    }
+    this.metrics.intentHandled(refused ?? null, (performance.now() - started) / 1000);
+  }
+
+  /**
+   * A Player is back in their held Seat. #35 calls this when a reconnect (by
+   * `reconnectionToken` or Guest token) lands.
+   */
+  seatReconnected(seat: SeatRecord): void {
+    this.metrics.seatReconnected();
+    this.log.info({ playerId: seat.playerId }, "Seat reconnected");
+  }
+
+  /**
+   * The Room's numbers for the `rooms`, `players_connected` and
+   * `seats_held_disconnected` gauges. Held: every Seat with no live client
+   * (dropped and held, or restored and not yet taken back), until the game ends.
+   */
+  gauges(): RoomGauges {
+    const live = new Set(this.clients.map((c) => c.sessionId));
+    const connected = this.seats.filter(
+      (s) => s.sessionId !== null && live.has(s.sessionId),
+    ).length;
+    const state = this.game === null ? "lobby" : this.endedAt === null ? "playing" : null;
+    return { state, connected, held: state === null ? 0 : this.seats.length - connected };
   }
 
   /** Runs a Player intent through the rules engine. */
@@ -634,17 +714,19 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
 
   /** Writes the Room's snapshot (and an intent's events) to the store; throws if the write fails. */
   private save(seats: SeatRecord[], game: GameState | null, events: GameEvent[]): void {
-    this.store.save(
-      {
-        code: this.roomId,
-        settings: this.settings,
-        roomName: this.displayName,
-        password: this.password && encodePassword(this.password),
-        seats: seats.map(({ playerId, name, tokenHash }) => ({ playerId, name, tokenHash })),
-        game,
-        endedAt: this.endedAt,
-      },
-      events,
+    this.metrics.timeStoreWrite(() =>
+      this.store.save(
+        {
+          code: this.roomId,
+          settings: this.settings,
+          roomName: this.displayName,
+          password: this.password && encodePassword(this.password),
+          seats: seats.map(({ playerId, name, tokenHash }) => ({ playerId, name, tokenHash })),
+          game,
+          endedAt: this.endedAt,
+        },
+        events,
+      ),
     );
   }
 
@@ -652,8 +734,9 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   private trySave(): void {
     try {
       this.save(this.seats, this.game, []);
-    } catch {
-      // Logging: #43. The next successful save writes the current Seats.
+    } catch (error) {
+      // The next successful save writes the current Seats.
+      this.log.error({ err: error }, "Seats not saved");
     }
   }
 
@@ -711,6 +794,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   private reject(client: Client, code: RejectionCode): void {
+    this.metrics.rejected(code);
     client.send(MESSAGE.rejected, { code } satisfies RejectionMessage);
   }
 }

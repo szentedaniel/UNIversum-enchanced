@@ -15,8 +15,12 @@
 import { RateLimiterMemory, RateLimiterRes } from "rate-limiter-flexible";
 import type { Refusal } from "@universum/protocol";
 import type { Limits } from "#limits.ts";
+import type { LimiterLimit } from "#observability/metrics.ts";
 
 export type RequestKind = "create" | "join";
+
+/** Told about every refusal: which limit, and the IP bucket it refused (metrics and logs, #43). */
+export type RefusalListener = (limit: LimiterLimit, bucket: string) => void;
 
 /**
  * Set by the HTTP gate on every matchmaking request (any value a client sent
@@ -51,6 +55,7 @@ function waitOf(rejection: unknown): number {
 
 export class AbuseGuard {
   readonly limits: Limits;
+  readonly #onRefusal: RefusalListener;
   readonly #creationsPerMinute: RateLimiterMemory;
   readonly #creationsPerHour: RateLimiterMemory;
   readonly #joins: RateLimiterMemory;
@@ -64,8 +69,9 @@ export class AbuseGuard {
   /** Live Lobbies by Room code, with the bucket of the IP that created it once its creator joined. */
   readonly #lobbies = new Map<string, string | null>();
 
-  constructor(limits: Limits) {
+  constructor(limits: Limits, onRefusal: RefusalListener = () => {}) {
     this.limits = limits;
+    this.#onRefusal = onRefusal;
     this.#creationsPerMinute = limiter("create-min", limits.roomCreationsPerMinute, 60);
     this.#creationsPerHour = limiter("create-hour", limits.roomCreationsPerHour, 3600);
     this.#joins = limiter("join-min", limits.joinsPerMinute, 60);
@@ -82,15 +88,26 @@ export class AbuseGuard {
 
   /** Counts one matchmaking request; `RATE_LIMITED` once the IP is over its rate. */
   async admitRequest(kind: RequestKind, bucket: string): Promise<Refusal | null> {
-    const limiters =
-      kind === "create" ? [this.#creationsPerMinute, this.#creationsPerHour] : [this.#joins];
+    const limiters: [RateLimiterMemory, LimiterLimit][] =
+      kind === "create"
+        ? [
+            [this.#creationsPerMinute, "room_creations_per_minute"],
+            [this.#creationsPerHour, "room_creations_per_hour"],
+          ]
+        : [[this.#joins, "joins_per_minute"]];
     // One after another: a request the per-minute limit refuses costs nothing per hour.
-    for (const rate of limiters) {
+    for (const [rate, limit] of limiters) {
       // oxlint-disable-next-line no-await-in-loop -- in order, on purpose
       const wait = await rate.consume(bucket).then(() => 0, waitOf);
-      if (wait > 0) return rateLimited(wait);
+      if (wait > 0) return this.refused(limit, bucket, rateLimited(wait));
     }
     return null;
+  }
+
+  /** Reports a refusal by `limit` (counted and logged with the IP tag), and returns it. */
+  refused<R>(limit: LimiterLimit, bucket: string, refusal: R): R {
+    this.#onRefusal(limit, bucket);
+    return refusal;
   }
 
   // ------------------------------------------------------------ sockets
@@ -108,7 +125,7 @@ export class AbuseGuard {
   /** `RATE_LIMITED` when the IP holds more open sockets than allowed (this one included). */
   socketRefusal(bucket: string): Refusal | null {
     return (this.#sockets.get(bucket) ?? 0) > this.limits.socketsPerIp
-      ? { code: "RATE_LIMITED" }
+      ? this.refused("sockets", bucket, { code: "RATE_LIMITED" })
       : null;
   }
 
@@ -119,7 +136,7 @@ export class AbuseGuard {
     const mine = [...this.#reservations.values()].filter((r) => r.bucket === bucket);
     if (mine.length < this.limits.seatReservationsPerIp) return null;
     const first = Math.min(...mine.map((r) => r.expiresAt));
-    return rateLimited(first - Date.now());
+    return this.refused("seat_reservations", bucket, rateLimited(first - Date.now()));
   }
 
   /** A fresh id for a matchmaking request (see `REQUEST_ID_HEADER`). */
@@ -171,12 +188,14 @@ export class AbuseGuard {
   creationRefusal(bucket: string): Refusal | null {
     const creating = [...this.#reservations.values()].filter((r) => r.kind === "create");
     if (this.#lobbies.size + creating.length >= this.limits.liveLobbies) {
-      return { code: "SERVER_BUSY" };
+      return this.refused("live_lobbies", bucket, { code: "SERVER_BUSY" });
     }
     const open =
       [...this.#lobbies.values()].filter((b) => b === bucket).length +
       creating.filter((r) => r.bucket === bucket).length;
-    return open >= this.limits.openLobbiesPerIp ? { code: "RATE_LIMITED" } : null;
+    return open >= this.limits.openLobbiesPerIp
+      ? this.refused("open_lobbies", bucket, { code: "RATE_LIMITED" })
+      : null;
   }
 
   // ------------------------------------------------------------ passwords
@@ -189,11 +208,19 @@ export class AbuseGuard {
   async passwordAttempt(code: string, bucket: string): Promise<Refusal | null> {
     const key = `${code}|${bucket}`;
     const room = await this.#passwordPerRoom.consume(key).then(() => 0, waitOf);
-    if (room > 0) return { code: "PASSWORD_LOCKED", retryAfter: seconds(room) };
+    if (room > 0) {
+      return this.refused("password_room", bucket, {
+        code: "PASSWORD_LOCKED",
+        retryAfter: seconds(room),
+      });
+    }
     const ip = await this.#passwordPerIp.consume(bucket).then(() => 0, waitOf);
     if (ip > 0) {
       await this.#passwordPerRoom.reward(key);
-      return { code: "PASSWORD_LOCKED", retryAfter: seconds(ip) };
+      return this.refused("password_ip", bucket, {
+        code: "PASSWORD_LOCKED",
+        retryAfter: seconds(ip),
+      });
     }
     return null;
   }
