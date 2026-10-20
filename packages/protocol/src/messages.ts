@@ -156,6 +156,37 @@ export type JoinOptions = { code: string; password?: string; guestToken?: string
  */
 export const CLOSE_CODE = { seatTaken: 4100 } as const;
 
+/**
+ * The reconnect policy of the real browser client, shared so the load-test
+ * generator (ticket #46) retries exactly as a Player would: the SDK's quick
+ * reconnects by `reconnectionToken`, then Guest-token rejoins.
+ */
+export const RECONNECT = {
+  /** The SDK's own reconnection attempts before the Guest-token rejoin takes over. */
+  sdkRetries: 8,
+  /** The SDK's exponential back-off, with equal jitter (its initial delay is 100 ms). */
+  sdk: { baseMs: 100, maxMs: 5_000 },
+  /** Guest-token rejoins: the first after `baseMs`, doubling up to `maxMs`, each with jitter. */
+  guest: { baseMs: 500, maxMs: 10_000 },
+  /** "Room not found" can be a server still restoring its Rooms: tried this many times. */
+  notFoundTries: 5,
+} as const;
+
+/**
+ * The wait before reconnect attempt `attempt` (1, 2, …): exponential from
+ * `base` up to `max`, with "equal jitter" (half of it fixed, half random), so
+ * a restarted server isn't hit by every client at the same moment.
+ */
+export function backoffDelay(
+  attempt: number,
+  base: number,
+  max: number,
+  random: () => number = Math.random,
+): number {
+  const exponential = Math.min(max, base * 2 ** Math.max(0, attempt - 1));
+  return exponential / 2 + (random() * exponential) / 2;
+}
+
 /** One Lobby on the Lobby list: the LobbyRoom listing's `metadata`. Never a password or hash. */
 export type LobbyListingMetadata = {
   /** `null`: the client shows a generated one. */

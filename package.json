@@ -10,7 +10,8 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "vitest run",
     "build": "pnpm --filter @universum/web run build",
-    "e2e": "pnpm --filter @universum/e2e run test"
+    "e2e": "pnpm --filter @universum/e2e run test",
+    "loadtest": "pnpm --filter @universum/loadtest run start"
   },
   "devDependencies": {
     "@types/node": "catalog:",
