@@ -12,7 +12,7 @@ import { createIpTagger, limiterRefused } from "#observability/limiter-refusals.
 import { colyseusLogger, silentLogger, type Logger } from "#observability/logger.ts";
 import { GameMetrics } from "#observability/metrics.ts";
 import { createBrowserRoutes } from "#http/browser-routes.ts";
-import { GameRoom, restoreOptions } from "#room/game-room.ts";
+import { GameRoom, restoreOptions, type GameTiming } from "#room/game-room.ts";
 import { systemScheduler, type Scheduler } from "#room/scheduler.ts";
 import { deleteAfterRetention } from "#store/retention.ts";
 import type { RoomStore } from "#store/room-store.ts";
@@ -36,6 +36,8 @@ export type GameServerOptions = {
   errorReporting?: Dsn | null;
   /** The rules engine's `apply` (tests pass one that throws). */
   engine?: typeof apply;
+  /** Shorter Turns and minutes for e2e runs (`GAME_TURN_LIMIT_MS`, `GAME_MINUTE_MS`); empty by default. */
+  timing?: GameTiming;
 };
 
 /** The Colyseus server with every Room type defined, not yet listening. */
@@ -46,6 +48,7 @@ export function createGameServer(options: GameServerOptions): Server {
     log = silentLogger,
     reporter = noReporter,
     engine = apply,
+    timing = {},
   } = options;
   const ipTag = createIpTagger();
   const guard = new AbuseGuard(options.limits ?? DEFAULT_LIMITS, (limit, bucket) =>
@@ -81,6 +84,7 @@ export function createGameServer(options: GameServerOptions): Server {
         override log = log;
         override reporter = reporter;
         override engine = engine;
+        override timing = timing;
       },
     )
     .enableRealtimeListing();

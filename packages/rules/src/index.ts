@@ -50,4 +50,5 @@ export {
   type PlayerView,
   type PublicView,
   type TurnTimer,
+  type ViewTiming,
 } from "#view.ts";

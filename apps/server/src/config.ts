@@ -2,6 +2,7 @@ import { join, resolve } from "node:path";
 import { LOG_LEVELS, type LogLevel } from "#observability/logger.ts";
 import { parseDsn } from "#observability/dsn.ts";
 import { loadLimits, type Limits } from "#limits.ts";
+import type { GameTiming } from "#room/game-room.ts";
 
 /** Typed server settings. Every value comes from the environment, with dev defaults. */
 export type ServerConfig = {
@@ -32,6 +33,11 @@ export type ServerConfig = {
    * reporting only while this is set.
    */
   sentryDsn: string | null;
+  /**
+   * Test-only clock overrides (`GAME_TURN_LIMIT_MS`, `GAME_MINUTE_MS`): shorter
+   * Turns and "minutes", so an e2e game reaches its end quickly. Unset in production.
+   */
+  timing: GameTiming;
 };
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -52,7 +58,21 @@ export function loadConfig(env: Env = process.env): ServerConfig {
     release: env["RELEASE"] || "dev",
     sentryDsn: parseSentryDsn(env["SENTRY_DSN"]),
     limits: loadLimits(env),
+    timing: {
+      turnLimitMs: parseOptionalMs("GAME_TURN_LIMIT_MS", env["GAME_TURN_LIMIT_MS"]),
+      minuteMs: parseOptionalMs("GAME_MINUTE_MS", env["GAME_MINUTE_MS"]),
+    },
   };
+}
+
+/** A positive whole number of milliseconds, or `undefined` when the variable is unset. */
+function parseOptionalMs(name: string, raw: string | undefined): number | undefined {
+  if (raw === undefined || raw === "") return undefined;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`${name} must be a whole number of milliseconds, got ${JSON.stringify(raw)}`);
+  }
+  return value;
 }
 
 /** The DSN, or `null` when reporting is off; anything else must be a DSN, never silently ignored. */

@@ -12,10 +12,21 @@ export type SetupInput = {
   seed: Seed;
   /** The server's clock when the game starts. */
   now: number;
+  /** A shorter Turn limit (ms), set by the server for e2e runs. */
+  turnLimitMs?: number;
+  /** A shorter "minute" (ms) for the Minute limit, set by the server for e2e runs. */
+  minuteMs?: number;
 };
 
 /** Builds the state of a game that has just started (R6–R9, R11). */
-export function setupGame({ seats, settings, seed, now }: SetupInput): GameState {
+export function setupGame({
+  seats,
+  settings,
+  seed,
+  now,
+  turnLimitMs,
+  minuteMs = MINUTE_MS,
+}: SetupInput): GameState {
   const first = seats[0];
   if (!first || seats.length < 2 || seats.length > 4) {
     throw new Error(`a game needs 2–4 Seats, got ${seats.length}`);
@@ -26,9 +37,9 @@ export function setupGame({ seats, settings, seed, now }: SetupInput): GameState
     turn: 1,
     currentPlayer: first.playerId,
     phase: awaitingRoll(),
-    turnDeadline: turnDeadlineFrom(now),
+    turnDeadline: turnDeadlineFrom(now, turnLimitMs),
     settings: { maxPlayers: settings.maxPlayers, minuteLimit: settings.minuteLimit },
-    endsAt: now + settings.minuteLimit * MINUTE_MS,
+    endsAt: now + settings.minuteLimit * minuteMs,
     players: seats.map((seat, index) => ({
       id: seat.playerId,
       name: { adjective: seat.name.adjective, noun: seat.name.noun },

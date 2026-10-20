@@ -11,6 +11,9 @@ import type { FieldState, GameState, PlayerState } from "#state.ts";
  */
 export type TurnTimer = { endsAt: number; limitMs: number };
 
+/** The server's clock overrides for the view (e2e runs); production leaves both out. */
+export type ViewTiming = { turnLimitMs?: number };
+
 /** A Player as clients see them: their state plus the numbers the UI shows. */
 export type PlayerView = PlayerState & {
   /** Cash plus the Value of their Fields; the podium ranks by it (R77). */
@@ -89,7 +92,7 @@ function pickOptions(state: GameState): PickOption[] | null {
   return null;
 }
 
-export function publicView(state: GameState): PublicView {
+export function publicView(state: GameState, timing: ViewTiming = {}): PublicView {
   return {
     stateVersion: state.stateVersion,
     version: state.version,
@@ -100,7 +103,10 @@ export function publicView(state: GameState): PublicView {
     turnTimer:
       state.turnDeadline === null
         ? null
-        : { endsAt: state.turnDeadline - TURN_SLACK_MS, limitMs: TURN_LIMIT_MS },
+        : {
+            endsAt: state.turnDeadline - TURN_SLACK_MS,
+            limitMs: timing.turnLimitMs ?? TURN_LIMIT_MS,
+          },
     settings: state.settings,
     endsAt: state.endsAt,
     players: state.players.map((player) => ({

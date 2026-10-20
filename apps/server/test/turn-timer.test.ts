@@ -1,13 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startTestServer, withDeadline, type TestServer } from "./helpers.ts";
 
-/** 20 s on the ring plus the 3 s slack (F22). */
-const DEADLINE_AFTER = 23_000;
+/** A 1 s ring (the e2e override) plus the 3 s slack. */
+const TURN_LIMIT_MS = 1_000;
+const DEADLINE_AFTER = TURN_LIMIT_MS + 3_000;
+/** 10 s "minutes": shorter than the 60 s default, long enough for the late-wake-up test. */
+const MINUTE_MS = 10_000;
 
 let server: TestServer;
 
 beforeAll(async () => {
-  server = await startTestServer();
+  server = await startTestServer({ timing: { turnLimitMs: TURN_LIMIT_MS, minuteMs: MINUTE_MS } });
 });
 
 afterAll(async () => {
@@ -25,7 +28,7 @@ async function startedGame() {
 }
 
 describe("the Turn deadline", () => {
-  it("every push carries the server's clock, and the first decision is due 23 s after Start", async () => {
+  it("every push carries the server's clock, the first decision is due one limit plus slack after Start, and the override reaches the ring and the Minute limit", async () => {
     const startedAt = server.scheduler.now();
     const alice = await server.create({ maxPlayers: 2 });
     const bob = await server.join(alice.code);
@@ -35,6 +38,11 @@ describe("the Turn deadline", () => {
 
     expect(message.now).toBe(startedAt);
     expect(message.view.turnDeadline).toBe(startedAt + DEADLINE_AFTER);
+    expect(message.view.turnTimer).toEqual({
+      endsAt: startedAt + TURN_LIMIT_MS,
+      limitMs: TURN_LIMIT_MS,
+    });
+    expect(message.view.endsAt).toBe(startedAt + message.view.settings.minuteLimit * MINUTE_MS);
   });
 
   it("R18/R19: an absent Player's Turn times out exactly once: the penalty, then the Turn passes", async () => {
@@ -64,7 +72,7 @@ describe("the Turn deadline", () => {
   it("a stale wake-up (for a Turn already over) changes nothing", async () => {
     const { alice, bob, view } = await startedGame();
     const aliceWakeUp = server.scheduler.lastTaskAt(view.turnDeadline);
-    server.scheduler.advanceTo(view.turnDeadline - 10_000);
+    server.scheduler.advanceTo(view.turnDeadline - 1_000);
     alice.send({ type: "Roll", turn: 1 });
     let [ended] = await Promise.all([alice.next("game"), bob.next("game")]);
     if (ended.view.phase.kind === "offer") {

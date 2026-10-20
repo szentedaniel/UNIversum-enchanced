@@ -52,4 +52,9 @@ export type Ctx = {
   actor: Actor;
   /** The server's `now` (epoch ms). The engine never reads a clock itself. */
   now: number;
+  /**
+   * The Turn limit in ms (`TURN_LIMIT_MS` when left out). The server sets a
+   * shorter one for e2e runs; it is not part of the game state.
+   */
+  turnLimitMs?: number;
 };

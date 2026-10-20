@@ -28,7 +28,7 @@ export function emit(tx: Tx, event: GameEvent): void {
  */
 export function setPhase(tx: Tx, phase: Phase): void {
   tx.state.phase = phase;
-  tx.state.turnDeadline = turnDeadlineFrom(tx.ctx.now);
+  tx.state.turnDeadline = turnDeadlineFrom(tx.ctx.now, tx.ctx.turnLimitMs);
 }
 
 /** Stops the intent at a Player decision: the phase lists the options. */
