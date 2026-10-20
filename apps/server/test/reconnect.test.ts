@@ -12,6 +12,8 @@ import {
 
 /** A Lobby Seat is held this long for a Player who dropped (spec: Seat hold). */
 const LOBBY_HOLD = 60_000;
+/** What Colyseus answers a reconnection token it no longer holds a Seat for. */
+const EXPIRED = "reconnection token invalid or expired";
 
 // One server at a time per file (the matchmaker is a singleton); each test
 // stops whatever it started.
@@ -83,7 +85,7 @@ describe("a Lobby Seat while its Player is away", () => {
     const freed = await alice.next("lobby");
 
     expect(freed.seats).toHaveLength(1);
-    await expect(server.reconnect(bob)).rejects.toThrow();
+    await expect(server.reconnect(bob)).rejects.toThrow(EXPIRED);
     const carol = await server.join(alice.code);
     expect((await carol.next("lobby")).seats).toHaveLength(2);
   });
@@ -117,19 +119,19 @@ describe("a Lobby Seat while its Player is away", () => {
     const lobby = await again.until("lobby", (l) => l.seats[0]?.heldUntil === undefined);
     expect(lobby.seats.map((s) => s.playerId)).toEqual([playerId]);
     // The old connection's hold was given up with it.
-    await expect(server.reconnect(alice)).rejects.toThrow();
+    await expect(server.reconnect(alice)).rejects.toThrow(EXPIRED);
   });
 });
 
 /** A started 2-Player game with Guest tokens; both clients have their first view taken. */
 async function startedGame(server: TestServer) {
-  const tokens = [newGuestToken(), newGuestToken()] as const;
+  const tokens = [newGuestToken(), newGuestToken()];
   const alice = await server.create({ maxPlayers: 2, guestToken: tokens[0] });
   const bob = await server.join(alice.code, { guestToken: tokens[1] });
   const ids = [(await alice.next("welcome")).playerId, (await bob.next("welcome")).playerId];
   alice.send({ type: "Start" });
   const [first] = await Promise.all([alice.next("game"), bob.next("game")]);
-  return { alice, bob, tokens, ids, code: alice.code, view: first!.view };
+  return { alice, bob, tokens, ids, code: alice.code, view: first.view };
 }
 
 describe("a Seat in a running game while its Player is away", () => {
@@ -165,7 +167,7 @@ describe("a Seat in a running game while its Player is away", () => {
     expect(view.version).toBe(0);
     again.send({ type: "Roll", turn: 1 });
     expect((await again.next("game")).view.version).toBe(1);
-    await expect(server.reconnect(alice)).rejects.toThrow();
+    await expect(server.reconnect(alice)).rejects.toThrow(EXPIRED);
   });
 
   it("moves to the new connection when the Guest opens a second tab, closing the first one", async () => {
@@ -199,7 +201,7 @@ describe("a Seat in a running game while its Player is away", () => {
 
     server.room(code)?.endGame();
 
-    await expect(server.reconnect(alice)).rejects.toThrow();
+    await expect(server.reconnect(alice)).rejects.toThrow(EXPIRED);
   });
 
   it("is taken back by Guest token after a server restart", async () => {
