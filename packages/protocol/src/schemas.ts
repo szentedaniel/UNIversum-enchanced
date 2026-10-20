@@ -7,10 +7,11 @@
  * rules engine; `PlayerIntentsMatchRules` below fails to compile until the
  * schemas and the rules' `PlayerIntent` type agree.
  */
-import { MAX_LEVEL, type PlayerIntent } from "@universum/rules";
+import { FIELD_COUNT, MAX_LEVEL, type PlayerIntent } from "@universum/rules";
 import { z } from "zod";
 import {
   DEFAULT_SETTINGS,
+  GUEST_TOKEN_PATTERN,
   MINUTE_LIMITS,
   PASSWORD_MAX_BYTES,
   PLAYER_COUNTS,
@@ -33,6 +34,20 @@ const PLAYER_INTENT_SCHEMAS = [
   z.strictObject({ type: z.literal("RollForTwelve"), turn }),
   z.strictObject({ type: z.literal("BuyPcrTest"), turn }),
   z.strictObject({ type: z.literal("UsePcrTest"), turn }),
+  z.strictObject({
+    type: z.literal("SellFields"),
+    turn,
+    fields: z
+      .array(
+        z
+          .int()
+          .min(0)
+          .max(FIELD_COUNT - 1),
+      )
+      .min(1)
+      .max(FIELD_COUNT),
+  }),
+  z.strictObject({ type: z.literal("AutoSell"), turn }),
 ] as const;
 
 const ROOM_INTENT_SCHEMAS = [z.strictObject({ type: z.literal("Start") })] as const;
@@ -62,11 +77,15 @@ const password = z
 /** A raw Room name; the server's Room name check normalises and judges it. This only bounds the work. */
 const ROOM_NAME_MAX_RAW_LENGTH = 256;
 
+/** See `GUEST_TOKEN_PATTERN`. */
+const guestToken = z.string().regex(GUEST_TOKEN_PATTERN);
+
 export const createOptionsSchema = z.object({
   maxPlayers: z.literal(PLAYER_COUNTS).default(DEFAULT_SETTINGS.maxPlayers),
   minuteLimit: z.literal(MINUTE_LIMITS).default(DEFAULT_SETTINGS.minuteLimit),
   roomName: z.string().max(ROOM_NAME_MAX_RAW_LENGTH).optional(),
   password: password.optional(),
+  guestToken: guestToken.optional(),
 });
 
 export type CreateOptionsInputMatch = Assert<
@@ -79,6 +98,7 @@ export type CreateOptionsOutputMatch = Assert<
 export const joinOptionsSchema = z.object({
   code: z.string().regex(/^\d{6}$/),
   password: password.optional(),
+  guestToken: guestToken.optional(),
 });
 
 export type JoinOptionsMatch = Assert<

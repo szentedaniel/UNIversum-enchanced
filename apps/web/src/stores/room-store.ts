@@ -32,6 +32,10 @@ export type RoomState = {
   push: Push | null;
   /** The latest Rejection of one of this client's intents. */
   rejection: { code: RejectionCode; seq: number } | null;
+  /** The server's clock minus this client's, when the last Lobby message arrived (for held Seats' countdowns). */
+  lobbyClockOffset: number;
+  /** `lost` because this Guest took the Seat in another tab (it must not try to win it back). */
+  takenElsewhere: boolean;
 };
 
 export const initialRoomState: RoomState = {
@@ -41,6 +45,8 @@ export const initialRoomState: RoomState = {
   lobby: null,
   push: null,
   rejection: null,
+  lobbyClockOffset: 0,
+  takenElsewhere: false,
 };
 
 export const roomStore = createStore<RoomState>()(subscribeWithSelector(() => initialRoomState));

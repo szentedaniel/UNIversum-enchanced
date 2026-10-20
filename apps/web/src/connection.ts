@@ -1,11 +1,20 @@
 /**
  * The one connection to the Room server, and the only writer of `roomStore`.
  * It owns the `@colyseus/sdk` client; screens call these functions and read
- * the store. Reconnection by `reconnectionToken` and Guest token lands here (#35).
- * It also streams the Lobby list (`watchLobbyList`), which lives outside the store.
+ * the store. It also streams the Lobby list (`watchLobbyList`), which lives
+ * outside the store.
+ *
+ * Reconnecting (spec: Client → State): a short drop is the SDK's own
+ * reconnection by `reconnectionToken`; anything else (server restart, the SDK
+ * giving up, a drop in the first 5 s) rejoins the same Seat by Guest token,
+ * with back-off and jitter, until it works, the Room is gone or the Guest
+ * goes home. A reload or a new tab rejoins by Guest token too (`ensureJoined`).
+ * The status is `connected | reconnecting | lost`, and a reconnected client
+ * never shows an older `version` than it had.
  */
-import { Client, MatchMakeError, type Room } from "@colyseus/sdk";
+import { Client, CloseCode, MatchMakeError, type Room } from "@colyseus/sdk";
 import {
+  CLOSE_CODE,
   GAME_ROOM,
   LOBBY_LIST_MESSAGE,
   LOBBY_ROOM,
@@ -22,14 +31,25 @@ import {
   type RejectionMessage,
   type WelcomeMessage,
 } from "@universum/protocol/messages";
+import { guestToken } from "#guest-token.ts";
+import { backoffDelay } from "#lib/backoff.ts";
 import { initialRoomState, roomStore } from "#stores/room-store.ts";
 
 /** Vite (dev) and Caddy (production) forward this path to the Room server. */
 const COLYSEUS_PATH = "/colyseus";
 
+/** The SDK's quick reconnects (≈ 20 s at most), before the Guest-token rejoin takes over. */
+const SDK_RECONNECT_RETRIES = 8;
+/** Guest-token rejoins: the first after `REJOIN_BASE_MS`, doubling up to `REJOIN_MAX_MS`, each with jitter. */
+const REJOIN_BASE_MS = 500;
+const REJOIN_MAX_MS = 10_000;
+/** "Room not found" can be a server still restoring its Rooms: tried this many times before giving up. */
+const REJOIN_NOT_FOUND_TRIES = 5;
+
 const sdk = new Client(COLYSEUS_PATH);
 let room: Room | null = null;
 let seq = 0;
+let rejoinTimer: ReturnType<typeof setTimeout> | undefined;
 
 /**
  * A failed create or join, as a Rejection code the screens can show, and
@@ -46,15 +66,26 @@ export class JoinError extends Error {
   }
 }
 
+const rejectionOf = (error: unknown): RejectionCode =>
+  error instanceof MatchMakeError ? matchmakeRefusal(error).code : "INTERNAL";
+
+const joinOptions = (code: string, password?: string): JoinOptions =>
+  password === undefined
+    ? { code, guestToken: guestToken() }
+    : { code, password, guestToken: guestToken() };
+
 /** Creates a Room and takes its first Seat; resolves with the Room code. */
 export async function createRoom(options: CreateOptions = {}): Promise<string> {
-  return attach(() => sdk.create(GAME_ROOM, options));
+  return attach(() => sdk.create(GAME_ROOM, { ...options, guestToken: guestToken() }));
 }
 
-/** Joins the Room with this code; a password Lobby refuses a missing or wrong password (`WRONG_PASSWORD`). */
+/**
+ * Joins the Room with this code; a password Lobby refuses a missing or wrong
+ * password (`WRONG_PASSWORD`). If this browser already has a Seat there, it
+ * gets that Seat back, in a running game too.
+ */
 export async function joinRoom(code: string, password?: string): Promise<string> {
-  const options: JoinOptions = password === undefined ? { code } : { code, password };
-  return attach(() => sdk.joinById(code, options));
+  return attach(() => sdk.joinById(code, joinOptions(code, password)));
 }
 
 let joining: { code: string; done: Promise<string> } | null = null;
@@ -77,6 +108,7 @@ export function sendIntent(intent: ClientIntent): void {
 }
 
 export async function leaveRoom(): Promise<void> {
+  clearTimeout(rejoinTimer);
   const leaving = room;
   room = null;
   roomStore.setState(initialRoomState);
@@ -95,27 +127,92 @@ async function attach(connect: () => Promise<Room>): Promise<string> {
     const { code, retryAfter } = matchmakeRefusal(error);
     throw new JoinError(code, retryAfter);
   }
-  // Register every handler before the next await: the server sends on join.
+  listen(joined);
+  return joined.roomId;
+}
+
+/** Makes `joined` this client's Room: every handler, registered before the next await (the server sends on join). */
+function listen(joined: Room): void {
   room = joined;
+  joined.reconnection.maxRetries = SDK_RECONNECT_RETRIES;
+  joined.reconnection.backoff = (attempt, delay) => backoffDelay(attempt, delay, 5_000);
+  const mine = () => room === joined;
   joined.onMessage(MESSAGE.welcome, (message: WelcomeMessage) => {
-    roomStore.setState({ me: message.playerId });
+    if (mine()) roomStore.setState({ me: message.playerId });
   });
   joined.onMessage(MESSAGE.lobby, (lobby: LobbyMessage) => {
-    roomStore.setState({ lobby });
+    if (mine()) roomStore.setState({ lobby, lobbyClockOffset: lobby.now - Date.now() });
   });
   joined.onMessage(MESSAGE.game, ({ view, events, now }: GameMessage) => {
+    if (!mine()) return;
+    // Never back to an older state after a reconnect (spec: Client → State).
+    const last = roomStore.getState().push;
+    if (last && view.version < last.view.version) return;
     roomStore.setState({ push: { view, events, seq: ++seq, clockOffset: now - Date.now() } });
   });
   joined.onMessage(MESSAGE.rejected, ({ code }: RejectionMessage) => {
-    roomStore.setState({ rejection: { code, seq: ++seq } });
+    if (mine()) roomStore.setState({ rejection: { code, seq: ++seq } });
   });
-  joined.onDrop(() => roomStore.setState({ status: "reconnecting" }));
-  joined.onReconnect(() => roomStore.setState({ status: "connected" }));
-  joined.onLeave(() => {
-    if (room === joined) roomStore.setState({ status: "lost" });
+  joined.onDrop(() => {
+    if (mine()) roomStore.setState({ status: "reconnecting" });
   });
-  roomStore.setState({ status: "connected", code: joined.roomId });
-  return joined.roomId;
+  joined.onReconnect(() => {
+    if (mine()) roomStore.setState({ status: "connected" });
+  });
+  joined.onLeave((code) => {
+    if (!mine()) return;
+    room = null;
+    if (code === CloseCode.CONSENTED) {
+      // The server closed the Room (the game ended long ago).
+      roomStore.setState({ status: "lost" });
+    } else if (code === CLOSE_CODE.seatTaken) {
+      roomStore.setState({ status: "lost", takenElsewhere: true });
+    } else {
+      rejoin(joined.roomId, 1);
+    }
+  });
+  roomStore.setState({ status: "connected", code: joined.roomId, takenElsewhere: false });
+}
+
+/** Rejoins the Seat by Guest token, attempt `attempt` (1, 2, …), keeping what the screen shows meanwhile. */
+function rejoin(code: string, attempt: number): void {
+  roomStore.setState({ status: "reconnecting" });
+  clearTimeout(rejoinTimer);
+  rejoinTimer = setTimeout(
+    () => void tryRejoin(code, attempt),
+    backoffDelay(attempt, REJOIN_BASE_MS, REJOIN_MAX_MS),
+  );
+}
+
+async function tryRejoin(code: string, attempt: number): Promise<void> {
+  const stillWanted = () => room === null && roomStore.getState().code === code;
+  if (!stillWanted()) return;
+  let joined: Room;
+  try {
+    joined = await sdk.joinById(code, joinOptions(code));
+  } catch (error) {
+    if (!stillWanted()) return;
+    const rejection = rejectionOf(error);
+    // A server that is down (INTERNAL), busy, rate-limiting or still restoring
+    // its Rooms is tried again (the back-off soon outlasts any short `retryAfter`).
+    if (
+      rejection === "INTERNAL" ||
+      rejection === "SERVER_BUSY" ||
+      rejection === "RATE_LIMITED" ||
+      (rejection === "ROOM_NOT_FOUND" && attempt < REJOIN_NOT_FOUND_TRIES)
+    ) {
+      rejoin(code, attempt + 1);
+    } else {
+      roomStore.setState({ status: "lost" });
+    }
+    return;
+  }
+  if (!stillWanted()) {
+    // The Guest went home (or elsewhere) meanwhile.
+    void joined.leave();
+    return;
+  }
+  listen(joined);
 }
 
 type ListingCache = { roomId: string; metadata?: LobbyListingMetadata };

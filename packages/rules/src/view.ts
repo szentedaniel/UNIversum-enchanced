@@ -1,5 +1,6 @@
 import type { FieldId } from "#board.ts";
 import { TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
+import { autoSellPicks } from "#rules/charge.ts";
 import { rentOf, saleValueOf, valueOf } from "#rules/pricing.ts";
 import type { FieldState, GameState } from "#state.ts";
 
@@ -26,6 +27,8 @@ export type PublicView = Omit<GameState, "rng" | "fields"> & {
    * is the slack before `turnDeadline` (the slack is never shown).
    */
   turnTimer: { endsAt: number; limitMs: number };
+  /** During a Sale, the Fields Auto-sell would sell (R68); `null` outside a Sale. */
+  autoSell: FieldId[] | null;
 };
 
 export function publicView(state: GameState): PublicView {
@@ -49,5 +52,9 @@ export function publicView(state: GameState): PublicView {
     })),
     doubler: state.doubler,
     lastChanceCard: state.lastChanceCard,
+    autoSell:
+      state.phase.kind === "selling"
+        ? autoSellPicks(state, state.currentPlayer, state.phase.shortfall)
+        : null,
   };
 }

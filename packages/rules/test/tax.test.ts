@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { START_CASH, type GameState } from "#index.ts";
-import { newGame, player, rollOnto, withField, withPlayer } from "./helpers.ts";
+import { accept, newGame, player, rollOnto, withField, withPlayer } from "./helpers.ts";
 
 const TAX = 30;
 const VESZPREM = 1; // Values 200,000 / 240,000 / 320,000 / 440,000
@@ -66,11 +66,29 @@ describe("landing on Tax", () => {
     expect(state.currentPlayer).toBe("p2");
   });
 
-  it("R38: until the Sale exists, cash that doesn't cover the Tax pays what it can and never goes negative", () => {
+  it("R37, R38: cash that doesn't cover the Tax opens a Sale for the Shortfall, keeping the amount", () => {
     const start = withPlayer(newGame(), "p1", { cash: 30_000 });
+    // (616,000 + 400,000) × 10% = 101,600
     const { state, events } = landOnTax({ [PARIS]: 4, [MUSEUM]: 0 }, start);
 
-    expect(events).toContainEqual({ type: "TaxPaid", player: "p1", amount: 30_000 });
-    expect(player(state, "p1").cash).toBe(0);
+    expect(state.phase).toEqual({
+      kind: "selling",
+      shortfall: 71_600,
+      resume: { kind: "tax", amount: 101_600 },
+    });
+    expect(events.some((e) => e.type === "TaxPaid")).toBe(false);
+    expect(player(state, "p1").cash).toBe(30_000);
+  });
+
+  it("F20: after the Sale the Tax computed at landing is paid, not a smaller one on what is left", () => {
+    const start = withPlayer(newGame(), "p1", { cash: 30_000 });
+    const landed = landOnTax({ [PARIS]: 4, [MUSEUM]: 0 }, start).state;
+
+    // Auto-sell sells the Museum (360,000), the cheaper Field.
+    const { state, events } = accept(landed, { type: "AutoSell", turn: landed.turn }, "p1");
+
+    expect(events).toContainEqual({ type: "TaxPaid", player: "p1", amount: 101_600 });
+    expect(player(state, "p1").cash).toBe(30_000 + 360_000 - 101_600);
+    expect(state.currentPlayer).toBe("p2");
   });
 });

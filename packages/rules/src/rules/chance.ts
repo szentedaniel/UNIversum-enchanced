@@ -47,9 +47,7 @@ const EFFECTS: Record<ChanceCardId, (tx: Tx, player: PlayerId) => void> = {
   },
   // A Charge like any other (F6: v1 never took this money).
   failedExams: (tx, playerId) => {
-    charge(tx, playerId, -CHANCE_CARD_MONEY.failedExams, (amount) => {
-      emit(tx, { type: "ChanceChargePaid", player: playerId, amount });
-    });
+    charge(tx, playerId, { kind: "chanceCard", amount: -CHANCE_CARD_MONEY.failedExams });
   },
 };
 

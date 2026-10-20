@@ -295,12 +295,12 @@ describe("Rent", () => {
     expect(applied.state.currentPlayer).toBe("p3");
   });
 
-  it("never takes more than the payer's cash, so money never goes negative (the Sale comes with #29)", () => {
+  it("R70, F12: a payer who can't cover the Rent with cash or Fields pays what they have and is Bankrupt; no money is created", () => {
     const start = withPlayer(newGame(), "p2", { cash: 100_000 });
 
     const applied = landOnOwned(SEATTLE, { [SEATTLE]: 4 }, start);
 
-    expect(player(applied.state, "p2").cash).toBe(0);
+    expect(player(applied.state, "p2")).toMatchObject({ cash: 0, bankrupt: true });
     expect(totalCash(applied.state)).toBe(totalCash(start));
   });
 });

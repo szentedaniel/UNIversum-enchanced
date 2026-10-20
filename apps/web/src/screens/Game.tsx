@@ -1,6 +1,7 @@
 import type { GameEvent, PhaseOf, PlayerIntent, PublicView } from "@universum/rules";
 import { FIELDS } from "@universum/rules/board";
-import { useState } from "react";
+import type { RejectionCode } from "@universum/protocol/messages";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useStore } from "zustand";
 import { Board } from "#board/Board.tsx";
@@ -9,12 +10,15 @@ import { EventToast, MinutePill } from "#components/GameHud.tsx";
 import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { Card } from "#components/ui/card.tsx";
-import { sendIntent } from "#connection.ts";
+import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
+import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
+import { saleFor } from "#pick/sale.ts";
+import { SaleTray } from "#screens/SaleTray.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { roomStore } from "#stores/room-store.ts";
-import { uiStore } from "#stores/ui-store.ts";
+import { salePicksFor, uiStore } from "#stores/ui-store.ts";
 import { chanceCardText, fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
 
 /** The newest event worth a toast, as text. */
@@ -102,6 +106,13 @@ function describe(event: GameEvent, view: PublicView): string | null {
       });
     case "PcrTestUsed":
       return m.event_pcr_test_used({ name: name(event.player) });
+    case "FieldsSold":
+      return (event.auto ? m.event_auto_sold : m.event_fields_sold)({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
+    case "WentBankrupt":
+      return m.event_went_bankrupt({ name: name(event.player) });
     default:
       return null;
   }
@@ -121,6 +132,7 @@ const NOTICES = new Set<GameEvent["type"]>([
   "RentPaid",
   "CardDrawn",
   "TaxPaid",
+  "WentBankrupt",
 ]);
 
 const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
@@ -133,15 +145,28 @@ export function Game() {
   const status = useStore(roomStore, (s) => s.status);
   const rejection = useStore(roomStore, (s) => s.rejection);
   const selectedField = useStore(uiStore, (s) => s.selectedField);
+  const salePicks = useStore(uiStore, (s) => s.salePicks);
   // No optimistic UI: after a tap the control stays hidden until the next push or a Rejection.
   const [sentAt, setSentAt] = useState<number | null>(null);
   const wide = useWide();
+  const [joinError, setJoinError] = useState<RejectionCode | null>(null);
+
+  // Opened by its address (a reload, a new tab, a later visit): take the Seat back by Guest token.
+  useEffect(() => {
+    ensureJoined(code).catch((e: unknown) => {
+      setJoinError(e instanceof JoinError ? e.code : "INTERNAL");
+    });
+  }, [code]);
 
   if (!push) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-4 text-center">
         <p className="m-0 font-bold">
-          {status === "connecting" ? m.connecting() : m.connection_lost()}
+          {joinError
+            ? rejectionText(joinError)
+            : status === "lost"
+              ? m.connection_lost()
+              : m.connecting()}
         </p>
         <Link to="/" className={buttonVariants({ variant: "plain" })}>
           {m.back_home()}
@@ -159,6 +184,8 @@ export function Game() {
   const offer = myTurn && view.phase.kind === "offer" && !pending ? view.phase : null;
   const quarantineChoice =
     myTurn && !pending && view.phase.kind === "quarantineChoice" ? view.phase : null;
+  const sale = saleFor(view, me);
+  const othersSale = !myTurn && view.phase.kind === "selling";
   // One toast at a time: the first notice of the push, else its first event worth one.
   const notice = events.find((event) => NOTICES.has(event.type));
   const toast = (notice ? [notice] : events)
@@ -179,6 +206,7 @@ export function Game() {
     you: p.id === me,
     bankrupt: p.bankrupt,
     status: [
+      p.bankrupt ? m.game_bankrupt() : null,
       p.quarantineRounds === null ? null : m.game_in_quarantine({ rounds: p.quarantineRounds }),
       p.hasPcrTest ? m.game_pcr_test_held() : null,
     ]
@@ -219,6 +247,11 @@ export function Game() {
           {m.game_turn({ turn: view.turn })}
         </span>
       </div>
+      {othersSale && (
+        <p className="m-0 text-sm font-bold text-ink/70" data-testid="sale-waiting">
+          {m.sale_waiting({ name: current ? playerName(current.name) : "" })}
+        </p>
+      )}
       {canRoll && (
         <Button size="lg" onClick={() => send({ type: "Roll", turn: view.turn })}>
           {m.game_roll()}
@@ -266,11 +299,30 @@ export function Game() {
       )}
     </Card>
   );
-  const card = selectedField === null ? turnCard : <FieldCard id={selectedField} view={view} />;
+  const mySeat = view.players.find((p) => p.id === me)?.seat ?? 0;
+  // The Sale tray takes the bottom slot during this client's Sale; else the Field card or the Turn card.
+  const card = sale ? (
+    <SaleTray
+      view={view}
+      sale={sale}
+      picks={salePicksFor(salePicks, sale.key)}
+      seat={mySeat}
+      clockOffset={push.clockOffset}
+      busy={pending}
+      onUnpick={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
+      onAutoSell={() => send({ type: "AutoSell", turn: view.turn })}
+      onSell={(fields) => send({ type: "SellFields", turn: view.turn, fields })}
+    />
+  ) : selectedField === null ? (
+    turnCard
+  ) : (
+    <FieldCard id={selectedField} view={view} />
+  );
 
   if (wide) {
     return (
       <main className="board-backdrop fixed inset-0 overflow-hidden">
+        <ReconnectOverlay />
         {/* The Board's box: clear of the corner cards, the status row and the card; the
             fit area also keeps clear of the camera buttons on its right. */}
         <div className="absolute inset-x-[110px] top-[110px] bottom-[200px] [--board-inset-left:3.75rem] [--board-inset-right:3.75rem]">
@@ -297,6 +349,7 @@ export function Game() {
 
   return (
     <main className="board-backdrop fixed inset-0 flex flex-col overflow-hidden pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
+      <ReconnectOverlay />
       <ul className="m-0 flex list-none justify-center gap-1.5 px-2" aria-label={m.game_players()}>
         {players.map((player) => (
           <PlayerChip key={player.seat} player={player} className="w-0 max-w-28 flex-1" />

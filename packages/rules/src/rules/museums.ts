@@ -40,10 +40,7 @@ export const landOnMuseum: Landing = (tx, playerId, field) => {
     return;
   }
   if (owner === playerId) return; // Own Museum: no Rent (R58), nothing to buy.
-  charge(tx, playerId, rentOf(tx.state, field), (amount) => {
-    playerById(tx, owner).cash += amount;
-    emit(tx, { type: "RentPaid", player: playerId, owner, field, amount });
-  });
+  charge(tx, playerId, { kind: "rent", amount: rentOf(tx.state, field), owner, field });
 };
 
 export const museumIntents = {

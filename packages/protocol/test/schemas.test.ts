@@ -22,6 +22,9 @@ describe("intentSchema", () => {
     [{ type: "RollForTwelve", turn: 3 }],
     [{ type: "BuyPcrTest", turn: 3 }],
     [{ type: "UsePcrTest", turn: 3 }],
+    [{ type: "SellFields", turn: 3, fields: [1] }],
+    [{ type: "SellFields", turn: 3, fields: [0, 15, 31] }],
+    [{ type: "AutoSell", turn: 3 }],
   ])("accepts %j", (message) => {
     expect(intentSchema.safeParse(message)).toEqual({ success: true, data: message });
   });
@@ -45,6 +48,16 @@ describe("intentSchema", () => {
     ["a BuyMuseum naming a Field", { type: "BuyMuseum", turn: 1, field: 4 }],
     ["a PCR test bought without a turn", { type: "BuyPcrTest" }],
     ["a PCR test with a price", { type: "BuyPcrTest", turn: 1, amount: 0 }],
+    ["a Sale without Fields", { type: "SellFields", turn: 1 }],
+    ["a Sale of no Field", { type: "SellFields", turn: 1, fields: [] }],
+    ["a Sale of a Field off the Board", { type: "SellFields", turn: 1, fields: [32] }],
+    ["a Sale of a negative Field", { type: "SellFields", turn: 1, fields: [-1] }],
+    ["a Sale of a Field by name", { type: "SellFields", turn: 1, fields: ["paris"] }],
+    [
+      "a Sale of more Fields than the Board has",
+      { type: "SellFields", turn: 1, fields: Array.from({ length: 33 }, () => 1) },
+    ],
+    ["an Auto-sell naming Fields", { type: "AutoSell", turn: 1, fields: [1] }],
   ])("refuses %s", (_, message) => {
     expect(intentSchema.safeParse(message).success).toBe(false);
   });
