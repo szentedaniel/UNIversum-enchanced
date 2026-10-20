@@ -62,7 +62,10 @@ function viewWith(phase: Phase, autoSell: number[] | null = null): PublicView {
     turnTimer: { endsAt: 47_000, limitMs: 20_000 },
     settings: { maxPlayers: 2, minuteLimit: 15 },
     endsAt: 0,
-    players: [playerState("p1", 0), playerState("p2", 1)],
+    players: [
+      { ...playerState("p1", 0), wealth: 100_000 },
+      { ...playerState("p2", 1), wealth: 100_000 },
+    ],
     fields,
     doubler: null,
     lastChanceCard: null,

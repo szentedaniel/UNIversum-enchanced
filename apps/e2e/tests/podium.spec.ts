@@ -1,0 +1,143 @@
+import { expect, test, type Browser, type Page } from "@playwright/test";
+
+// The result screen (#32), on each project's device. A random game can't be
+// played to its end quickly, so the test shows a made-up game-over view through
+// the test-only `showView` hook (as if the server had pushed it): the podium's
+// 2-1-3 order, the winner's own figure colour, the greyed Bankrupt Player and
+// the way back to the Lobby list. Nothing is sent to the server.
+test.use({ locale: "en-US" });
+
+/** Creates a 2-Player Room on `page`, fills it with a second Guest and starts. */
+async function startGame(page: Page, browser: Browser) {
+  await page.goto("/create");
+  await page.getByLabel("2", { exact: true }).check();
+  await page.getByRole("button", { name: "Create Room" }).click();
+  await expect(page).toHaveURL(/\/room\/[1-9]\d{5}$/);
+  const code = new URL(page.url()).pathname.split("/").at(-1) ?? "";
+  const other = await browser.newContext({ locale: "en-US" });
+  const guest = await other.newPage();
+  await guest.goto(`/room/${code}`);
+  await expect(page.locator("[data-testid=seat][data-open]")).toHaveCount(0);
+  await page.getByRole("button", { name: "Start" }).click();
+  await expect(page).toHaveURL(`/game/${code}`);
+  await expect
+    .poll(() => page.evaluate(() => window.universumTest?.camera().scale ?? 0))
+    .toBeGreaterThan(0);
+  return other;
+}
+
+/**
+ * Four Players: the yellow Seat (3) wins a time-up game, then the others by
+ * Wealth; Seat 2 is Bankrupt. The winner is not the Wealthiest, so the test
+ * proves the server's winner comes first.
+ */
+function showGameOver(page: Page) {
+  return page.evaluate(() => {
+    const hooks = window.universumTest!;
+    const view = structuredClone(hooks.room().push!.view);
+    view.players = [
+      {
+        id: "p1",
+        seat: 0,
+        name: { adjective: "brave", noun: "bear" },
+        cash: 2_000_000,
+        wealth: 2_000_000,
+        position: 0,
+        bankrupt: false,
+        quarantineRounds: null,
+        hasPcrTest: false,
+      },
+      {
+        id: "p2",
+        seat: 1,
+        name: { adjective: "calm", noun: "wolf" },
+        cash: 500_000,
+        wealth: 3_000_000,
+        position: 0,
+        bankrupt: false,
+        quarantineRounds: null,
+        hasPcrTest: false,
+      },
+      {
+        id: "p3",
+        seat: 2,
+        name: { adjective: "busy", noun: "beaver" },
+        cash: 0,
+        wealth: 0,
+        position: 0,
+        bankrupt: true,
+        quarantineRounds: null,
+        hasPcrTest: false,
+      },
+      {
+        id: "p4",
+        seat: 3,
+        name: { adjective: "happy", noun: "tiger" },
+        cash: 4_100_000,
+        wealth: 4_100_000,
+        position: 0,
+        bankrupt: false,
+        quarantineRounds: null,
+        hasPcrTest: false,
+      },
+    ];
+    view.fields = view.fields.map(() => ({ owner: null, level: 0, value: 0, rent: 0, sale: 0 }));
+    view.currentPlayer = "p4";
+    view.phase = { kind: "gameOver", winner: "p4", reason: "timeUp" };
+    view.turnDeadline = null;
+    view.turnTimer = null;
+    hooks.showView(view);
+  });
+}
+
+test("the result screen: a 2-1-3 podium in Player colours, the Bankrupt Player greyed below, and back to the list", async ({
+  page,
+  browser,
+}) => {
+  const other = await startGame(page, browser);
+  try {
+    await showGameOver(page);
+
+    const podium = page.getByTestId("podium");
+    await expect(podium).toBeVisible();
+    await expect(podium.getByTestId("podium-title")).toHaveText("Happy Tiger wins!");
+    await expect(podium).toContainText("Time's up.");
+
+    // 2-1-3, with the winner first by place, not by array order.
+    const places = podium.getByTestId("podium-place");
+    await expect(places).toHaveCount(3);
+    expect(
+      await places.evaluateAll((nodes) => nodes.map((n) => n.getAttribute("data-place"))),
+    ).toEqual(["2", "1", "3"]);
+    expect(
+      await places.evaluateAll((nodes) => nodes.map((n) => n.getAttribute("data-player"))),
+    ).toEqual(["p2", "p4", "p1"]);
+
+    // Each place names its Player and shows their Wealth.
+    const first = podium.locator('[data-testid=podium-place][data-place="1"]');
+    await expect(first).toContainText("Happy Tiger");
+    await expect(first).toContainText("4,100,000");
+    await expect(podium).toContainText("Calm Wolf");
+    await expect(podium).toContainText("Brave Bear");
+
+    // F28: the winner's block is in the winner's own colour (yellow, Seat 3).
+    const block = first.getByTestId("podium-block");
+    expect(await block.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe(
+      "rgb(255, 204, 0)",
+    );
+
+    // The Bankrupt Player is below the podium, greyed.
+    const below = podium.getByTestId("podium-below");
+    await expect(below).toContainText("Busy Beaver");
+    await expect(below).toContainText("Bankrupt");
+    expect(await below.locator("li").evaluate((node) => getComputedStyle(node).opacity)).toBe(
+      "0.5",
+    );
+
+    // Back to the Lobby list.
+    await podium.getByRole("link", { name: "Back to the Lobby list" }).click();
+    await expect(page).toHaveURL(/\/rooms$/);
+  } finally {
+    await other.close();
+  }
+});

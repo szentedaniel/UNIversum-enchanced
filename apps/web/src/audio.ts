@@ -11,10 +11,23 @@ export { soundStore };
 let element: HTMLAudioElement | null = null;
 let unlocked = false;
 
+/**
+ * The one dice-sound element. Under browser automation (Playwright sets
+ * `navigator.webdriver`) it starts muted, so test runs stay silent while
+ * `play()` is still called and can be counted.
+ */
+function diceElement(): HTMLAudioElement {
+  if (!element) {
+    element = new Audio(diceSound);
+    if (navigator.webdriver) element.muted = true;
+  }
+  return element;
+}
+
 /** Plays the dice sound, unless muted. A failed play (no gesture yet) is silent. */
 export function playDice(): void {
   if (soundStore.getState().muted) return;
-  const sound = (element ??= new Audio(diceSound));
+  const sound = diceElement();
   sound.currentTime = 0;
   void sound.play().catch(() => {});
 }
@@ -27,7 +40,7 @@ export function playDice(): void {
 export function unlockAudio(): void {
   if (unlocked) return;
   unlocked = true;
-  const sound = (element ??= new Audio(diceSound));
+  const sound = diceElement();
   const volume = sound.volume;
   sound.volume = 0;
   void (async () => {

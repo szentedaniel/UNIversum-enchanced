@@ -41,7 +41,10 @@ function viewWith(phase: Phase, pickOptions: PickOption[] | null): PublicView {
     turnTimer: { endsAt: 47_000, limitMs: 20_000 },
     settings: { maxPlayers: 2, minuteLimit: 15 },
     endsAt: 0,
-    players: [playerState("p1", 0), playerState("p2", 1)],
+    players: [
+      { ...playerState("p1", 0), wealth: 2_500_000 },
+      { ...playerState("p2", 1), wealth: 2_500_000 },
+    ],
     fields: Array.from({ length: FIELD_COUNT }, (_, id) =>
       id === BUDAPEST || id === MUSEUM_1 ? fieldView("p1", 121_000) : fieldView(null),
     ),

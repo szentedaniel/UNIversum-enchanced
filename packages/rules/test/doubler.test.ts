@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { publicView, SYSTEM, type GameState } from "#index.ts";
-import { accept, newGame, player, reject, rollOnto, withField, withPlayer } from "./helpers.ts";
+import {
+  accept,
+  deadlineOf,
+  newGame,
+  player,
+  reject,
+  rollOnto,
+  withField,
+  withPlayer,
+} from "./helpers.ts";
 
 const VESZPREM = 1;
 const BUDAPEST = 2;
@@ -130,7 +139,7 @@ describe("placing the Doubler", () => {
       landed.state,
       { type: "TurnTimedOut", turn: landed.state.turn },
       SYSTEM,
-      landed.state.turnDeadline,
+      deadlineOf(landed.state),
     );
 
     expect(player(timedOut.state, "p1").cash).toBe(2_250_000);

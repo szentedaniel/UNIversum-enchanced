@@ -121,11 +121,13 @@ export function SaleTray({
             seat={seat}
             size={44}
             ring={
-              <TurnRing
-                key={`${view.turn}:${view.turnDeadline}`}
-                timer={view.turnTimer}
-                clockOffset={clockOffset}
-              />
+              view.turnTimer === null ? null : (
+                <TurnRing
+                  key={`${view.turn}:${view.turnDeadline}`}
+                  timer={view.turnTimer}
+                  clockOffset={clockOffset}
+                />
+              )
             }
           />
         </div>

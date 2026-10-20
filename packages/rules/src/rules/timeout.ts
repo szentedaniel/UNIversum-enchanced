@@ -57,7 +57,8 @@ export const timeoutIntents = {
     actor: "system",
     phases: "any",
     run(tx) {
-      if (tx.ctx.now < tx.state.turnDeadline) return rejection("NOT_OFFERED");
+      const { turnDeadline } = tx.state;
+      if (turnDeadline === null || tx.ctx.now < turnDeadline) return rejection("NOT_OFFERED");
       const player = tx.state.currentPlayer;
       emit(tx, { type: "TimedOut", player });
       const outcome = TIMEOUT_OUTCOMES[tx.state.phase.kind];

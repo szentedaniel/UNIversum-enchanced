@@ -10,6 +10,7 @@ import { FieldCard } from "#board/FieldCard.tsx";
 import { GameMenu } from "#components/GameMenu.tsx";
 import { EventToast, MinutePill } from "#components/GameHud.tsx";
 import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
+import { Podium } from "#components/Podium.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { Card } from "#components/ui/card.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
@@ -117,6 +118,8 @@ function describe(event: GameEvent, view: PublicView): string | null {
       });
     case "WentBankrupt":
       return m.event_went_bankrupt({ name: name(event.player) });
+    case "GameEnded":
+      return m.event_game_ended({ name: name(event.winner) });
     default:
       return null;
   }
@@ -137,6 +140,7 @@ const NOTICES = new Set<GameEvent["type"]>([
   "CardDrawn",
   "TaxPaid",
   "WentBankrupt",
+  "GameEnded",
 ]);
 
 const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
@@ -188,6 +192,7 @@ export function Game() {
   }
 
   const { view, events } = push;
+  const gameOver = view.phase.kind === "gameOver" ? view.phase : null;
   const current = view.players.find((p) => p.id === view.currentPlayer);
   const myTurn = view.currentPlayer === me;
   const answeredAt = Math.max(push.seq, rejection?.seq ?? 0);
@@ -227,7 +232,7 @@ export function Game() {
     ]
       .filter((text) => text !== null)
       .join(" · "),
-    ring: p.id === view.currentPlayer && (
+    ring: p.id === view.currentPlayer && view.turnTimer !== null && (
       <TurnRing
         key={`${view.turn}:${view.turnDeadline}`}
         timer={view.turnTimer}
@@ -239,7 +244,7 @@ export function Game() {
 
   const statusRow = (
     <>
-      <MinutePill endsAt={view.endsAt} />
+      <MinutePill endsAt={view.endsAt} clockOffset={push.clockOffset} />
       <EventToast
         key={rejected ? `r${rejection.seq}` : push.seq}
         tone={rejected ? "bad" : "neutral"}
@@ -321,64 +326,65 @@ export function Game() {
     </Card>
   );
   const mySeat = view.players.find((p) => p.id === me)?.seat ?? 0;
-  // Inspect mode during a pick opens the Field card in the tray's place, with
-  // ‹ › over pickable Fields only; closing it brings the tray back. Otherwise
-  // the pick tray takes the bottom slot, then the Field card, then the Turn card.
+  // The result screen replaces both. Otherwise inspect mode during a pick opens
+  // the Field card in the tray's place, with ‹ › over pickable Fields only;
+  // closing it brings the tray back. Else the pick tray takes the bottom slot,
+  // then the Field card, then the Turn card.
   const pick = sale ?? singlePick;
-  const card =
-    pick && inspect && selectedField !== null ? (
-      <FieldCard id={selectedField} view={view} stepThrough={pick.pickable} />
-    ) : sale ? (
-      <SaleTray
-        view={view}
-        sale={sale}
-        picks={salePicksFor(salePicks, sale.key)}
-        seat={mySeat}
-        clockOffset={push.clockOffset}
-        busy={pending}
-        checklistOpen={checklistOpen}
-        inspect={inspect}
-        onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
-        onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
-        onToggle={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
-        onFocus={(field) => uiStore.getState().focusPick(field)}
-        onUnpick={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
-        onAutoSell={() => send({ type: "AutoSell", turn: view.turn })}
-        onSell={(fields) => send({ type: "SellFields", turn: view.turn, fields })}
-      />
-    ) : singlePick ? (
-      <PickTray
-        view={view}
-        pick={singlePick}
-        selection={singleSelection}
-        seat={mySeat}
-        clockOffset={push.clockOffset}
-        busy={pending}
-        checklistOpen={checklistOpen}
-        inspect={inspect}
-        onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
-        onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
-        onToggle={(field) => uiStore.getState().choosePick(singlePick.key, field)}
-        onFocus={(field) => uiStore.getState().focusPick(field)}
-        onPick={(field) => uiStore.getState().choosePick(singlePick.key, field)}
-        onCommit={(field) =>
-          send(
-            singlePick.kind === "doubler"
-              ? { type: "PlaceDoubler", turn: view.turn, field }
-              : { type: "TravelErasmus", turn: view.turn, field },
-          )
-        }
-      />
-    ) : selectedField === null ? (
-      turnCard
-    ) : (
-      <FieldCard id={selectedField} view={view} />
-    );
+  const card = gameOver ? null : pick && inspect && selectedField !== null ? (
+    <FieldCard id={selectedField} view={view} stepThrough={pick.pickable} />
+  ) : sale ? (
+    <SaleTray
+      view={view}
+      sale={sale}
+      picks={salePicksFor(salePicks, sale.key)}
+      seat={mySeat}
+      clockOffset={push.clockOffset}
+      busy={pending}
+      checklistOpen={checklistOpen}
+      inspect={inspect}
+      onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
+      onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
+      onToggle={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
+      onFocus={(field) => uiStore.getState().focusPick(field)}
+      onUnpick={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
+      onAutoSell={() => send({ type: "AutoSell", turn: view.turn })}
+      onSell={(fields) => send({ type: "SellFields", turn: view.turn, fields })}
+    />
+  ) : singlePick ? (
+    <PickTray
+      view={view}
+      pick={singlePick}
+      selection={singleSelection}
+      seat={mySeat}
+      clockOffset={push.clockOffset}
+      busy={pending}
+      checklistOpen={checklistOpen}
+      inspect={inspect}
+      onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
+      onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
+      onToggle={(field) => uiStore.getState().choosePick(singlePick.key, field)}
+      onFocus={(field) => uiStore.getState().focusPick(field)}
+      onPick={(field) => uiStore.getState().choosePick(singlePick.key, field)}
+      onCommit={(field) =>
+        send(
+          singlePick.kind === "doubler"
+            ? { type: "PlaceDoubler", turn: view.turn, field }
+            : { type: "TravelErasmus", turn: view.turn, field },
+        )
+      }
+    />
+  ) : selectedField === null ? (
+    turnCard
+  ) : (
+    <FieldCard id={selectedField} view={view} />
+  );
 
   if (wide) {
     return (
       <main className="board-backdrop fixed inset-0 overflow-hidden">
         <ReconnectOverlay />
+        {gameOver && <Podium view={view} phase={gameOver} />}
         {/* The Board's box: clear of the corner cards, the status row and the card; the
             fit area also keeps clear of the camera buttons on its right. */}
         <div className="absolute inset-x-[110px] top-[110px] bottom-[200px] [--board-inset-left:3.75rem] [--board-inset-right:3.75rem]">
@@ -406,6 +412,7 @@ export function Game() {
   return (
     <main className="board-backdrop fixed inset-0 flex flex-col overflow-hidden pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
       <ReconnectOverlay />
+      {gameOver && <Podium view={view} phase={gameOver} />}
       <ul className="m-0 flex list-none justify-center gap-1.5 px-2" aria-label={m.game_players()}>
         {players.map((player) => (
           <PlayerChip key={player.seat} player={player} className="w-0 max-w-28 flex-1" />

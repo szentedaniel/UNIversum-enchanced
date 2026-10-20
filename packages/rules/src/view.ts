@@ -2,8 +2,20 @@ import type { FieldId } from "#board.ts";
 import { FIELD_COUNT } from "#board.ts";
 import { ROUND_BONUS, TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
 import { autoSellPicks } from "#rules/charge.ts";
-import { baseRentOf, rentOf, saleValueOf, valueOf } from "#rules/pricing.ts";
-import type { FieldState, GameState } from "#state.ts";
+import { baseRentOf, rentOf, saleValueOf, valueOf, wealthOf } from "#rules/pricing.ts";
+import type { FieldState, GameState, PlayerState } from "#state.ts";
+
+/**
+ * The Turn timer the ring shows: it runs for `limitMs` and empties at
+ * `endsAt`, which is the slack before `turnDeadline` (the slack is never shown).
+ */
+export type TurnTimer = { endsAt: number; limitMs: number };
+
+/** A Player as clients see them: their state plus the numbers the UI shows. */
+export type PlayerView = PlayerState & {
+  /** Cash plus the Value of their Fields; the podium ranks by it (R77). */
+  wealth: number;
+};
 
 /** A Field as clients see it: its state plus the numbers the UI shows. */
 export type FieldView = FieldState & {
@@ -34,13 +46,11 @@ export type PickOption =
  * compile here until someone decides whether clients may see it. Derived
  * numbers the UI shows (Rent, Buyout price, Auto-sell's picks) are added here.
  */
-export type PublicView = Omit<GameState, "rng" | "fields"> & {
+export type PublicView = Omit<GameState, "rng" | "fields" | "players"> & {
   fields: FieldView[];
-  /**
-   * The Turn timer ring: it runs for `limitMs` and empties at `endsAt`, which
-   * is the slack before `turnDeadline` (the slack is never shown).
-   */
-  turnTimer: { endsAt: number; limitMs: number };
+  players: PlayerView[];
+  /** The Turn timer ring; `null` once the game is over. */
+  turnTimer: TurnTimer | null;
   /** During a Sale, the Fields Auto-sell would sell (R68); `null` outside a Sale. */
   autoSell: FieldId[] | null;
   /** During a Doubler or Erasmus pick, each option's effect; `null` outside one. */
@@ -87,10 +97,16 @@ export function publicView(state: GameState): PublicView {
     currentPlayer: state.currentPlayer,
     phase: state.phase,
     turnDeadline: state.turnDeadline,
-    turnTimer: { endsAt: state.turnDeadline - TURN_SLACK_MS, limitMs: TURN_LIMIT_MS },
+    turnTimer:
+      state.turnDeadline === null
+        ? null
+        : { endsAt: state.turnDeadline - TURN_SLACK_MS, limitMs: TURN_LIMIT_MS },
     settings: state.settings,
     endsAt: state.endsAt,
-    players: state.players,
+    players: state.players.map((player) => ({
+      ...player,
+      wealth: wealthOf(state, player.id),
+    })),
     fields: state.fields.map((field, id: FieldId) => ({
       owner: field.owner,
       level: field.level,

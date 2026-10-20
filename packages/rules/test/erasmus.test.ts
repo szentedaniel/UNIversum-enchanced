@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FIELDS, publicView, SYSTEM, type GameState } from "#index.ts";
-import { accept, newGame, player, reject, rollOnto, withField } from "./helpers.ts";
+import { accept, deadlineOf, newGame, player, reject, rollOnto, withField } from "./helpers.ts";
 
 const VESZPREM = 1;
 const ZURICH = 5;
@@ -38,8 +38,13 @@ describe("landing on Erasmus", () => {
 
     const landed = rollOnto(state, ERASMUS);
 
-    // F16: there is nothing to pick, so the Turn passes at once.
-    expect(landed.state.phase).toEqual({ kind: "awaitingRoll" });
+    // F16: there is nothing to pick, so the Turn passes at once. Owning every
+    // ownable Field is also a Super-monopoly, which ends the game there (R78).
+    expect(landed.state.phase).toEqual({
+      kind: "gameOver",
+      winner: "p2",
+      reason: "superMonopoly",
+    });
     expect(landed.state.currentPlayer).toBe("p2");
   });
 });
@@ -124,8 +129,8 @@ describe("travelling with Erasmus", () => {
     const landed = rollOnto(state, ERASMUS);
 
     expect(landed.state.currentPlayer).toBe("p2");
-    expect(landed.state.turn).toBe(2);
-    expect(landed.state.phase).toEqual({ kind: "awaitingRoll" });
+    // The game ends at this Turn change (the Super-monopoly), before a new Turn begins.
+    expect(landed.state.phase).toMatchObject({ kind: "gameOver", winner: "p2" });
     expect(player(landed.state, "p1").cash).toBe(2_500_000);
     expect(landed.events.some((event) => event.type === "TimedOut")).toBe(false);
   });
@@ -137,7 +142,7 @@ describe("travelling with Erasmus", () => {
       landed.state,
       { type: "TurnTimedOut", turn: landed.state.turn },
       SYSTEM,
-      landed.state.turnDeadline,
+      deadlineOf(landed.state),
     );
 
     expect(player(timedOut.state, "p1").cash).toBe(2_250_000);

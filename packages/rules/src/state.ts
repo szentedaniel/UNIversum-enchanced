@@ -92,9 +92,10 @@ export type GameState = {
   /**
    * When the current decision times out (epoch ms): `now + TURN_LIMIT_MS +
    * TURN_SLACK_MS`, reset by every phase change (R17, F22). The Room server
-   * wakes up then and sends `TurnTimedOut`.
+   * wakes up then and sends `TurnTimedOut`. `null` once the game is over:
+   * nothing can time out any more.
    */
-  turnDeadline: number;
+  turnDeadline: number | null;
   settings: Settings;
   /** When the Minute limit runs out (epoch ms); checked at each Turn change. */
   endsAt: number;

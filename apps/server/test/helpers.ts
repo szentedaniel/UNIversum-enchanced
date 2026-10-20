@@ -24,7 +24,7 @@ import {
   type RejectionMessage,
   type WelcomeMessage,
 } from "@universum/protocol";
-import type { apply } from "@universum/rules";
+import type { apply, PublicView } from "@universum/rules";
 import type { Dsn } from "#observability/dsn.ts";
 import type { ErrorReporter } from "#observability/error-reporting.ts";
 import type { Logger } from "#observability/logger.ts";
@@ -109,6 +109,13 @@ export const TEST_LIMITS: Limits = {
   seatReservationsPerIp: 10_000,
   socketsPerIp: 10_000,
 };
+
+/** A started game's first view, with its Turn deadline narrowed to a number. */
+export function withDeadline(message: GameMessage): PublicView & { turnDeadline: number } {
+  const { view } = message;
+  if (view.turnDeadline === null) throw new Error("a started game has a deadline");
+  return { ...view, turnDeadline: view.turnDeadline };
+}
 
 /** A Guest on its own IP (sent as `X-Real-IP`, as Caddy does). */
 export type TestGuest = {
