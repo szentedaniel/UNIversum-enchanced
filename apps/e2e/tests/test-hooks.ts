@@ -24,6 +24,8 @@ declare global {
       fieldCenter(id: number): { x: number; y: number };
       camera(): Camera;
       view(): ViewSummary | null;
+      /** The room store (only the fields the specs read). */
+      room(): { me: string | null; status: string };
     };
   }
 }
