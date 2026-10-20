@@ -25,6 +25,7 @@ import {
   type WelcomeMessage,
 } from "@universum/protocol";
 import type { apply } from "@universum/rules";
+import type { Dsn } from "#observability/dsn.ts";
 import type { ErrorReporter } from "#observability/error-reporting.ts";
 import type { Logger } from "#observability/logger.ts";
 import { GameMetrics } from "#observability/metrics.ts";
@@ -130,6 +131,8 @@ export type TestServerOptions = {
   engine?: typeof apply;
   /** Where errors are reported; nowhere by default. */
   reporter?: ErrorReporter;
+  /** The tracker DSN `/client-config` and `/errors` use; `null` (off) by default. */
+  errorReporting?: Dsn | null;
 };
 
 export type TestServer = {
@@ -185,10 +188,11 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
   const sqlite = openSqliteRoomStore(databasePath);
   const store = options.wrapStore?.(sqlite) ?? sqlite;
   const metrics = new GameMetrics({ release: "test" });
-  const { log, engine, reporter } = options;
+  const { log, engine, reporter, errorReporting } = options;
   const server = createGameServer({
     engine,
     reporter,
+    errorReporting,
     gracefullyShutdown: false,
     scheduler,
     store,

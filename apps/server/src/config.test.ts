@@ -86,6 +86,8 @@ describe("loadConfig", () => {
       intentBurstClose: 50,
       maxPayloadBytes: 1024,
       matchmakeBodyBytes: 2048,
+      errorEventsPerMinute: 10,
+      errorReportBytes: 204800,
     });
   });
 

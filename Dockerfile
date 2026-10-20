@@ -41,6 +41,9 @@ CMD ["node", "src/main.ts"]
 
 # --- web: the Vite build -------------------------------------------------------
 FROM pnpm AS web-build
+# The same release as the server's (compose passes it to both targets).
+ARG RELEASE=dev
+ENV RELEASE=$RELEASE
 # Installing the web app also compiles its Paraglide messages (postinstall).
 RUN --mount=type=cache,id=universum-pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter "@universum/web..."

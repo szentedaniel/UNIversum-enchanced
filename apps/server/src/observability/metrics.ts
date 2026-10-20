@@ -30,6 +30,7 @@ export const LIMITER_LIMITS = [
   "password_room",
   "password_ip",
   "intent_flood",
+  "error_events",
 ] as const;
 export type LimiterLimit = (typeof LIMITER_LIMITS)[number];
 

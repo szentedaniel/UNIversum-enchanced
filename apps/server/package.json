@@ -19,7 +19,8 @@
     "@universum/protocol": "workspace:*",
     "@universum/rules": "workspace:*",
     "pino": "catalog:",
-    "rate-limiter-flexible": "catalog:"
+    "rate-limiter-flexible": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@colyseus/sdk": "catalog:",
