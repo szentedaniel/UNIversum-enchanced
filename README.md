@@ -74,6 +74,29 @@ Manual check after packaging changes: run `docker compose up --build`, open http
 browsers (e.g. a desktop browser and a phone on the LAN at `http://<this machine's IP>`), create a
 Room in one, join it with the Room code in the other, start, and play a few Turns.
 
+## Load test (manual, never in CI)
+
+`pnpm loadtest` proves the launch peak: it brings up the compose stack with
+`compose.loadtest.yaml` (the server capped at 2 CPUs / 2 GB, per-IP limits raised, flood limits,
+`maxPayload` and the Lobby cap at production values) and the `monitoring` profile, runs 1,000
+scripted Rooms of 4 over a 10-minute ramp and a 30-minute hold, SIGKILLs the server 20 minutes into
+the hold, and prints PASS/FAIL per criterion from Prometheus plus the generator's own round-trip
+and Seat/version checks. It writes a Markdown report to `loadtest-reports/` (gitignored) and exits
+non-zero on any FAIL.
+
+The generator runs on the host, outside the container caps; a run where the generator itself uses
+more than 70% of the machine is marked invalid. A passing 40-minute run on a Linux host is the
+sign-off (#47); for a quick scaled smoke on a laptop:
+
+```sh
+pnpm loadtest -- --rooms 20 --ramp 1m --hold 2m --restart-at 1m \
+  --http-port 9146 --prometheus-port 9190 --grafana-port 9300 --project loadtest-smoke
+```
+
+`pnpm loadtest -- --help` lists every option, including `--find-knee` (adds 100 Rooms/min until a
+threshold breaks and reports the last passing count; it never gates), `--no-build` and `--keep`.
+CI only type-checks and lints `apps/loadtest`; it never runs the load.
+
 ## Third-party content
 
 The Room name word filter (`apps/server/src/room/blocked-words.ts`) is seeded from the
