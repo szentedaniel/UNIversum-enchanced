@@ -65,6 +65,17 @@ export type SeatRecord = LobbySeat & { sessionId: string | null };
  */
 type SeatAuth = { bucket: string; reservation: string; creates: boolean; code?: string };
 
+/** The IP bucket `onAuth` admitted a client under (see `SeatAuth`), for the refusal log's IP tag. */
+function bucketOf(client: Client): string {
+  const auth: unknown = client.auth;
+  return typeof auth === "object" &&
+    auth !== null &&
+    "bucket" in auth &&
+    typeof auth.bucket === "string"
+    ? auth.bucket
+    : "unknown";
+}
+
 /** The HTTP status Colyseus answers a refused create or join with. */
 const STATUS: Partial<Record<RejectionCode, number>> = {
   MALFORMED: 400,
@@ -434,8 +445,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     }
     const verdict = meter.record(performance.now());
     if (verdict === "warn" || verdict === "close") {
-      const auth = client.auth as Partial<SeatAuth> | undefined;
-      this.guard.refused("intent_flood", auth?.bucket ?? "unknown", null);
+      this.guard.refused("intent_flood", bucketOf(client), null);
     }
     if (verdict === "warn") this.reject(client, "SLOW_DOWN");
     if (verdict === "close") client.leave(CloseCode.WITH_ERROR);

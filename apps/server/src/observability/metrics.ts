@@ -60,41 +60,48 @@ export class GameMetrics {
   constructor(options: { release: string }) {
     const registers = [this.registry];
     collectDefaultMetrics({ register: this.registry });
-    new Gauge({
+    const buildInfo = new Gauge({
       name: "build_info",
       help: "The running build (git SHA as release); the value is always 1.",
       labelNames: ["release"],
       registers,
-    }).set({ release: options.release }, 1);
+    });
+    buildInfo.set({ release: options.release }, 1);
 
     const rooms = () => [...this.#rooms].map((room) => room.gauges());
-    new Gauge({
-      name: "rooms",
-      help: "Live Rooms by state.",
-      labelNames: ["state"],
-      registers,
-      collect() {
-        const states = rooms().map((r) => r.state);
-        this.set({ state: "lobby" }, states.filter((s) => s === "lobby").length);
-        this.set({ state: "playing" }, states.filter((s) => s === "playing").length);
-      },
-    });
-    new Gauge({
-      name: "players_connected",
-      help: "Seats with a live connection.",
-      registers,
-      collect() {
-        this.set(rooms().reduce((sum, r) => sum + r.connected, 0));
-      },
-    });
-    new Gauge({
-      name: "seats_held_disconnected",
-      help: "Taken Seats nobody is connected to (held for a reconnect).",
-      registers,
-      collect() {
-        this.set(rooms().reduce((sum, r) => sum + r.held, 0));
-      },
-    });
+    this.registry.registerMetric(
+      new Gauge({
+        name: "rooms",
+        help: "Live Rooms by state.",
+        labelNames: ["state"],
+        registers: [],
+        collect() {
+          const states = rooms().map((r) => r.state);
+          this.set({ state: "lobby" }, states.filter((s) => s === "lobby").length);
+          this.set({ state: "playing" }, states.filter((s) => s === "playing").length);
+        },
+      }),
+    );
+    this.registry.registerMetric(
+      new Gauge({
+        name: "players_connected",
+        help: "Seats with a live connection.",
+        registers: [],
+        collect() {
+          this.set(rooms().reduce((sum, r) => sum + r.connected, 0));
+        },
+      }),
+    );
+    this.registry.registerMetric(
+      new Gauge({
+        name: "seats_held_disconnected",
+        help: "Taken Seats nobody is connected to (held for a reconnect).",
+        registers: [],
+        collect() {
+          this.set(rooms().reduce((sum, r) => sum + r.held, 0));
+        },
+      }),
+    );
 
     this.#intents = new Counter({
       name: "intents_total",

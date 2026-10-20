@@ -1,5 +1,5 @@
 import { once } from "node:events";
-import { createServer } from "node:http";
+import { createServer, type ServerResponse } from "node:http";
 import type { GameMetrics } from "#observability/metrics.ts";
 
 /**
@@ -16,6 +16,17 @@ export type InternalServer = {
   close(): Promise<void>;
 };
 
+async function serveMetrics(metrics: GameMetrics, response: ServerResponse): Promise<void> {
+  try {
+    const body = await metrics.scrape();
+    response.writeHead(200, { "content-type": metrics.contentType });
+    response.end(body);
+  } catch {
+    response.writeHead(500, { "content-type": "text/plain" });
+    response.end("metrics failed");
+  }
+}
+
 export async function startInternalServer(options: {
   port: number;
   host: string;
@@ -27,16 +38,7 @@ export async function startInternalServer(options: {
   const server = createServer((request, response) => {
     const path = new URL(request.url ?? "/", "http://internal").pathname;
     if (path === "/metrics" && metrics) {
-      void metrics.scrape().then(
-        (body) => {
-          response.writeHead(200, { "content-type": metrics.contentType });
-          response.end(body);
-        },
-        () => {
-          response.writeHead(500, { "content-type": "text/plain" });
-          response.end("metrics failed");
-        },
-      );
+      void serveMetrics(metrics, response);
       return;
     }
     const status = path === "/healthz" ? 200 : path === "/readyz" ? (isReady ? 200 : 503) : 404;

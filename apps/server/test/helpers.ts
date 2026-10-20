@@ -257,7 +257,10 @@ export function captureLogs() {
         .join("")
         .split("\n")
         .filter((l) => l !== "")
-        .map((l) => JSON.parse(l) as Record<string, unknown>),
+        .map((l) => {
+          const line: Record<string, unknown> = JSON.parse(l);
+          return line;
+        }),
   };
 }
 

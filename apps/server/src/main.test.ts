@@ -87,7 +87,10 @@ describe("server under plain Node", () => {
     const lines = output
       .trim()
       .split("\n")
-      .map((l) => JSON.parse(l) as { level: number; msg: string });
+      .map((l) => {
+        const line: { level: number; msg: string } = JSON.parse(l);
+        return line;
+      });
     expect(lines.filter((l) => l.level === 30).map((l) => l.msg)).toEqual([
       "Server listening",
       "Rooms restored",

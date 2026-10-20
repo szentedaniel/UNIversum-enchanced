@@ -1,3 +1,4 @@
+import { MatchMakeError } from "@colyseus/sdk";
 import { afterEach, describe, expect, it } from "vitest";
 import { createLogger } from "#observability/logger.ts";
 import { captureLogs, eventually, startTestServer, type TestServer } from "./helpers.ts";
@@ -56,12 +57,11 @@ describe("metrics", () => {
 
     await other.leave();
 
-    await eventually(async () => {
-      const dropped = await server!.metrics.scrape();
-      expect(sample(dropped, "seat_drops_total")).toBe(1);
-      expect(sample(dropped, "players_connected")).toBe(1);
-      expect(sample(dropped, "seats_held_disconnected")).toBe(1);
-    });
+    const scrape = () => server!.metrics.scrape();
+    await expect.poll(async () => sample(await scrape(), "seat_drops_total")).toBe(1);
+    const dropped = await scrape();
+    expect(sample(dropped, "players_connected")).toBe(1);
+    expect(sample(dropped, "seats_held_disconnected")).toBe(1);
   });
 
   it("no series is labelled with a Room code or a Player", async () => {
@@ -101,7 +101,7 @@ describe("limiter refusals", () => {
     const guest = server.from("203.0.113.77");
     await guest.create();
 
-    await expect(guest.create()).rejects.toThrow();
+    await expect(guest.create()).rejects.toBeInstanceOf(MatchMakeError);
 
     const scrape = await server.metrics.scrape();
     expect(sample(scrape, 'limiter_refusals_total{limit="room_creations_per_minute"}')).toBe(1);
@@ -152,7 +152,9 @@ describe("logs", () => {
       log: createLogger({ level: "debug", stream: capture.stream }),
     });
     const alice = await server.create({ maxPlayers: 2, password: "hunter2-secret" });
-    await expect(server.join(alice.code, { password: "wrong-guess" })).rejects.toThrow();
+    await expect(server.join(alice.code, { password: "wrong-guess" })).rejects.toBeInstanceOf(
+      MatchMakeError,
+    );
     const bob = await server.join(alice.code, { password: "hunter2-secret" });
     const aliceId = (await alice.next("welcome")).playerId;
     const bobId = (await bob.next("welcome")).playerId;
