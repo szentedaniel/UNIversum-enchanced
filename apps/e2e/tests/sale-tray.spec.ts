@@ -16,6 +16,7 @@ const SEATTLE = 17;
 const fieldCenter = (page: Page, id: number) =>
   page.evaluate((field) => window.universumTest!.fieldCenter(field), id);
 const pick = (page: Page) => page.evaluate(() => window.universumTest?.pick() ?? null);
+const camera = (page: Page) => page.evaluate(() => window.universumTest?.camera() ?? null);
 
 /** A tap on a phone, a click on desktop. */
 async function tapField(page: Page, isMobile: boolean, id: number) {
@@ -150,6 +151,100 @@ test("in the last 5 s of an uncovered Sale, Auto-sell's Fields are ringed; a Ban
     // Covered: no more warning.
     await tapField(page, isMobile, BERLIN);
     await expect.poll(async () => (await pick(page))?.ringed).toEqual([]);
+  } finally {
+    await other.close();
+  }
+});
+
+test("the checklist lists the Sale cheapest first with Auto-sell's picks badged, and its rows toggle the picks", async ({
+  page,
+  browser,
+}) => {
+  const other = await startGame(page, browser);
+  try {
+    await showSale(page, 15_000);
+    const tray = page.getByTestId("sale-tray");
+    const toggle = tray.getByTestId("pick-checklist-toggle");
+    // It opens the way the Player last left it: collapsed on a fresh client.
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await expect(tray.getByTestId("pick-checklist")).toHaveCount(0);
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+
+    const rows = tray.getByTestId("pick-checklist").getByRole("button");
+    await expect(rows).toHaveCount(3);
+    // Cheapest first, Auto-sell's picks badged.
+    await expect(rows.nth(0)).toContainText("Veszprém");
+    await expect(rows.nth(0)).toContainText("Auto-sell");
+    await expect(rows.nth(1)).toContainText("Budapest");
+    await expect(rows.nth(1)).toContainText("Auto-sell");
+    await expect(rows.nth(2)).toContainText("Berlin");
+    await expect(rows.nth(2)).not.toContainText("Auto-sell");
+    await expect(rows.nth(0)).toContainText("180K");
+    await expect(rows.nth(2)).toContainText("792K");
+
+    // A row toggles the same pick as a Board tap, and focuses its Field
+    // without zooming the camera.
+    const scale = (await camera(page))?.scale ?? 0;
+    await rows.nth(2).click();
+    await expect(rows.nth(2)).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(async () => (await pick(page))?.picked).toEqual([BERLIN]);
+    await expect(tray.getByRole("button", { name: /^Sell 1 for 792K$/ })).toBeEnabled();
+    expect((await camera(page))?.scale).toBe(scale);
+
+    // A second tap on the row unpicks it; collapsing brings the chips back.
+    await rows.nth(2).click();
+    await expect.poll(async () => (await pick(page))?.picked).toEqual([]);
+    await toggle.click();
+    await expect(tray.getByTestId("pick-checklist")).toHaveCount(0);
+    await expect(tray.getByText("Tap your Fields on the Board to pick them")).toBeVisible();
+  } finally {
+    await other.close();
+  }
+});
+
+test("inspect mode opens the Field card for any Field without picking, and ‹ › step through pickable Fields only", async ({
+  page,
+  browser,
+  isMobile,
+}) => {
+  const other = await startGame(page, browser);
+  try {
+    await showSale(page, 15_000);
+    const tray = page.getByTestId("sale-tray");
+    const inspect = tray.getByTestId("pick-inspect-toggle");
+    await expect(inspect).toHaveAttribute("aria-pressed", "false");
+    await inspect.click();
+    await expect(inspect).toHaveAttribute("aria-pressed", "true");
+    await expect(tray.getByTestId("pick-inspect-hint")).toBeVisible();
+
+    // A tap on a Field the Sale can't pick opens its normal card and picks nothing.
+    await tapField(page, isMobile, CHANCE);
+    const card = page.getByTestId("field-card");
+    await expect(card).toBeVisible();
+    await expect(card).toContainText("Chance");
+    await expect.poll(async () => (await pick(page))?.picked).toEqual([]);
+
+    // ‹ › step through the Sale's pickable Fields only: Chance → Veszprém → Budapest.
+    await card.getByRole("button", { name: "Next Field" }).click();
+    await expect(card).toContainText("Veszprém");
+    await expect.poll(async () => (await pick(page))?.picked).toEqual([]);
+    await card.getByRole("button", { name: "Next Field" }).click();
+    await expect(card).toContainText("Budapest");
+    await card.getByRole("button", { name: "Previous Field" }).click();
+    await expect(card).toContainText("Veszprém");
+
+    // A tap on a pickable Field still only inspects; closing returns to the tray.
+    await tapField(page, isMobile, BERLIN);
+    await expect(card).toContainText("Berlin");
+    await expect.poll(async () => (await pick(page))?.picked).toEqual([]);
+    await card.getByRole("button", { name: "Close" }).click();
+    await expect(page.getByTestId("field-card")).toHaveCount(0);
+
+    // Leaving inspect mode picks by tap again.
+    await page.getByTestId("pick-inspect-toggle").click();
+    await tapField(page, isMobile, BERLIN);
+    await expect.poll(async () => (await pick(page))?.picked).toEqual([BERLIN]);
   } finally {
     await other.close();
   }

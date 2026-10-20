@@ -88,10 +88,7 @@ const ERASMUS_OPTIONS: PickOption[] = [
 ];
 
 function single(kind: "doubler" | "erasmus") {
-  const view =
-    kind === "doubler"
-      ? viewWith(PLACING, null)
-      : viewWith(ERASMUS, null);
+  const view = kind === "doubler" ? viewWith(PLACING, null) : viewWith(ERASMUS, null);
   const options = kind === "doubler" ? DOUBLER_OPTIONS : ERASMUS_OPTIONS;
   const pick = singlePickFor({ ...view, pickOptions: options }, "p1");
   if (!pick) throw new Error("no pick");
@@ -102,7 +99,10 @@ describe("saleChecklist", () => {
   it("lists the Player's Fields cheapest first, with Auto-sell's picks badged", () => {
     // saleFor already orders the pickable Fields; the checklist reasserts it
     // because the order is the checklist's contract too.
-    const pick = { ...salePick([VESZPREM, BUDAPEST]), pickable: [BERLIN, VESZPREM, BUDAPEST, MUSEUM_1] };
+    const pick = {
+      ...salePick([VESZPREM, BUDAPEST]),
+      pickable: [BERLIN, VESZPREM, BUDAPEST, MUSEUM_1],
+    };
     expect(saleChecklist(pick, viewWith(SELLING))).toEqual([
       { kind: "sale", field: VESZPREM, sale: 180_000, auto: true },
       { kind: "sale", field: BUDAPEST, sale: 198_000, auto: true },
@@ -112,12 +112,11 @@ describe("saleChecklist", () => {
   });
 
   it("does not badge any row when Auto-sell has no picks", () => {
-    expect(saleChecklist(salePick(null), viewWith(SELLING)).map((row) => row.auto)).toEqual([
-      false,
-      false,
-      false,
-      false,
-    ]);
+    expect(
+      saleChecklist(salePick(null), viewWith(SELLING)).map((row) =>
+        row.kind === "sale" ? row.auto : false,
+      ),
+    ).toEqual([false, false, false, false]);
   });
 });
 

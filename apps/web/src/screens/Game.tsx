@@ -149,6 +149,8 @@ export function Game() {
   const selectedField = useStore(uiStore, (s) => s.selectedField);
   const salePicks = useStore(uiStore, (s) => s.salePicks);
   const singleSelection = useStore(uiStore, (s) => s.singlePick);
+  const checklistOpen = useStore(uiStore, (s) => s.checklistOpen);
+  const inspect = useStore(uiStore, (s) => s.inspect);
   // No optimistic UI: after a tap the control stays hidden until the next push or a Rejection.
   const [sentAt, setSentAt] = useState<number | null>(null);
   const wide = useWide();
@@ -311,41 +313,59 @@ export function Game() {
     </Card>
   );
   const mySeat = view.players.find((p) => p.id === me)?.seat ?? 0;
-  // The pick tray takes the bottom slot during this client's pick; else the Field card or the Turn card.
-  const card = sale ? (
-    <SaleTray
-      view={view}
-      sale={sale}
-      picks={salePicksFor(salePicks, sale.key)}
-      seat={mySeat}
-      clockOffset={push.clockOffset}
-      busy={pending}
-      onUnpick={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
-      onAutoSell={() => send({ type: "AutoSell", turn: view.turn })}
-      onSell={(fields) => send({ type: "SellFields", turn: view.turn, fields })}
-    />
-  ) : singlePick ? (
-    <PickTray
-      view={view}
-      pick={singlePick}
-      selection={singleSelection}
-      seat={mySeat}
-      clockOffset={push.clockOffset}
-      busy={pending}
-      onPick={(field) => uiStore.getState().choosePick(singlePick.key, field)}
-      onCommit={(field) =>
-        send(
-          singlePick.kind === "doubler"
-            ? { type: "PlaceDoubler", turn: view.turn, field }
-            : { type: "TravelErasmus", turn: view.turn, field },
-        )
-      }
-    />
-  ) : selectedField === null ? (
-    turnCard
-  ) : (
-    <FieldCard id={selectedField} view={view} />
-  );
+  // Inspect mode during a pick opens the Field card in the tray's place, with
+  // ‹ › over pickable Fields only; closing it brings the tray back. Otherwise
+  // the pick tray takes the bottom slot, then the Field card, then the Turn card.
+  const pick = sale ?? singlePick;
+  const card =
+    pick && inspect && selectedField !== null ? (
+      <FieldCard id={selectedField} view={view} stepThrough={pick.pickable} />
+    ) : sale ? (
+      <SaleTray
+        view={view}
+        sale={sale}
+        picks={salePicksFor(salePicks, sale.key)}
+        seat={mySeat}
+        clockOffset={push.clockOffset}
+        busy={pending}
+        checklistOpen={checklistOpen}
+        inspect={inspect}
+        onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
+        onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
+        onToggle={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
+        onFocus={(field) => uiStore.getState().focusPick(field)}
+        onUnpick={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
+        onAutoSell={() => send({ type: "AutoSell", turn: view.turn })}
+        onSell={(fields) => send({ type: "SellFields", turn: view.turn, fields })}
+      />
+    ) : singlePick ? (
+      <PickTray
+        view={view}
+        pick={singlePick}
+        selection={singleSelection}
+        seat={mySeat}
+        clockOffset={push.clockOffset}
+        busy={pending}
+        checklistOpen={checklistOpen}
+        inspect={inspect}
+        onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
+        onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
+        onToggle={(field) => uiStore.getState().choosePick(singlePick.key, field)}
+        onFocus={(field) => uiStore.getState().focusPick(field)}
+        onPick={(field) => uiStore.getState().choosePick(singlePick.key, field)}
+        onCommit={(field) =>
+          send(
+            singlePick.kind === "doubler"
+              ? { type: "PlaceDoubler", turn: view.turn, field }
+              : { type: "TravelErasmus", turn: view.turn, field },
+          )
+        }
+      />
+    ) : selectedField === null ? (
+      turnCard
+    ) : (
+      <FieldCard id={selectedField} view={view} />
+    );
 
   if (wide) {
     return (
