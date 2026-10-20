@@ -155,6 +155,8 @@ export function Game() {
   const selectedField = useStore(uiStore, (s) => s.selectedField);
   const salePicks = useStore(uiStore, (s) => s.salePicks);
   const singleSelection = useStore(uiStore, (s) => s.singlePick);
+  const checklistOpen = useStore(uiStore, (s) => s.checklistOpen);
+  const inspect = useStore(uiStore, (s) => s.inspect);
   // No optimistic UI: after a tap the control stays hidden until the next push or a Rejection.
   const [sentAt, setSentAt] = useState<number | null>(null);
   const wide = useWide();
@@ -324,9 +326,14 @@ export function Game() {
     </Card>
   );
   const mySeat = view.players.find((p) => p.id === me)?.seat ?? 0;
-  // The Sale or pick tray takes the bottom slot during this client's decision;
-  // else the Field card or the Turn card. The result screen replaces both.
-  const card = gameOver ? null : sale ? (
+  // The result screen replaces both. Otherwise inspect mode during a pick opens
+  // the Field card in the tray's place, with ‹ › over pickable Fields only;
+  // closing it brings the tray back. Else the pick tray takes the bottom slot,
+  // then the Field card, then the Turn card.
+  const pick = sale ?? singlePick;
+  const card = gameOver ? null : pick && inspect && selectedField !== null ? (
+    <FieldCard id={selectedField} view={view} stepThrough={pick.pickable} />
+  ) : sale ? (
     <SaleTray
       view={view}
       sale={sale}
@@ -334,6 +341,12 @@ export function Game() {
       seat={mySeat}
       clockOffset={push.clockOffset}
       busy={pending}
+      checklistOpen={checklistOpen}
+      inspect={inspect}
+      onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
+      onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
+      onToggle={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
+      onFocus={(field) => uiStore.getState().focusPick(field)}
       onUnpick={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
       onAutoSell={() => send({ type: "AutoSell", turn: view.turn })}
       onSell={(fields) => send({ type: "SellFields", turn: view.turn, fields })}
@@ -346,6 +359,12 @@ export function Game() {
       seat={mySeat}
       clockOffset={push.clockOffset}
       busy={pending}
+      checklistOpen={checklistOpen}
+      inspect={inspect}
+      onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
+      onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
+      onToggle={(field) => uiStore.getState().choosePick(singlePick.key, field)}
+      onFocus={(field) => uiStore.getState().focusPick(field)}
       onPick={(field) => uiStore.getState().choosePick(singlePick.key, field)}
       onCommit={(field) =>
         send(

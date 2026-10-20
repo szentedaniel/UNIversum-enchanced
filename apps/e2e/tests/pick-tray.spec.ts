@@ -150,3 +150,52 @@ test("choosing Erasmus: the tray shows the Fields ahead and whether Start is pas
     await other.close();
   }
 });
+
+test("the checklist lists Erasmus destinations nearest first and stays expanded across picks and reloads", async ({
+  page,
+  browser,
+}) => {
+  const other = await startGame(page, browser);
+  try {
+    await showPick(page, "erasmus");
+    const tray = page.getByTestId("pick-tray");
+    const toggle = tray.getByTestId("pick-checklist-toggle");
+    // It opens the way the Player last left it: collapsed on a fresh client.
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await toggle.click();
+    const rows = tray.getByTestId("pick-checklist").getByRole("button");
+    await expect(rows).toHaveCount(2);
+    // Erasmus is ordered by distance ahead: Museum (4) before London (29).
+    await expect(rows.nth(0)).toContainText("Museum");
+    await expect(rows.nth(0)).toContainText("4 Fields ahead");
+    await expect(rows.nth(1)).toContainText("London");
+    await expect(rows.nth(1)).toContainText("29 Fields ahead");
+    await expect(rows.nth(1)).toContainText("Passes Start +250K");
+
+    // A row selects the destination, replacing the Board's single choice.
+    await rows.nth(1).click();
+    await expect(rows.nth(1)).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(async () => (await pick(page))?.picked).toEqual([LONDON]);
+    await expect(tray.getByRole("button", { name: "Travel to London" })).toBeEnabled();
+
+    // The next pick opens expanded, as it was left.
+    await showPick(page, "doubler");
+    await expect(page.getByTestId("pick-tray").getByTestId("pick-checklist")).toBeVisible();
+    await expect(page.getByTestId("pick-checklist-toggle")).toHaveAttribute("aria-pressed", "true");
+
+    // So does the game after a reload.
+    await page.reload();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Boolean(window.universumTest?.view() && window.universumTest.room().me),
+        ),
+      )
+      .toBe(true);
+    await showPick(page, "doubler");
+    await expect(page.getByTestId("pick-tray").getByTestId("pick-checklist")).toBeVisible();
+    await expect(page.getByTestId("pick-checklist-toggle")).toHaveAttribute("aria-pressed", "true");
+  } finally {
+    await other.close();
+  }
+});
