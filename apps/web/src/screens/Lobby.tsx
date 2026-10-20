@@ -3,6 +3,7 @@ import { Check, Copy, Lock, LockOpen, Timer, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useStore } from "zustand";
+import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ScreenHeader } from "#components/ScreenHeader.tsx";
 import { SeatCard } from "#components/SeatCard.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
@@ -49,11 +50,30 @@ function RoomCodeSticker({ code }: { code: string }) {
   );
 }
 
+/** "Reconnecting 0:42": the time left until a held Seat is freed, by the server's clock. */
+function HeldCountdown({ until, clockOffset }: { until: number; clockOffset: number }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, []);
+
+  const seconds = Math.max(0, Math.ceil((until - (now + clockOffset)) / 1000));
+  const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  return (
+    <span data-testid="seat-held" className="tnum">
+      {m.seat_reconnecting({ time })}
+    </span>
+  );
+}
+
 export function Lobby() {
   const { code = "" } = useParams();
   const navigate = useNavigate();
   const lobby = useStore(roomStore, (s) => (s.code === code ? s.lobby : null));
   const me = useStore(roomStore, (s) => s.me);
+  const clockOffset = useStore(roomStore, (s) => s.lobbyClockOffset);
   const started = useStore(roomStore, (s) => s.code === code && s.push !== null);
   const [error, setError] = useState<RejectionCode | null>(null);
   const [retryAt, setRetryAt] = useState<number | null>(null);
@@ -121,6 +141,7 @@ export function Lobby() {
   return (
     <div className="min-h-dvh pb-8">
       <ScreenHeader back="/rooms" label={m.back_to_list()} />
+      <ReconnectOverlay />
       <main className="mx-auto max-w-5xl px-4 pt-6">
         <div className="flex flex-col items-center gap-3 text-center">
           <h1 className="m-0 text-3xl font-black md:text-4xl">
@@ -137,6 +158,11 @@ export function Lobby() {
               you={seat.playerId === me}
               // Seats are in join order; while the creator stays, theirs is the first.
               creator={i === 0}
+              held={
+                seat.heldUntil === undefined ? undefined : (
+                  <HeldCountdown until={seat.heldUntil} clockOffset={clockOffset} />
+                )
+              }
             />
           ))}
           {open.map((i) => (

@@ -1,6 +1,7 @@
 import type { GameEvent, PhaseOf, PlayerIntent, PublicView } from "@universum/rules";
 import { FIELDS } from "@universum/rules/board";
-import { useState } from "react";
+import type { RejectionCode } from "@universum/protocol/messages";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useStore } from "zustand";
 import { Board } from "#board/Board.tsx";
@@ -9,7 +10,8 @@ import { EventToast, MinutePill } from "#components/GameHud.tsx";
 import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { Card } from "#components/ui/card.tsx";
-import { sendIntent } from "#connection.ts";
+import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
+import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
 import { TurnRing } from "#screens/TurnRing.tsx";
@@ -136,12 +138,24 @@ export function Game() {
   // No optimistic UI: after a tap the control stays hidden until the next push or a Rejection.
   const [sentAt, setSentAt] = useState<number | null>(null);
   const wide = useWide();
+  const [joinError, setJoinError] = useState<RejectionCode | null>(null);
+
+  // Opened by its address (a reload, a new tab, a later visit): take the Seat back by Guest token.
+  useEffect(() => {
+    ensureJoined(code).catch((e: unknown) => {
+      setJoinError(e instanceof JoinError ? e.code : "INTERNAL");
+    });
+  }, [code]);
 
   if (!push) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-4 text-center">
         <p className="m-0 font-bold">
-          {status === "connecting" ? m.connecting() : m.connection_lost()}
+          {joinError
+            ? rejectionText(joinError)
+            : status === "lost"
+              ? m.connection_lost()
+              : m.connecting()}
         </p>
         <Link to="/" className={buttonVariants({ variant: "plain" })}>
           {m.back_home()}
@@ -271,6 +285,7 @@ export function Game() {
   if (wide) {
     return (
       <main className="board-backdrop fixed inset-0 overflow-hidden">
+        <ReconnectOverlay />
         {/* The Board's box: clear of the corner cards, the status row and the card; the
             fit area also keeps clear of the camera buttons on its right. */}
         <div className="absolute inset-x-[110px] top-[110px] bottom-[200px] [--board-inset-left:3.75rem] [--board-inset-right:3.75rem]">
@@ -297,6 +312,7 @@ export function Game() {
 
   return (
     <main className="board-backdrop fixed inset-0 flex flex-col overflow-hidden pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
+      <ReconnectOverlay />
       <ul className="m-0 flex list-none justify-center gap-1.5 px-2" aria-label={m.game_players()}>
         {players.map((player) => (
           <PlayerChip key={player.seat} player={player} className="w-0 max-w-28 flex-1" />

@@ -2,6 +2,7 @@
  * Room-server test helpers: an in-process server on a free port, and real
  * `@colyseus/sdk` clients that record every message they receive.
  */
+import { randomBytes } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -144,6 +145,8 @@ export type TestServer = {
   join(code: string, options?: Omit<JoinOptions, "code">): Promise<TestClient>;
   /** A Guest opens the Lobby list. */
   watchLobbyList(): Promise<TestLobbyList>;
+  /** A dropped client comes back by its `reconnectionToken`, as the SDK does after a short drop. */
+  reconnect(dropped: TestClient): Promise<TestClient>;
   /**
    * The live Room under `code`, if any. Only for what no client can see yet:
    * a restored game's Seats have no connection until rejoin lands (#35).
@@ -232,6 +235,8 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
       return matchmakeRefusal({ code: response.status, message: error });
     },
     watchLobbyList: async () => track(new TestLobbyList(await sdk.joinOrCreate(LOBBY_ROOM))),
+    reconnect: async (dropped) =>
+      track(new TestClient(await sdk.reconnect(dropped.reconnectionToken))),
     room(code) {
       const room = matchMaker.getLocalRoomById(code);
       return room instanceof GameRoom ? room : undefined;
@@ -279,9 +284,18 @@ export async function eventually(check: () => void, timeoutMs = TIMEOUT_MS): Pro
   }
 }
 
+/** A new random Guest token, as a browser creates once. */
+export const newGuestToken = (): string => randomBytes(16).toString("hex");
+
 /** One Guest's connection. Messages are queued per type until a test takes them. */
 export class TestClient {
   readonly room: Room;
+  /** Every message received, raw, to check that no secret ever reaches a client. */
+  readonly received: unknown[] = [];
+  /** The reconnection token this connection had when it dropped. */
+  reconnectionToken = "";
+  /** Resolves with the close code once this connection is closed. */
+  readonly closed: Promise<number>;
   readonly #queues: { [K in MessageType]: Messages[K][] } = {
     welcome: [],
     lobby: [],
@@ -292,6 +306,9 @@ export class TestClient {
 
   constructor(room: Room) {
     this.room = room;
+    // Tests reconnect by hand (`server.reconnect`), never the SDK by itself.
+    room.reconnection.enabled = false;
+    this.closed = new Promise((resolve) => room.onLeave((code) => resolve(code)));
     // Handlers must be registered before the first await after joining, or
     // the SDK drops the messages the server sends on join.
     this.#listen("welcome");
@@ -303,6 +320,7 @@ export class TestClient {
   // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- ties the queue to the message type
   #listen<T extends MessageType>(type: T): void {
     this.room.onMessage(MESSAGE[type], (message: Messages[T]) => {
+      this.received.push(message);
       const waiter = this.#waiters[type];
       if (waiter) {
         delete this.#waiters[type];
@@ -359,6 +377,12 @@ export class TestClient {
 
   async leave(): Promise<void> {
     if (this.room.connection.isOpen) await this.room.leave();
+  }
+
+  /** The connection drops without a goodbye (a network blip, a closed tab). */
+  async drop(): Promise<void> {
+    this.reconnectionToken = this.room.reconnectionToken;
+    await this.room.leave(false);
   }
 }
 
