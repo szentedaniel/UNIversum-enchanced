@@ -3,7 +3,6 @@ import { once } from "node:events";
 import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createServer } from "node:net";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -39,21 +38,22 @@ describe("server under plain Node", () => {
     expect(stdout.trim()).toBe("intent 32");
   });
 
-  it("boots on the configured ports, keeps its SQLite file in DATA_DIR, and turns ready", async () => {
-    const [port, internalPort] = [await freePort(), await freePort()];
+  it("boots on any free port (PORT=0), keeps its SQLite file in DATA_DIR, and turns ready", async () => {
     const dataDir = join(mkdtempSync(join(tmpdir(), "universum-main-")), "data");
     child = spawn(process.execPath, ["src/main.ts"], {
       cwd: serverDir,
       env: {
         ...process.env,
-        PORT: String(port),
-        INTERNAL_PORT: String(internalPort),
+        NODE_ENV: "production",
+        LOG_LEVEL: "",
+        PORT: "0",
+        INTERNAL_PORT: "0",
         DATA_DIR: dataDir,
       },
       stdio: ["ignore", "pipe", "inherit"],
     });
 
-    await waitForOutput(child, "Server ready");
+    const { port, internalPort } = await listeningPorts(child);
     const health = await fetch(`http://127.0.0.1:${port}/__healthcheck`);
     const ready = await fetch(`http://127.0.0.1:${internalPort}/readyz`);
 
@@ -63,7 +63,6 @@ describe("server under plain Node", () => {
   });
 
   it("in production logs NDJSON boot and shutdown lines, and serves /metrics with its release", async () => {
-    const [port, internalPort] = [await freePort(), await freePort()];
     child = spawn(process.execPath, ["src/main.ts"], {
       cwd: serverDir,
       env: {
@@ -71,14 +70,14 @@ describe("server under plain Node", () => {
         NODE_ENV: "production",
         LOG_LEVEL: "",
         RELEASE: "0123abc",
-        PORT: String(port),
-        INTERNAL_PORT: String(internalPort),
+        PORT: "0",
+        INTERNAL_PORT: "0",
         DATA_DIR: join(mkdtempSync(join(tmpdir(), "universum-main-")), "data"),
       },
       stdio: ["ignore", "pipe", "inherit"],
     });
 
-    await waitForOutput(child, "Server ready");
+    const { internalPort } = await listeningPorts(child);
     const metrics = await (await fetch(`http://127.0.0.1:${internalPort}/metrics`)).text();
     child.kill("SIGTERM");
     const output = await waitForOutput(child, "Server stopped");
@@ -101,17 +100,39 @@ describe("server under plain Node", () => {
   });
 });
 
-async function freePort(): Promise<number> {
-  const server = createServer().listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const address = server.address();
-  server.close();
-  if (address === null || typeof address === "string") throw new Error("no port");
-  return address.port;
-}
-
 /** Everything each spawned server printed so far. */
 const outputs = new WeakMap<ChildProcess, string>();
+
+/** One NDJSON log line, or `null` for a partial or human-readable line. */
+function logLine(text: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return typeof parsed === "object" && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The ports a spawned production server bound, read from its "Server
+ * listening" line once it is ready. Binding port 0 avoids racing other test
+ * workers for a free port.
+ */
+async function listeningPorts(proc: ChildProcess): Promise<{ port: number; internalPort: number }> {
+  const output = await waitForOutput(proc, "Server ready");
+  const line = output
+    .split("\n")
+    .map(logLine)
+    .find((l) => l?.["msg"] === "Server listening");
+  const port = line?.["port"];
+  const internalPort = line?.["internalPort"];
+  if (typeof port !== "number" || typeof internalPort !== "number") {
+    throw new Error(`the server log has no listening ports:\n${output}`);
+  }
+  return { port, internalPort };
+}
 
 /** Waits until the process has printed `text`; returns everything it printed so far. */
 async function waitForOutput(proc: ChildProcess, text: string): Promise<string> {

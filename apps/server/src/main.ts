@@ -53,10 +53,10 @@ server.onShutdown(async () => {
 });
 
 await server.listen(config.port, config.host);
-log.info(
-  { port: config.port, internalPort: internal.port, release: config.release },
-  "Server listening",
-);
+// The actual port (PORT=0 binds any free one), so a spawned server can be reached.
+const address = server.transport.server?.address();
+const port = address && typeof address !== "string" ? address.port : config.port;
+log.info({ port, internalPort: internal.port, release: config.release }, "Server listening");
 
 const started = performance.now();
 const restored = await restoreRooms({ store, metrics, log });
