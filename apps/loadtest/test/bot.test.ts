@@ -20,6 +20,7 @@ const view = (phase: View["phase"], extra: Partial<View> = {}): View => ({
       name: { adjective: "brave", noun: "otter" },
       seat: 0,
       cash: 2_500_000,
+      wealth: 2_500_000,
       position: 0,
       bankrupt: false,
       quarantineRounds: null,
@@ -30,6 +31,7 @@ const view = (phase: View["phase"], extra: Partial<View> = {}): View => ({
   doubler: null,
   lastChanceCard: null,
   autoSell: null,
+  pickOptions: null,
   ...extra,
 });
 

@@ -38,10 +38,10 @@ Rooms; `restore_duration_seconds` is Prometheus's own boot gauge.
   `os.availableParallelism()`). Each worker owns whole Room groups: every 4th client creates, the
   other 3 `joinById` after 5–30 s. The creator sends `Start` when the Lobby shows every Seat taken.
 - Bots act only on the options the view lists (`src/bot.ts`): Roll, Quarantine choice, every Level /
-  Buyout / Museum / Decline, AutoSell / SellFields. **Phases a later ticket adds (#31 placing the
-  Doubler / choosing Erasmus, #32 game over) are not in today's union**: unknown phases are left to
-  the Turn timer, and `isGameOver` recognises the string kinds `gameOver` / `ended`. When #31 lands,
-  add its two phase cases to `offeredIntents`; when #32 lands, confirm its phase name.
+  Buyout / Museum / Decline, PlaceDoubler on each offered Field, TravelErasmus to each offered
+  Field, AutoSell / SellFields. #31 and #32 are merged, so those phases are in the union; a phase a
+  later ticket adds is unknown here and is left to the Turn timer, and `isGameOver` matches the
+  typed `gameOver` phase (plus the strings `gameOver` / `ended`, harmlessly).
 - The profile (`src/profile.ts`) is seeded (`--seed`, default 46): linear ramp, 10% password Rooms,
   join delays, and per-game drops. Drops happen only between 30 s and 13 min of a game: a 2-minute
   smoke intentionally has none. 2% of drops return after 60–120 s by Guest token; the rest return in
@@ -77,6 +77,19 @@ Rooms; `restore_duration_seconds` is Prometheus's own boot gauge.
   2,000). Each minute it takes a worker snapshot and a one-minute Prometheus window, runs the same
   verdict without restart criteria, and stops at the first failing criterion; the report says the
   last passing count and the breaking criterion. It always exits 0.
+
+## Verified on this branch
+
+- Unit tests: 86 in `apps/loadtest/test` (config/args, profile, bot, stats, Prometheus parsing +
+  canned metric collection, verdict boundaries, report, docker args).
+- Scaled smoke after the v2-modernization merge (Docker Desktop 29.9, Compose 5.6, Apple M3):
+  `--rooms 20 --ramp 1m --hold 2m --restart-at 1m` → PASS, `/readyz` 1.1 s, 80/80 seats back in
+  15.6 s, 448/448 intents answered, server CPU 0.07 cores, RSS 0.23 GB, generator 2.8%. At a
+  2-minute hold the post-restart window is empty (`heap growth` SKIPs) and no planned drop is due
+  yet; 80 clients did reconnect by Guest token after the kill.
+- `--find-knee --max-rooms 200` → PASS at 200 Rooms (100/min), last passing count 200.
+- Full checks after the merge: oxfmt, oxlint, `tsc`, 797 Vitest tests, `TEST_HOOKS=1` web build,
+  Playwright 54 passed / 1 skipped on ports 3146/5246.
 
 ## Gotchas
 
