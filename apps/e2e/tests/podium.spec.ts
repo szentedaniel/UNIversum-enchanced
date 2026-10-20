@@ -84,6 +84,7 @@ function showGameOver(page: Page) {
     view.fields = view.fields.map(() => ({ owner: null, level: 0, value: 0, rent: 0, sale: 0 }));
     view.currentPlayer = "p4";
     view.phase = { kind: "gameOver", winner: "p4", reason: "timeUp" };
+    view.actsAfter = Date.now() + hooks.room().push!.clockOffset;
     view.turnDeadline = null;
     view.turnTimer = null;
     // What the server's publicView carries at gameOver: winner first, then

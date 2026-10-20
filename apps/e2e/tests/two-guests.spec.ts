@@ -7,6 +7,66 @@ const fieldCenter = (page: Page, id: number) =>
 
 const me = (page: Page) => page.evaluate(() => window.universumTest?.room().me ?? null);
 
+/**
+ * Samples every animation frame (ADR-0004): whether a control for the pushed
+ * decision is on screen, and how the client's server clock compares to the
+ * push's `actsAfter`. Sampling in the page catches the hold however slow
+ * Playwright is to round-trip.
+ */
+async function startPlaybackProbe(page: Page) {
+  await page.evaluate(() => {
+    const samples: NonNullable<Window["playbackProbe"]> = [];
+    window.playbackProbe = samples;
+    let running = true;
+    window.stopPlaybackProbe = () => {
+      running = false;
+    };
+    // oxlint-disable-next-line unicorn/consistent-function-scoping -- must live in the page
+    const button = (pattern: RegExp) =>
+      [...document.querySelectorAll("button")].some((element) =>
+        pattern.test(element.textContent?.trim() ?? ""),
+      );
+    // oxlint-disable-next-line unicorn/consistent-function-scoping -- must live in the page
+    const tick = () => {
+      const { push, me: viewer } = window.universumTest!.room();
+      if (push) {
+        const { view } = push;
+        const decision =
+          (view.currentPlayer === viewer &&
+            (view.phase.kind === "awaitingRoll" || view.phase.kind === "quarantineChoice") &&
+            button(/^Roll/)) ||
+          (view.phase.kind === "offer" &&
+            document.querySelector('[data-testid="offer"]') !== null) ||
+          (view.phase.kind === "selling" &&
+            document.querySelector('[data-testid="sale-tray"]') !== null) ||
+          ((view.phase.kind === "placingDoubler" || view.phase.kind === "choosingErasmus") &&
+            document.querySelector('[data-testid="pick-tray"]') !== null);
+        const ring = document.querySelector<SVGCircleElement>(
+          "[aria-current=true] .turn-ring-left",
+        );
+        const delayMs = ring
+          ? Number.parseFloat(getComputedStyle(ring).animationDelay) * 1000
+          : Number.NaN;
+        samples.push({
+          version: view.version,
+          now: Date.now() + push.clockOffset,
+          actsAfter: view.actsAfter,
+          decision,
+          ringDelayMs: Number.isFinite(delayMs) ? Math.round(delayMs) : null,
+        });
+      }
+      if (running) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+const stopPlaybackProbe = (page: Page) =>
+  page.evaluate(() => {
+    window.stopPlaybackProbe?.();
+    return window.playbackProbe ?? [];
+  });
+
 test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and play", async ({
   baseURL,
 }) => {
@@ -79,9 +139,53 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
       const button = page.getByRole("button", { name });
       return page === phone ? button.tap() : button.click();
     };
-    const playTurn = async (turn: number) => {
+    /** After a Roll: neither screen shows the next decision's controls until actsAfter, and it then does. */
+    const expectPlaybackHold = async (roller: Page, versionBefore: number) => {
+      const view = await viewOf(roller);
+      const rolledVersion = view?.version ?? 0;
+      expect(rolledVersion).toBeGreaterThan(versionBefore);
+      const ids = await Promise.all(both.map(me));
+      const current = [desktop, phone].find(
+        (page) => ids[[desktop, phone].indexOf(page)] === view?.currentPlayer,
+      );
+      if (!current) throw new Error("no screen holds the current Player's Seat");
+      // Both screens past the Playback by the server's clock.
+      await expect
+        .poll(async () =>
+          (
+            await Promise.all(
+              both.map((page) =>
+                page.evaluate(() => {
+                  const { push } = window.universumTest!.room();
+                  return push === null
+                    ? false
+                    : Date.now() + push.clockOffset >= push.view.actsAfter + 100;
+                }),
+              ),
+            )
+          ).every(Boolean),
+        )
+        .toBe(true);
+      for (const samples of await Promise.all(both.map(stopPlaybackProbe))) {
+        const held = samples.filter(
+          (sample) => sample.version === rolledVersion && sample.now < sample.actsAfter - 25,
+        );
+        expect(held.length).toBeGreaterThan(0);
+        expect(held.filter((sample) => sample.decision)).toEqual([]);
+        // The ring waits full: its animation starts only when the Playback ends.
+        expect(held.some((sample) => (sample.ringDelayMs ?? 0) > 100)).toBe(true);
+      }
+      const phase = view?.phase.kind;
+      if (phase === "offer") await expect(current.getByTestId("offer")).toBeVisible();
+      else if (phase === "quarantineChoice")
+        await expect(current.getByRole("button", { name: "Roll for 12" })).toBeVisible();
+      else await expect(current.getByRole("button", { name: /^Roll/ })).toBeVisible();
+    };
+    const playTurn = async (turn: number, checkHold = false) => {
       const [roller, waiter] = turn % 2 === 1 ? [desktop, phone] : [phone, desktop];
       await expect(waiter.getByRole("button", { name: "Roll" })).toHaveCount(0);
+      const versionBefore = (await viewOf(roller))?.version ?? 0;
+      if (checkHold) await Promise.all(both.map(startPlaybackProbe));
       // Not `exact`: a Player who landed on Quarantine gets "Roll for 12"
       // instead, which also ends the Turn (or, on a 12, may stop at an offer).
       await press(roller, "Roll");
@@ -93,6 +197,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
         })
         .toBe(true);
       const view = await viewOf(roller);
+      if (checkHold) await expectPlaybackHold(roller, versionBefore);
       if (view?.phase.kind === "offer") {
         await expect(roller.getByTestId("offer")).toBeVisible();
         await expect(waiter.getByTestId("offer")).toHaveCount(0);
@@ -118,7 +223,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     // At least 4 Turns, and on until someone has bought a University.
     for (let turn = 1; turn <= 16; turn++) {
       // oxlint-disable-next-line no-await-in-loop -- Turns are played one after another
-      await playTurn(turn);
+      await playTurn(turn, turn === 1);
       if (turn === 1) {
         // oxlint-disable-next-line no-await-in-loop -- after the first roll
         await expect

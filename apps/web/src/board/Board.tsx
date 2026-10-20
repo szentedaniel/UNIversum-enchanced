@@ -7,7 +7,7 @@ import { fieldFacts } from "#board/field-facts.ts";
 import { Button } from "#components/ui/button.tsx";
 import { selectedPick, singleMarks, singlePickFor } from "#pick/pick.ts";
 import { AUTO_SELL_WARNING_MS, saleFor, saleMarks } from "#pick/sale.ts";
-import { roomStore } from "#stores/room-store.ts";
+import { roomStore, type Push } from "#stores/room-store.ts";
 import { salePicksFor, uiStore } from "#stores/ui-store.ts";
 import { exposeBoard } from "#test-hooks.ts";
 import { fieldName, formatCompactMoney, m } from "#text.ts";
@@ -16,16 +16,19 @@ import { fieldName, formatCompactMoney, m } from "#text.ts";
 const OBSTACLES = "[data-board-obstacle]";
 const ZOOM_STEP = 1.5;
 
-/** This client's open Sale, from the latest push. */
+/** Whether the latest push's Playback has ended by the server's clock (ADR-0004). */
+const playbackOver = (push: Push): boolean => Date.now() + push.clockOffset >= push.view.actsAfter;
+
+/** This client's open Sale, from the latest push, once its Playback has ended. */
 function currentSale() {
   const { push, me } = roomStore.getState();
-  return push ? saleFor(push.view, me) : null;
+  return push && playbackOver(push) ? saleFor(push.view, me) : null;
 }
 
-/** This client's open Doubler or Erasmus pick, from the latest push. */
+/** This client's open Doubler or Erasmus pick, from the latest push, once its Playback has ended. */
 function currentPick() {
   const { push, me } = roomStore.getState();
-  return push ? singlePickFor(push.view, me) : null;
+  return push && playbackOver(push) ? singlePickFor(push.view, me) : null;
 }
 
 /**
@@ -76,6 +79,7 @@ export function Board() {
     let cancelled = false;
     let revealFrame = 0;
     let warningTimer = 0;
+    let playbackTimer = 0;
 
     async function mount(element: HTMLElement, area: HTMLElement) {
       const renderer = await createBoard(element, area, {
@@ -113,10 +117,21 @@ export function Board() {
         });
       };
 
-      /** Marks this client's open pick on the Board, and wakes up again when the last seconds start. */
+      /**
+       * Marks this client's open pick on the Board, and wakes up again when the
+       * Playback ends and when the last seconds start.
+       */
       const syncPick = () => {
         clearTimeout(warningTimer);
+        clearTimeout(playbackTimer);
         const { push } = roomStore.getState();
+        if (push) {
+          const waitMs = push.view.actsAfter - (Date.now() + push.clockOffset);
+          if (waitMs > 0) {
+            playbackTimer = window.setTimeout(syncPick, waitMs + 20);
+            return renderer.setPick(null);
+          }
+        }
         const sale = currentSale();
         const pick = currentPick();
         const key = sale?.key ?? pick?.key ?? null;
@@ -180,6 +195,7 @@ export function Board() {
       cancelled = true;
       cancelAnimationFrame(revealFrame);
       clearTimeout(warningTimer);
+      clearTimeout(playbackTimer);
       for (const stop of unsubscribe) stop();
       exposeBoard(null);
       created?.destroy();

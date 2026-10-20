@@ -39,9 +39,7 @@ const nextRoll = (state: GameState) => ({
 describe("the Playback table", () => {
   it("ADR-0004: the Chance card lasts 7 s, and every length is a non-negative whole number", () => {
     expect(PLAYBACK_MS.CardDrawn).toBe(7_000);
-    expect(
-      Object.values(PLAYBACK_MS).every((ms) => Number.isInteger(ms) && ms >= 0),
-    ).toBe(true);
+    expect(Object.values(PLAYBACK_MS).every((ms) => Number.isInteger(ms) && ms >= 0)).toBe(true);
   });
 
   it("ADR-0004: the Playback of an event list is the sum of its events, with Moved scaled by its steps", () => {
@@ -115,9 +113,9 @@ describe("acting after the Playback", () => {
     const state = newGame({ now: T0 });
 
     expect(state.actsAfter).toBe(T0);
-    expect(isRejection(apply(state, nextRoll(state), { actor: state.currentPlayer, now: T0 }))).toBe(
-      false,
-    );
+    expect(
+      isRejection(apply(state, nextRoll(state), { actor: state.currentPlayer, now: T0 })),
+    ).toBe(false);
   });
 
   it("ADR-0004: a Player intent before actsAfter is refused with PLAYBACK_RUNNING, one at exactly actsAfter is accepted", () => {
@@ -164,7 +162,9 @@ describe("the deadline counts from actsAfter", () => {
     const applied = rollOnto(newGame(), TAX, now);
 
     expect(applied.state.actsAfter).toBe(now + playbackOf(applied.events));
-    expect(applied.state.turnDeadline).toBe(applied.state.actsAfter + TURN_LIMIT_MS + TURN_SLACK_MS);
+    expect(applied.state.turnDeadline).toBe(
+      applied.state.actsAfter + TURN_LIMIT_MS + TURN_SLACK_MS,
+    );
   });
 
   it("ADR-0004: a timeout's deadline also counts from its own Playback", () => {
@@ -174,16 +174,18 @@ describe("the deadline counts from actsAfter", () => {
     const applied = timeOut(state, at);
 
     expect(applied.state.actsAfter).toBe(at + playbackOf(applied.events));
-    expect(applied.state.turnDeadline).toBe(applied.state.actsAfter + TURN_LIMIT_MS + TURN_SLACK_MS);
+    expect(applied.state.turnDeadline).toBe(
+      applied.state.actsAfter + TURN_LIMIT_MS + TURN_SLACK_MS,
+    );
   });
 
   it("ADR-0004: the server's Turn limit override applies after the Playback too", () => {
     const base = newGame();
-    const rolled = apply(
-      base,
-      nextRoll(base),
-      { actor: base.currentPlayer, now: T0, turnLimitMs: 5_000 },
-    );
+    const rolled = apply(base, nextRoll(base), {
+      actor: base.currentPlayer,
+      now: T0,
+      turnLimitMs: 5_000,
+    });
     if (isRejection(rolled)) throw new Error(`Roll was rejected with ${rolled.code}`);
 
     expect(rolled.state.actsAfter).toBe(T0 + playbackOf(rolled.events));

@@ -30,7 +30,11 @@ function game(): GameState {
 }
 
 function rolled(state: GameState) {
-  const result = apply(state, { type: "Roll", turn: state.turn }, { actor: "p1", now: state.actsAfter });
+  const result = apply(
+    state,
+    { type: "Roll", turn: state.turn },
+    { actor: "p1", now: state.actsAfter },
+  );
   if ("code" in result) throw new Error(result.code);
   return result;
 }

@@ -170,7 +170,9 @@ describe("played games", () => {
           // The Playback ends no earlier than the intent that set it.
           expect(after.actsAfter).toBeGreaterThanOrEqual(step.now);
           const expected =
-            after.phase.kind === "gameOver" ? null : after.actsAfter + TURN_LIMIT_MS + TURN_SLACK_MS;
+            after.phase.kind === "gameOver"
+              ? null
+              : after.actsAfter + TURN_LIMIT_MS + TURN_SLACK_MS;
 
           expect(after.turnDeadline).toBe(expected);
         }

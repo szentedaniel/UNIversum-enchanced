@@ -27,37 +27,37 @@ const NOTHING_MS = 0;
  * multiply it by the event's `steps` (which `playbackOf` does).
  */
 export const PLAYBACK_MS: Readonly<Record<GameEvent["type"], number>> = {
- DiceRolled: DICE_MS,
- Moved: STEP_MS,
- RoundBonusPaid: BEAT_MS,
- LevelBought: BEAT_MS,
- MuseumBought: BEAT_MS,
- BoughtOut: BEAT_MS,
- OfferDeclined: NOTHING_MS,
- RentPaid: BEAT_MS,
- CardDrawn: CARD_MS,
- ChanceMoneyReceived: BEAT_MS,
- ChanceChargePaid: BEAT_MS,
- TaxPaid: BEAT_MS,
- QuarantineEntered: BEAT_MS,
- QuarantineRoundUsed: BEAT_MS,
- QuarantineReleased: BEAT_MS,
- PcrTestBought: BEAT_MS,
- PcrTestUsed: BEAT_MS,
- FieldsSold: BEAT_MS,
- WentBankrupt: BEAT_MS,
- TimedOut: BEAT_MS,
- TimeoutPenaltyPaid: BEAT_MS,
- DoublerPlaced: BEAT_MS,
- GameEnded: BEAT_MS,
- TurnPassed: NOTHING_MS,
+  DiceRolled: DICE_MS,
+  Moved: STEP_MS,
+  RoundBonusPaid: BEAT_MS,
+  LevelBought: BEAT_MS,
+  MuseumBought: BEAT_MS,
+  BoughtOut: BEAT_MS,
+  OfferDeclined: NOTHING_MS,
+  RentPaid: BEAT_MS,
+  CardDrawn: CARD_MS,
+  ChanceMoneyReceived: BEAT_MS,
+  ChanceChargePaid: BEAT_MS,
+  TaxPaid: BEAT_MS,
+  QuarantineEntered: BEAT_MS,
+  QuarantineRoundUsed: BEAT_MS,
+  QuarantineReleased: BEAT_MS,
+  PcrTestBought: BEAT_MS,
+  PcrTestUsed: BEAT_MS,
+  FieldsSold: BEAT_MS,
+  WentBankrupt: BEAT_MS,
+  TimedOut: BEAT_MS,
+  TimeoutPenaltyPaid: BEAT_MS,
+  DoublerPlaced: BEAT_MS,
+  GameEnded: BEAT_MS,
+  TurnPassed: NOTHING_MS,
 };
 
 /** The Playback length of an event list in ms: the sum of its events, `Moved` by its steps. */
 export function playbackOf(events: readonly GameEvent[]): number {
- let total = 0;
- for (const event of events) {
-  total += event.type === "Moved" ? event.steps * PLAYBACK_MS.Moved : PLAYBACK_MS[event.type];
- }
- return total;
+  let total = 0;
+  for (const event of events) {
+    total += event.type === "Moved" ? event.steps * PLAYBACK_MS.Moved : PLAYBACK_MS[event.type];
+  }
+  return total;
 }

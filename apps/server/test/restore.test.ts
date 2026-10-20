@@ -1,11 +1,7 @@
-import { readFileSync } from "node:fs";
 import { MatchMakeError } from "@colyseus/sdk";
-import {
-  matchmakeRejection,
-  type RejectionCode,
-  type RoomSettings,
-} from "@universum/protocol";
+import { matchmakeRejection, type RejectionCode } from "@universum/protocol";
 import { migrate, type GameState } from "@universum/rules";
+import stateV1 from "../../../packages/rules/test/fixtures/state-v1.json" with { type: "json" };
 import { afterEach, describe, expect, it } from "vitest";
 import {
   eventually,
@@ -184,29 +180,18 @@ describe("restore on boot", () => {
 
   it("ADR-0004: a Room stored at version 1 restores and plays on", async () => {
     const before = await start();
-    // The rules package's committed v1 snapshot, as an older deploy stored it.
-    const snapshot: unknown = JSON.parse(
-      readFileSync(
-        new URL("../../../packages/rules/test/fixtures/state-v1.json", import.meta.url),
-        "utf8",
-      ),
-    );
-    const old = snapshot as {
-      players: { id: string; name: { adjective: string; noun: string } }[];
-      settings: RoomSettings;
-      turnDeadline: number;
-    };
     const code = "600150";
+    // The rules package's committed v1 snapshot, as an older deploy stored it.
     before.store.save(
       {
         code,
-        settings: old.settings,
+        settings: { maxPlayers: 4, minuteLimit: 50 },
         roomName: null,
         creatorId: null,
         password: null,
-        seats: old.players.map(({ id, name }) => ({ playerId: id, name })),
+        seats: stateV1.players.map(({ id, name }) => ({ playerId: id, name })),
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- a stored state from before the shape change
-        game: snapshot as GameState,
+        game: stateV1 as unknown as GameState,
         endedAt: null,
       },
       [],
@@ -217,11 +202,15 @@ describe("restore on boot", () => {
     expect(after.restored).toBe(1);
     const game = after.room(code)?.game;
     // Migrated on boot: the deadline it had, and no wait before acting.
-    expect(game).toMatchObject({ stateVersion: 2, turn: 2, actsAfter: old.turnDeadline - DEADLINE_AFTER });
-    expect(game?.turnDeadline).toBe(old.turnDeadline);
+    expect(game).toMatchObject({
+      stateVersion: 2,
+      turn: 2,
+      actsAfter: stateV1.turnDeadline - DEADLINE_AFTER,
+    });
+    expect(game?.turnDeadline).toBe(stateV1.turnDeadline);
 
     // It plays on: the Turn times out at the deadline it kept.
-    after.scheduler.advanceTo(old.turnDeadline);
+    after.scheduler.advanceTo(stateV1.turnDeadline);
     expect(after.room(code)?.game).toMatchObject({ version: 3, turn: 3 });
   });
 

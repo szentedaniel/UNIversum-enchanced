@@ -19,19 +19,19 @@ export type StoredState = Record<string, unknown>;
  * shape (see test/migrate.test.ts).
  */
 const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> = {
- // Version 2 adds `actsAfter` (ADR-0004). A running game carries on with no
- // wait: its current decision started when its deadline was counted, so the
- // Playback has already ended by then. A game that is over has no deadline;
- // its Playback is over too, so `endsAt` is a safe "now".
- 1: (state) => {
-  const deadline = state["turnDeadline"];
-  return {
-   ...state,
-   stateVersion: 2,
-   actsAfter:
-    typeof deadline === "number" ? deadline - TURN_LIMIT_MS - TURN_SLACK_MS : state["endsAt"],
-  };
- },
+  // Version 2 adds `actsAfter` (ADR-0004). A running game carries on with no
+  // wait: its current decision started when its deadline was counted, so the
+  // Playback has already ended by then. A game that is over has no deadline;
+  // its Playback is over too, so `endsAt` is a safe "now".
+  1: (state) => {
+    const deadline = state["turnDeadline"];
+    return {
+      ...state,
+      stateVersion: 2,
+      actsAfter:
+        typeof deadline === "number" ? deadline - TURN_LIMIT_MS - TURN_SLACK_MS : state["endsAt"],
+    };
+  },
 };
 
 /**
@@ -40,28 +40,28 @@ const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> 
  * in the chain. The host then leaves that Room in the store untouched.
  */
 export function migrate(stored: unknown): GameState {
- if (!isObject(stored)) throw new Error("not a stored state");
- let state = stored;
- for (; ;) {
-  const from = state["stateVersion"];
-  if (typeof from !== "number" || !Number.isInteger(from) || from < 1) {
-   throw new Error(`invalid stateVersion ${JSON.stringify(from)}`);
+  if (!isObject(stored)) throw new Error("not a stored state");
+  let state = stored;
+  for (;;) {
+    const from = state["stateVersion"];
+    if (typeof from !== "number" || !Number.isInteger(from) || from < 1) {
+      throw new Error(`invalid stateVersion ${JSON.stringify(from)}`);
+    }
+    if (from > STATE_VERSION) {
+      throw new Error(`stateVersion ${from} is newer than this server's ${STATE_VERSION}`);
+    }
+    if (isCurrent(state)) return state;
+    const step = MIGRATIONS[from];
+    if (!step) throw new Error(`no migration from stateVersion ${from}`);
+    state = step(state);
   }
-  if (from > STATE_VERSION) {
-   throw new Error(`stateVersion ${from} is newer than this server's ${STATE_VERSION}`);
-  }
-  if (isCurrent(state)) return state;
-  const step = MIGRATIONS[from];
-  if (!step) throw new Error(`no migration from stateVersion ${from}`);
-  state = step(state);
- }
 }
 
 function isObject(value: unknown): value is StoredState {
- return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** Trusted by version: every step and the snapshot fixtures keep the shape in line with it. */
 function isCurrent(state: StoredState): state is GameState {
- return state["stateVersion"] === STATE_VERSION;
+  return state["stateVersion"] === STATE_VERSION;
 }

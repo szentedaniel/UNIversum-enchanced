@@ -24,7 +24,7 @@ export const TURN_SLACK_MS = 3_000;
  * production leaves it out.
  */
 export const turnDeadlineFrom = (actsAfter: number, turnLimitMs = TURN_LIMIT_MS): number =>
- actsAfter + turnLimitMs + TURN_SLACK_MS;
+  actsAfter + turnLimitMs + TURN_SLACK_MS;
 
 /** Above this much cash the Timeout penalty is 10% of cash (R19). */
 export const TIMEOUT_PENALTY_THRESHOLD = 100_000;
