@@ -8,15 +8,14 @@ export type FetchLike = (
   url: string,
 ) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 
-type PromSample = {
-  metric?: Record<string, string>;
-  value?: [number, string];
-  values?: [number, string][];
-};
-type PromData = {
-  resultType?: string;
-  result?: PromSample[] | [number, string];
-};
+type PromData = { resultType?: unknown; result?: unknown };
+type PromSample = { value?: unknown; values?: unknown };
+
+const isSample = (value: unknown): value is PromSample =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const samplesOf = (result: unknown): PromSample[] =>
+  Array.isArray(result) ? result.filter(isSample) : [];
 
 function dataOf(json: unknown): PromData {
   if (typeof json !== "object" || json === null) {
@@ -29,34 +28,39 @@ function dataOf(json: unknown): PromData {
   if (!("data" in json) || typeof json.data !== "object" || json.data === null) {
     throw new Error("Prometheus answered without data");
   }
-  return json.data as PromData;
+  return {
+    resultType: "resultType" in json.data ? json.data.resultType : undefined,
+    result: "result" in json.data ? json.data.result : undefined,
+  };
 }
 
 /** The sample as a finite number, or `null` for NaN, ±Infinity and no data. */
-function numberOf(raw: string): number | null {
+function numberOf(raw: unknown): number | null {
+  if (typeof raw !== "string") return null;
   const value = Number(raw);
   return Number.isFinite(value) ? value : null;
+}
+
+/** The `value` of a `[timestamp, "number"]` pair, or `null`. */
+function pairValue(pair: unknown): number | null {
+  return Array.isArray(pair) && pair.length === 2 ? numberOf(pair[1]) : null;
 }
 
 /** One instant query's first sample, or `null` when the query matched nothing. */
 export function parseInstant(json: unknown): number | null {
   const data = dataOf(json);
-  if (data.resultType === "scalar") {
-    const scalar = data.result as [number, string] | undefined;
-    return Array.isArray(scalar) && scalar.length === 2 ? numberOf(String(scalar[1])) : null;
-  }
-  const result = (data.result ?? []) as PromSample[];
-  const value = result[0]?.value;
-  return value === undefined ? null : numberOf(value[1]);
+  if (data.resultType === "scalar") return pairValue(data.result);
+  return pairValue(samplesOf(data.result)[0]?.value);
 }
 
 /** A range query's samples, one number array per series (empty series dropped). */
 export function parseRange(json: unknown): number[][] {
-  const data = dataOf(json);
-  const result = (data.result ?? []) as PromSample[];
-  return result
-    .map((series) => (series.values ?? []).map(([, raw]) => numberOf(raw)))
-    .map((values) => values.filter((value): value is number => value !== null))
+  return samplesOf(dataOf(json).result)
+    .map((series) =>
+      (Array.isArray(series.values) ? series.values.map(pairValue) : []).filter(
+        (value): value is number => value !== null,
+      ),
+    )
     .filter((values) => values.length > 0);
 }
 

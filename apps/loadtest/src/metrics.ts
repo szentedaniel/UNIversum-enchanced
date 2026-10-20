@@ -53,27 +53,24 @@ export async function collectServerMetrics(
   if (b !== null && b.seconds > 0) windowsToRead.push(b);
 
   const hist = async (quantile: number, metric: string): Promise<number | null> => {
-    let worst: number | null = null;
-    for (const window of windowsToRead) {
-      const value = await prom.instant(
-        `histogram_quantile(${quantile}, sum by (le) (rate(${metric}_bucket[${Math.round(window.seconds)}s])))`,
-        window.endMs,
-      );
-      worst = maxOf(worst, value);
-    }
-    return worst;
+    const values = await Promise.all(
+      windowsToRead.map((window) =>
+        prom.instant(
+          `histogram_quantile(${quantile}, sum by (le) (rate(${metric}_bucket[${Math.round(window.seconds)}s])))`,
+          window.endMs,
+        ),
+      ),
+    );
+    return values.reduce(maxOf, null);
   };
 
   const maxOver = async (metric: string): Promise<number | null> => {
-    let worst: number | null = null;
-    for (const window of windowsToRead) {
-      const value = await prom.instant(
-        `max_over_time(${metric}[${Math.round(window.seconds)}s])`,
-        window.endMs,
-      );
-      worst = maxOf(worst, value);
-    }
-    return worst;
+    const values = await Promise.all(
+      windowsToRead.map((window) =>
+        prom.instant(`max_over_time(${metric}[${Math.round(window.seconds)}s])`, window.endMs),
+      ),
+    );
+    return values.reduce(maxOf, null);
   };
 
   const intentP95Ms = await scale(hist(0.95, "intent_duration_seconds"), 1_000);
@@ -84,26 +81,30 @@ export async function collectServerMetrics(
 
   let cpuSeconds = 0;
   let cpuWindowSeconds = 0;
-  for (const window of windowsToRead) {
-    const value = await prom.instant(cpuQuery(Math.round(window.seconds)), window.endMs);
-    if (value !== null) {
+  const cpuValues = await Promise.all(
+    windowsToRead.map((window) => prom.instant(cpuQuery(Math.round(window.seconds)), window.endMs)),
+  );
+  cpuValues.forEach((value, index) => {
+    const window = windowsToRead[index];
+    if (value !== null && window !== undefined) {
       cpuSeconds += value * window.seconds;
       cpuWindowSeconds += window.seconds;
     }
-  }
+  });
   const serverCpuCores = cpuWindowSeconds === 0 ? null : cpuSeconds / cpuWindowSeconds;
 
   const rejections: Record<string, number> = {};
   for (const code of rejectionCodes) {
-    let total = 0;
-    for (const window of windowsToRead) {
-      const value = await prom.instant(
-        `sum(increase(rejections_total{code="${code}"}[${Math.round(window.seconds)}s]))`,
-        window.endMs,
-      );
-      total += value ?? 0;
-    }
-    rejections[code] = total;
+    // oxlint-disable-next-line no-await-in-loop -- one code at a time keeps the query log readable
+    const values = await Promise.all(
+      windowsToRead.map((window) =>
+        prom.instant(
+          `sum(increase(rejections_total{code="${code}"}[${Math.round(window.seconds)}s]))`,
+          window.endMs,
+        ),
+      ),
+    );
+    rejections[code] = values.reduce<number>((total, value) => total + (value ?? 0), 0);
   }
 
   const heapGrowthRatio = b === null ? null : await heapGrowth(prom, b.endMs, b.seconds);

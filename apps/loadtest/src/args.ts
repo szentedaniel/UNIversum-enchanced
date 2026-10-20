@@ -138,13 +138,15 @@ export function parseArgs(
         profile.rooms = integer("--rooms", value(i, arg), 1, 100_000);
         i++;
         break;
-      case "--players":
-        profile.playersPerRoom = integer("--players", value(i, arg), 2, 4);
-        if (![2, 3, 4].includes(profile.playersPerRoom)) {
+      case "--players": {
+        const players = integer("--players", value(i, arg), 2, 4);
+        if (players !== 2 && players !== 3 && players !== 4) {
           throw new Error("loadtest: --players must be 2, 3 or 4");
         }
+        profile.playersPerRoom = players;
         i++;
         break;
+      }
       case "--ramp":
         profile.rampSeconds = parseSecondsOrThrowArg(arg, value(i, arg));
         i++;
@@ -160,10 +162,10 @@ export function parseArgs(
         break;
       case "--minute-limit": {
         const limit = integer("--minute-limit", value(i, arg), 15, 50);
-        if (![15, 30, 50].includes(limit)) {
+        if (limit !== 15 && limit !== 30 && limit !== 50) {
           throw new Error("loadtest: --minute-limit must be 15, 30 or 50");
         }
-        profile.minuteLimit = limit as 15 | 30 | 50;
+        profile.minuteLimit = limit;
         i++;
         break;
       }

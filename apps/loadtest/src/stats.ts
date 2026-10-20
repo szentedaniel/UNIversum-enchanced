@@ -30,6 +30,8 @@ export type WorkerStats = {
   unplannedExits: number;
   roomsStarted: number;
   gamesFinished: number;
+  /** Rooms playing at the kill that must be restored. */
+  roomsAtKill: number;
   /** Seats expected to come back after the planned kill. */
   clientsAtKill: number;
   /** Of those, back within the reseat window after `/readyz`. */
@@ -53,10 +55,38 @@ export type ClientSummary = Omit<WorkerStats, "rttMs" | "cpuSamples"> & {
   generatorCpuPeakFraction: number;
 };
 
+export function emptyWorkerStats(): WorkerStats {
+  return {
+    rttMs: [],
+    intentsSent: 0,
+    intentsAccepted: 0,
+    rejections: {},
+    decisions: 0,
+    timeouts: 0,
+    drops: 0,
+    shortDrops: 0,
+    longDrops: 0,
+    tokenRejoins: 0,
+    guestRejoins: 0,
+    failedRejoins: 0,
+    seatMismatches: 0,
+    versionRegressions: 0,
+    unplannedExits: 0,
+    roomsStarted: 0,
+    gamesFinished: 0,
+    roomsAtKill: 0,
+    clientsAtKill: 0,
+    clientsBackInTime: 0,
+    maxRejoinAfterReadyMs: null,
+    cpuSamples: [],
+    errors: [],
+  };
+}
+
 /** The nearest-rank percentile: the smallest sample at or above `p`% of the rest. */
 export function percentile(samples: number[], p: number): number | null {
   if (samples.length === 0) return null;
-  const sorted = [...samples].sort((a, b) => a - b);
+  const sorted = samples.toSorted((a, b) => a - b);
   const rank = Math.ceil((p / 100) * sorted.length);
   return sorted[Math.min(sorted.length - 1, Math.max(0, rank - 1))] ?? null;
 }
@@ -124,6 +154,7 @@ export function mergeWorkerStats(
     unplannedExits: sum(workers, (worker) => worker.unplannedExits),
     roomsStarted: sum(workers, (worker) => worker.roomsStarted),
     gamesFinished: sum(workers, (worker) => worker.gamesFinished),
+    roomsAtKill: sum(workers, (worker) => worker.roomsAtKill),
     clientsAtKill: sum(workers, (worker) => worker.clientsAtKill),
     clientsBackInTime: sum(workers, (worker) => worker.clientsBackInTime),
     maxRejoinAfterReadyMs,

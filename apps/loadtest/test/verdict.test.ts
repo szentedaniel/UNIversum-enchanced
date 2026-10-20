@@ -41,6 +41,7 @@ const client = (overrides: Partial<ClientSummary> = {}): ClientSummary => ({
   unplannedExits: 0,
   roomsStarted: 1_000,
   gamesFinished: 400,
+  roomsAtKill: 1_000,
   clientsAtKill: 3_800,
   clientsBackInTime: 3_800,
   maxRejoinAfterReadyMs: 12_000,

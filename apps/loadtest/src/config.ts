@@ -13,7 +13,7 @@ export type LoadProfile = {
   /** Rooms scheduled over the ramp. */
   rooms: number;
   /** Guests per Room (the spec's 4). */
-  playersPerRoom: number;
+  playersPerRoom: 2 | 3 | 4;
   /** Rooms ramp linearly from 0 to `rooms` over this long. */
   rampSeconds: number;
   /** The steady hold after the ramp, until the run ends. */

@@ -24,6 +24,33 @@ const matrix = (values: string[]) => ({
   },
 });
 
+const canned = (url: string): unknown => {
+  const parsed = new URL(url);
+  const query = parsed.searchParams.get("query") ?? "";
+  if (query.includes("intent_duration_seconds_bucket")) {
+    return vector(query.includes("0.95") ? "0.031" : "0.087");
+  }
+  if (query.includes("room_store_write_duration_seconds_bucket")) return vector("0.009");
+  if (query.includes("nodejs_eventloop_lag_p99_seconds")) return vector("0.021");
+  if (query.includes("process_cpu_seconds_total")) return vector("0.42");
+  if (query.includes("process_resident_memory_bytes")) return vector("734003200");
+  if (query.includes("nodejs_heap_size_used_bytes")) {
+    const time = parsed.searchParams.get("time") ?? "";
+    return vector(time.startsWith("1700002400") ? "210000000" : "200000000");
+  }
+  if (query.includes('code="INTERNAL"')) return vector("0");
+  if (query.includes('code="MALFORMED"')) return vector("0");
+  if (query.includes('code="RATE_LIMITED"')) return vector("2");
+  if (query.includes('code="SLOW_DOWN"')) return vector("3");
+  if (query.includes("restore_duration_seconds")) return vector("4.5");
+  if (query.includes("rooms_restored")) return vector("1000");
+  if (query.includes('rooms{state="playing"}')) return vector("998");
+  if (query.includes("process_start_time_seconds")) {
+    return matrix(["1700000000", "1700000000", "1700001200", "1700001200"]);
+  }
+  throw new Error(`unexpected query: ${query}`);
+};
+
 describe("Prometheus response parsing", () => {
   it("reads a vector sample", () => {
     expect(parseInstant(vector("0.047"))).toBe(0.047);
@@ -90,33 +117,6 @@ describe("the server measurements", () => {
     killMs: 1_700_001_800_000,
     holdEndMs: 1_700_002_400_000,
     b: { endMs: 1_700_002_400_000, seconds: 480 },
-  };
-
-  const canned = (url: string): unknown => {
-    const parsed = new URL(url);
-    const query = parsed.searchParams.get("query") ?? "";
-    if (query.includes("intent_duration_seconds_bucket")) {
-      return vector(query.includes("0.95") ? "0.031" : "0.087");
-    }
-    if (query.includes("room_store_write_duration_seconds_bucket")) return vector("0.009");
-    if (query.includes("nodejs_eventloop_lag_p99_seconds")) return vector("0.021");
-    if (query.includes("process_cpu_seconds_total")) return vector("0.42");
-    if (query.includes("process_resident_memory_bytes")) return vector("734003200");
-    if (query.includes("nodejs_heap_size_used_bytes")) {
-      const time = parsed.searchParams.get("time") ?? "";
-      return vector(time.startsWith("1700002400") ? "210000000" : "200000000");
-    }
-    if (query.includes('code="INTERNAL"')) return vector("0");
-    if (query.includes('code="MALFORMED"')) return vector("0");
-    if (query.includes('code="RATE_LIMITED"')) return vector("2");
-    if (query.includes('code="SLOW_DOWN"')) return vector("3");
-    if (query.includes("restore_duration_seconds")) return vector("4.5");
-    if (query.includes("rooms_restored")) return vector("1000");
-    if (query.includes('rooms{state="playing"}')) return vector("998");
-    if (query.includes("process_start_time_seconds")) {
-      return matrix(["1700000000", "1700000000", "1700001200", "1700001200"]);
-    }
-    throw new Error(`unexpected query: ${query}`);
   };
 
   const client = new PrometheusClient("http://prom.test", async (url) => ({

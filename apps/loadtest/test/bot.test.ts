@@ -4,37 +4,41 @@ import { chooseIntent, isGameOver, isMyTurn, offeredIntents } from "#bot.ts";
 
 type View = GameMessage["view"];
 
-const view = (phase: unknown, extra: Partial<View> = {}): View =>
-  ({
-    stateVersion: 1,
-    version: 7,
-    turn: 12,
-    currentPlayer: "p0",
-    phase,
-    turnDeadline: 1_000,
-    turnTimer: { endsAt: 1_000, limitMs: 20_000 },
-    settings: { maxPlayers: 4, minuteLimit: 15 },
-    endsAt: 900_000,
-    players: [
-      {
-        id: "p0",
-        name: { adjective: "brave", noun: "otter" },
-        seat: 0,
-        cash: 2_500_000,
-        position: 0,
-        bankrupt: false,
-        quarantineRounds: null,
-        hasPcrTest: false,
-      },
-    ],
-    fields: [],
-    doubler: null,
-    lastChanceCard: null,
-    autoSell: null,
-    ...extra,
-  }) as View;
+const view = (phase: View["phase"], extra: Partial<View> = {}): View => ({
+  stateVersion: 1,
+  version: 7,
+  turn: 12,
+  currentPlayer: "p0",
+  phase,
+  turnDeadline: 1_000,
+  turnTimer: { endsAt: 1_000, limitMs: 20_000 },
+  settings: { maxPlayers: 4, minuteLimit: 15 },
+  endsAt: 900_000,
+  players: [
+    {
+      id: "p0",
+      name: { adjective: "brave", noun: "otter" },
+      seat: 0,
+      cash: 2_500_000,
+      position: 0,
+      bankrupt: false,
+      quarantineRounds: null,
+      hasPcrTest: false,
+    },
+  ],
+  fields: [],
+  doubler: null,
+  lastChanceCard: null,
+  autoSell: null,
+  ...extra,
+});
 
-const types = (intents: ClientIntent[]) => intents.map((intent) => intent.type).sort();
+// A phase a later ticket adds: outside today's union, as a stale client would see it.
+const futurePhase = (kind: string): View["phase"] =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- #31/#32 add these phases
+  ({ kind }) as View["phase"];
+
+const types = (intents: ClientIntent[]) => intents.map((intent) => intent.type).toSorted();
 
 describe("bot decisions", () => {
   it("rolls when the Room awaits a roll", () => {
@@ -106,7 +110,11 @@ describe("bot decisions", () => {
   });
 
   it("auto-sells or sells Auto-sell's picks during a Sale", () => {
-    const phase = { kind: "selling", shortfall: 100_000, resume: { kind: "tax", amount: 1 } };
+    const phase: View["phase"] = {
+      kind: "selling",
+      shortfall: 100_000,
+      resume: { kind: "tax", amount: 1 },
+    };
     expect(types(offeredIntents(view(phase, { autoSell: [4, 9] }), "p0"))).toEqual([
       "AutoSell",
       "SellFields",
@@ -120,8 +128,8 @@ describe("bot decisions", () => {
   });
 
   it("leaves a phase it does not know to the Turn timer", () => {
-    expect(offeredIntents(view({ kind: "placingDoubler", fields: [2, 5] }), "p0")).toEqual([]);
-    expect(offeredIntents(view({ kind: "choosingErasmus", fields: [9] }), "p0")).toEqual([]);
+    expect(offeredIntents(view(futurePhase("placingDoubler")), "p0")).toEqual([]);
+    expect(offeredIntents(view(futurePhase("choosingErasmus")), "p0")).toEqual([]);
   });
 
   it("picks uniformly from what the view offers", () => {
@@ -144,7 +152,7 @@ describe("bot decisions", () => {
   });
 
   it("recognises the game-over phase a later ticket adds", () => {
-    expect(isGameOver(view({ kind: "gameOver" }))).toBe(true);
+    expect(isGameOver(view(futurePhase("gameOver")))).toBe(true);
     expect(isGameOver(view({ kind: "awaitingRoll" }))).toBe(false);
   });
 });

@@ -19,6 +19,7 @@ const zeroStats = (): WorkerStats => ({
   unplannedExits: 0,
   roomsStarted: 0,
   gamesFinished: 0,
+  roomsAtKill: 0,
   clientsAtKill: 0,
   clientsBackInTime: 0,
   maxRejoinAfterReadyMs: null,

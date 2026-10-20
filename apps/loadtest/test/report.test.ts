@@ -41,6 +41,7 @@ const client: ClientSummary = {
   unplannedExits: 0,
   roomsStarted: 1000,
   gamesFinished: 400,
+  roomsAtKill: 999,
   clientsAtKill: 4000,
   clientsBackInTime: 4000,
   maxRejoinAfterReadyMs: 12_000,

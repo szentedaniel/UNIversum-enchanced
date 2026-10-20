@@ -49,12 +49,13 @@ export type RunReport = {
   kneeResult?: KneeResult | null;
 };
 
+const pad2 = (value: number) => String(value).padStart(2, "0");
+
 /** `loadtest-20261020-180509.md` in UTC. */
 export function reportFileName(startedAt: Date): string {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `loadtest-${startedAt.getUTCFullYear()}${pad(startedAt.getUTCMonth() + 1)}${pad(
+  return `loadtest-${startedAt.getUTCFullYear()}${pad2(startedAt.getUTCMonth() + 1)}${pad2(
     startedAt.getUTCDate(),
-  )}-${pad(startedAt.getUTCHours())}${pad(startedAt.getUTCMinutes())}${pad(
+  )}-${pad2(startedAt.getUTCHours())}${pad2(startedAt.getUTCMinutes())}${pad2(
     startedAt.getUTCSeconds(),
   )}.md`;
 }
@@ -236,7 +237,11 @@ export function renderReport(report: RunReport): string {
       `- Hold start: ${iso(new Date(report.windows.holdStartMs))}`,
       `- Kill: ${iso(new Date(report.windows.killMs))}`,
       `- Hold end: ${iso(new Date(report.windows.holdEndMs))}`,
-      `- Second window: ${report.windows.b === null ? "none (the restart left less than the exclusion)" : `${shortDuration(report.windows.b.seconds)}`}`,
+      `- Second window: ${
+        report.windows.b === null
+          ? "none (the restart left less than the exclusion)"
+          : shortDuration(report.windows.b.seconds)
+      }`,
       "",
     );
   }

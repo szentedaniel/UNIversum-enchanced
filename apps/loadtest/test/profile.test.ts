@@ -71,7 +71,7 @@ describe("the per-game drop plan", () => {
   });
 
   it("returns a short drop in 2–30 s by reconnection token", () => {
-    for (const drop of drops.filter((drop) => !drop.long)) {
+    for (const drop of drops.filter((planned) => !planned.long)) {
       expect(drop.returnMs).toBeGreaterThanOrEqual(2_000);
       expect(drop.returnMs).toBeLessThanOrEqual(30_000);
     }
