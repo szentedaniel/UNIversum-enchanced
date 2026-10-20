@@ -34,6 +34,7 @@ function viewWith(field: FieldView): PublicView {
     ),
     doubler: null,
     lastChanceCard: null,
+    autoSell: null,
   };
 }
 

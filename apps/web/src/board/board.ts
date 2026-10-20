@@ -31,13 +31,17 @@ import { pawnBadge } from "#board/badge.ts";
 import { INK } from "#board/colors.ts";
 import { attachGestures } from "#board/gestures.ts";
 import { FIELD_WIDTH, fieldPoint, type Point } from "#board/layout.ts";
+import type { PickMarks } from "#pick/sale.ts";
 
 export type BoardOptions = {
   /** The Field's name in the active language. */
   fieldLabel(id: FieldId): string;
   /** Compact money shown on the Field's tile (its Rent), or `null`. */
   fieldNote?(view: PublicView, id: FieldId): string | null;
-  /** A tap: the nearest Field within reach, or `null` for a tap far from every Field. */
+  /**
+   * A tap: the nearest Field within reach, or `null` for a tap far from every
+   * Field. During a pick only pickable Fields count (the tap snaps to them).
+   */
   onFieldTap?(id: FieldId | null): void;
   /** Follow was switched off by hand (a drag, pinch or wheel). */
   onFollowChange?(on: boolean): void;
@@ -48,6 +52,12 @@ export type Board = {
   update(view: PublicView, events: readonly GameEvent[]): void;
   /** Rings and lifts the Field whose card is open. Never moves the camera. */
   setSelected(id: FieldId | null): void;
+  /**
+   * Starts, updates or (`null`) ends a pick: other Fields are greyed, picked
+   * ones lifted and green, `ringed` ones ringed in orange; taps snap to
+   * pickable Fields only.
+   */
+  setPick(marks: PickMarks | null): void;
   /** Pans (never zooms) only if the Field is off screen or under one of `obstacles` (viewport rects). */
   reveal(id: FieldId, obstacles: readonly DOMRect[]): void;
   /** Zooms around the fit area's centre. */
@@ -62,6 +72,8 @@ export type Board = {
   camera(): Camera;
   /** Test hook: the latest view handed to the Board. */
   readonly view: PublicView | null;
+  /** Test hook: the pick marks shown, or `null` outside a pick. */
+  readonly pick: PickMarks | null;
 };
 
 type Animation = { duration: number; tick(progress: number): void };
@@ -86,6 +98,11 @@ const FOLLOW_EASE = 0.12;
 const SELECTED_LIFT = 12;
 const RING_PX = 3;
 const RING_COLOR = 0xff7a1a;
+/** Picked Fields: Tabletop `success`. */
+const PICKED_COLOR = 0x1f9d6e;
+/** Auto-sell's Fields near the end of an uncovered Sale: Tabletop `warning`. */
+const AUTO_SELL_RING_COLOR = 0xe0790b;
+const AUTO_SELL_RING_PX = 5;
 const ZOOM_STEP_MS = 200;
 
 const PAWN_WIDTH = 92;
@@ -209,20 +226,31 @@ export async function createBoard(
   const bounds: Rect = { x: local.x, y: local.y, w: local.width, h: local.height };
 
   let selected: FieldId | null = null;
+  let pick: PickMarks | null = null;
 
-  /** The Field's top-face centre in Board units (lifted while selected). */
+  const isLifted = (id: FieldId) => id === selected || (pick?.picked.includes(id) ?? false);
+
+  /** The Field's top-face centre in Board units (lifted while selected or picked). */
   const boardCentre = (id: FieldId): Point => {
     const at = fieldPoints[id] ?? { x: 0, y: 0 };
-    return id === selected ? { x: at.x, y: at.y - SELECTED_LIFT } : at;
+    return isLifted(id) ? { x: at.x, y: at.y - SELECTED_LIFT } : at;
   };
 
+  /** The selection and the pick marks: lift, ring and grey each Field. */
   function applySelected(): void {
     fields.forEach((art, id) => {
       const at = fieldPoints[id] ?? { x: 0, y: 0 };
-      const on = id === selected;
-      art.container.y = at.y - art.centre.y - (on ? SELECTED_LIFT : 0);
-      art.container.zIndex = on ? 1e6 : at.y;
-      art.setRing(on ? { color: RING_COLOR, width: RING_PX / camera.scale } : null);
+      const lifted = isLifted(id);
+      art.container.y = at.y - art.centre.y - (lifted ? SELECTED_LIFT : 0);
+      art.container.zIndex = id === selected ? 1e6 : lifted ? 1e5 + at.y : at.y;
+      const width = RING_PX / camera.scale;
+      if (id === selected) art.setRing({ color: RING_COLOR, width });
+      else if (pick?.picked.includes(id))
+        art.setRing({ color: PICKED_COLOR, width, fill: PICKED_COLOR });
+      else if (pick?.ringed.includes(id)) {
+        art.setRing({ color: AUTO_SELL_RING_COLOR, width: AUTO_SELL_RING_PX / camera.scale });
+      } else art.setRing(null);
+      art.setDimmed(pick !== null && !pick.pickable.includes(id));
     });
     invalidate();
   }
@@ -320,7 +348,7 @@ export async function createBoard(
     camera = clamped;
     world.scale.set(camera.scale);
     world.position.set(camera.x, camera.y);
-    if (zoomed && selected !== null) applySelected();
+    if (zoomed && (selected !== null || pick !== null)) applySelected();
     if (zoomed) settleText();
     invalidate();
   }
@@ -393,6 +421,7 @@ export async function createBoard(
       let nearest: FieldId | null = null;
       let distance = Infinity;
       for (let id = 0; id < FIELD_COUNT; id++) {
+        if (pick && !pick.pickable.includes(id)) continue;
         const centre = toScreen(camera, boardCentre(id));
         const d = Math.hypot(centre.x - at.x, centre.y - at.y);
         if (d < distance) {
@@ -502,6 +531,11 @@ export async function createBoard(
       selected = id;
       applySelected();
     },
+    setPick(marks) {
+      if (JSON.stringify(marks) === JSON.stringify(pick)) return;
+      pick = marks;
+      applySelected();
+    },
     reveal(id, obstacles) {
       const canvasRect = app.canvas.getBoundingClientRect();
       // Where the Field will be once any running pan ends.
@@ -556,6 +590,9 @@ export async function createBoard(
     camera: () => ({ ...camera }),
     get view() {
       return shown;
+    },
+    get pick() {
+      return pick;
     },
   };
 }

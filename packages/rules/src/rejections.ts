@@ -11,6 +11,8 @@ export const RULES_REJECTION_CODES = [
   "NOT_YOUR_TURN",
   /** The intent is not one of the options the current phase offers. */
   "NOT_OFFERED",
+  /** The Fields picked in a Sale sell for less than the Shortfall (R66). */
+  "SHORTFALL_NOT_COVERED",
 ] as const;
 
 export type RulesRejectionCode = (typeof RULES_REJECTION_CODES)[number];

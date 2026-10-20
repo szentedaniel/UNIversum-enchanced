@@ -7,7 +7,7 @@ import {
   type GameState,
   type Seed,
 } from "#index.ts";
-import { newGame, player, rollOnto, withPlayer } from "./helpers.ts";
+import { newGame, player, rollOnto, withField, withPlayer } from "./helpers.ts";
 
 const CHANCE = 14;
 
@@ -146,13 +146,28 @@ describe("money cards", () => {
     expect(totalCash(state)).toBe(totalCash(newGame()) - 200_000);
   });
 
-  it("R34: until the Sale exists, cash that doesn't cover the −200,000 card pays what it can and never goes negative", () => {
+  it("R34, R70: a Player who can't cover the −200,000 card with cash or Fields pays what they have and is Bankrupt", () => {
     const seed = seedDrawing("failedExams");
     const start = withPlayer(newGame({ seed }), "p1", { cash: 50_000 });
 
     const { state, events } = draw(seed, null, start);
 
     expect(events).toContainEqual({ type: "ChanceChargePaid", player: "p1", amount: 50_000 });
-    expect(player(state, "p1").cash).toBe(0);
+    expect(events).toContainEqual({ type: "WentBankrupt", player: "p1", fields: [] });
+    expect(player(state, "p1")).toMatchObject({ cash: 0, bankrupt: true });
+  });
+
+  it("R34, F6: a Player who can cover the −200,000 card only by selling goes into a Sale for the Shortfall", () => {
+    const seed = seedDrawing("failedExams");
+    let start = withPlayer(newGame({ seed }), "p1", { cash: 50_000 });
+    start = withField(start, 1, { owner: "p1", level: 1 }); // Veszprém, sale 180,000
+
+    const { state } = draw(seed, null, start);
+
+    expect(state.phase).toEqual({
+      kind: "selling",
+      shortfall: 150_000,
+      resume: { kind: "chanceCard", amount: 200_000 },
+    });
   });
 });

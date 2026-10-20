@@ -70,9 +70,17 @@ export type FieldArt = {
   /** Every canvas text, so the Board can re-rasterise them at the zoom level. */
   readonly texts: Text[];
   setLook(look: FieldLook): void;
-  /** The selection ring, `width` in local units (the Board keeps it ~3 screen px). */
-  setRing(ring: { color: number; width: number } | null): void;
+  /**
+   * The selection or pick ring, `width` in local units (the Board keeps it a
+   * few screen px); the outline is filled with `fill` (default: a white glaze).
+   */
+  setRing(ring: { color: number; width: number; fill?: number } | null): void;
+  /** Greys the whole Field (container tint, no filter): it can't be picked. */
+  setDimmed(dimmed: boolean): void;
 };
+
+/** The container tint of a Field that can't be picked. */
+const DIMMED_TINT = 0x5a6070;
 
 type Pair = [number, number];
 
@@ -251,11 +259,15 @@ export function createFieldArt(field: FieldInfo, label: string, frames: Frames):
       ring.visible = next !== null;
       ring.clear();
       if (next) {
+        const { fill, ...stroke } = next;
         ring
           .poly(outline)
-          .fill({ color: 0xffffff, alpha: 0.3 })
-          .stroke({ ...next, join: "round" });
+          .fill(fill === undefined ? { color: 0xffffff, alpha: 0.3 } : { color: fill, alpha: 0.45 })
+          .stroke({ ...stroke, join: "round" });
       }
+    },
+    setDimmed(dimmed) {
+      container.tint = dimmed ? DIMMED_TINT : 0xffffff;
     },
   };
 }

@@ -72,20 +72,27 @@ export function levelOffers(field: FieldId, level: number, cash: number): LevelO
   return offers;
 }
 
+/**
+ * After the Rent: the Buyout of another Player's University, below Level 4 and
+ * only if the Player's cash covers it (R48, R52). Nothing for a Bankrupt Player.
+ */
+export function offerBuyout(tx: Tx, playerId: PlayerId, field: FieldId): void {
+  const player = playerById(tx, playerId);
+  const level = tx.state.fields[field]?.level ?? 0;
+  const buyout = buyoutPriceOf(tx.state, field);
+  if (!player.bankrupt && level < MAX_LEVEL && buyout <= player.cash) {
+    decide(tx, { kind: "offer", field, levels: [], buyout });
+  }
+}
+
 /** Landing on a University (R13, R48, R49, R52, R56, R58). */
 export const landOnUniversity: Landing = (tx, playerId, field) => {
   const { owner, level } = tx.state.fields[field] ?? { owner: null, level: 0 };
   if (owner !== null && owner !== playerId) {
     // Rent first (R56), whoever's Turn and wherever the owner stands (R47).
-    charge(tx, playerId, rentOf(tx.state, field), (amount) => {
-      playerById(tx, owner).cash += amount;
-      emit(tx, { type: "RentPaid", player: playerId, owner, field, amount });
-    });
-    // Then the Buyout: below Level 4, and only if what is left covers it (R48, R52).
-    const buyout = buyoutPriceOf(tx.state, field);
-    if (!tx.decided && level < MAX_LEVEL && buyout <= playerById(tx, playerId).cash) {
-      decide(tx, { kind: "offer", field, levels: [], buyout });
-    }
+    // A Sale for the Rent (#29) stops here; the Buyout check then follows the Sale.
+    charge(tx, playerId, { kind: "rent", amount: rentOf(tx.state, field), owner, field });
+    if (!tx.decided) offerBuyout(tx, playerId, field);
     return;
   }
   // Own or unowned: no Rent (R58), only the offer.

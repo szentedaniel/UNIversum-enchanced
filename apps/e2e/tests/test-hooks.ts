@@ -17,6 +17,17 @@ export type ViewSummary = {
   fields: { owner: string | null; level: number; value: number; rent: number }[];
 };
 export type Camera = { scale: number; x: number; y: number };
+export type PickMarks = { pickable: number[]; picked: number[]; ringed: number[] };
+/** The parts of a full pushed view (PublicView) that specs change before `showView`. */
+export type FullView = {
+  currentPlayer: string;
+  phase: unknown;
+  players: { id: string; bankrupt: boolean }[];
+  fields: { owner: string | null; level: number; value: number; rent: number; sale: number }[];
+  autoSell: number[] | null;
+  turnDeadline: number;
+  turnTimer: { endsAt: number; limitMs: number };
+};
 
 declare global {
   interface Window {
@@ -24,8 +35,15 @@ declare global {
       fieldCenter(id: number): { x: number; y: number };
       camera(): Camera;
       view(): ViewSummary | null;
+      pick(): PickMarks | null;
+      /** Shows a made-up view (a full PublicView) as if the server had pushed it. */
+      showView(view: FullView): void;
       /** The room store (only the fields the specs read). */
-      room(): { me: string | null; status: string };
+      room(): {
+        me: string | null;
+        status: string;
+        push: { view: FullView; clockOffset: number } | null;
+      };
     };
   }
 }

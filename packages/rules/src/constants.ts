@@ -23,6 +23,9 @@ export const turnDeadlineFrom = (now: number): number => now + TURN_LIMIT_MS + T
 /** Above this much cash the Timeout penalty is 10% of cash (R19). */
 export const TIMEOUT_PENALTY_THRESHOLD = 100_000;
 
+/** The Timeout penalty at or below the threshold, raised by Auto-sell first (R19). */
+export const LOW_CASH_TIMEOUT_PENALTY = 100_000;
+
 /** Quarantine rounds a Player sits out after landing on the Quarantine Field (R39). */
 export const QUARANTINE_ROUNDS = 3;
 
