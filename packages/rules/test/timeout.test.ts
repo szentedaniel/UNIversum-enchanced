@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  apply,
+  isRejection,
   publicView,
+  setupGame,
   START_CASH,
   START_FIELD,
   SYSTEM,
@@ -14,6 +17,8 @@ import {
   player,
   reject,
   rollOnto,
+  SEED,
+  seats,
   T0,
   withPlayer,
 } from "./helpers.ts";
@@ -55,6 +60,32 @@ describe("the Turn timer", () => {
 
     expect(view.turnDeadline).toBe(T0 + DEADLINE_AFTER);
     expect(view.turnTimer).toEqual({ endsAt: T0 + 20_000, limitMs: 20_000 });
+  });
+
+  it("a server's timing override shortens every deadline, the ring and the Minute limit", () => {
+    const state = setupGame({
+      seats: seats(2),
+      settings: { maxPlayers: 2, minuteLimit: 15 },
+      seed: SEED,
+      now: T0,
+      turnLimitMs: 5_000,
+      minuteMs: 1_000,
+    });
+
+    expect(state.turnDeadline).toBe(T0 + 5_000 + TURN_SLACK_MS);
+    expect(state.endsAt).toBe(T0 + 15_000);
+    expect(publicView(state, { turnLimitMs: 5_000 }).turnTimer).toEqual({
+      endsAt: T0 + 5_000,
+      limitMs: 5_000,
+    });
+
+    const rolled = apply(
+      state,
+      { type: "Roll", turn: 1 },
+      { actor: "p1", now: T0 + 1_000, turnLimitMs: 5_000 },
+    );
+    if (isRejection(rolled)) throw new Error(`Roll was rejected with ${rolled.code}`);
+    expect(rolled.state.turnDeadline).toBe(T0 + 1_000 + 5_000 + TURN_SLACK_MS);
   });
 });
 

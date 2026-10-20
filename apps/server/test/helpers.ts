@@ -30,7 +30,7 @@ import type { ErrorReporter } from "#observability/error-reporting.ts";
 import type { Logger } from "#observability/logger.ts";
 import { GameMetrics } from "#observability/metrics.ts";
 import { DEFAULT_LIMITS, type Limits } from "#limits.ts";
-import { GameRoom } from "#room/game-room.ts";
+import { GameRoom, type GameTiming } from "#room/game-room.ts";
 import type { Scheduler } from "#room/scheduler.ts";
 import { createGameServer, restoreRooms } from "#server.ts";
 import type { RoomStore } from "#store/room-store.ts";
@@ -140,6 +140,8 @@ export type TestServerOptions = {
   reporter?: ErrorReporter;
   /** The tracker DSN `/client-config` and `/errors` use; `null` (off) by default. */
   errorReporting?: Dsn | null;
+  /** Shorter Turns and minutes (e2e's env overrides); the production constants by default. */
+  timing?: GameTiming;
 };
 
 export type TestServer = {
@@ -206,6 +208,7 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
     limits: { ...TEST_LIMITS, ...options.limits },
     metrics,
     log,
+    timing: options.timing,
   });
   await server.listen(0, "127.0.0.1");
   const restored = await restoreRooms({ store, scheduler, metrics, log });

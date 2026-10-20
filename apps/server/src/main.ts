@@ -39,6 +39,7 @@ const server = createGameServer({
   log,
   reporter,
   errorReporting: dsn,
+  timing: config.timing,
 });
 server.onBeforeShutdown(() => log.info("Server shutting down"));
 // Every Room has stopped (on SIGTERM/SIGINT) before the store closes.

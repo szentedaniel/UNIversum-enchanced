@@ -174,6 +174,12 @@ export class RestoreRoom {
 /** Server-side create options for a restore: `matchMaker.createRoom(GAME_ROOM, restoreOptions(room))`. */
 export const restoreOptions = (stored: StoredRoom) => ({ restore: new RestoreRoom(stored) });
 
+/**
+ * Test-only clock overrides (`GAME_TURN_LIMIT_MS`, `GAME_MINUTE_MS`), so a
+ * full game fits an e2e run. Empty in production, which uses the rules constants.
+ */
+export type GameTiming = { turnLimitMs?: number; minuteMs?: number };
+
 function restoreFrom(options: unknown): StoredRoom | null {
   if (typeof options !== "object" || options === null || !("restore" in options)) return null;
   return options.restore instanceof RestoreRoom ? options.restore.stored : null;
@@ -219,6 +225,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   reporter: ErrorReporter = noReporter;
   /** The rules engine's `apply`; `createGameServer` sets it (tests pass one that throws). */
   engine: typeof apply = apply;
+  /** Shorter Turns and minutes for e2e runs; empty in production. */
+  timing: GameTiming = {};
   /** Engine throws in a row in this Room; the third is logged at `fatal` (spec: Engine throws). */
   #throwsInARow = 0;
   /** Failed tries of the current Turn deadline, for the retry back-off. */
@@ -484,7 +492,11 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   /** Brings a returning client up to date: the game view, or the Lobby (to everyone, as the Seat is no longer held). */
   private sendCurrent(client: Client): void {
     if (this.game) {
-      const message: GameMessage = { view: publicView(this.game), events: [], now: this.now() };
+      const message: GameMessage = {
+        view: publicView(this.game, this.timing),
+        events: [],
+        now: this.now(),
+      };
       client.send(MESSAGE.game, message);
     } else {
       this.broadcastLobby();
@@ -592,6 +604,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       settings: this.settings,
       seed: newSeed(),
       now: this.now(),
+      ...this.timing,
     });
     const refused = this.commit(game, []);
     if (refused) return refused;
@@ -733,7 +746,11 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    */
   private run(game: GameState, intent: Intent, actor: Actor): Applied | Rejection | null {
     try {
-      const result = this.engine(game, intent, { actor, now: this.now() });
+      const result = this.engine(game, intent, {
+        actor,
+        now: this.now(),
+        turnLimitMs: this.timing.turnLimitMs,
+      });
       this.#throwsInARow = 0;
       return result;
     } catch (error) {
@@ -774,7 +791,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       return "INTERNAL";
     }
     this.game = state;
-    const message: GameMessage = { view: publicView(state), events, now: this.now() };
+    const message: GameMessage = { view: publicView(state, this.timing), events, now: this.now() };
     this.broadcast(MESSAGE.game, message);
     if (state.phase.kind === "gameOver") this.endGame();
     else this.scheduleDeadline(state);
