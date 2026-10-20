@@ -1,8 +1,14 @@
 import type { FieldId } from "#board.ts";
 import { TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
 import { autoSellPicks } from "#rules/charge.ts";
-import { rentOf, saleValueOf, valueOf } from "#rules/pricing.ts";
-import type { FieldState, GameState } from "#state.ts";
+import { rentOf, saleValueOf, valueOf, wealthOf } from "#rules/pricing.ts";
+import type { FieldState, GameState, PlayerState } from "#state.ts";
+
+/** A Player as clients see them: their state plus the numbers the UI shows. */
+export type PlayerView = PlayerState & {
+  /** Cash plus the Value of their Fields; the podium ranks by it (R77). */
+  wealth: number;
+};
 
 /** A Field as clients see it: its state plus the numbers the UI shows. */
 export type FieldView = FieldState & {
@@ -20,8 +26,9 @@ export type FieldView = FieldState & {
  * compile here until someone decides whether clients may see it. Derived
  * numbers the UI shows (Rent, Buyout price, Auto-sell's picks) are added here.
  */
-export type PublicView = Omit<GameState, "rng" | "fields"> & {
+export type PublicView = Omit<GameState, "rng" | "fields" | "players"> & {
   fields: FieldView[];
+  players: PlayerView[];
   /**
    * The Turn timer ring: it runs for `limitMs` and empties at `endsAt`, which
    * is the slack before `turnDeadline` (the slack is never shown). `null`
@@ -46,7 +53,10 @@ export function publicView(state: GameState): PublicView {
         : { endsAt: state.turnDeadline - TURN_SLACK_MS, limitMs: TURN_LIMIT_MS },
     settings: state.settings,
     endsAt: state.endsAt,
-    players: state.players,
+    players: state.players.map((player) => ({
+      ...player,
+      wealth: wealthOf(state, player.id),
+    })),
     fields: state.fields.map((field, id: FieldId) => ({
       owner: field.owner,
       level: field.level,

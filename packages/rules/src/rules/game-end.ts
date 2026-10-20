@@ -5,7 +5,8 @@
  * left, then the Minute limit, then a Super-monopoly, then 3 Monopolies — so
  * there is always exactly one winner (F4, F5, F25).
  */
-import type { PlayerId } from "#state.ts";
+import { wealthOf } from "#rules/pricing.ts";
+import type { PlayerId, PlayerState } from "#state.ts";
 import { emit, setFinalPhase, type Tx } from "#tx.ts";
 
 /** Why the game ended, which is also what the result screen says (R76–R79). */
@@ -38,14 +39,33 @@ function finish(tx: Tx, winner: PlayerId, reason: GameEndReason): void {
 }
 
 /**
+ * The richest of `players`: most Wealth (R77), then more cash, then the
+ * earlier Seat (F25). `players` is never empty where this is called.
+ */
+function richest(tx: Tx, players: readonly PlayerState[]): PlayerState | undefined {
+  return players.toSorted(
+    (a, b) =>
+      wealthOf(tx.state, b.id) - wealthOf(tx.state, a.id) || b.cash - a.cash || a.seat - b.seat,
+  )[0];
+}
+
+/**
  * The game-end check (R76–R79), at the Turn change. Returns whether the game
  * ended; when it did, the Turn does not pass.
  */
 export function checkGameEnd(tx: Tx): boolean {
   if (tx.state.phase.kind === "gameOver") return true;
   const alive = tx.state.players.filter((player) => !player.bankrupt);
-  const winner = alive[0] ?? tx.state.players[0];
-  if (alive.length > 1 || !winner) return false;
-  finish(tx, winner.id, "lastPlayer");
-  return true;
+  if (alive.length <= 1) {
+    // Only one Player left, or (unreachable through play) none at all.
+    const winner = alive[0] ?? richest(tx, tx.state.players);
+    if (winner) finish(tx, winner.id, "lastPlayer");
+    return true;
+  }
+  if (tx.ctx.now >= tx.state.endsAt) {
+    const winner = richest(tx, alive);
+    if (winner) finish(tx, winner.id, "timeUp");
+    return true;
+  }
+  return false;
 }

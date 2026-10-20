@@ -436,6 +436,7 @@ describe("played games", () => {
           expect(p.cash).toBe(0);
           expect(state.fields.some((f) => f.owner === p.id)).toBe(false);
         }
+        if (state.phase.kind === "gameOver") break;
       }
     }
     // The games really went through Sales and bankruptcies.

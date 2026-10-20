@@ -4,7 +4,7 @@
  * the rule areas and `publicView`. The Doubler (#31) extends `rentOf`.
  */
 import { FIELDS, MUSEUM_VALUE, type FieldId, type GroupId } from "#board.ts";
-import type { GameState } from "#state.ts";
+import type { GameState, PlayerId } from "#state.ts";
 
 /** Rent as a percentage of Value, by Level 1–4 (R28). */
 const RENT_PERCENT = [0, 55, 70, 85, 100] as const;
@@ -52,8 +52,28 @@ export function isMonopoly(state: GameState, group: GroupId): boolean {
 }
 
 /** How many Museums `owner` holds. */
-function museumsOf(state: GameState, owner: string): number {
+function museumsOf(state: GameState, owner: PlayerId): number {
   return FIELDS.filter((f) => f.kind === "museum" && state.fields[f.id]?.owner === owner).length;
+}
+
+/**
+ * The Value of every Field the Player owns: Universities at their current
+ * Level, each Museum at 400,000 whoever owns it (F2). Tax charges a share of
+ * it; a Player's Wealth is this plus their cash (R77).
+ */
+export function fieldsValue(state: GameState, playerId: PlayerId): number {
+  let total = 0;
+  for (const info of FIELDS) {
+    if (state.fields[info.id]?.owner !== playerId) continue;
+    total += info.kind === "museum" ? MUSEUM_VALUE : valueOf(state, info.id);
+  }
+  return total;
+}
+
+/** A Player's Wealth: cash plus the Value of their Fields (R77, the time-up ranking). */
+export function wealthOf(state: GameState, playerId: PlayerId): number {
+  const player = state.players.find((p) => p.id === playerId);
+  return (player?.cash ?? 0) + fieldsValue(state, playerId);
 }
 
 /** What a Player other than the owner pays on landing here now; 0 when unowned. */
