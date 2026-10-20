@@ -36,7 +36,9 @@ Branch `ticket/44-errors`. Builds on #25 (deadline), #34 (store), #37 (limiter),
   **values**: any `key=value` pair named `reconnectionToken`/`guestToken`/`token`/`password`
   (case-insensitive) keeps its key and gets `[Filtered]`, and any bare 32-hex Guest token is
   replaced with `[Filtered]`; this covers breadcrumb URLs, `request.url`,
-  `request.query_string` and exception messages.
+  `request.query_string` and exception messages. Sentry's own 32-hex ids
+  (`event_id`, `trace_id`, `span_id`, `parent_span_id`, `sid`, `replay_id`, `profile_id`, by
+  key at any depth) are exempt from the bare-token rule, or every event would lose its id.
 - `http/browser-routes.ts` (`createBrowserRoutes({dsn, guard, log})`) serves:
   - `GET /client-config` → `{ errorReporting: boolean }` (always 200; 405 otherwise).
   - `POST /errors` → 404 when `dsn` is null; else 10/min per IP
