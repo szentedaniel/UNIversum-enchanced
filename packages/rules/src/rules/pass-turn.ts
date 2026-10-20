@@ -3,8 +3,9 @@
  * the roll (`rules/turn.ts`) so the rule areas a landing leads to (Universities,
  * Museums, …) can pass the Turn without an import cycle through `landing.ts`.
  */
+import { beginTurn } from "#rules/quarantine.ts";
 import type { PlayerId } from "#state.ts";
-import { emit, setPhase, type Tx } from "#tx.ts";
+import { emit, type Tx } from "#tx.ts";
 
 declare module "#state.ts" {
   interface PhaseMap {
@@ -24,7 +25,8 @@ export const awaitingRoll = () => ({ kind: "awaitingRoll" }) as const;
 
 /**
  * Passes the Turn to the next non-Bankrupt Player in Seat order (R14).
- * The game-end check (R15, #32) runs here, before the Turn passes.
+ * The game-end check (R15, #32) runs here, before the Turn passes; the new
+ * Turn then starts in `beginTurn` (the dice, or the Quarantine choice).
  */
 export function passTurn(tx: Tx): void {
   const { players } = tx.state;
@@ -37,6 +39,6 @@ export function passTurn(tx: Tx): void {
     }
   }
   tx.state.turn += 1;
-  setPhase(tx, awaitingRoll());
   emit(tx, { type: "TurnPassed", player: tx.state.currentPlayer, turn: tx.state.turn });
+  beginTurn(tx);
 }

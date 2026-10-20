@@ -59,10 +59,43 @@ function describe(event: GameEvent, view: PublicView): string | null {
         owner: name(event.owner),
         amount: formatMoney(event.amount),
       });
+    case "QuarantineEntered":
+      return m.event_quarantine_entered({ name: name(event.player), rounds: event.rounds });
+    case "QuarantineRoundUsed":
+      return m.event_quarantine_round_used({
+        name: name(event.player),
+        rounds: event.roundsLeft,
+      });
+    case "QuarantineReleased":
+      return m.event_quarantine_released({ name: name(event.player) });
+    case "PcrTestBought":
+      return m.event_pcr_test_bought({
+        name: name(event.player),
+        amount: formatMoney(event.amount),
+      });
+    case "PcrTestUsed":
+      return m.event_pcr_test_used({ name: name(event.player) });
     default:
       return null;
   }
 }
+
+/**
+ * Steps with no choice that a Player must notice (spec: acknowledgements are
+ * events, not clicks). They take the toast ahead of routine events in the
+ * same push, such as the dice that led there.
+ */
+const NOTICES = new Set<GameEvent["type"]>([
+  "QuarantineEntered",
+  "QuarantineRoundUsed",
+  "QuarantineReleased",
+  "PcrTestBought",
+  "PcrTestUsed",
+  "RentPaid",
+]);
+
+const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
+  view.players.find((p) => p.id === playerId)?.quarantineRounds ?? 0;
 
 export function Game() {
   const { code = "" } = useParams();
@@ -95,8 +128,13 @@ export function Game() {
   const pending = sentAt !== null && answeredAt <= sentAt;
   const canRoll = myTurn && view.phase.kind === "awaitingRoll" && !pending;
   const offer = myTurn && view.phase.kind === "offer" && !pending ? view.phase : null;
-  // One toast at a time: the first event of the push worth one.
-  const toast = events.map((event) => describe(event, view)).find((text) => text !== null);
+  const quarantineChoice =
+    myTurn && !pending && view.phase.kind === "quarantineChoice" ? view.phase : null;
+  // One toast at a time: the first notice of the push, else its first event worth one.
+  const notice = events.find((event) => NOTICES.has(event.type));
+  const toast = (notice ? [notice] : events)
+    .map((event) => describe(event, view))
+    .find((text) => text !== null);
 
   function send(intent: PlayerIntent) {
     setSentAt(answeredAt);
@@ -111,6 +149,12 @@ export function Game() {
     current: p.id === view.currentPlayer,
     you: p.id === me,
     bankrupt: p.bankrupt,
+    status: [
+      p.quarantineRounds === null ? null : m.game_in_quarantine({ rounds: p.quarantineRounds }),
+      p.hasPcrTest ? m.game_pcr_test_held() : null,
+    ]
+      .filter((text) => text !== null)
+      .join(" · "),
     ring: p.id === view.currentPlayer && (
       <TurnRing
         key={`${view.turn}:${view.turnDeadline}`}
@@ -158,6 +202,36 @@ export function Game() {
           onBuy={(level) => send({ type: "BuyLevel", turn: view.turn, level })}
           onDecline={() => send({ type: "DeclineOffer", turn: view.turn })}
         />
+      )}
+      {quarantineChoice && (
+        <section className="flex flex-col gap-2" aria-label={m.field_quarantine()}>
+          <p className="m-0 text-sm font-bold text-ink/70">
+            {m.game_quarantine_rounds({ rounds: quarantineRoundsOf(view, view.currentPlayer) })}
+          </p>
+          <Button size="lg" onClick={() => send({ type: "RollForTwelve", turn: view.turn })}>
+            {m.game_roll_for_twelve()}
+          </Button>
+          <div className="flex flex-wrap gap-2">
+            {quarantineChoice.canBuyPcrTest && (
+              <Button
+                variant="plain"
+                className="flex-1"
+                onClick={() => send({ type: "BuyPcrTest", turn: view.turn })}
+              >
+                {m.game_buy_pcr_test({ price: formatMoney(quarantineChoice.pcrTestPrice) })}
+              </Button>
+            )}
+            {quarantineChoice.canUsePcrTest && (
+              <Button
+                variant="accent"
+                className="flex-1"
+                onClick={() => send({ type: "UsePcrTest", turn: view.turn })}
+              >
+                {m.game_use_pcr_test()}
+              </Button>
+            )}
+          </div>
+        </section>
       )}
     </Card>
   );

@@ -72,6 +72,15 @@ export function roll(state: GameState, now = T0): Applied {
   return accept(state, { type: "Roll", turn: state.turn }, state.currentPlayer, now);
 }
 
+/**
+ * The current Player throws the dice the phase offers: the plain roll, or the
+ * roll for 12 on the Quarantine choice. For tests that play many Turns.
+ */
+export function rollOffered(state: GameState, now = T0): Applied {
+  const type = state.phase.kind === "quarantineChoice" ? "RollForTwelve" : "Roll";
+  return accept(state, { type, turn: state.turn }, state.currentPlayer, now);
+}
+
 /** Returns a copy of `state` with one Player's fields replaced. */
 export function withPlayer(
   state: GameState,
@@ -123,7 +132,7 @@ export function withField(state: GameState, field: FieldId, patch: Partial<Field
  * the Turn.
  */
 export function playTurn(state: GameState, now = T0): { rolled: Applied; state: GameState } {
-  const rolled = roll(state, now);
+  const rolled = rollOffered(state, now);
   const { phase, turn, currentPlayer } = rolled.state;
   if (phase.kind !== "offer") return { rolled, state: rolled.state };
   const declined = accept(rolled.state, { type: "DeclineOffer", turn }, currentPlayer, now);

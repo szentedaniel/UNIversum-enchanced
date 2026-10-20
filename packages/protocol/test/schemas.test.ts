@@ -17,6 +17,9 @@ describe("intentSchema", () => {
     [{ type: "BuyLevel", turn: 3, level: 1 }],
     [{ type: "BuyLevel", turn: 3, level: 4 }],
     [{ type: "DeclineOffer", turn: 3 }],
+    [{ type: "RollForTwelve", turn: 3 }],
+    [{ type: "BuyPcrTest", turn: 3 }],
+    [{ type: "UsePcrTest", turn: 3 }],
   ])("accepts %j", (message) => {
     expect(intentSchema.safeParse(message)).toEqual({ success: true, data: message });
   });
@@ -36,6 +39,8 @@ describe("intentSchema", () => {
     ["Level 5", { type: "BuyLevel", turn: 1, level: 5 }],
     ["a Level that is not an integer", { type: "BuyLevel", turn: 1, level: 1.5 }],
     ["a BuyLevel naming a Field", { type: "BuyLevel", turn: 1, level: 1, field: 3 }],
+    ["a PCR test bought without a turn", { type: "BuyPcrTest" }],
+    ["a PCR test with a price", { type: "BuyPcrTest", turn: 1, amount: 0 }],
   ])("refuses %s", (_, message) => {
     expect(intentSchema.safeParse(message).success).toBe(false);
   });
