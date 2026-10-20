@@ -188,6 +188,13 @@ describe("the Markdown report", () => {
     }
   });
 
+  it("lists client rejections", () => {
+    const text = renderReport(
+      report({ client: { ...client, rejections: { STALE_TURN: 2, NOT_OFFERED: 1 } } }),
+    );
+    expect(text).toContain("| Client rejections | STALE_TURN 2, NOT_OFFERED 1 |");
+  });
+
   it("describes the profile it ran", () => {
     const text = renderReport(report());
     expect(text).toContain("1000 Rooms × 4 Guests");

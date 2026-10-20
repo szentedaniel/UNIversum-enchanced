@@ -65,10 +65,12 @@ export class Compose {
     if (result.code !== 0) throw new Error(`docker compose up failed (${result.code})`);
   }
 
-  /** SIGKILL the server; Docker's `restart: unless-stopped` brings it back. */
+  /** SIGKILL the server, then start it again (compose keeps the container stopped after `kill`). */
   async killServer(): Promise<void> {
-    const result = await this.run(["kill", "server"], { allowFailure: true });
-    if (result.code !== 0) throw new Error(`docker compose kill failed (${result.code})`);
+    const killed = await this.run(["kill", "server"], { allowFailure: true });
+    if (killed.code !== 0) throw new Error(`docker compose kill failed (${killed.code})`);
+    // Compose marks the container stopped, so the restart policy may not fire; start it explicitly.
+    await this.run(["start", "server"], { allowFailure: true });
   }
 
   /**
@@ -77,17 +79,10 @@ export class Compose {
    */
   async waitUntilReady(timeoutMs: number): Promise<{ ready: boolean; atMs: number }> {
     const started = Date.now();
-    let restarted = false;
     while (Date.now() - started <= timeoutMs) {
       // oxlint-disable-next-line no-await-in-loop -- readiness is polled, one probe at a time
       const result = await this.execReadyz();
       if (result === 0) return { ready: true, atMs: Date.now() };
-      // If Docker's restart policy did not catch the kill, start it ourselves.
-      if (!restarted && Date.now() - started > 5_000) {
-        restarted = true;
-        // oxlint-disable-next-line no-await-in-loop -- the start must finish before the next probe
-        await this.run(["start", "server"], { allowFailure: true });
-      }
       // oxlint-disable-next-line no-await-in-loop -- the probe interval
       await sleep(250);
     }
@@ -105,7 +100,7 @@ export class Compose {
         "-e",
         "fetch('http://127.0.0.1:9464/readyz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))",
       ],
-      { allowFailure: true },
+      { allowFailure: true, inherit: false },
     );
     return result.code;
   }

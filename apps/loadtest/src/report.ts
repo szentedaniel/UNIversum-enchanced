@@ -195,6 +195,7 @@ export function renderReport(report: RunReport): string {
     `| Intents sent / accepted | ${number(report.client.intentsSent)} / ${number(
       report.client.intentsAccepted,
     )} |`,
+    `| Client rejections | ${rejectionList(report.client.rejections)} |`,
     `| Decisions / Turn timeouts | ${number(report.client.decisions)} / ${number(
       report.client.timeouts,
     )} |`,
@@ -251,4 +252,11 @@ export function renderReport(report: RunReport): string {
 
 function orNoData(value: number | null, format: (value: number) => string): string {
   return value === null ? "no data" : format(value);
+}
+
+function rejectionList(rejections: Record<string, number>): string {
+  const entries = Object.entries(rejections).filter(([, count]) => count > 0);
+  return entries.length === 0
+    ? "none"
+    : entries.map(([code, count]) => `${code} ${number(count)}`).join(", ");
 }
