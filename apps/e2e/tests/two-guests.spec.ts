@@ -57,6 +57,7 @@ async function startPlaybackProbe(page: Page) {
           now: Date.now() + push.clockOffset,
           actsAfter: view.actsAfter,
           decision,
+          open: window.universumTest!.playback().over,
           ringDelayMs: Number.isFinite(delayMs) ? Math.round(delayMs) : null,
         });
       }

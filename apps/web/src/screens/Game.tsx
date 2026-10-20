@@ -19,151 +19,35 @@ import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
 import { singlePickFor } from "#pick/pick.ts";
 import { saleFor } from "#pick/sale.ts";
+import { playbackStore } from "#playback/playback-store.ts";
+import { usePlaybackToast } from "#playback/use-toast.ts";
 import { PickTray } from "#screens/PickTray.tsx";
 import { SaleTray } from "#screens/SaleTray.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { roomStore } from "#stores/room-store.ts";
 import { salePicksFor, uiStore } from "#stores/ui-store.ts";
-import { chanceCardText, fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
-
-/** The newest event worth a toast, as text. */
-function describe(event: GameEvent, view: PublicView): string | null {
-  const name = (id: string) => {
-    const player = view.players.find((p) => p.id === id);
-    return player ? playerName(player.name) : "";
-  };
-  switch (event.type) {
-    case "DiceRolled":
-      return m.event_dice_rolled({
-        name: name(event.player),
-        first: event.dice[0],
-        second: event.dice[1],
-      });
-    case "RoundBonusPaid":
-      return m.event_round_bonus({ name: name(event.player), amount: formatMoney(event.amount) });
-    case "TimedOut":
-      return m.event_timed_out({ name: name(event.player) });
-    case "TimeoutPenaltyPaid":
-      return m.event_timeout_penalty({
-        name: name(event.player),
-        amount: formatMoney(event.amount),
-      });
-    case "TurnPassed":
-      return m.event_turn_passed({ name: name(event.player) });
-    case "LevelBought":
-      return m.event_level_bought({
-        name: name(event.player),
-        field: fieldName(FIELDS[event.field]?.key ?? ""),
-        level: event.level,
-        price: formatMoney(event.price),
-      });
-    case "OfferDeclined":
-      return m.event_offer_declined({
-        name: name(event.player),
-        field: fieldName(FIELDS[event.field]?.key ?? ""),
-      });
-    case "RentPaid":
-      return m.event_rent_paid({
-        name: name(event.player),
-        owner: name(event.owner),
-        amount: formatMoney(event.amount),
-      });
-    case "MuseumBought":
-      return m.event_museum_bought({
-        name: name(event.player),
-        field: fieldName(FIELDS[event.field]?.key ?? ""),
-        price: formatMoney(event.price),
-      });
-    case "BoughtOut":
-      return m.event_bought_out({
-        name: name(event.player),
-        owner: name(event.owner),
-        field: fieldName(FIELDS[event.field]?.key ?? ""),
-        price: formatMoney(event.price),
-      });
-    case "CardDrawn":
-      return m.event_card_drawn({ name: name(event.player), ...chanceCardText(event.card) });
-    case "ChanceMoneyReceived":
-      return m.event_chance_money_received({
-        name: name(event.player),
-        amount: formatMoney(event.amount),
-      });
-    case "ChanceChargePaid":
-      return m.event_chance_charge_paid({
-        name: name(event.player),
-        amount: formatMoney(event.amount),
-      });
-    case "TaxPaid":
-      return m.event_tax_paid({ name: name(event.player), amount: formatMoney(event.amount) });
-    case "QuarantineEntered":
-      return m.event_quarantine_entered({ name: name(event.player), rounds: event.rounds });
-    case "QuarantineRoundUsed":
-      return m.event_quarantine_round_used({
-        name: name(event.player),
-        rounds: event.roundsLeft,
-      });
-    case "QuarantineReleased":
-      return m.event_quarantine_released({ name: name(event.player) });
-    case "PcrTestBought":
-      return m.event_pcr_test_bought({
-        name: name(event.player),
-        amount: formatMoney(event.amount),
-      });
-    case "PcrTestUsed":
-      return m.event_pcr_test_used({ name: name(event.player) });
-    case "FieldsSold":
-      return (event.auto ? m.event_auto_sold : m.event_fields_sold)({
-        name: name(event.player),
-        amount: formatMoney(event.amount),
-      });
-    case "WentBankrupt":
-      return m.event_went_bankrupt({ name: name(event.player) });
-    case "GameEnded":
-      return m.event_game_ended({ name: name(event.winner) });
-    default:
-      return null;
-  }
-}
+import { fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
 
 /**
  * Steps with no choice that a Player must notice (spec: acknowledgements are
- * events, not clicks). They take the toast ahead of routine events in the
- * same push, such as the dice that led there.
+ * events, not clicks). Every step is shown now, so this only styles the step:
+ * a notice gets the accent sticker, routine events the plain one.
  */
-const NOTICES = new Set<GameEvent["type"]>([
-  "QuarantineEntered",
-  "QuarantineRoundUsed",
-  "QuarantineReleased",
-  "PcrTestBought",
-  "PcrTestUsed",
-  "RentPaid",
-  "CardDrawn",
-  "TaxPaid",
-  "WentBankrupt",
-  "GameEnded",
-]);
+const NOTICES: Partial<Record<GameEvent["type"], true>> = {
+  QuarantineEntered: true,
+  QuarantineRoundUsed: true,
+  QuarantineReleased: true,
+  PcrTestBought: true,
+  PcrTestUsed: true,
+  RentPaid: true,
+  CardDrawn: true,
+  TaxPaid: true,
+  WentBankrupt: true,
+  GameEnded: true,
+};
 
 const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
   view.players.find((p) => p.id === playerId)?.quarantineRounds ?? 0;
-
-/**
- * Whether the server's clock has reached the Playback's end, so the latest
- * push's decision is open (ADR-0004). Re-renders once when it passes; a new
- * push with a later `actsAfter` hides the controls again.
- */
-function usePlaybackOver(actsAfter: number, clockOffset: number): boolean {
-  // The server's clock, re-read when the Playback ends (or at once, when it
-  // already has). A new push with a later `actsAfter` leaves this behind it,
-  // so the controls close again.
-  const [now, setNow] = useState(() => Date.now() + clockOffset);
-  useEffect(() => {
-    // A few ms past the boundary, so the tap never races the server's clock.
-    const delayMs = Math.max(0, actsAfter - (Date.now() + clockOffset)) + 20;
-    const timer = window.setTimeout(() => setNow(Date.now() + clockOffset), delayMs);
-    return () => clearTimeout(timer);
-  }, [actsAfter, clockOffset]);
-  return now >= actsAfter;
-}
 
 export function Game() {
   const { code = "" } = useParams();
@@ -180,7 +64,9 @@ export function Game() {
   const [sentAt, setSentAt] = useState<number | null>(null);
   const wide = useWide();
   const [joinError, setJoinError] = useState<RejectionCode | null>(null);
-  const playbackOver = usePlaybackOver(push?.view.actsAfter ?? 0, push?.clockOffset ?? 0);
+  // Both clocks: the local Playback of this push and the server's `actsAfter` (ADR-0004).
+  const playbackOver = useStore(playbackStore, (state) => state.over);
+  const toast = usePlaybackToast(push);
 
   // The dice sound starts on the server's roll, never on a tap (spec: no optimistic UI).
   useEffect(() => {
@@ -211,7 +97,7 @@ export function Game() {
     );
   }
 
-  const { view, events } = push;
+  const { view } = push;
   const gameOver = view.phase.kind === "gameOver" ? view.phase : null;
   const current = view.players.find((p) => p.id === view.currentPlayer);
   const myTurn = view.currentPlayer === me;
@@ -232,11 +118,6 @@ export function Game() {
     !myTurn &&
     playbackOver &&
     (view.phase.kind === "placingDoubler" || view.phase.kind === "choosingErasmus");
-  // One toast at a time: the first notice of the push, else its first event worth one.
-  const notice = events.find((event) => NOTICES.has(event.type));
-  const toast = (notice ? [notice] : events)
-    .map((event) => describe(event, view))
-    .find((text) => text !== null);
 
   function send(intent: PlayerIntent) {
     setSentAt(answeredAt);
@@ -273,9 +154,9 @@ export function Game() {
       <MinutePill endsAt={view.endsAt} clockOffset={push.clockOffset} />
       <EventToast
         key={rejected ? `r${rejection.seq}` : push.seq}
-        tone={rejected ? "bad" : "neutral"}
+        tone={rejected ? "bad" : toast && NOTICES[toast.event.type] ? "good" : "neutral"}
       >
-        {rejected ? rejectionText(rejection.code) : toast}
+        {rejected ? rejectionText(rejection.code) : toast?.text}
       </EventToast>
       <GameMenu />
     </>
@@ -410,7 +291,7 @@ export function Game() {
     return (
       <main className="board-backdrop fixed inset-0 overflow-hidden">
         <ReconnectOverlay />
-        {gameOver && <Podium view={view} phase={gameOver} />}
+        {gameOver && playbackOver && <Podium view={view} phase={gameOver} />}
         {/* The Board's box: clear of the corner cards, the status row and the card; the
             fit area also keeps clear of the camera buttons on its right. */}
         <div className="absolute inset-x-[110px] top-[110px] bottom-[200px] [--board-inset-left:3.75rem] [--board-inset-right:3.75rem]">
@@ -438,7 +319,7 @@ export function Game() {
   return (
     <main className="board-backdrop fixed inset-0 flex flex-col overflow-hidden pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
       <ReconnectOverlay />
-      {gameOver && <Podium view={view} phase={gameOver} />}
+      {gameOver && playbackOver && <Podium view={view} phase={gameOver} />}
       <ul className="m-0 flex list-none justify-center gap-1.5 px-2" aria-label={m.game_players()}>
         {players.map((player) => (
           <PlayerChip key={player.seat} player={player} className="w-0 max-w-28 flex-1" />
