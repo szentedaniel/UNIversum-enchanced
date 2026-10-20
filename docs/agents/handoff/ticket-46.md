@@ -84,8 +84,8 @@ Rooms; `restore_duration_seconds` is Prometheus's own boot gauge.
 - Unit tests: 86 in `apps/loadtest/test` (config/args, profile, bot, stats, Prometheus parsing +
   canned metric collection, verdict boundaries, report, docker args).
 - Scaled smoke after the v2-modernization merge (Docker Desktop 29.9, Compose 5.6, Apple M3):
-  `--rooms 20 --ramp 1m --hold 2m --restart-at 1m` → PASS, `/readyz` 1.1 s, 80/80 seats back in
-  15.6 s, 448/448 intents answered, server CPU 0.07 cores, RSS 0.23 GB, generator 2.8%. At a
+  `--rooms 20 --ramp 1m --hold 2m --restart-at 1m` → PASS, `/readyz` 1.0 s, 80/80 seats back in
+  14.4 s, 612/612 intents answered, server CPU 0.07 cores, RSS 0.23 GB, generator 3.1%. At a
   2-minute hold the post-restart window is empty (`heap growth` SKIPs) and no planned drop is due
   yet; 80 clients did reconnect by Guest token after the kill.
 - `--find-knee --max-rooms 200` → PASS at 200 Rooms (100/min), last passing count 200.
