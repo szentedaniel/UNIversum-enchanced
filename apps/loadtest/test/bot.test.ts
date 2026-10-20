@@ -127,9 +127,22 @@ describe("bot decisions", () => {
     expect(types(offeredIntents(view(phase, { autoSell: null }), "p0"))).toEqual(["AutoSell"]);
   });
 
+  it("places the Doubler on each offered Field", () => {
+    expect(offeredIntents(view({ kind: "placingDoubler", fields: [2, 5] }), "p0")).toEqual([
+      { type: "PlaceDoubler", turn: 12, field: 2 },
+      { type: "PlaceDoubler", turn: 12, field: 5 },
+    ]);
+  });
+
+  it("travels to each offered Erasmus Field", () => {
+    expect(offeredIntents(view({ kind: "choosingErasmus", fields: [9, 22] }), "p0")).toEqual([
+      { type: "TravelErasmus", turn: 12, field: 9 },
+      { type: "TravelErasmus", turn: 12, field: 22 },
+    ]);
+  });
+
   it("leaves a phase it does not know to the Turn timer", () => {
-    expect(offeredIntents(view(futurePhase("placingDoubler")), "p0")).toEqual([]);
-    expect(offeredIntents(view(futurePhase("choosingErasmus")), "p0")).toEqual([]);
+    expect(offeredIntents(view(futurePhase("someFuturePhase")), "p0")).toEqual([]);
   });
 
   it("picks uniformly from what the view offers", () => {
@@ -151,8 +164,8 @@ describe("bot decisions", () => {
     });
   });
 
-  it("recognises the game-over phase a later ticket adds", () => {
-    expect(isGameOver(view(futurePhase("gameOver")))).toBe(true);
+  it("recognises the game-over phase", () => {
+    expect(isGameOver(view({ kind: "gameOver", winner: "p0", reason: "timeUp" }))).toBe(true);
     expect(isGameOver(view({ kind: "awaitingRoll" }))).toBe(false);
   });
 });

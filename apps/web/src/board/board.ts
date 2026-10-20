@@ -58,6 +58,11 @@ export type Board = {
    * pickable Fields only.
    */
   setPick(marks: PickMarks | null): void;
+  /**
+   * Inspect mode during a pick: taps may land on any Field (the Field card
+   * opens), not only the pickable ones. The marks stay as they were.
+   */
+  setInspect(on: boolean): void;
   /** Pans (never zooms) only if the Field is off screen or under one of `obstacles` (viewport rects). */
   reveal(id: FieldId, obstacles: readonly DOMRect[]): void;
   /** Zooms around the fit area's centre. */
@@ -227,6 +232,7 @@ export async function createBoard(
 
   let selected: FieldId | null = null;
   let pick: PickMarks | null = null;
+  let inspect = false;
 
   const isLifted = (id: FieldId) => id === selected || (pick?.picked.includes(id) ?? false);
 
@@ -421,7 +427,7 @@ export async function createBoard(
       let nearest: FieldId | null = null;
       let distance = Infinity;
       for (let id = 0; id < FIELD_COUNT; id++) {
-        if (pick && !pick.pickable.includes(id)) continue;
+        if (pick && !inspect && !pick.pickable.includes(id)) continue;
         const centre = toScreen(camera, boardCentre(id));
         const d = Math.hypot(centre.x - at.x, centre.y - at.y);
         if (d < distance) {
@@ -535,6 +541,9 @@ export async function createBoard(
       if (JSON.stringify(marks) === JSON.stringify(pick)) return;
       pick = marks;
       applySelected();
+    },
+    setInspect(on) {
+      inspect = on;
     },
     reveal(id, obstacles) {
       const canvasRect = app.canvas.getBoundingClientRect();

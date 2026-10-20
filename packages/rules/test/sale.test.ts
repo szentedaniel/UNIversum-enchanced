@@ -8,7 +8,17 @@ import {
   type GameState,
   type Intent,
 } from "#index.ts";
-import { accept, newGame, player, reject, rollOnto, T0, withField, withPlayer } from "./helpers.ts";
+import {
+  accept,
+  deadlineOf,
+  newGame,
+  player,
+  reject,
+  rollOnto,
+  T0,
+  withField,
+  withPlayer,
+} from "./helpers.ts";
 
 // Field ids and their Bank sale values (90% of Value) at the Levels used below.
 const VESZPREM = 1; // Level 1: sale 180,000
@@ -261,7 +271,7 @@ describe("Auto-sell", () => {
 });
 
 const timeOut = (state: GameState) =>
-  accept(state, { type: "TurnTimedOut", turn: state.turn }, SYSTEM, state.turnDeadline);
+  accept(state, { type: "TurnTimedOut", turn: state.turn }, SYSTEM, deadlineOf(state));
 
 /** The first Seat, waiting for the dice with `cash` and `owned`. */
 const waiting = (cash: number, owned: Record<number, number>) =>
@@ -380,8 +390,8 @@ function chooser(seed: number) {
 function anyOption(state: GameState, pick: (n: number) => number): { intent: Intent; now: number } {
   const turn = state.turn;
   const { phase } = state;
-  if (pick(8) === 0) return { intent: { type: "TurnTimedOut", turn }, now: state.turnDeadline };
-  const now = state.turnDeadline - 1;
+  if (pick(8) === 0) return { intent: { type: "TurnTimedOut", turn }, now: deadlineOf(state) };
+  const now = deadlineOf(state) - 1;
   switch (phase.kind) {
     case "offer": {
       const level = phase.levels.at(-1)?.level;
@@ -398,6 +408,14 @@ function anyOption(state: GameState, pick: (n: number) => number): { intent: Int
     }
     case "quarantineChoice":
       return { intent: { type: "RollForTwelve", turn }, now };
+    case "placingDoubler": {
+      const field = phase.fields[pick(phase.fields.length)];
+      return { intent: { type: "PlaceDoubler", turn, field: field ?? 0 }, now };
+    }
+    case "choosingErasmus": {
+      const field = phase.fields[pick(phase.fields.length)];
+      return { intent: { type: "TravelErasmus", turn, field: field ?? 0 }, now };
+    }
     default:
       return { intent: { type: "Roll", turn }, now };
   }
@@ -426,6 +444,7 @@ describe("played games", () => {
           expect(p.cash).toBe(0);
           expect(state.fields.some((f) => f.owner === p.id)).toBe(false);
         }
+        if (state.phase.kind === "gameOver") break;
       }
     }
     // The games really went through Sales and bankruptcies.

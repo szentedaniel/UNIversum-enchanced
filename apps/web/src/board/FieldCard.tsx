@@ -7,6 +7,7 @@ import { fieldFacts } from "#board/field-facts.ts";
 import { PlayerToken } from "#components/PlayerToken.tsx";
 import { Button } from "#components/ui/button.tsx";
 import { cn } from "#lib/utils.ts";
+import { stepThrough } from "#pick/checklist.ts";
 import { uiStore } from "#stores/ui-store.ts";
 import { fieldKindName, fieldName, formatMoney, m, playerName } from "#text.ts";
 
@@ -23,8 +24,10 @@ function band(color: number): CSSProperties {
 
 const money = (value: number | null) => (value === null ? m.field_card_none() : formatMoney(value));
 
-const step = (id: FieldId, by: number) =>
-  uiStore.getState().selectField((id + by + FIELD_COUNT) % FIELD_COUNT);
+const step = (id: FieldId, by: number, through?: readonly FieldId[]) =>
+  through === undefined
+    ? (id + by + FIELD_COUNT) % FIELD_COUNT
+    : (stepThrough(through, id, by) ?? id);
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -46,10 +49,16 @@ export function FieldCard({
   id,
   view,
   className,
+  stepThrough: through,
 }: {
   id: FieldId;
   view: PublicView;
   className?: string;
+  /**
+   * During a pick's inspect mode, ‹ › step through these pickable Fields only;
+   * omitted, they step round the whole ring.
+   */
+  stepThrough?: readonly FieldId[];
 }) {
   const facts = fieldFacts(view, id);
   if (!facts) return null;
@@ -115,7 +124,7 @@ export function FieldCard({
           variant="plain"
           size="sm"
           aria-label={m.field_card_previous()}
-          onClick={() => step(id, -1)}
+          onClick={() => uiStore.getState().selectField(step(id, -1, through))}
         >
           <ChevronLeft strokeWidth={3} />
         </Button>
@@ -123,7 +132,7 @@ export function FieldCard({
           variant="plain"
           size="sm"
           aria-label={m.field_card_next()}
-          onClick={() => step(id, 1)}
+          onClick={() => uiStore.getState().selectField(step(id, 1, through))}
         >
           <ChevronRight strokeWidth={3} />
         </Button>

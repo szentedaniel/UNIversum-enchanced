@@ -28,13 +28,14 @@ function viewWith(field: FieldView): PublicView {
     turnTimer: { endsAt: 0, limitMs: 0 },
     settings: { maxPlayers: 2, minuteLimit: 15 },
     endsAt: 0,
-    players: [owner],
+    players: [{ ...owner, wealth: owner.cash }],
     fields: Array.from({ length: FIELD_COUNT }, (_, id) =>
       id === VESZPREM ? field : { owner: null, level: 0, value: 0, rent: 0, sale: 0 },
     ),
     doubler: null,
     lastChanceCard: null,
     autoSell: null,
+    pickOptions: null,
   };
 }
 

@@ -48,6 +48,22 @@ const PLAYER_INTENT_SCHEMAS = [
       .max(FIELD_COUNT),
   }),
   z.strictObject({ type: z.literal("AutoSell"), turn }),
+  z.strictObject({
+    type: z.literal("PlaceDoubler"),
+    turn,
+    field: z
+      .int()
+      .min(0)
+      .max(FIELD_COUNT - 1),
+  }),
+  z.strictObject({
+    type: z.literal("TravelErasmus"),
+    turn,
+    field: z
+      .int()
+      .min(0)
+      .max(FIELD_COUNT - 1),
+  }),
 ] as const;
 
 const ROOM_INTENT_SCHEMAS = [z.strictObject({ type: z.literal("Start") })] as const;

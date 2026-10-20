@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SYSTEM, type GameState, type PlayerState, type Seed } from "#index.ts";
 import {
   accept,
+  deadlineOf,
   diceOf,
   newGame,
   player,
@@ -75,7 +76,7 @@ function quarantinedTurn(patch: Partial<PlayerState> = {}, seed: Seed = SEED, no
 }
 
 const timeOut = (state: GameState) =>
-  accept(state, { type: "TurnTimedOut", turn: state.turn }, SYSTEM, state.turnDeadline);
+  accept(state, { type: "TurnTimedOut", turn: state.turn }, SYSTEM, deadlineOf(state));
 
 /** An integer hash: small or patterned raw seed words give correlated first dice. */
 function mix(x: number): number {

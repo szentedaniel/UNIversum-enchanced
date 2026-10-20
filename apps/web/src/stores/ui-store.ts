@@ -1,7 +1,7 @@
 /**
  * Local UI state that never goes to the server: the open Field card, the
- * camera mode and the Fields picked in a Sale. The Board subscribes outside
- * React. Panels and the checklist preference join it later (#39).
+ * camera mode, the Fields picked in a Sale or a single pick, and the pick
+ * tray's checklist preference. The Board subscribes outside React.
  */
 import type { FieldId } from "@universum/rules/board";
 import { subscribeWithSelector } from "zustand/middleware";
@@ -19,7 +19,40 @@ export type UiState = {
   salePicks: { key: string; fields: FieldId[] };
   /** A tap in a Sale: picks the Field, or unpicks it. Never commits. */
   toggleSalePick(key: string, field: FieldId): void;
+  /** The Field chosen in a Doubler or Erasmus pick whose decision is `key`; one at most. */
+  singlePick: { key: string; field: FieldId | null };
+  /** A tap in a single pick: selects the Field, replacing the earlier choice. Never commits. */
+  choosePick(key: string, field: FieldId | null): void;
+  /** The pick tray's checklist is expanded (the Player's habit, kept across picks and reloads). */
+  checklistOpen: boolean;
+  setChecklistOpen(open: boolean): void;
+  /** Inspect mode during a pick: Board taps open the Field card instead of picking. */
+  inspect: boolean;
+  setInspect(inspect: boolean): void;
+  /** The Field a checklist row focused: ringed on the Board and panned to if hidden. */
+  pickFocus: FieldId | null;
+  focusPick(field: FieldId | null): void;
 };
+
+/** The persisted key: one preference per browser, i.e. per Guest/Player here. */
+const CHECKLIST_KEY = "universum:pick-checklist-open";
+
+function storedChecklistOpen(): boolean {
+  try {
+    return typeof localStorage !== "undefined" && localStorage.getItem(CHECKLIST_KEY) === "1";
+  } catch {
+    // Storage can be disabled or full: start collapsed, without breaking the app.
+    return false;
+  }
+}
+
+function storeChecklistOpen(open: boolean): void {
+  try {
+    localStorage.setItem(CHECKLIST_KEY, open ? "1" : "0");
+  } catch {
+    // Without storage the preference lasts for this session only.
+  }
+}
 
 export const uiStore = createStore<UiState>()(
   subscribeWithSelector((set) => ({
@@ -35,6 +68,17 @@ export const uiStore = createStore<UiState>()(
           fields: toggledPicks(salePicks.key === key ? salePicks.fields : [], field),
         },
       })),
+    singlePick: { key: "", field: null },
+    choosePick: (key, field) => set({ singlePick: { key, field } }),
+    checklistOpen: storedChecklistOpen(),
+    setChecklistOpen: (open) => {
+      storeChecklistOpen(open);
+      set({ checklistOpen: open });
+    },
+    inspect: false,
+    setInspect: (inspect) => set({ inspect }),
+    pickFocus: null,
+    focusPick: (field) => set({ pickFocus: field }),
   })),
 );
 

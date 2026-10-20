@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { FIELDS, publicView, START_CASH, SYSTEM, type GameState } from "#index.ts";
-import { accept, newGame, player, reject, rollOnto, T0, withField, withPlayer } from "./helpers.ts";
+import {
+  accept,
+  deadlineOf,
+  newGame,
+  player,
+  reject,
+  rollOnto,
+  T0,
+  withField,
+  withPlayer,
+} from "./helpers.ts";
 
 // Field ids used below (none of them is reached by passing Start from the
 // positions `rollOnto` picks, except where a test says so).
@@ -157,7 +167,7 @@ describe("buying and building", () => {
       offered,
       { type: "TurnTimedOut", turn: offered.turn },
       SYSTEM,
-      offered.turnDeadline,
+      deadlineOf(offered),
     );
 
     expect(timedOut.state.fields[VIENNA]).toEqual({ owner: null, level: 0 });

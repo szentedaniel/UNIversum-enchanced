@@ -5,10 +5,12 @@ const viewOf = (page: Page) => page.evaluate(() => window.universumTest?.view() 
 const fieldCenter = (page: Page, id: number) =>
   page.evaluate((field) => window.universumTest?.fieldCenter(field), id);
 
+const me = (page: Page) => page.evaluate(() => window.universumTest?.room().me ?? null);
+
 test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and play", async ({
   baseURL,
 }) => {
-  const desktopBrowser = await chromium.launch();
+  const desktopBrowser = await chromium.launch({ args: ["--mute-audio"] });
   const phoneBrowser = await webkit.launch();
   try {
     const desktopContext = await desktopBrowser.newContext({
@@ -23,6 +25,15 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     });
     const desktop = await desktopContext.newPage();
     const phone = await phoneContext.newPage();
+    // Count dice-sound plays before any app code runs: unlock once, then one per roll.
+    await phone.addInitScript(() => {
+      window.dicePlays = 0;
+      // oxlint-disable-next-line unicorn/consistent-function-scoping -- must live in the page
+      HTMLMediaElement.prototype.play = function play() {
+        window.dicePlays = (window.dicePlays ?? 0) + 1;
+        return Promise.resolve();
+      };
+    });
     const both = [desktop, phone];
 
     // The desktop Guest creates a 2-Player Room and lands in its Lobby.
@@ -47,6 +58,8 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     await phone.getByRole("button", { name: "Start" }).tap();
     await Promise.all(both.map((page) => expect(page).toHaveURL(`/game/${code}`)));
     await expect(desktop.getByText("Your Turn")).toBeVisible();
+    // The dice sound was unlocked by the taps above; a roll now plays it.
+    const playsBeforeRoll = await phone.evaluate(() => window.dicePlays ?? 0);
 
     // Every screen shows the one Turn-timer ring, on the current Player's card.
     for (const page of both) {
@@ -106,6 +119,12 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     for (let turn = 1; turn <= 16; turn++) {
       // oxlint-disable-next-line no-await-in-loop -- Turns are played one after another
       await playTurn(turn);
+      if (turn === 1) {
+        // oxlint-disable-next-line no-await-in-loop -- after the first roll
+        await expect
+          .poll(() => phone.evaluate(() => window.dicePlays ?? 0))
+          .toBeGreaterThan(playsBeforeRoll);
+      }
       if (turn >= 4 && bought) break;
     }
 
@@ -135,6 +154,24 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
         timeout: 1_000,
       });
     }).toPass();
+
+    // The menu muting the dice; the choice is part of the page's storage.
+    const phoneId = await me(phone);
+    await phone.getByTestId("game-menu").tap();
+    await phone.getByTestId("sound-toggle").tap();
+    await expect(phone.getByTestId("sound-toggle")).toHaveAttribute("aria-pressed", "true");
+
+    // A language switch mid-game reloads the page; the Guest token returns the
+    // phone to the same Seat, the game speaks German, and the mute choice survived.
+    await phone.getByTestId("language-de").tap();
+    await expect(phone.locator("html")).toHaveAttribute("lang", "de");
+    await expect(phone).toHaveURL(`/game/${code}`);
+    await expect(phone.getByTestId("turn-of")).toBeVisible();
+    await expect.poll(() => me(phone)).toBe(phoneId);
+    await expect(phone.getByTestId("turn-of")).toContainText(/am Zug/);
+    await phone.getByTestId("game-menu").tap();
+    await expect(phone.getByTestId("sound-toggle")).toHaveAttribute("aria-pressed", "true");
+    await expect(phone.getByTestId("sound-toggle")).toContainText("Ton aus");
   } finally {
     await Promise.all([desktopBrowser.close(), phoneBrowser.close()]);
   }

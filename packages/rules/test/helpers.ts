@@ -41,6 +41,12 @@ export type GameOptions = {
   now?: number;
 };
 
+/** The current phase's deadline; a game that has ended has none. */
+export function deadlineOf(state: GameState): number {
+  if (state.turnDeadline === null) throw new Error("the game has no deadline");
+  return state.turnDeadline;
+}
+
 /** A freshly started game with default settings (4 Players, 50-minute Minute limit). */
 export function newGame(options: GameOptions = {}): GameState {
   const players = options.players ?? options.settings?.maxPlayers ?? 4;
@@ -127,14 +133,33 @@ export function withField(state: GameState, field: FieldId, patch: Partial<Field
 }
 
 /**
- * A whole Turn without buying: the current Player rolls, then declines any
- * offer, so the Turn passes. Returns the roll's own result and the state after
- * the Turn.
+ * A whole Turn without buying: the current Player rolls, then turns down every
+ * offer or pick the landing leads to, so the Turn passes. Returns the roll's
+ * own result and the state after the Turn.
  */
 export function playTurn(state: GameState, now = T0): { rolled: Applied; state: GameState } {
   const rolled = rollOffered(state, now);
-  const { phase, turn, currentPlayer } = rolled.state;
-  if (phase.kind !== "offer") return { rolled, state: rolled.state };
-  const declined = accept(rolled.state, { type: "DeclineOffer", turn }, currentPlayer, now);
-  return { rolled, state: declined.state };
+  let current = rolled;
+  // A landing can lead through more than one decision (Erasmus travel, then the offer).
+  for (let guard = 0; guard < 10; guard++) {
+    const { phase, turn, currentPlayer } = current.state;
+    if (phase.kind === "offer") {
+      current = accept(current.state, { type: "DeclineOffer", turn }, currentPlayer, now);
+      continue;
+    }
+    if (phase.kind === "placingDoubler") {
+      const field = phase.fields[0];
+      if (field === undefined) return { rolled, state: current.state };
+      current = accept(current.state, { type: "PlaceDoubler", turn, field }, currentPlayer, now);
+      continue;
+    }
+    if (phase.kind === "choosingErasmus") {
+      const field = phase.fields[0];
+      if (field === undefined) return { rolled, state: current.state };
+      current = accept(current.state, { type: "TravelErasmus", turn, field }, currentPlayer, now);
+      continue;
+    }
+    return { rolled, state: current.state };
+  }
+  return { rolled, state: current.state };
 }

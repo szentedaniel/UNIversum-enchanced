@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { List, Plus } from "lucide-react";
 import { Link } from "react-router";
+import { LanguagePicker } from "#components/LanguagePicker.tsx";
 import { Logo } from "#components/Logo.tsx";
 import { buttonVariants } from "#components/ui/button.tsx";
 import { leaveRoom } from "#connection.ts";
@@ -28,6 +29,7 @@ export function Home() {
       </nav>
       <p className="m-0 font-bold text-muted-foreground">{m.home_or_join()}</p>
       <JoinByCode />
+      <LanguagePicker className="mt-2" />
     </main>
   );
 }

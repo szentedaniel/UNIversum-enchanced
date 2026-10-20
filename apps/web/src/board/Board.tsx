@@ -5,6 +5,7 @@ import { useStore } from "zustand";
 import { createBoard, type Board as BoardRenderer } from "#board/board.ts";
 import { fieldFacts } from "#board/field-facts.ts";
 import { Button } from "#components/ui/button.tsx";
+import { selectedPick, singleMarks, singlePickFor } from "#pick/pick.ts";
 import { AUTO_SELL_WARNING_MS, saleFor, saleMarks } from "#pick/sale.ts";
 import { roomStore } from "#stores/room-store.ts";
 import { salePicksFor, uiStore } from "#stores/ui-store.ts";
@@ -21,14 +22,33 @@ function currentSale() {
   return push ? saleFor(push.view, me) : null;
 }
 
+/** This client's open Doubler or Erasmus pick, from the latest push. */
+function currentPick() {
+  const { push, me } = roomStore.getState();
+  return push ? singlePickFor(push.view, me) : null;
+}
+
 /**
- * A tap on the Board: during this client's Sale it toggles the (pickable)
- * Field and never commits; otherwise it opens the Field card.
+ * A tap on the Board: during this client's pick it selects the (pickable)
+ * Field and never commits; in inspect mode it opens any Field's card instead;
+ * otherwise it opens the Field card.
  */
 function onFieldTap(id: FieldId | null): void {
   const sale = currentSale();
-  if (!sale) return uiStore.getState().selectField(id);
-  if (id !== null) uiStore.getState().toggleSalePick(sale.key, id);
+  const pick = sale ? null : currentPick();
+  if ((sale || pick) && uiStore.getState().inspect) {
+    uiStore.getState().selectField(id);
+    return;
+  }
+  if (sale) {
+    if (id !== null) uiStore.getState().toggleSalePick(sale.key, id);
+    return;
+  }
+  if (pick) {
+    if (id !== null) uiStore.getState().choosePick(pick.key, id);
+    return;
+  }
+  uiStore.getState().selectField(id);
 }
 
 /**
@@ -74,15 +94,44 @@ export function Board() {
       created = renderer;
       const first = roomStore.getState().push;
       if (first) renderer.update(first.view, []);
+      /** The decision the marks belong to; a new one starts without focus or inspect mode. */
+      let pickKey: string | null = null;
 
-      /** Marks this client's Sale on the Board, and wakes up again when the last seconds start. */
+      /** Rings and reveals the focused Field: the open card's, else the checklist row's. */
+      const applySelection = () => {
+        const { selectedField, pickFocus } = uiStore.getState();
+        const id = selectedField ?? pickFocus;
+        renderer.setSelected(id);
+        cancelAnimationFrame(revealFrame);
+        if (id === null) return;
+        // After React has laid out the card/tray: pan only if the Field is hidden.
+        revealFrame = requestAnimationFrame(() => {
+          const obstacles = [...document.querySelectorAll(OBSTACLES)].map((el) =>
+            el.getBoundingClientRect(),
+          );
+          renderer.reveal(id, obstacles);
+        });
+      };
+
+      /** Marks this client's open pick on the Board, and wakes up again when the last seconds start. */
       const syncPick = () => {
         clearTimeout(warningTimer);
         const { push } = roomStore.getState();
         const sale = currentSale();
-        if (!push || !sale) return renderer.setPick(null);
-        // The tray replaces the Field card during the Sale.
-        if (uiStore.getState().selectedField !== null) uiStore.getState().selectField(null);
+        const pick = currentPick();
+        const key = sale?.key ?? pick?.key ?? null;
+        if (key !== pickKey) {
+          pickKey = key;
+          uiStore.getState().focusPick(null);
+          uiStore.getState().setInspect(false);
+          if (uiStore.getState().selectedField !== null) uiStore.getState().selectField(null);
+        }
+        if (!push || (!sale && !pick)) return renderer.setPick(null);
+        if (pick) {
+          const field = selectedPick(pick, uiStore.getState().singlePick);
+          return renderer.setPick(singleMarks(pick, field));
+        }
+        if (!sale || push.view.turnTimer === null) return renderer.setPick(null);
         const msLeft = push.view.turnTimer.endsAt - (Date.now() + push.clockOffset);
         const picks = salePicksFor(uiStore.getState().salePicks, sale.key);
         renderer.setPick(saleMarks(sale, push.view, picks, msLeft));
@@ -100,19 +149,19 @@ export function Board() {
           },
         ),
         uiStore.subscribe((state) => state.salePicks, syncPick),
+        uiStore.subscribe((state) => state.singlePick, syncPick),
+        uiStore.subscribe((state) => state.selectedField, applySelection, {
+          fireImmediately: true,
+        }),
+        uiStore.subscribe((state) => state.pickFocus, applySelection),
         uiStore.subscribe(
-          (state) => state.selectedField,
-          (id) => {
-            renderer.setSelected(id);
-            cancelAnimationFrame(revealFrame);
-            if (id === null) return;
-            // After React has laid out the card: pan only if the Field is hidden.
-            revealFrame = requestAnimationFrame(() => {
-              const obstacles = [...document.querySelectorAll(OBSTACLES)].map((el) =>
-                el.getBoundingClientRect(),
-              );
-              renderer.reveal(id, obstacles);
-            });
+          (state) => state.inspect,
+          (on) => {
+            renderer.setInspect(on);
+            // Leaving inspect mode closes the Field card; the tray returns.
+            if (!on && uiStore.getState().selectedField !== null) {
+              uiStore.getState().selectField(null);
+            }
           },
           { fireImmediately: true },
         ),

@@ -4,17 +4,22 @@ import type { RejectionCode } from "@universum/protocol/messages";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useStore } from "zustand";
+import { playDice } from "#audio.ts";
 import { Board } from "#board/Board.tsx";
 import { FieldCard } from "#board/FieldCard.tsx";
+import { GameMenu } from "#components/GameMenu.tsx";
 import { EventToast, MinutePill } from "#components/GameHud.tsx";
 import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
+import { Podium } from "#components/Podium.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { Card } from "#components/ui/card.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
+import { singlePickFor } from "#pick/pick.ts";
 import { saleFor } from "#pick/sale.ts";
+import { PickTray } from "#screens/PickTray.tsx";
 import { SaleTray } from "#screens/SaleTray.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { roomStore } from "#stores/room-store.ts";
@@ -113,6 +118,8 @@ function describe(event: GameEvent, view: PublicView): string | null {
       });
     case "WentBankrupt":
       return m.event_went_bankrupt({ name: name(event.player) });
+    case "GameEnded":
+      return m.event_game_ended({ name: name(event.winner) });
     default:
       return null;
   }
@@ -133,6 +140,7 @@ const NOTICES = new Set<GameEvent["type"]>([
   "CardDrawn",
   "TaxPaid",
   "WentBankrupt",
+  "GameEnded",
 ]);
 
 const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
@@ -146,10 +154,18 @@ export function Game() {
   const rejection = useStore(roomStore, (s) => s.rejection);
   const selectedField = useStore(uiStore, (s) => s.selectedField);
   const salePicks = useStore(uiStore, (s) => s.salePicks);
+  const singleSelection = useStore(uiStore, (s) => s.singlePick);
+  const checklistOpen = useStore(uiStore, (s) => s.checklistOpen);
+  const inspect = useStore(uiStore, (s) => s.inspect);
   // No optimistic UI: after a tap the control stays hidden until the next push or a Rejection.
   const [sentAt, setSentAt] = useState<number | null>(null);
   const wide = useWide();
   const [joinError, setJoinError] = useState<RejectionCode | null>(null);
+
+  // The dice sound starts on the server's roll, never on a tap (spec: no optimistic UI).
+  useEffect(() => {
+    if (push?.events.some((event) => event.type === "DiceRolled")) playDice();
+  }, [push]);
 
   // Opened by its address (a reload, a new tab, a later visit): take the Seat back by Guest token.
   useEffect(() => {
@@ -176,6 +192,7 @@ export function Game() {
   }
 
   const { view, events } = push;
+  const gameOver = view.phase.kind === "gameOver" ? view.phase : null;
   const current = view.players.find((p) => p.id === view.currentPlayer);
   const myTurn = view.currentPlayer === me;
   const answeredAt = Math.max(push.seq, rejection?.seq ?? 0);
@@ -185,7 +202,10 @@ export function Game() {
   const quarantineChoice =
     myTurn && !pending && view.phase.kind === "quarantineChoice" ? view.phase : null;
   const sale = saleFor(view, me);
+  const singlePick = singlePickFor(view, me);
   const othersSale = !myTurn && view.phase.kind === "selling";
+  const othersPick =
+    !myTurn && (view.phase.kind === "placingDoubler" || view.phase.kind === "choosingErasmus");
   // One toast at a time: the first notice of the push, else its first event worth one.
   const notice = events.find((event) => NOTICES.has(event.type));
   const toast = (notice ? [notice] : events)
@@ -212,7 +232,7 @@ export function Game() {
     ]
       .filter((text) => text !== null)
       .join(" · "),
-    ring: p.id === view.currentPlayer && (
+    ring: p.id === view.currentPlayer && view.turnTimer !== null && (
       <TurnRing
         key={`${view.turn}:${view.turnDeadline}`}
         timer={view.turnTimer}
@@ -224,13 +244,14 @@ export function Game() {
 
   const statusRow = (
     <>
-      <MinutePill endsAt={view.endsAt} />
+      <MinutePill endsAt={view.endsAt} clockOffset={push.clockOffset} />
       <EventToast
         key={rejected ? `r${rejection.seq}` : push.seq}
         tone={rejected ? "bad" : "neutral"}
       >
         {rejected ? rejectionText(rejection.code) : toast}
       </EventToast>
+      <GameMenu />
     </>
   );
 
@@ -250,6 +271,11 @@ export function Game() {
       {othersSale && (
         <p className="m-0 text-sm font-bold text-ink/70" data-testid="sale-waiting">
           {m.sale_waiting({ name: current ? playerName(current.name) : "" })}
+        </p>
+      )}
+      {othersPick && (
+        <p className="m-0 text-sm font-bold text-ink/70" data-testid="pick-waiting">
+          {m.pick_waiting({ name: current ? playerName(current.name) : "" })}
         </p>
       )}
       {canRoll && (
@@ -300,8 +326,14 @@ export function Game() {
     </Card>
   );
   const mySeat = view.players.find((p) => p.id === me)?.seat ?? 0;
-  // The Sale tray takes the bottom slot during this client's Sale; else the Field card or the Turn card.
-  const card = sale ? (
+  // The result screen replaces both. Otherwise inspect mode during a pick opens
+  // the Field card in the tray's place, with ‹ › over pickable Fields only;
+  // closing it brings the tray back. Else the pick tray takes the bottom slot,
+  // then the Field card, then the Turn card.
+  const pick = sale ?? singlePick;
+  const card = gameOver ? null : pick && inspect && selectedField !== null ? (
+    <FieldCard id={selectedField} view={view} stepThrough={pick.pickable} />
+  ) : sale ? (
     <SaleTray
       view={view}
       sale={sale}
@@ -309,9 +341,38 @@ export function Game() {
       seat={mySeat}
       clockOffset={push.clockOffset}
       busy={pending}
+      checklistOpen={checklistOpen}
+      inspect={inspect}
+      onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
+      onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
+      onToggle={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
+      onFocus={(field) => uiStore.getState().focusPick(field)}
       onUnpick={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
       onAutoSell={() => send({ type: "AutoSell", turn: view.turn })}
       onSell={(fields) => send({ type: "SellFields", turn: view.turn, fields })}
+    />
+  ) : singlePick ? (
+    <PickTray
+      view={view}
+      pick={singlePick}
+      selection={singleSelection}
+      seat={mySeat}
+      clockOffset={push.clockOffset}
+      busy={pending}
+      checklistOpen={checklistOpen}
+      inspect={inspect}
+      onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
+      onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
+      onToggle={(field) => uiStore.getState().choosePick(singlePick.key, field)}
+      onFocus={(field) => uiStore.getState().focusPick(field)}
+      onPick={(field) => uiStore.getState().choosePick(singlePick.key, field)}
+      onCommit={(field) =>
+        send(
+          singlePick.kind === "doubler"
+            ? { type: "PlaceDoubler", turn: view.turn, field }
+            : { type: "TravelErasmus", turn: view.turn, field },
+        )
+      }
     />
   ) : selectedField === null ? (
     turnCard
@@ -323,6 +384,7 @@ export function Game() {
     return (
       <main className="board-backdrop fixed inset-0 overflow-hidden">
         <ReconnectOverlay />
+        {gameOver && <Podium view={view} phase={gameOver} />}
         {/* The Board's box: clear of the corner cards, the status row and the card; the
             fit area also keeps clear of the camera buttons on its right. */}
         <div className="absolute inset-x-[110px] top-[110px] bottom-[200px] [--board-inset-left:3.75rem] [--board-inset-right:3.75rem]">
@@ -350,6 +412,7 @@ export function Game() {
   return (
     <main className="board-backdrop fixed inset-0 flex flex-col overflow-hidden pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
       <ReconnectOverlay />
+      {gameOver && <Podium view={view} phase={gameOver} />}
       <ul className="m-0 flex list-none justify-center gap-1.5 px-2" aria-label={m.game_players()}>
         {players.map((player) => (
           <PlayerChip key={player.seat} player={player} className="w-0 max-w-28 flex-1" />
