@@ -36,7 +36,10 @@ function drawCard(tx: Tx): ChanceCardId {
 
 /** What each card does to the Player who drew it. */
 const EFFECTS: Record<ChanceCardId, (tx: Tx, player: PlayerId) => void> = {
-  pcrTest: () => {},
+  // A flag, not a count: a second card is wasted (F23).
+  pcrTest: (tx, playerId) => {
+    playerById(tx, playerId).hasPcrTest = true;
+  },
   scholarship: (tx, playerId) => {
     const amount = CHANCE_CARD_MONEY.scholarship;
     playerById(tx, playerId).cash += amount;

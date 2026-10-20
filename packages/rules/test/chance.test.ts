@@ -110,6 +110,25 @@ describe("the Chance draw", () => {
   });
 });
 
+describe("the PCR card", () => {
+  it("R35: gives the Player a PCR test and nothing else", () => {
+    const { state, events } = draw(seedDrawing("pcrTest"));
+
+    expect(player(state, "p1")).toMatchObject({ hasPcrTest: true, cash: START_CASH });
+    expect(events.map((e) => e.type)).toEqual(["DiceRolled", "Moved", "CardDrawn", "TurnPassed"]);
+  });
+
+  it("R35, F23: a Player holds at most one PCR test, so a second card is wasted", () => {
+    const seed = seedDrawing("pcrTest");
+    const start = withPlayer(newGame({ seed }), "p1", { hasPcrTest: true });
+
+    const { state } = draw(seed, null, start);
+
+    expect(player(state, "p1").hasPcrTest).toBe(true);
+    expect(JSON.stringify(state)).toBe(JSON.stringify(draw(seed).state));
+  });
+});
+
 describe("money cards", () => {
   it("R34: the +200,000 card is paid by the Bank", () => {
     const { state, events } = draw(seedDrawing("scholarship"));
