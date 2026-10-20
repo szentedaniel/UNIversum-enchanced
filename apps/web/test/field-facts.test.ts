@@ -13,6 +13,8 @@ const owner: PlayerState = {
   cash: 0,
   position: 0,
   bankrupt: false,
+  quarantineRounds: null,
+  hasPcrTest: false,
 };
 
 function viewWith(field: FieldView): PublicView {
