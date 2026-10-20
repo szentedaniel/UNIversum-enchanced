@@ -70,7 +70,7 @@ describe("the roll", () => {
     expect(player(applied.state, "p1").position).toBe((30 + a + b) % 32);
   });
 
-  it("R73: passing Start pays the Round bonus of 250,000", () => {
+  it("R10, R73: passing Start pays the Round bonus of 250,000", () => {
     const state = withPlayer(newGame(), "p1", { position: 31 });
 
     const applied = roll(state);
@@ -100,7 +100,7 @@ describe("the roll", () => {
     expect(applied.events.some((e) => e.type === "RoundBonusPaid")).toBe(false);
   });
 
-  it("returns the events in order: DiceRolled, Moved, RoundBonusPaid, TurnPassed", () => {
+  it("R13: returns the events in order: DiceRolled, Moved, RoundBonusPaid, TurnPassed", () => {
     // Ends exactly on Start, the one Field with no effect of its own.
     const [a, b] = diceOf(roll(newGame()));
     const from = 32 - (a + b);

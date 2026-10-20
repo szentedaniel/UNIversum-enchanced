@@ -15,7 +15,7 @@ function owning(state: GameState, owner: string, fields: number[]): GameState {
 }
 
 describe("landing on an unowned Museum", () => {
-  it("R53: offers the Museum for 400,000, and the Turn waits for the Player", () => {
+  it("R10, R53: offers the Museum for 400,000, and the Turn waits for the Player", () => {
     const applied = rollOnto(newGame(), MUSEUM_2);
 
     expect(applied.state.phase).toEqual({
