@@ -98,7 +98,12 @@ stay in #51.
   asserts no decision control is visible while
   `Date.now() + clockOffset < actsAfter - 25`, and the current Player's control
   appears afterwards. A Playback is at least 450 + 2×160 ms, so the hold window
-  is long enough to sample on a slow CI box.
+  is long enough to sample on a slow CI box. Its `playTurn` resolves **every**
+  decision a Roll can stop at — an offer, a Sale, a Doubler or Erasmus pick —
+  through the tray and loops until the Turn passes (a pick's travel can lead
+  to another decision); each control's `toBeVisible` is the Playback wait. Any
+  new decision phase the Roll can reach needs a case there, or the spec times
+  out polling for the next Turn.
 - Full-game e2e: the game still ends on the 120 s minute limit in wall-clock
   time, so the 240 s guard holds; the loop's controls are found through
   Playwright auto-wait. A Chance draw adds 7 s of Playback inside the Turn,
