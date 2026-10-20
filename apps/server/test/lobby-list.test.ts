@@ -71,6 +71,25 @@ describe("the Lobby list", () => {
     await list.until((l) => l.get(alice.code)?.players === 1);
   });
 
+  it("names the creator's Seat by Player id, and keeps the crown there when Seats shift", async () => {
+    const alice = await server.create({ maxPlayers: 3 });
+    const aliceId = (await alice.next("welcome")).playerId;
+    expect((await alice.next("lobby")).creatorId).toBe(aliceId);
+    const bob = await server.join(alice.code);
+    const bobId = (await bob.next("welcome")).playerId;
+    const carol = await server.join(alice.code);
+    const carolId = (await carol.next("welcome")).playerId;
+    expect((await bob.until("lobby", (l) => l.seats.length === 3)).creatorId).toBe(aliceId);
+
+    await alice.leave();
+    const shifted = await bob.until("lobby", (l) => l.seats.length === 2);
+
+    // Seat 0 is now Bob's, but the crown stays with the creator (who is gone).
+    expect(shifted.seats.map((seat) => seat.playerId)).toEqual([bobId, carolId]);
+    expect(shifted.creatorId).toBe(aliceId);
+    expect(shifted.seats.some((seat) => seat.playerId === shifted.creatorId)).toBe(false);
+  });
+
   it("drops a Lobby when its last Player leaves", async () => {
     const list = await server.watchLobbyList();
     const alice = await server.create();

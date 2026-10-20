@@ -208,6 +208,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   displayName: string | null = null;
   /** Never sent or logged; `null` for a Room without a password. */
   password: PasswordHash | null = null;
+  /** The creator's public Player id (the Lobby's crown), or `null` until they take a Seat. */
+  creatorId: PlayerId | null = null;
   /** Taken Seats in join order (R6). */
   seats: SeatRecord[] = [];
   /** The running game, or `null` while the Room is a Lobby. */
@@ -345,6 +347,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     claimRoomCode(stored.code);
     this.settings = stored.settings;
     this.displayName = stored.roomName;
+    this.creatorId = stored.creatorId;
     this.password = stored.password && decodePassword(stored.password);
     this.seats = stored.seats.map(({ playerId, name, tokenHash = null }) => ({
       playerId,
@@ -389,6 +392,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       sessionId: client.sessionId,
       tokenHash: token && hashGuestToken(token),
     };
+    if (auth?.creates && this.seats.length === 0) this.creatorId = seat.playerId;
     // Saved first: a Seat the store doesn't have isn't taken (the join fails).
     this.save([...this.seats, seat], this.game, []);
     this.seats.push(seat);
@@ -806,6 +810,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
           code: this.roomId,
           settings: this.settings,
           roomName: this.displayName,
+          creatorId: this.creatorId,
           password: this.password && encodePassword(this.password),
           seats: seats.map(({ playerId, name, tokenHash }) => ({ playerId, name, tokenHash })),
           game,
@@ -889,6 +894,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     const lobby: LobbyMessage = {
       code: this.roomId,
       roomName: this.displayName,
+      creatorId: this.creatorId,
       hasPassword: this.password !== null,
       settings: this.settings,
       // Public Player ids and names only: never a session id or token hash.

@@ -25,6 +25,8 @@ export type StoredRoom<G = GameState> = {
   settings: RoomSettings;
   /** The checked Room name, or `null` when its creator left it empty. */
   roomName: string | null;
+  /** The creator's public Player id (the Seat with the crown), or `null` if they never joined. */
+  creatorId: string | null;
   /** The Room password's salt and scrypt hash (base64), or `null` for a Room without one. */
   password: StoredPassword | null;
   /** Taken Seats in join order. */

@@ -119,6 +119,7 @@ describe("restore on boot", () => {
   it("a Lobby comes back with its code, settings and Seats, and a new Guest can join it", async () => {
     const before = await start();
     const alice = await before.create({ maxPlayers: 3, minuteLimit: 15 });
+    const aliceId = (await alice.next("welcome")).playerId;
     const bob = await before.join(alice.code);
     const lobby = await bob.until("lobby", (l) => l.seats.length === 2);
 
@@ -128,6 +129,7 @@ describe("restore on boot", () => {
 
     expect(after.restored).toBe(1);
     expect(restored.code).toBe(alice.code);
+    expect(restored.creatorId).toBe(aliceId);
     expect(restored.settings).toEqual({ maxPlayers: 3, minuteLimit: 15 });
     // Held for their Guests, who have not taken them back yet (#35).
     expect(restored.seats.slice(0, 2)).toEqual(

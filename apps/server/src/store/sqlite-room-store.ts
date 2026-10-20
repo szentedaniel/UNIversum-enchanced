@@ -74,11 +74,19 @@ export function openSqliteRoomStore(path: string): SqliteRoomStore {
     unfinished() {
       return selectUnfinished.all().map((row) => {
         const snapshot: Snapshot = JSON.parse(String(row["state"]));
-        const { settings, seats, game, roomName = null, password = null } = snapshot;
+        const {
+          settings,
+          seats,
+          game,
+          roomName = null,
+          creatorId = null,
+          password = null,
+        } = snapshot;
         return {
           code: String(row["code"]),
           settings,
           roomName,
+          creatorId,
           password,
           seats,
           game,

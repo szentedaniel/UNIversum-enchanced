@@ -75,6 +75,11 @@ export type LobbyMessage = {
   code: string;
   /** `null`: the creator left it empty, and the client shows a generated one. */
   roomName: string | null;
+  /**
+   * The public Player id of the Room's creator, whose Seat the client marks
+   * with a crown (story 16), or `null` before the creator takes a Seat.
+   */
+  creatorId: PlayerId | null;
   hasPassword: boolean;
   settings: RoomSettings;
   /** Taken Seats in join order; the rest of `settings.maxPlayers` are open. */
