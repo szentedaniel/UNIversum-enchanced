@@ -100,3 +100,12 @@ export const FIELDS: readonly FieldInfo[] = [
 
 /** The Start Field, where the Round bonus is paid. */
 export const START_FIELD: FieldId = 0;
+
+/**
+ * The 3 Chance cards, in v1's order (R32): a PCR test, a +200,000 scholarship
+ * and a −200,000 fee for failing every exam. The web app maps each id to its
+ * Paraglide title and text.
+ */
+export const CHANCE_CARDS = ["pcrTest", "scholarship", "failedExams"] as const;
+
+export type ChanceCardId = (typeof CHANCE_CARDS)[number];

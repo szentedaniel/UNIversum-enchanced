@@ -22,3 +22,9 @@ export const turnDeadlineFrom = (now: number): number => now + TURN_LIMIT_MS + T
 
 /** Above this much cash the Timeout penalty is 10% of cash (R19). */
 export const TIMEOUT_PENALTY_THRESHOLD = 100_000;
+
+/** Every Museum's Value, whoever owns it (F2): its price, Tax and Wealth use it. */
+export const MUSEUM_VALUE = 400_000;
+
+/** What the money Chance cards pay or charge (R34). */
+export const CHANCE_MONEY = 200_000;

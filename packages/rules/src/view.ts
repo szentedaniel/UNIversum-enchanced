@@ -45,5 +45,6 @@ export function publicView(state: GameState): PublicView {
       rent: rentOf(state, id),
     })),
     doubler: state.doubler,
+    lastChanceCard: state.lastChanceCard,
   };
 }

@@ -39,6 +39,7 @@ export function setupGame({ seats, settings, seed, now }: SetupInput): GameState
     })),
     fields: FIELDS.map(() => ({ owner: null, level: 0 })),
     doubler: null,
+    lastChanceCard: null,
     rng: rngFromSeed(seed),
   };
 }
