@@ -29,6 +29,7 @@ catalog:
   oxlint-tsgolint: 7.0.2004
   pixi.js: 8.22.0
   pure-rand: 8.4.2
+  rate-limiter-flexible: 11.2.3
   react: 19.3.1
   react-dom: 19.3.1
   react-router: 8.4.0

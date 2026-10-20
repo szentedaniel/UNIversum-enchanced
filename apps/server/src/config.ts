@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { loadLimits, type Limits } from "#limits.ts";
 
 /** Typed server settings. Every value comes from the environment, with dev defaults. */
 export type ServerConfig = {
@@ -8,6 +9,8 @@ export type ServerConfig = {
   host: string;
   /** Folder for the SQLite data (`DATA_DIR`). Gitignored in dev. */
   dataDir: string;
+  /** Abuse-protection limits (`LIMIT_*`, see `limits.ts`). */
+  limits: Limits;
 };
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -19,6 +22,7 @@ export function loadConfig(env: Env = process.env): ServerConfig {
     port: parsePort(env["PORT"]),
     host: env["HOST"] ?? "127.0.0.1",
     dataDir: env["DATA_DIR"] ?? DEV_DATA_DIR,
+    limits: loadLimits(env),
   };
 }
 

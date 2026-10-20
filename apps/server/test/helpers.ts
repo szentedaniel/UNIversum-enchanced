@@ -14,9 +14,12 @@ import {
   type LobbyListing,
   type LobbyListingMetadata,
   type LobbyMessage,
+  matchmakeRefusal,
+  type Refusal,
   type RejectionMessage,
   type WelcomeMessage,
 } from "@universum/protocol";
+import { DEFAULT_LIMITS, type Limits } from "#limits.ts";
 import type { Scheduler } from "#room/scheduler.ts";
 import { createGameServer } from "#server.ts";
 
@@ -80,8 +83,29 @@ export class ManualScheduler implements Scheduler {
   }
 }
 
+/**
+ * Test servers keep the production limits, except the per-IP ones every test
+ * Guest shares (they all come from 127.0.0.1), which are raised as e2e does.
+ */
+export const TEST_LIMITS: Limits = {
+  ...DEFAULT_LIMITS,
+  roomCreationsPerMinute: 10_000,
+  roomCreationsPerHour: 10_000,
+  openLobbiesPerIp: 10_000,
+  joinsPerMinute: 10_000,
+  seatReservationsPerIp: 10_000,
+  socketsPerIp: 10_000,
+};
+
+/** A Guest on its own IP (sent as `X-Real-IP`, as Caddy does). */
+export type TestGuest = {
+  create(options?: CreateOptions): Promise<TestClient>;
+  join(code: string, options?: Omit<JoinOptions, "code">): Promise<TestClient>;
+};
+
 export type TestServer = {
   sdk: Client;
+  port: number;
   /** Every Room's clock and wake-ups. */
   scheduler: ManualScheduler;
   /** A Guest creates a Room. */
@@ -90,27 +114,69 @@ export type TestServer = {
   join(code: string, options?: Omit<JoinOptions, "code">): Promise<TestClient>;
   /** A Guest opens the Lobby list. */
   watchLobbyList(): Promise<TestLobbyList>;
+  /** A Guest whose requests come from `ip`. */
+  from(ip: string): TestGuest;
+  /**
+   * A raw matchmaking request from `ip` that never opens its WebSocket (the
+   * Seat, if any, stays reserved until it lapses). `null`: accepted.
+   */
+  matchmake(
+    path: string,
+    body: unknown,
+    options?: { ip?: string; rawBody?: string },
+  ): Promise<Refusal | null>;
   stop(): Promise<void>;
 };
 
-export async function startTestServer(): Promise<TestServer> {
+export async function startTestServer(
+  setup: { limits?: Partial<Limits> } = {},
+): Promise<TestServer> {
   const scheduler = new ManualScheduler();
-  const server = createGameServer({ gracefullyShutdown: false, scheduler });
+  const server = createGameServer({
+    gracefullyShutdown: false,
+    scheduler,
+    limits: { ...TEST_LIMITS, ...setup.limits },
+  });
   await server.listen(0, "127.0.0.1");
   const address = server.transport.server?.address();
   if (!address || typeof address === "string") throw new Error("the server has no TCP port");
-  const sdk = new Client(`ws://127.0.0.1:${address.port}`);
+  const { port } = address;
+  const sdk = new Client(`ws://127.0.0.1:${port}`);
   const clients: { leave(): Promise<void> }[] = [];
   const track = <T extends { leave(): Promise<void> }>(client: T) => {
     clients.push(client);
     return client;
   };
+  const guest = (client: Client): TestGuest => ({
+    create: async (options = {}) => track(new TestClient(await client.create(GAME_ROOM, options))),
+    join: async (code, options = {}) =>
+      track(
+        new TestClient(await client.joinById(code, { code, ...options } satisfies JoinOptions)),
+      ),
+  });
   return {
     sdk,
+    port,
     scheduler,
-    create: async (options = {}) => track(new TestClient(await sdk.create(GAME_ROOM, options))),
-    join: async (code, options = {}) =>
-      track(new TestClient(await sdk.joinById(code, { code, ...options } satisfies JoinOptions))),
+    ...guest(sdk),
+    from: (ip) => guest(new Client(`ws://127.0.0.1:${port}`, { headers: { "x-real-ip": ip } })),
+    async matchmake(path, body, { ip, rawBody } = {}) {
+      const response = await fetch(`http://127.0.0.1:${port}/matchmake/${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(ip && { "x-real-ip": ip }) },
+        body: rawBody ?? JSON.stringify(body),
+      });
+      if (response.ok) return null;
+      const answer: unknown = await response.json();
+      const error =
+        typeof answer === "object" &&
+        answer !== null &&
+        "error" in answer &&
+        typeof answer.error === "string"
+          ? answer.error
+          : "";
+      return matchmakeRefusal({ code: response.status, message: error });
+    },
     watchLobbyList: async () => track(new TestLobbyList(await sdk.joinOrCreate(LOBBY_ROOM))),
     async stop() {
       await Promise.all(clients.map((c) => c.leave()));
