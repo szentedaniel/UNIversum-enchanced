@@ -46,6 +46,7 @@ export type { LevelOffer } from "#rules/universities.ts";
 export {
   publicView,
   type FieldView,
+  type PickOption,
   type PlayerView,
   type PublicView,
   type TurnTimer,

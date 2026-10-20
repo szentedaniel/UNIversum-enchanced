@@ -76,13 +76,32 @@ export function wealthOf(state: GameState, playerId: PlayerId): number {
   return (player?.cash ?? 0) + fieldsValue(state, playerId);
 }
 
-/** What a Player other than the owner pays on landing here now; 0 when unowned. */
-export function rentOf(state: GameState, field: FieldId): number {
+/**
+ * The Rent before the Monopoly multiplier and the Doubler count (R61): a
+ * University's Value × its Level's rate, or a Museum's 75,000 × the owner's
+ * Museums. 0 when unowned.
+ */
+export function baseRentOf(state: GameState, field: FieldId): number {
   const info = FIELDS[field];
   const fieldState = state.fields[field];
   if (!fieldState?.owner) return 0;
   if (info?.kind === "museum") return MUSEUM_RENT_STEP * museumsOf(state, fieldState.owner);
   if (!info?.group) return 0;
-  const rent = (valueOf(state, field) * (RENT_PERCENT[fieldState.level] ?? 0)) / 100;
-  return Math.round(isMonopoly(state, info.group) ? (rent * MONOPOLY_TENTHS) / 10 : rent);
+  return Math.round((valueOf(state, field) * (RENT_PERCENT[fieldState.level] ?? 0)) / 100);
+}
+
+/**
+ * What a Player other than the owner pays on landing here now; 0 when unowned.
+ * A Doubler multiplies plain Rent by its count + 1, without the Monopoly ×1.4
+ * on a University; a Museum keeps its count multiplier (R61, F10).
+ */
+export function rentOf(state: GameState, field: FieldId): number {
+  const info = FIELDS[field];
+  const fieldState = state.fields[field];
+  if (!fieldState?.owner) return 0;
+  const doubler = state.doubler?.field === field ? state.doubler.count : 0;
+  const base = baseRentOf(state, field);
+  if (info?.kind === "museum" || doubler > 0) return base * (doubler + 1);
+  if (!info?.group) return 0;
+  return Math.round(isMonopoly(state, info.group) ? (base * MONOPOLY_TENTHS) / 10 : base);
 }

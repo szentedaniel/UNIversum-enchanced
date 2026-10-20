@@ -31,6 +31,15 @@ export type ViewPlayer = {
   hasPcrTest: boolean;
 };
 
+export type FullPickOption =
+  | { kind: "doubler"; field: number; rent: number; rentAfter: number }
+  | {
+      kind: "erasmus";
+      field: number;
+      steps: number;
+      passesStart: boolean;
+      bonus: number | null;
+    };
 /** The parts of a full pushed view (PublicView) that specs change before `showView`. */
 export type FullView = {
   turn: number;
@@ -38,7 +47,9 @@ export type FullView = {
   phase: unknown;
   players: ViewPlayer[];
   fields: { owner: string | null; level: number; value: number; rent: number; sale: number }[];
+  doubler: { field: number; count: number } | null;
   autoSell: number[] | null;
+  pickOptions: FullPickOption[] | null;
   turnDeadline: number | null;
   turnTimer: { endsAt: number; limitMs: number } | null;
 };

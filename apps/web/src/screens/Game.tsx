@@ -15,7 +15,9 @@ import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
+import { singlePickFor } from "#pick/pick.ts";
 import { saleFor } from "#pick/sale.ts";
+import { PickTray } from "#screens/PickTray.tsx";
 import { SaleTray } from "#screens/SaleTray.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { roomStore } from "#stores/room-store.ts";
@@ -150,6 +152,7 @@ export function Game() {
   const rejection = useStore(roomStore, (s) => s.rejection);
   const selectedField = useStore(uiStore, (s) => s.selectedField);
   const salePicks = useStore(uiStore, (s) => s.salePicks);
+  const singleSelection = useStore(uiStore, (s) => s.singlePick);
   // No optimistic UI: after a tap the control stays hidden until the next push or a Rejection.
   const [sentAt, setSentAt] = useState<number | null>(null);
   const wide = useWide();
@@ -190,7 +193,10 @@ export function Game() {
   const quarantineChoice =
     myTurn && !pending && view.phase.kind === "quarantineChoice" ? view.phase : null;
   const sale = saleFor(view, me);
+  const singlePick = singlePickFor(view, me);
   const othersSale = !myTurn && view.phase.kind === "selling";
+  const othersPick =
+    !myTurn && (view.phase.kind === "placingDoubler" || view.phase.kind === "choosingErasmus");
   // One toast at a time: the first notice of the push, else its first event worth one.
   const notice = events.find((event) => NOTICES.has(event.type));
   const toast = (notice ? [notice] : events)
@@ -257,6 +263,11 @@ export function Game() {
           {m.sale_waiting({ name: current ? playerName(current.name) : "" })}
         </p>
       )}
+      {othersPick && (
+        <p className="m-0 text-sm font-bold text-ink/70" data-testid="pick-waiting">
+          {m.pick_waiting({ name: current ? playerName(current.name) : "" })}
+        </p>
+      )}
       {canRoll && (
         <Button size="lg" onClick={() => send({ type: "Roll", turn: view.turn })}>
           {m.game_roll()}
@@ -305,8 +316,8 @@ export function Game() {
     </Card>
   );
   const mySeat = view.players.find((p) => p.id === me)?.seat ?? 0;
-  // The Sale tray takes the bottom slot during this client's Sale; else the Field card or the Turn card.
-  // The result screen replaces the controls once the game is over.
+  // The Sale or pick tray takes the bottom slot during this client's decision;
+  // else the Field card or the Turn card. The result screen replaces both.
   const card = gameOver ? null : sale ? (
     <SaleTray
       view={view}
@@ -318,6 +329,23 @@ export function Game() {
       onUnpick={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
       onAutoSell={() => send({ type: "AutoSell", turn: view.turn })}
       onSell={(fields) => send({ type: "SellFields", turn: view.turn, fields })}
+    />
+  ) : singlePick ? (
+    <PickTray
+      view={view}
+      pick={singlePick}
+      selection={singleSelection}
+      seat={mySeat}
+      clockOffset={push.clockOffset}
+      busy={pending}
+      onPick={(field) => uiStore.getState().choosePick(singlePick.key, field)}
+      onCommit={(field) =>
+        send(
+          singlePick.kind === "doubler"
+            ? { type: "PlaceDoubler", turn: view.turn, field }
+            : { type: "TravelErasmus", turn: view.turn, field },
+        )
+      }
     />
   ) : selectedField === null ? (
     turnCard

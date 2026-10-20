@@ -408,6 +408,14 @@ function anyOption(state: GameState, pick: (n: number) => number): { intent: Int
     }
     case "quarantineChoice":
       return { intent: { type: "RollForTwelve", turn }, now };
+    case "placingDoubler": {
+      const field = phase.fields[pick(phase.fields.length)];
+      return { intent: { type: "PlaceDoubler", turn, field: field ?? 0 }, now };
+    }
+    case "choosingErasmus": {
+      const field = phase.fields[pick(phase.fields.length)];
+      return { intent: { type: "TravelErasmus", turn, field: field ?? 0 }, now };
+    }
     default:
       return { intent: { type: "Roll", turn }, now };
   }

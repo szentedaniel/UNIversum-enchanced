@@ -5,6 +5,7 @@ import { useStore } from "zustand";
 import { createBoard, type Board as BoardRenderer } from "#board/board.ts";
 import { fieldFacts } from "#board/field-facts.ts";
 import { Button } from "#components/ui/button.tsx";
+import { selectedPick, singleMarks, singlePickFor } from "#pick/pick.ts";
 import { AUTO_SELL_WARNING_MS, saleFor, saleMarks } from "#pick/sale.ts";
 import { roomStore } from "#stores/room-store.ts";
 import { salePicksFor, uiStore } from "#stores/ui-store.ts";
@@ -21,14 +22,28 @@ function currentSale() {
   return push ? saleFor(push.view, me) : null;
 }
 
+/** This client's open Doubler or Erasmus pick, from the latest push. */
+function currentPick() {
+  const { push, me } = roomStore.getState();
+  return push ? singlePickFor(push.view, me) : null;
+}
+
 /**
- * A tap on the Board: during this client's Sale it toggles the (pickable)
+ * A tap on the Board: during this client's pick it selects the (pickable)
  * Field and never commits; otherwise it opens the Field card.
  */
 function onFieldTap(id: FieldId | null): void {
   const sale = currentSale();
-  if (!sale) return uiStore.getState().selectField(id);
-  if (id !== null) uiStore.getState().toggleSalePick(sale.key, id);
+  if (sale) {
+    if (id !== null) uiStore.getState().toggleSalePick(sale.key, id);
+    return;
+  }
+  const pick = currentPick();
+  if (pick) {
+    if (id !== null) uiStore.getState().choosePick(pick.key, id);
+    return;
+  }
+  uiStore.getState().selectField(id);
 }
 
 /**
@@ -75,14 +90,20 @@ export function Board() {
       const first = roomStore.getState().push;
       if (first) renderer.update(first.view, []);
 
-      /** Marks this client's Sale on the Board, and wakes up again when the last seconds start. */
+      /** Marks this client's open pick on the Board, and wakes up again when the last seconds start. */
       const syncPick = () => {
         clearTimeout(warningTimer);
         const { push } = roomStore.getState();
         const sale = currentSale();
-        if (!push || !sale || push.view.turnTimer === null) return renderer.setPick(null);
-        // The tray replaces the Field card during the Sale.
+        const pick = currentPick();
+        if (!push || (!sale && !pick)) return renderer.setPick(null);
+        // The tray replaces the Field card during a pick.
         if (uiStore.getState().selectedField !== null) uiStore.getState().selectField(null);
+        if (pick) {
+          const field = selectedPick(pick, uiStore.getState().singlePick);
+          return renderer.setPick(singleMarks(pick, field));
+        }
+        if (!sale || push.view.turnTimer === null) return renderer.setPick(null);
         const msLeft = push.view.turnTimer.endsAt - (Date.now() + push.clockOffset);
         const picks = salePicksFor(uiStore.getState().salePicks, sale.key);
         renderer.setPick(saleMarks(sale, push.view, picks, msLeft));
@@ -100,6 +121,7 @@ export function Board() {
           },
         ),
         uiStore.subscribe((state) => state.salePicks, syncPick),
+        uiStore.subscribe((state) => state.singlePick, syncPick),
         uiStore.subscribe(
           (state) => state.selectedField,
           (id) => {
