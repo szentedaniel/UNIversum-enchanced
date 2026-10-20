@@ -41,6 +41,10 @@ export const DEFAULT_LIMITS = {
   maxPayloadBytes: 1024,
   /** Largest matchmaking request body (bytes). */
   matchmakeBodyBytes: 2048,
+  /** Error envelopes per IP per minute on the `/errors` tunnel. */
+  errorEventsPerMinute: 10,
+  /** Largest error envelope body (bytes) the `/errors` tunnel accepts. */
+  errorReportBytes: 200 * 1024,
 };
 
 export type Limits = { [K in keyof typeof DEFAULT_LIMITS]: number };

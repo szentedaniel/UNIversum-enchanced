@@ -5,10 +5,13 @@ import { createGatedHttpServer } from "#abuse/gated-http.ts";
 import { AbuseGuard } from "#abuse/guard.ts";
 import { ipBucket } from "#abuse/ip.ts";
 import { DEFAULT_LIMITS, type Limits } from "#limits.ts";
-import { migrate } from "@universum/rules";
+import { apply, migrate } from "@universum/rules";
+import type { Dsn } from "#observability/dsn.ts";
+import { noReporter, type ErrorReporter } from "#observability/error-reporting.ts";
 import { createIpTagger, limiterRefused } from "#observability/limiter-refusals.ts";
 import { colyseusLogger, silentLogger, type Logger } from "#observability/logger.ts";
 import { GameMetrics } from "#observability/metrics.ts";
+import { createBrowserRoutes } from "#http/browser-routes.ts";
 import { GameRoom, restoreOptions } from "#room/game-room.ts";
 import { systemScheduler, type Scheduler } from "#room/scheduler.ts";
 import { deleteAfterRetention } from "#store/retention.ts";
@@ -27,17 +30,30 @@ export type GameServerOptions = {
   log?: Logger;
   /** Abuse-protection limits (`config.limits`); the spec's defaults when left out. */
   limits?: Limits;
+  /** Where errors are reported (`SENTRY_DSN`); nowhere by default. */
+  reporter?: ErrorReporter;
+  /** The tracker DSN served to clients and forwarded to by `/errors`; `null` = reporting off. */
+  errorReporting?: Dsn | null;
+  /** The rules engine's `apply` (tests pass one that throws). */
+  engine?: typeof apply;
 };
 
 /** The Colyseus server with every Room type defined, not yet listening. */
 export function createGameServer(options: GameServerOptions): Server {
-  const { store, metrics = new GameMetrics({ release: "dev" }), log = silentLogger } = options;
+  const {
+    store,
+    metrics = new GameMetrics({ release: "dev" }),
+    log = silentLogger,
+    reporter = noReporter,
+    engine = apply,
+  } = options;
   const ipTag = createIpTagger();
   const guard = new AbuseGuard(options.limits ?? DEFAULT_LIMITS, (limit, bucket) =>
     limiterRefused({ log, metrics, ipTag }, limit, bucket),
   );
+  const routes = createBrowserRoutes({ dsn: options.errorReporting ?? null, guard, log });
   const transport = new WebSocketTransport({
-    server: createGatedHttpServer(guard),
+    server: createGatedHttpServer(guard, routes),
     maxPayload: guard.limits.maxPayloadBytes,
     beforeUpgrade: (_request, context) => {
       const refusal = guard.socketRefusal(ipBucket(context.ip));
@@ -63,6 +79,8 @@ export function createGameServer(options: GameServerOptions): Server {
         override store = store;
         override metrics = metrics;
         override log = log;
+        override reporter = reporter;
+        override engine = engine;
       },
     )
     .enableRealtimeListing();
