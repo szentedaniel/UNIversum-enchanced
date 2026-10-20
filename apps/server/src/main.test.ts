@@ -103,13 +103,14 @@ describe("server under plain Node", () => {
 /** Everything each spawned server printed so far. */
 const outputs = new WeakMap<ChildProcess, string>();
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 /** One NDJSON log line, or `null` for a partial or human-readable line. */
 function logLine(text: string): Record<string, unknown> | null {
   try {
     const parsed: unknown = JSON.parse(text);
-    return typeof parsed === "object" && parsed !== null
-      ? (parsed as Record<string, unknown>)
-      : null;
+    return isRecord(parsed) ? parsed : null;
   } catch {
     return null;
   }
