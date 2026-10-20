@@ -208,7 +208,7 @@ describe("a Sale", () => {
 
     const sale = rollOnto({ ...state, currentPlayer: "p2" }, SEATTLE, at).state;
 
-    expect(sale.turnDeadline).toBe(at + 23_000);
+    expect(sale.turnDeadline).toBe(sale.actsAfter + 23_000);
   });
 
   it("R52: after a Sale for Rent the Buyout follows when the Player can now pay it", () => {

@@ -58,6 +58,7 @@ function viewWith(phase: Phase, autoSell: number[] | null = null): PublicView {
     turn: 4,
     currentPlayer: "p2",
     phase,
+    actsAfter: 40_000,
     turnDeadline: 50_000,
     turnTimer: { endsAt: 47_000, limitMs: 20_000 },
     settings: { maxPlayers: 2, minuteLimit: 15 },

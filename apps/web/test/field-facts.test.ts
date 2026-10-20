@@ -24,6 +24,7 @@ function viewWith(field: FieldView): PublicView {
     turn: 1,
     currentPlayer: owner.id,
     phase: { kind: "awaitingRoll" },
+    actsAfter: 40_000,
     turnDeadline: 0,
     turnTimer: { endsAt: 0, limitMs: 0 },
     settings: { maxPlayers: 2, minuteLimit: 15 },

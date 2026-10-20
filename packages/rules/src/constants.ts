@@ -12,17 +12,19 @@ export const MINUTE_MS = 60_000;
 export const TURN_LIMIT_MS = 20_000;
 
 /**
- * Extra time the server allows past the ring for client animations and lag
- * (spec: Clocks). Clients never show it.
+ * Extra time the server allows past the ring for network lag only (spec:
+ * Clocks). The Playback is counted separately, before the Turn limit starts
+ * (ADR-0004). Clients never show it.
  */
 export const TURN_SLACK_MS = 3_000;
 
 /**
- * The `turnDeadline` of a decision that starts at `now`. `turnLimitMs` is a
- * server override for e2e runs, which need short Turns; production leaves it out.
+ * The `turnDeadline` of a decision whose Playback ends at `actsAfter`.
+ * `turnLimitMs` is a server override for e2e runs, which need short Turns;
+ * production leaves it out.
  */
-export const turnDeadlineFrom = (now: number, turnLimitMs = TURN_LIMIT_MS): number =>
-  now + turnLimitMs + TURN_SLACK_MS;
+export const turnDeadlineFrom = (actsAfter: number, turnLimitMs = TURN_LIMIT_MS): number =>
+ actsAfter + turnLimitMs + TURN_SLACK_MS;
 
 /** Above this much cash the Timeout penalty is 10% of cash (R19). */
 export const TIMEOUT_PENALTY_THRESHOLD = 100_000;

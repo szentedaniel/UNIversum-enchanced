@@ -161,7 +161,7 @@ describe("buying and building", () => {
 
   it("R17, R18: the offer gets a fresh deadline; when it runs out, the penalty, nothing bought, and the Turn passes", () => {
     const offered = rollOnto(newGame(), VIENNA, T0 + 5_000).state;
-    expect(offered.turnDeadline).toBe(T0 + 5_000 + 23_000);
+    expect(offered.turnDeadline).toBe(offered.actsAfter + 23_000);
 
     const timedOut = accept(
       offered,

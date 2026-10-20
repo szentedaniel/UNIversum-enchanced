@@ -59,7 +59,8 @@ describe("the Turn deadline", () => {
       { type: "TurnPassed", player: ids[1], turn: 2 },
     ]);
     expect(timedOut.view).toMatchObject({ version: 1, turn: 2, currentPlayer: ids[1] });
-    expect(timedOut.view.turnDeadline).toBe(view.turnDeadline + DEADLINE_AFTER);
+    // The new deadline counts from the end of the timeout's Playback (ADR-0004).
+    expect(timedOut.view.turnDeadline).toBe(timedOut.view.actsAfter + DEADLINE_AFTER);
 
     // Time moves on, but not to Bob's deadline: no second timeout for Alice's Turn.
     server.scheduler.advanceTo(view.turnDeadline + DEADLINE_AFTER - 1);
@@ -76,7 +77,9 @@ describe("the Turn deadline", () => {
     alice.send({ type: "Roll", turn: 1 });
     let [ended] = await Promise.all([alice.next("game"), bob.next("game")]);
     if (ended.view.phase.kind === "offer") {
-      // The seed is random: a roll onto a University stops at the offer.
+      // The seed is random: a roll onto a University stops at the offer, which
+      // opens only when the roll's Playback has ended.
+      server.scheduler.advanceTo(ended.view.actsAfter);
       alice.send({ type: "DeclineOffer", turn: 1 });
       [ended] = await Promise.all([alice.next("game"), bob.next("game")]);
     }
@@ -84,6 +87,7 @@ describe("the Turn deadline", () => {
     server.scheduler.advanceTo(view.turnDeadline); // Alice's deadline, not Bob's
     aliceWakeUp(); // fires late anyway, as if a cancelled timer slipped through
 
+    server.scheduler.advanceTo(ended.view.actsAfter); // Bob's decision opens now
     bob.send({ type: "Roll", turn: 2 });
     const next = await alice.next("game");
     expect(next.view.version).toBe(ended.view.version + 1);
@@ -98,6 +102,6 @@ describe("the Turn deadline", () => {
     const timedOut = await bob.next("game");
 
     expect(timedOut.events[0]).toEqual({ type: "TimedOut", player: ids[0] });
-    expect(timedOut.view.turnDeadline).toBe(view.turnDeadline + 60_000 + DEADLINE_AFTER);
+    expect(timedOut.view.turnDeadline).toBe(timedOut.view.actsAfter + DEADLINE_AFTER);
   });
 });
