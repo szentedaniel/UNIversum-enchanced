@@ -95,7 +95,7 @@ describe("the solvency rule on Rent", () => {
     expect(state.phase).toMatchObject({ kind: "selling", shortfall: 724_000 });
   });
 
-  it("R70, F12: when cash + every Field can't cover it, the payer is Bankrupt and the owner gets what they could raise", () => {
+  it("R70, R72, F12: when cash + every Field can't cover it, the payer is Bankrupt and the owner gets what they could raise", () => {
     // Cash 100,000 + sale 180,000 = 280,000 < 924,000.
     const { state, events } = landOnRent(100_000, { [VESZPREM]: 1 });
 

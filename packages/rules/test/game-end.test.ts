@@ -22,7 +22,7 @@ function endTurn(state: GameState, now = T0): Applied {
 }
 
 describe("game end", () => {
-  it("R76: with one non-Bankrupt Player left, the game ends at the Turn change and they win", () => {
+  it("R15, R76: with one non-Bankrupt Player left, the game ends at the Turn change and they win", () => {
     const bankrupt = { bankrupt: true, cash: 0 };
     const state = withPlayer(
       withPlayer(withPlayer(newGame({ players: 4 }), "p2", bankrupt), "p3", bankrupt),
@@ -61,7 +61,7 @@ describe("the Minute limit", () => {
 
   const timeUp = (state: GameState): Applied => endTurn(state, ENDS_AT);
 
-  it("R77: the game ends after the Turn in progress, and the most Wealthy non-Bankrupt Player wins", () => {
+  it("R75, R77: the game ends after the Turn in progress, and the most Wealthy non-Bankrupt Player wins", () => {
     const applied = timeUp(threePlayers(1_500_000, 1_000_000));
 
     expect(applied.state.phase).toEqual({ kind: "gameOver", winner: "p2", reason: "timeUp" });
