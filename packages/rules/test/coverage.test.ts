@@ -29,8 +29,6 @@ const OUT_OF_SCOPE: Readonly<Record<number, string>> = {
   74: "R74: the Board countdown is client rendering of `endsAt` (MinutePill), covered by the Playwright seam, not by the engine.",
 };
 
-const outOfScope = (id: number): boolean => Object.hasOwn(OUT_OF_SCOPE, id);
-
 const RULE_IDS = Array.from({ length: 80 }, (_, index) => index + 1);
 
 /** The rule ids an `it("…")` title cites, with `R25–R27` expanded to 25, 26, 27. */
@@ -56,7 +54,7 @@ describe("R-id coverage", () => {
   );
 
   it("every R1–R80 either has a test named by its id or a documented exclusion", () => {
-    const missing = RULE_IDS.filter((id) => !cited.has(id) && !outOfScope(id));
+    const missing = RULE_IDS.filter((id) => !cited.has(id) && !Object.hasOwn(OUT_OF_SCOPE, id));
 
     // Name a missing rule's test by its id, or add the id to OUT_OF_SCOPE with a reason.
     expect(missing).toEqual([]);
