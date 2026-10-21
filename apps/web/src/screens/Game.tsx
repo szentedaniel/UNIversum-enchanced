@@ -7,6 +7,8 @@ import { useStore } from "zustand";
 import { playDice } from "#audio.ts";
 import { Board } from "#board/Board.tsx";
 import { FieldCard } from "#board/FieldCard.tsx";
+import { ChanceCardOverlay } from "#components/ChanceCardOverlay.tsx";
+import { DiceOverlay } from "#components/DiceOverlay.tsx";
 import { GameMenu } from "#components/GameMenu.tsx";
 import { EventToast, MinutePill } from "#components/GameHud.tsx";
 import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
@@ -20,6 +22,7 @@ import { cn } from "#lib/utils.ts";
 import { singlePickFor } from "#pick/pick.ts";
 import { saleFor } from "#pick/sale.ts";
 import { playbackStore } from "#playback/playback-store.ts";
+import { usePlaybackStep } from "#playback/use-step.ts";
 import { usePlaybackToast } from "#playback/use-toast.ts";
 import { PickTray } from "#screens/PickTray.tsx";
 import { SaleTray } from "#screens/SaleTray.tsx";
@@ -67,6 +70,8 @@ export function Game() {
   // Both clocks: the local Playback of this push and the server's `actsAfter` (ADR-0004).
   const playbackOver = useStore(playbackStore, (state) => state.over);
   const toast = usePlaybackToast(push);
+  // The dice and a drawn Chance card show for their own step of the Playback (ADR-0004).
+  const step = usePlaybackStep(push);
 
   // The dice sound starts on the server's roll, never on a tap (spec: no optimistic UI).
   useEffect(() => {
@@ -148,6 +153,14 @@ export function Game() {
     ),
   }));
   const rejected = rejection !== null && rejection.seq > push.seq;
+  const stepEvent = step?.event;
+  // The Playback's DOM layer: the Roll's dice, or a drawn Chance card for its 7 s.
+  const boardOverlay =
+    stepEvent?.type === "DiceRolled" ? (
+      <DiceOverlay dice={stepEvent.dice} />
+    ) : stepEvent?.type === "CardDrawn" ? (
+      <ChanceCardOverlay key={`${push.seq}:${step?.startMs ?? 0}`} card={stepEvent.card} />
+    ) : null;
 
   const statusRow = (
     <>
@@ -296,6 +309,7 @@ export function Game() {
             fit area also keeps clear of the camera buttons on its right. */}
         <div className="absolute inset-x-[110px] top-[110px] bottom-[200px] [--board-inset-left:3.75rem] [--board-inset-right:3.75rem]">
           <Board />
+          {boardOverlay && <div className="playback-overlay">{boardOverlay}</div>}
         </div>
         <ul className="contents" aria-label={m.game_players()}>
           {players.map((player) => (
@@ -333,6 +347,7 @@ export function Game() {
           the whole space above the top row instead. */}
       <div className="relative mt-2 min-h-0 flex-1 [--board-inset-bottom:14rem] [--board-inset-top:3.75rem] landscape:[--board-inset-bottom:0px] landscape:[--board-inset-right:3.5rem] landscape:[--board-inset-top:0px]">
         <Board />
+        {boardOverlay && <div className="playback-overlay landscape:bottom-24">{boardOverlay}</div>}
         <div className="absolute inset-x-2 bottom-0 landscape:mx-auto landscape:max-w-md">
           {card}
         </div>

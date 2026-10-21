@@ -153,6 +153,21 @@
     pointer-events: none;
   }
 
+  /* The Playback's DOM overlays (the dice, a Chance card, #52) sit over the
+     Board in the same box the camera fits into: clear of the camera buttons
+     and of the card or tray the screen reserves at the bottom. Only the
+     overlay's own controls take taps; the Board stays reachable around it. */
+  .playback-overlay {
+    position: absolute;
+    inset: var(--board-inset-top, 0px) var(--board-inset-right, 0px) var(--board-inset-bottom, 0px)
+      var(--board-inset-left, 0px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+    pointer-events: none;
+  }
+
   /* The Turn timer (screens/TurnRing.tsx) around the current Player's figure
      (components/TimerRing.tsx): a primary arc that empties over the Turn limit. */
   .turn-ring {
@@ -203,6 +218,7 @@
   transition:
     transform 80ms ease-out,
     box-shadow 80ms ease-out;
+
   &:active:not(:disabled) {
     transform: translate(2px, 2px);
     box-shadow: 1px 1px 0 var(--border);
@@ -236,6 +252,7 @@
     opacity: 0;
     transform: translateY(-8px) scale(0.98);
   }
+
   to {
     opacity: 1;
     transform: none;
@@ -250,6 +267,7 @@
   0% {
     transform: translateY(-20vh) rotate(0);
   }
+
   100% {
     transform: translateY(110vh) rotate(720deg);
   }

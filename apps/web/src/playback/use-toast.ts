@@ -6,10 +6,11 @@
  * that the Board does); a tab that was in the background catches up to the
  * latest step reached instead of queueing the ones it missed.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { ToastCue } from "#playback/toast.ts";
 import { cueAt, toastCues } from "#playback/toast.ts";
 import { timelineOf } from "#playback/timeline.ts";
+import { usePlayhead } from "#playback/use-playhead.ts";
 import type { Push } from "#stores/room-store.ts";
 import { eventText } from "#text.ts";
 
@@ -19,22 +20,8 @@ export function usePlaybackToast(push: Push | null): ToastCue | null {
     () => (push ? toastCues(timelineOf(push.events), (event) => eventText(event, push.view)) : []),
     [push],
   );
-  const [reached, setReached] = useState<{ seq: number; elapsedMs: number } | null>(null);
-
-  useEffect(() => {
-    if (!push || cues.length === 0) return undefined;
-    let timer = 0;
-    const advance = () => {
-      const elapsedMs = Date.now() - push.receivedAt;
-      setReached({ seq: push.seq, elapsedMs });
-      const next = cues.find((cue) => cue.startMs > elapsedMs);
-      if (next) timer = window.setTimeout(advance, next.startMs - elapsedMs + 1);
-    };
-    // From a timer, not the effect body, so the render stays pure.
-    timer = window.setTimeout(advance, 0);
-    return () => window.clearTimeout(timer);
-  }, [push, cues]);
+  const playhead = usePlayhead(push);
 
   // A cue from the previous push never shows over the new one's timeline.
-  return push && reached?.seq === push.seq ? cueAt(cues, reached.elapsedMs) : null;
+  return playhead ? cueAt(cues, playhead.elapsedMs) : null;
 }

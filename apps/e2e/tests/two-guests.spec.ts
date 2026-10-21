@@ -34,6 +34,7 @@ async function startPlaybackProbe(page: Page) {
     // oxlint-disable-next-line unicorn/consistent-function-scoping -- must live in the page
     const tick = () => {
       const { push, me: viewer } = window.universumTest!.room();
+      const diceBox = document.querySelector('[data-testid="dice"]')?.getBoundingClientRect();
       if (push) {
         const { view } = push;
         const decision =
@@ -58,6 +59,14 @@ async function startPlaybackProbe(page: Page) {
           actsAfter: view.actsAfter,
           decision,
           open: window.universumTest!.playback().over,
+          dice:
+            diceBox !== undefined &&
+            diceBox.width > 0 &&
+            diceBox.height > 0 &&
+            diceBox.bottom > 0 &&
+            diceBox.right > 0 &&
+            diceBox.top < innerHeight &&
+            diceBox.left < innerWidth,
           ringDelayMs: Number.isFinite(delayMs) ? Math.round(delayMs) : null,
         });
       }
@@ -189,6 +198,8 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
         expect(held.filter((sample) => sample.decision)).toEqual([]);
         // The ring waits full: its animation starts only when the Playback ends.
         expect(held.some((sample) => (sample.ringDelayMs ?? 0) > 100)).toBe(true);
+        // Every screen saw the Roll's dice before the pawn moved.
+        expect(held.some((sample) => sample.dice)).toBe(true);
       }
       // The decision's control appears once the Playback ends, by auto-wait.
       const phase = view?.phase.kind;
