@@ -58,6 +58,12 @@ async function createAndJoin(
   return { code, context, guest };
 }
 
+/**
+ * How long a screen's Board may take to come up: a browser's first Board
+ * (WebKit on a Linux runner renders WebGL in software) takes over 5 s.
+ */
+const BOARD_UP_MS = 15_000;
+
 /** Creates a 2-Player Room on `page`, fills it with a second Guest and starts. */
 export async function startGame(
   page: Page,
@@ -74,7 +80,9 @@ export async function startGame(
   await Promise.all(
     [page, guest].map((screen) =>
       expect
-        .poll(() => screen.evaluate(() => window.universumTest?.camera().scale ?? 0))
+        .poll(() => screen.evaluate(() => window.universumTest?.camera().scale ?? 0), {
+          timeout: BOARD_UP_MS,
+        })
         .toBeGreaterThan(0),
     ),
   );
