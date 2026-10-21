@@ -19,6 +19,16 @@ import type { FullPhase, FullView, PlaybackHook, Rejection, SocketCall } from ".
 /** A screen the spec acts through: a phone taps, a desktop clicks. */
 export type Interactor = { page: Page; mobile: boolean };
 
+/** The Board's camera, from the test-only hook; null before the Board is up. */
+const camera = (page: Page) => page.evaluate(() => window.universumTest?.camera() ?? null);
+
+/** The Board's camera scale, 0 before the Board is up. */
+export const scale = async (page: Page) => (await camera(page))?.scale ?? 0;
+
+/** A Field's centre on the Board, from the test-only hook. */
+export const fieldCenter = (page: Page, id: number) =>
+  page.evaluate((field) => window.universumTest!.fieldCenter(field), id);
+
 /**
  * Records every WebSocket the page constructs, before the app's scripts run
  * (#61). A browser rejects the SDK's first attempt — `new WebSocket(url,
@@ -113,11 +123,7 @@ export async function startGame(
   // The test hooks appear once each screen's Board is up.
   await Promise.all(
     [page, guest].map((screen) =>
-      expect
-        .poll(() => screen.evaluate(() => window.universumTest?.camera().scale ?? 0), {
-          timeout: BOARD_UP_MS,
-        })
-        .toBeGreaterThan(0),
+      expect.poll(() => scale(screen), { timeout: BOARD_UP_MS }).toBeGreaterThan(0),
     ),
   );
   await Promise.all([expectOneJoinSocket(page, "creator"), expectOneJoinSocket(guest, "guest")]);

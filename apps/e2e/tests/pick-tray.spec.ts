@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { closeAfterDump, startGame, test } from "./helpers.ts";
+import { closeAfterDump, fieldCenter, startGame, test } from "./helpers.ts";
 
 // The single-pick tray (#31): the Doubler and Erasmus. A random game can't be
 // steered into either corner, so the test shows a made-up view through the
@@ -14,8 +14,6 @@ const BERLIN = 15; // the other pickable Field
 const LONDON = 21; // Erasmus: past Start
 const MUSEUM_4 = 28; // Erasmus: ahead
 
-const fieldCenter = (page: Page, id: number) =>
-  page.evaluate((field) => window.universumTest!.fieldCenter(field), id);
 const pick = (page: Page) => page.evaluate(() => window.universumTest?.pick() ?? null);
 
 /** A tap on a phone, a click on desktop. */

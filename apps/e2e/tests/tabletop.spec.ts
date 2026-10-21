@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { scale } from "./helpers.ts";
 
 // The Tabletop visual direction (#40): theme, fonts and the responsive layouts.
 // Runs once per single-browser project: desktop Chromium (corner cards) and
@@ -108,12 +109,12 @@ test("Lobby and game screens: Seat cards, then Player cards or chips around the 
     await expect(page.getByTestId("player-chip")).toHaveCount(2);
     const fit = await page.locator(".board-fit-area").boundingBox();
     expect(fit!.height).toBeGreaterThanOrEqual(200);
-    let scale = -1;
+    let steady = -1;
     await expect
       .poll(async () => {
-        const now = await page.evaluate(() => window.universumTest?.camera().scale ?? 0);
-        const still = now > 0 && now === scale;
-        scale = now;
+        const now = await scale(page);
+        const still = now > 0 && now === steady;
+        steady = now;
         return still;
       })
       .toBe(true);

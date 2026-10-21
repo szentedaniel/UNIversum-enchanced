@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { closeAfterDump, startGame, test } from "./helpers.ts";
+import { closeAfterDump, fieldCenter, scale, startGame, test } from "./helpers.ts";
 
 // The Sale tray (#29), on each project's device. A random game can't be steered
 // into a Sale, so the test shows a made-up selling view through the test-only
@@ -14,10 +14,7 @@ const CHANCE = 14; // not the Player's; next to Berlin
 const BERLIN = 15; // sale 792,000
 const SEATTLE = 17;
 
-const fieldCenter = (page: Page, id: number) =>
-  page.evaluate((field) => window.universumTest!.fieldCenter(field), id);
 const pick = (page: Page) => page.evaluate(() => window.universumTest?.pick() ?? null);
-const camera = (page: Page) => page.evaluate(() => window.universumTest?.camera() ?? null);
 
 /** A tap on a phone, a click on desktop. */
 async function tapField(page: Page, isMobile: boolean, id: number) {
@@ -168,12 +165,12 @@ test("the checklist lists the Sale cheapest first with Auto-sell's picks badged,
 
     // A row toggles the same pick as a Board tap, and focuses its Field
     // without zooming the camera.
-    const scale = (await camera(page))?.scale ?? 0;
+    const before = await scale(page);
     await rows.nth(2).click();
     await expect(rows.nth(2)).toHaveAttribute("aria-pressed", "true");
     await expect.poll(async () => (await pick(page))?.picked).toEqual([BERLIN]);
     await expect(tray.getByRole("button", { name: /^Sell 1 for 792K$/ })).toBeEnabled();
-    expect((await camera(page))?.scale).toBe(scale);
+    expect(await scale(page)).toBe(before);
 
     // A second tap on the row unpicks it; collapsing brings the chips back.
     await rows.nth(2).click();

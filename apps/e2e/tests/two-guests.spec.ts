@@ -1,6 +1,7 @@
 import { chromium, devices, expect, webkit, type Page } from "@playwright/test";
 import {
   closeAfterDump,
+  fieldCenter,
   press as pressControl,
   registerPage,
   resolveDecision as resolveSharedDecision,
@@ -17,9 +18,6 @@ const viewOf = (page: Page) => page.evaluate(() => window.universumTest?.view() 
 /** The full pushed view, with every phase's options (the Board's view is a summary). */
 const pushView = (page: Page): Promise<FullView | null> =>
   page.evaluate(() => window.universumTest?.room().push?.view ?? null);
-
-const fieldCenter = (page: Page, id: number) =>
-  page.evaluate((field) => window.universumTest?.fieldCenter(field), id);
 
 const me = (page: Page) => page.evaluate(() => window.universumTest?.room().me ?? null);
 
@@ -322,8 +320,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     // so a tap that misses is retried with a fresh Field centre.
     await expect(async () => {
       const zurich = await fieldCenter(phone, 5);
-      expect(zurich).toBeDefined();
-      await phone.touchscreen.tap(zurich!.x, zurich!.y);
+      await phone.touchscreen.tap(zurich.x, zurich.y);
       await expect(phone.getByTestId("field-card").getByRole("heading")).toHaveText("Zurich", {
         timeout: 1_000,
       });
