@@ -106,8 +106,15 @@ declare global {
       fieldCenter(id: number): { x: number; y: number };
       camera(): Camera;
       view(): ViewSummary | null;
-      /** Whether the latest push's decision is open (local Playback and `actsAfter`). */
-      playback(): { seq: number | null; over: boolean };
+      /**
+       * Which push the decision gate is for and whether it is open (local
+       * Playback and `actsAfter`), and the Turn the card shows while it waits.
+       */
+      playback(): {
+        seq: number | null;
+        over: boolean;
+        shownTurn: { turn: number; currentPlayer: string } | null;
+      };
       pick(): PickMarks | null;
       /** Shows a made-up view (a full PublicView) as if the server had pushed it, with optional events. */
       showView(view: FullView, events?: { type: string; [key: string]: unknown }[]): void;
@@ -115,6 +122,8 @@ declare global {
       room(): {
         me: string | null;
         status: string;
+        /** The latest Rejection of one of this client's intents. */
+        rejection: { code: string; seq: number } | null;
         push: {
           view: FullView;
           /** The events of the push, in order. */
