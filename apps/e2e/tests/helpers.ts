@@ -428,21 +428,28 @@ let handedOver: (Browser | BrowserContext)[] = [];
 /**
  * The uncaught exceptions the browsers reported for the current test (#61).
  * A page's own `error` listeners never saw the SDK's caught `SyntaxError`, but
- * WebKit still reports it as a page error, so the fixture fails the test on
- * any of them and attaches the dumps.
+ * WebKit still reports it as a page error, so the guard fixture fails the test
+ * on any of them and the failure dump is attached first.
  */
-let pageErrors: { page: string; error: Error }[] = [];
+let pageErrors: { page: Page; error: Error }[] = [];
 const watchedPages = new WeakSet<Page>();
+/** The name each page is registered under now; the last registration wins. */
+const pageNames = new WeakMap<Page, string>();
 
 /**
  * Registers a page for the failure dump under `name` (the attachment's name);
- * registering the same name again replaces the page, e.g. after a reopen.
+ * registering the same name again replaces the page, e.g. after a reopen, and
+ * a page registered under a new name keeps only its latest name — the guard
+ * reports its errors under that name too.
  */
 export function registerPage(name: string, page: Page): void {
+  const previous = pageNames.get(page);
+  if (previous !== undefined && previous !== name) registeredPages.delete(previous);
   registeredPages.set(name, page);
+  pageNames.set(page, name);
   if (watchedPages.has(page)) return;
   watchedPages.add(page);
-  page.on("pageerror", (error) => pageErrors.push({ page: name, error }));
+  page.on("pageerror", (error) => pageErrors.push({ page, error }));
 }
 
 /**
@@ -468,23 +475,43 @@ async function attachDumps(testInfo: TestInfo): Promise<void> {
 }
 
 /**
- * The `test` every game spec imports instead of `@playwright/test`. On failure
- * it attaches each registered page's state before the pages close (`page` is a
- * dependency, so this teardown runs first); a passing test attaches nothing.
- * A test whose pages reported an uncaught exception fails here too (#61), with
- * the same dumps. `timeout` keeps the teardown running when the test timed out.
+ * The `test` every game spec imports instead of `@playwright/test`: the
+ * failure dump (#54) and the `pageerror` guard (#61). `failureDump` depends on
+ * the guard, so the guard is set up first and torn down last: a passing test
+ * whose page threw gets its dumps attached, then fails with the page's name.
  */
-export const test = base.extend<{ failureDump: void }>({
-  failureDump: [
-    async ({ page: _page }, use, testInfo) => {
-      registeredPages = new Map();
-      handedOver = [];
+export const test = base.extend<{ failureDump: void; pageErrorGuard: void }>({
+  pageErrorGuard: [
+    // oxlint-disable-next-line no-empty-pattern -- the guard reads module state, no fixture
+    async ({}, use) => {
       pageErrors = [];
       await use();
-      const errors = pageErrors;
+      if (pageErrors.length === 0) return;
+      throw new Error(
+        pageErrors
+          .map(
+            ({ page, error }) =>
+              `${pageNames.get(page) ?? "a page"} threw: ${error.stack ?? error.message}`,
+          )
+          .join("\n\n"),
+      );
+    },
+    { auto: true, timeout: 30_000 },
+  ],
+  /**
+   * On failure, attaches each registered page's state before the pages close
+   * (`page` is a dependency, so this teardown runs first) and closes what the
+   * spec handed over. A passing test attaches nothing, unless the guard will
+   * fail it. `timeout` keeps the teardown running when the test timed out.
+   */
+  failureDump: [
+    async ({ page: _page, pageErrorGuard: _guard }, use, testInfo) => {
+      registeredPages = new Map();
+      handedOver = [];
+      await use();
       const failed = testInfo.status !== testInfo.expectedStatus;
       try {
-        if (failed || errors.length > 0) await attachDumps(testInfo);
+        if (failed || pageErrors.length > 0) await attachDumps(testInfo);
       } catch (error) {
         // Never let the dump replace the test's own error.
         console.warn(`the failure dump was not attached: ${String(error)}`);
@@ -495,13 +522,6 @@ export const test = base.extend<{ failureDump: void }>({
               console.warn(`a test resource was not closed: ${String(error)}`);
             }),
           ),
-        );
-      }
-      if (!failed && errors.length > 0) {
-        throw new Error(
-          errors
-            .map(({ page, error }) => `${page} threw: ${error.stack ?? error.message}`)
-            .join("\n\n"),
         );
       }
     },
