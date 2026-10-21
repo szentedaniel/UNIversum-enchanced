@@ -1,4 +1,4 @@
-import type { RejectionCode } from "@universum/protocol/messages";
+import { serverNow, type RejectionCode } from "@universum/protocol/messages";
 import { Check, Copy, Lock, LockOpen, Timer, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -8,7 +8,6 @@ import { ScreenHeader } from "#components/ScreenHeader.tsx";
 import { SeatCard } from "#components/SeatCard.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
-import { serverNow } from "#lib/server-clock.ts";
 import { PasswordForm, RejectionText, retryAtOf, useCountdown, useJoin } from "#screens/join.tsx";
 import { roomStore } from "#stores/room-store.ts";
 import { m, playerName, roomNameText } from "#text.ts";

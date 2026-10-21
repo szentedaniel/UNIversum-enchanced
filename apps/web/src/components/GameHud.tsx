@@ -3,9 +3,9 @@
  * event toast. On desktop they share one row above the Board's fit area; on
  * phone they sit between the Player chips and the Board.
  */
+import { serverNow } from "@universum/protocol/messages";
 import { Timer } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { serverNow } from "#lib/server-clock.ts";
 import { cn } from "#lib/utils.ts";
 import { m } from "#text.ts";
 
