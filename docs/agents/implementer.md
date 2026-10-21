@@ -6,8 +6,9 @@ How an implementer agent (omp, Claude Code, or a human) builds one ticket of a s
 
 1. The ticket: `gh issue view <N> --comments`. The **Implementation context** comment lists what the ticket builds on, the files involved, the hazards, and which handoff docs to read.
 2. The spec: `gh issue view <spec> --json body --jq .body`, where `<spec>` is the ticket's _Parent_. Its _Testing Decisions_ section defines what a good test is here. Spec #22 still holds the base rules, protocol and Clocks decisions that later specs extend.
-3. `GLOSSARY.md` (domain terms; use them in code and messages) and `docs/adr/`.
+3. `GLOSSARY.md` (domain terms) and `docs/adr/`.
 4. `docs/agents/handoff/INDEX.md`, then every handoff doc the ticket's context comment names. `ticket-24.md` holds the extension points (where to add a phase, intent, event, Rejection code, protocol schema, Room handler, Board animation, message, test helper). `libs.md` holds verified library facts and gotchas. Grep installed packages under `node_modules/` instead of guessing an API.
+5. `CODING_STANDARDS.md`: the judgement calls a reviewer checks your diff against.
 
 ## 2. Workspace
 
@@ -19,18 +20,12 @@ How an implementer agent (omp, Claude Code, or a human) builds one ticket of a s
 
 ## 3. Build test-first
 
-Red → green → refactor, one behaviour at a time:
-
-- Drive each module through its public interface only: `apply(state, intent, ctx)` / `publicView` for rules, real SDK clients for the Room server (`apps/server/test/helpers.ts`), Playwright for the browser. Never test private helpers.
-- Rules tests are named by rule id (R1–R80, F-numbers from #13), e.g. `it("R44: ...")`. The rules inventory is `docs/research/rules-inventory-v1.md`; the spec's amendments win over it.
-- Randomness by seed, time by `ctx.now` or the injected scheduler — never sleep.
-- Every visible string is a Paraglide message in `apps/web/messages/{en,hu,de}.json`; the server sends only ids, codes and numbers.
+Red → green → refactor, one behaviour at a time. The lines a test must not cross — public interfaces, rule-id names, seeded time, Paraglide messages — are in `CODING_STANDARDS.md`.
 
 ## 4. Commit as you go
 
 - Commit after every green slice — a cut-off session must lose nothing.
-- Conventional commits: `type(scope): description` (feat, fix, test, refactor, docs, chore, build).
-- Never add `Co-Authored-By` or "Generated with" attribution lines.
+- Commit messages follow `CODING_STANDARDS.md` §Docs and commits.
 - Never push, never open PRs, never touch GitHub issues. Never use a bare `git stash` (the stash is shared across worktrees).
 
 ## 5. Checks (all must be green, in CI order)
