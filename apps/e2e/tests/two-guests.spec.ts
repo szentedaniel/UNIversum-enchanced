@@ -1,6 +1,7 @@
 import { chromium, devices, expect, webkit, type Page } from "@playwright/test";
 import {
   closeAfterDump,
+  expectBoardUp,
   fieldCenter,
   press as pressControl,
   registerPage,
@@ -144,6 +145,9 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     await phone.getByRole("button", { name: "Start" }).tap();
     await Promise.all(both.map((page) => expect(page).toHaveURL(`/game/${code}`)));
     await expect(desktop.getByText("Your Turn")).toBeVisible();
+    // The Playback probe reads the Board's hooks from the first frame, and this
+    // spec's phone is a freshly launched WebKit, whose first Board is the slow one.
+    await Promise.all(both.map(expectBoardUp));
     // The dice sound was unlocked by the taps above; a roll now plays it.
     const playsBeforeRoll = await phone.evaluate(() => window.dicePlays ?? 0);
 

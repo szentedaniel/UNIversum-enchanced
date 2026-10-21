@@ -98,6 +98,11 @@ async function createAndJoin(
  */
 const BOARD_UP_MS = 15_000;
 
+/** Waits until `page`'s Board is up: its test hooks appear with the Board. */
+export async function expectBoardUp(page: Page): Promise<void> {
+  await expect.poll(() => scale(page), { timeout: BOARD_UP_MS }).toBeGreaterThan(0);
+}
+
 /**
  * A join opens one WebSocket, with the browser signature (#61): a page that
  * recorded two constructions threw on the first, and the throw costs a
@@ -123,12 +128,7 @@ export async function startGame(
   await expect(page.locator("[data-testid=seat][data-open]")).toHaveCount(0);
   await page.getByRole("button", { name: "Start" }).click();
   await expect(page).toHaveURL(`/game/${code}`);
-  // The test hooks appear once each screen's Board is up.
-  await Promise.all(
-    [page, guest].map((screen) =>
-      expect.poll(() => scale(screen), { timeout: BOARD_UP_MS }).toBeGreaterThan(0),
-    ),
-  );
+  await Promise.all([page, guest].map(expectBoardUp));
   await Promise.all([expectOneJoinSocket(page, "creator"), expectOneJoinSocket(guest, "guest")]);
   return { context, guest };
 }
