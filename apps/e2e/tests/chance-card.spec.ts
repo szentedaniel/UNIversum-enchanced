@@ -1,4 +1,5 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { startGame } from "./helpers.ts";
 
 // The Chance card's Playback step (#52, ADR-0004), on each project's device. A
 // random game can't be steered onto a Chance Field, so the test shows a made-up
@@ -6,25 +7,6 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 // its text in the active language, and closing it hides it on that screen only,
 // never on the other Player's. Nothing is sent to the server.
 test.use({ locale: "en-US" });
-
-/** Creates a 2-Player Room on `page`, fills it with a second Guest and starts. */
-async function startGame(page: Page, browser: Browser) {
-  await page.goto("/create");
-  await page.getByLabel("2", { exact: true }).check();
-  await page.getByRole("button", { name: "Create Room" }).click();
-  await expect(page).toHaveURL(/\/room\/[1-9]\d{5}$/);
-  const code = new URL(page.url()).pathname.split("/").at(-1) ?? "";
-  const other = await browser.newContext({ locale: "en-US" });
-  const guest = await other.newPage();
-  await guest.goto(`/room/${code}`);
-  await expect(page.locator("[data-testid=seat][data-open]")).toHaveCount(0);
-  await page.getByRole("button", { name: "Start" }).click();
-  await expect(page).toHaveURL(`/game/${code}`);
-  await expect
-    .poll(() => page.evaluate(() => window.universumTest?.camera().scale ?? 0))
-    .toBeGreaterThan(0);
-  return { context: other, guest };
-}
 
 /** Shows a push that drew the given Chance card, as if the server had just sent it. */
 function showChance(page: Page, card: string) {
