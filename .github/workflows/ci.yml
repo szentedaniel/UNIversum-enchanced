@@ -1,3 +1,4 @@
+# Runs on every pull request and on pushes to main.
 name: CI
 
 on:
