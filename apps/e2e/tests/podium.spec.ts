@@ -1,4 +1,5 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import { closeAfterDump, startGame, test } from "./helpers.ts";
 
 // The result screen (#32), on each project's device. A random game can't be
 // played to its end quickly, so the test shows a made-up game-over view through
@@ -6,25 +7,6 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 // 2-1-3 order, the winner's own figure colour, the greyed Bankrupt Player and
 // the way back to the Lobby list. Nothing is sent to the server.
 test.use({ locale: "en-US" });
-
-/** Creates a 2-Player Room on `page`, fills it with a second Guest and starts. */
-async function startGame(page: Page, browser: Browser) {
-  await page.goto("/create");
-  await page.getByLabel("2", { exact: true }).check();
-  await page.getByRole("button", { name: "Create Room" }).click();
-  await expect(page).toHaveURL(/\/room\/[1-9]\d{5}$/);
-  const code = new URL(page.url()).pathname.split("/").at(-1) ?? "";
-  const other = await browser.newContext({ locale: "en-US" });
-  const guest = await other.newPage();
-  await guest.goto(`/room/${code}`);
-  await expect(page.locator("[data-testid=seat][data-open]")).toHaveCount(0);
-  await page.getByRole("button", { name: "Start" }).click();
-  await expect(page).toHaveURL(`/game/${code}`);
-  await expect
-    .poll(() => page.evaluate(() => window.universumTest?.camera().scale ?? 0))
-    .toBeGreaterThan(0);
-  return other;
-}
 
 /**
  * Four Players: the yellow Seat (3) wins a time-up game, then the others by
@@ -103,7 +85,7 @@ test("the result screen: a 2-1-3 podium in Player colours, the Bankrupt Player g
   page,
   browser,
 }) => {
-  const other = await startGame(page, browser);
+  const { context } = await startGame(page, browser);
   try {
     await showGameOver(page);
 
@@ -147,6 +129,6 @@ test("the result screen: a 2-1-3 podium in Player colours, the Bankrupt Player g
     await podium.getByRole("link", { name: "Back to the Lobby list" }).click();
     await expect(page).toHaveURL(/\/rooms$/);
   } finally {
-    await other.close();
+    closeAfterDump(context);
   }
 });

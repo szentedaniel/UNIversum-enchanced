@@ -354,12 +354,14 @@ export function closeAfterDump(resource: Browser | BrowserContext): void {
 /** One JSON per registered page, each named after it. */
 async function attachDumps(testInfo: TestInfo): Promise<void> {
   const dumps = await Promise.all([...registeredPages].map(([name, page]) => dumpPage(name, page)));
-  for (const dump of dumps) {
-    await testInfo.attach(`${dump.name}.json`, {
-      body: JSON.stringify(dump, null, 2),
-      contentType: "application/json",
-    });
-  }
+  await Promise.all(
+    dumps.map((dump) =>
+      testInfo.attach(`${dump.name}.json`, {
+        body: JSON.stringify(dump, null, 2),
+        contentType: "application/json",
+      }),
+    ),
+  );
 }
 
 /**
@@ -380,11 +382,13 @@ export const test = base.extend<{ failureDump: void }>({
         // Never let the dump replace the test's own error.
         console.warn(`the failure dump was not attached: ${String(error)}`);
       } finally {
-        for (const resource of handedOver.toReversed()) {
-          await resource.close().catch((error: unknown) => {
-            console.warn(`a test resource was not closed: ${String(error)}`);
-          });
-        }
+        await Promise.all(
+          handedOver.toReversed().map((resource) =>
+            resource.close().catch((error: unknown) => {
+              console.warn(`a test resource was not closed: ${String(error)}`);
+            }),
+          ),
+        );
       }
     },
     { auto: true, timeout: 30_000 },

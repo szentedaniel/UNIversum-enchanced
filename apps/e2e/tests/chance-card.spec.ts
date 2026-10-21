@@ -1,5 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-import { startGame } from "./helpers.ts";
+import { expect, type Page } from "@playwright/test";
+import { closeAfterDump, startGame, test } from "./helpers.ts";
 
 // The Chance card's Playback step (#52, ADR-0004), on each project's device. A
 // random game can't be steered onto a Chance Field, so the test shows a made-up
@@ -45,6 +45,6 @@ test("a drawn Chance card shows on both screens, and closing it hides it only on
     await expect(mine).toHaveCount(0);
     await expect(theirs).toBeVisible();
   } finally {
-    await context.close();
+    closeAfterDump(context);
   }
 });
