@@ -17,6 +17,7 @@ import {
   backoffDelay,
   CLOSE_CODE,
   matchmakeRefusal,
+  serverNow,
   type ClientIntent,
   type CreateOptions,
   type GameMessage,
@@ -350,7 +351,7 @@ class RoomClient {
     this.#actionKey = key;
     if (offeredIntents(view, me).length === 0) return;
     stats.decisions += 1;
-    const playbackLeftMs = Math.max(0, view.actsAfter - (Date.now() + serverOffset));
+    const playbackLeftMs = Math.max(0, view.actsAfter - serverNow(serverOffset));
     this.#cancelAction = later(playbackLeftMs + inRange(config.profile.actionDelayMs), () => {
       if (this.away || this.lastView?.version !== view.version) return;
       const intent = chooseIntent(view, me, Math.random);
