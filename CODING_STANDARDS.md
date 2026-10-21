@@ -1,6 +1,6 @@
 # Coding standards
 
-The judgement calls a reviewer checks a diff against. A rule a check already enforces is left out: `oxfmt`, `oxlint` and `tsc`; the import fence (`.oxlintrc.json` `no-restricted-imports`, `apps/web/test/import-fence.test.ts`); the engine purity guard (`packages/rules/test/purity.test.ts`); the Playback and server-clock fence (`apps/web/test/playback-fence.test.ts`); R-id coverage (`packages/rules/test/coverage.test.ts`); the state-shape snapshot guard (`packages/rules/test/migrate.test.ts`); message-key parity in hu/en/de (`apps/web/test/messages.test.ts`); flaky e2e (`failOnFlakyTests`).
+The judgement calls a reviewer checks a diff against. A rule a check already enforces is left out: `oxfmt`, `oxlint` and `tsc`; the import fence (`.oxlintrc.json` `no-restricted-imports`, `apps/web/test/import-fence.test.ts`); the engine purity guard (`packages/rules/test/purity.test.ts`); the Playback and server-clock fence (`apps/web/test/playback-fence.test.ts`); R-id coverage (`packages/rules/test/coverage.test.ts`); the state-shape snapshot guard (`packages/rules/test/migrate.test.ts`); message-key parity in hu/en/de (`apps/web/test/messages.test.ts`); flaky e2e (`failOnFlakyTests`); commit messages (`pnpm run check:commits`, `packages/repo-checks/src/commits.ts`); the implementer protocol's check list against CI (`packages/repo-checks/test/ci-protocol.test.ts`).
 
 ## Every area
 
@@ -31,8 +31,7 @@ The judgement calls a reviewer checks a diff against. A rule a check already enf
 - **One home for shared steps.** A step another spec already has goes into [`apps/e2e/tests/helpers.ts`](apps/e2e/tests/helpers.ts), never a copy in the spec.
 - **Drive the real screen.** Playwright acts through the UI and the test-only hooks (`fieldCenter`, the current view), and asserts on the DOM and the view — no screenshots, no React internals. ([spec #22, Testing Decisions](https://github.com/szentedaniel/UNIversum-enchanced/issues/22))
 
-## Docs and commits
+## Docs
 
-- **Conventional commits.** `type(scope): description` (feat, fix, test, refactor, docs, chore, build, ci — the last for CI workflow changes), with no `Co-Authored-By` or "Generated with" lines.
 - **Glossary terms in, avoided synonyms out.** Code, test names and messages use the term [`GLOSSARY.md`](GLOSSARY.md) defines, never the synonym it lists under _Avoid_.
 - **A changed decision lands in its ADR.** A diff that contradicts [`docs/adr/`](docs/adr/) amends that ADR in the same commit; a new domain concept goes into the glossary.

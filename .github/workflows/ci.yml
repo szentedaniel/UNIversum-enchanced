@@ -20,7 +20,10 @@ jobs:
     env:
       CI: true
     steps:
+      # Full history, so the commit check can read the whole range.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       # pnpm comes from `packageManager` in package.json; its store is cached.
       - uses: pnpm/action-setup@v6
@@ -33,6 +36,12 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      # A PR checks its own commits; a push to main, the commits it adds.
+      - name: Commit messages
+        run: pnpm run check:commits
+        env:
+          COMMIT_RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
 
       - name: Format
         run: pnpm exec oxfmt --check

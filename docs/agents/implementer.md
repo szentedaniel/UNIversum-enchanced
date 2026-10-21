@@ -25,19 +25,24 @@ Red → green → refactor, one behaviour at a time. The lines a test must not c
 ## 4. Commit as you go
 
 - Commit after every green slice — a cut-off session must lose nothing.
-- Commit messages follow `CODING_STANDARDS.md` §Docs and commits.
+- Commit messages are `type(scope): description`, with no AI attribution; `pnpm run check:commits` (§5) checks them, and `packages/repo-checks/src/commits.ts` lists the types.
 - Never push, never open PRs, never touch GitHub issues. Never use a bare `git stash` (the stash is shared across worktrees).
 
 ## 5. Checks (all must be green, in CI order)
 
 ```bash
+pnpm install --frozen-lockfile
+pnpm run check:commits
 pnpm exec oxfmt --check
 pnpm run lint
 pnpm -r run typecheck
 pnpm exec vitest run
 TEST_HOOKS=1 pnpm --filter @universum/web run build
 CI=true E2E_SERVER_PORT=<sp> E2E_WEB_PORT=<wp> pnpm --filter @universum/e2e run test
+docker compose build
 ```
+
+This list mirrors the `run:` steps of `.github/workflows/ci.yml` (`docker compose build` is CI's parallel `docker` job); `packages/repo-checks/test/ci-protocol.test.ts` fails when the two drift.
 
 Always pass the e2e ports you were given: other implementers run Playwright at the same time, and the default ports would reuse their servers.
 
