@@ -5,5 +5,5 @@
  * the ring, the Minute pill, the Board and the Lobby can't disagree.
  */
 export function serverNow(clockOffset: number, clientNow = Date.now()): number {
- return clientNow + clockOffset;
+  return clientNow + clockOffset;
 }
