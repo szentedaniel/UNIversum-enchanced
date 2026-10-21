@@ -34,7 +34,7 @@ function RoomCodeSticker({ code }: { code: string }) {
       onClick={() => {
         navigator.clipboard.writeText(code).then(
           () => setCopied(true),
-          () => { },
+          () => {},
         );
       }}
     >
