@@ -1,4 +1,4 @@
-import type { GameEvent, PhaseOf, PlayerIntent, PublicView } from "@universum/rules";
+import type { PhaseOf, PlayerIntent, PublicView } from "@universum/rules";
 import { FIELDS } from "@universum/rules/board";
 import type { RejectionCode } from "@universum/protocol/messages";
 import { useEffect, useState } from "react";
@@ -22,6 +22,7 @@ import { cn } from "#lib/utils.ts";
 import { singlePickFor } from "#pick/pick.ts";
 import { saleFor } from "#pick/sale.ts";
 import { playbackStore } from "#playback/playback-store.ts";
+import { toneOf } from "#playback/presentation.ts";
 import { usePlaybackStep } from "#playback/use-step.ts";
 import { usePlaybackToast } from "#playback/use-toast.ts";
 import { PickTray } from "#screens/PickTray.tsx";
@@ -30,24 +31,6 @@ import { TurnRing } from "#screens/TurnRing.tsx";
 import { roomStore } from "#stores/room-store.ts";
 import { salePicksFor, uiStore } from "#stores/ui-store.ts";
 import { fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
-
-/**
- * Steps with no choice that a Player must notice (spec: acknowledgements are
- * events, not clicks). Every step is shown now, so this only styles the step:
- * a notice gets the accent sticker, routine events the plain one.
- */
-const NOTICES: Partial<Record<GameEvent["type"], true>> = {
-  QuarantineEntered: true,
-  QuarantineRoundUsed: true,
-  QuarantineReleased: true,
-  PcrTestBought: true,
-  PcrTestUsed: true,
-  RentPaid: true,
-  CardDrawn: true,
-  TaxPaid: true,
-  WentBankrupt: true,
-  GameEnded: true,
-};
 
 const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
   view.players.find((p) => p.id === playerId)?.quarantineRounds ?? 0;
@@ -172,7 +155,7 @@ export function Game() {
       <MinutePill endsAt={view.endsAt} clockOffset={push.clockOffset} />
       <EventToast
         key={rejected ? `r${rejection.seq}` : push.seq}
-        tone={rejected ? "bad" : toast && NOTICES[toast.event.type] ? "good" : "neutral"}
+        tone={rejected ? "bad" : toast && toneOf(toast.event) === "notice" ? "good" : "neutral"}
       >
         {rejected ? rejectionText(rejection.code) : toast?.text}
       </EventToast>
