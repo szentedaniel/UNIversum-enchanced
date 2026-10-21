@@ -46,6 +46,10 @@ CI=true E2E_SERVER_PORT=<sp> E2E_WEB_PORT=<wp> pnpm --filter @universum/e2e run 
 
 Always pass the e2e ports you were given: other implementers run Playwright at the same time, and the default ports would reuse their servers.
 
+- **One spec, repeated:** `CI=true E2E_SERVER_PORT=<sp> E2E_WEB_PORT=<wp> pnpm --filter @universum/e2e run test tests/<name>.spec.ts --repeat-each 6 --retries 0`. Pass the arguments straight after `test`: with `-- ` in front, Playwright drops them and runs the whole suite.
+- **Flaky is failing:** in CI mode a test that passes only on its retry fails the run (`failOnFlakyTests`). Before reporting DONE, repeat every spec you touched as above.
+- **Waits after a Playback:** a control, tray or podium that opens after a Playback can take longer than Playwright's 5 s default (a Chance card alone is 7 s). Give such a wait a timeout computed with `playbackOf` from `@universum/rules` over the worst-case events, never a bare number.
+
 ## 6. Finish
 
 1. Merge the current integration tip: `git merge v2-modernization`, resolve conflicts keeping both sides' behaviour, regenerate Paraglide, re-run every check.
