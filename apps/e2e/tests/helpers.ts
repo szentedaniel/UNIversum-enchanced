@@ -13,27 +13,60 @@ import {
   type Page,
   type TestInfo,
 } from "@playwright/test";
-import { PLAYBACK_MS } from "@universum/rules";
-import type { FullPhase, FullView } from "./test-hooks.ts";
+import { PLAYBACK_MS, playbackOf, type GameEvent } from "@universum/rules";
+import type { FullPhase, FullView, PlaybackHook, Rejection } from "./test-hooks.ts";
 
 /** A screen the spec acts through: a phone taps, a desktop clicks. */
 export type Interactor = { page: Page; mobile: boolean };
+
+/**
+ * The longest Playback a Roll's push can carry: the dice, a 12-Field walk, the
+ * Chance card drawn on landing, its effect and the Round bonus. Waits after a
+ * Playback use its length, not Playwright's 5 s default.
+ */
+export const ROLL_PLAYBACK_MS = playbackOf([
+  { type: "DiceRolled", player: "p1", dice: [6, 6] },
+  { type: "Moved", player: "p1", from: 0, to: 12, steps: 12 },
+  { type: "CardDrawn", player: "p1", card: "failedExams" },
+  { type: "ChanceMoneyReceived", player: "p1", amount: 0 },
+  { type: "RoundBonusPaid", player: "p1", amount: 0 },
+] satisfies readonly GameEvent[]);
+
+/**
+ * Creates a 2-Player Room on `creator` and fills the second Seat with a Guest
+ * in a new context. The names are the failure dump's attachment names.
+ */
+async function createAndJoin(
+  creator: Page,
+  browser: Browser,
+  names: { creator: string; guest: string },
+  baseURL?: string,
+): Promise<{ code: string; context: BrowserContext; guest: Page }> {
+  registerPage(names.creator, creator);
+  await creator.goto("/create");
+  await creator.getByLabel("2", { exact: true }).check();
+  await creator.getByRole("button", { name: "Create Room" }).click();
+  await expect(creator).toHaveURL(/\/room\/[1-9]\d{5}$/);
+  const code = new URL(creator.url()).pathname.split("/").at(-1) ?? "";
+  const context = await browser.newContext({
+    ...(baseURL === undefined ? {} : { baseURL }),
+    locale: "en-US",
+  });
+  const guest = await context.newPage();
+  registerPage(names.guest, guest);
+  await guest.goto(`/room/${code}`);
+  return { code, context, guest };
+}
 
 /** Creates a 2-Player Room on `page`, fills it with a second Guest and starts. */
 export async function startGame(
   page: Page,
   browser: Browser,
 ): Promise<{ context: BrowserContext; guest: Page }> {
-  registerPage("creator", page);
-  await page.goto("/create");
-  await page.getByLabel("2", { exact: true }).check();
-  await page.getByRole("button", { name: "Create Room" }).click();
-  await expect(page).toHaveURL(/\/room\/[1-9]\d{5}$/);
-  const code = new URL(page.url()).pathname.split("/").at(-1) ?? "";
-  const context = await browser.newContext({ locale: "en-US" });
-  const guest = await context.newPage();
-  registerPage("guest", guest);
-  await guest.goto(`/room/${code}`);
+  const { code, context, guest } = await createAndJoin(page, browser, {
+    creator: "creator",
+    guest: "guest",
+  });
   await expect(page.locator("[data-testid=seat][data-open]")).toHaveCount(0);
   await page.getByRole("button", { name: "Start" }).click();
   await expect(page).toHaveURL(`/game/${code}`);
@@ -46,6 +79,25 @@ export async function startGame(
     ),
   );
   return { context, guest };
+}
+
+/** The creator opens a 2-Player Lobby and a second Guest joins it by code; returns the joiner's page. */
+export async function twoInLobby(
+  creator: Page,
+  browser: Browser,
+  baseURL: string | undefined,
+): Promise<{ code: string; joiner: Page }> {
+  const { code, guest } = await createAndJoin(
+    creator,
+    browser,
+    { creator: "creator", guest: "joiner" },
+    baseURL,
+  );
+  for (const page of [creator, guest]) {
+    // oxlint-disable-next-line no-await-in-loop -- one page after the other
+    await expect(page.getByText("Players: 2/2")).toBeVisible();
+  }
+  return { code, joiner: guest };
 }
 
 /** A control the view offers: waits for it to be enabled, then taps or clicks it. */
@@ -216,7 +268,7 @@ export type PageDump = {
   /** The connection status (`connected`, `reconnecting`, …). */
   status: string | null;
   /** The latest Rejection of one of this client's intents. */
-  rejection: { code: string; seq: number } | null;
+  rejection: Rejection | null;
   /** The latest push: its `seq`, the server clock offset and the event types, in order. */
   push: { seq: number; clockOffset: number; events: string[] } | null;
   /** The pushed view's Turn, current Player, phase, gate and version. */
@@ -228,11 +280,7 @@ export type PageDump = {
     version: number;
   } | null;
   /** `universumTest.playback()`: the push the gate is for, whether it is open, and the shown Turn. */
-  playback: {
-    seq: number | null;
-    over: boolean;
-    shownTurn: { turn: number; currentPlayer: string } | null;
-  } | null;
+  playback: PlaybackHook | null;
   /** The labels of the buttons on screen when the dump ran. */
   buttons: string[];
   /** Why the page could not be read (closed, navigating, no hooks); the rest is then null. */
@@ -343,12 +391,12 @@ export function registerPage(name: string, page: Page): void {
 }
 
 /**
- * Hands a browser or context to the test, which closes it after the failure
+ * Hands browsers or contexts to the test, which closes them after the failure
  * dump. A spec that closes its own pages first leaves the dump with an error
  * record instead of that screen's state.
  */
-export function closeAfterDump(resource: Browser | BrowserContext): void {
-  handedOver.push(resource);
+export function closeAfterDump(...resources: (Browser | BrowserContext)[]): void {
+  handedOver.push(...resources);
 }
 
 /** One JSON per registered page, each named after it. */

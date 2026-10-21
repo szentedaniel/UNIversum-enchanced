@@ -1,29 +1,16 @@
 import { chromium, devices, expect, webkit, type Page } from "@playwright/test";
-import { playbackOf, type GameEvent } from "@universum/rules";
 import {
   closeAfterDump,
   press as pressControl,
   registerPage,
   resolveDecision as resolveSharedDecision,
+  ROLL_PLAYBACK_MS,
   test,
   type Interactor,
   type OfferChoice,
   type OfferPhase,
 } from "./helpers.ts";
 import type { FullView } from "./test-hooks.ts";
-
-/**
- * The longest Playback a Roll's push can carry: the dice, a 12-Field walk, the
- * Chance card drawn on landing, its effect and the Round bonus. Waits for the
- * Playback use its length, not Playwright's 5 s default.
- */
-const ROLL_PLAYBACK_MS = playbackOf([
-  { type: "DiceRolled", player: "p1", dice: [6, 6] },
-  { type: "Moved", player: "p1", from: 0, to: 12, steps: 12 },
-  { type: "CardDrawn", player: "p1", card: "failedExams" },
-  { type: "ChanceMoneyReceived", player: "p1", amount: 0 },
-  { type: "RoundBonusPaid", player: "p1", amount: 0 },
-] satisfies readonly GameEvent[]);
 
 const viewOf = (page: Page) => page.evaluate(() => window.universumTest?.view() ?? null);
 
@@ -360,7 +347,6 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     await expect(phone.getByTestId("sound-toggle")).toHaveAttribute("aria-pressed", "true");
     await expect(phone.getByTestId("sound-toggle")).toContainText("Ton aus");
   } finally {
-    closeAfterDump(desktopBrowser);
-    closeAfterDump(phoneBrowser);
+    closeAfterDump(desktopBrowser, phoneBrowser);
   }
 });

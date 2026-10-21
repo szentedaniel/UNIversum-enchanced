@@ -102,36 +102,45 @@ declare global {
     playbackProbe?: PlaybackSample[];
     /** Stops the probe started by `two-guests.spec.ts`. */
     stopPlaybackProbe?: () => void;
-    universumTest?: {
-      fieldCenter(id: number): { x: number; y: number };
-      camera(): Camera;
-      view(): ViewSummary | null;
-      /**
-       * Which push the decision gate is for and whether it is open (local
-       * Playback and `actsAfter`), and the Turn the card shows while it waits.
-       */
-      playback(): {
-        seq: number | null;
-        over: boolean;
-        shownTurn: { turn: number; currentPlayer: string } | null;
-      };
-      pick(): PickMarks | null;
-      /** Shows a made-up view (a full PublicView) as if the server had pushed it, with optional events. */
-      showView(view: FullView, events?: { type: string; [key: string]: unknown }[]): void;
-      /** The room store (only the fields the specs read). */
-      room(): {
-        me: string | null;
-        status: string;
-        /** The latest Rejection of one of this client's intents. */
-        rejection: { code: string; seq: number } | null;
-        push: {
-          view: FullView;
-          /** The events of the push, in order. */
-          events: { type: string }[];
-          seq: number;
-          clockOffset: number;
-        } | null;
-      };
-    };
+    universumTest?: TestHooks;
   }
 }
+
+/** The latest Rejection of one of this client's intents. */
+export type Rejection = { code: string; seq: number };
+
+/** `playback()`: the push the decision gate is for, whether it is open, and the shown Turn. */
+export type PlaybackHook = {
+  seq: number | null;
+  over: boolean;
+  shownTurn: { turn: number; currentPlayer: string } | null;
+};
+
+/** The test-only hooks the web app installs on `window.universumTest` (apps/web/src/test-hooks.ts). */
+export type TestHooks = {
+  fieldCenter(id: number): { x: number; y: number };
+  camera(): Camera;
+  view(): ViewSummary | null;
+  /**
+   * Which push the decision gate is for and whether it is open (local
+   * Playback and `actsAfter`), and the Turn the card shows while it waits.
+   */
+  playback(): PlaybackHook;
+  pick(): PickMarks | null;
+  /** Shows a made-up view (a full PublicView) as if the server had pushed it, with optional events. */
+  showView(view: FullView, events?: { type: string; [key: string]: unknown }[]): void;
+  /** The room store (only the fields the specs read). */
+  room(): {
+    me: string | null;
+    status: string;
+    /** The latest Rejection of one of this client's intents. */
+    rejection: Rejection | null;
+    push: {
+      view: FullView;
+      /** The events of the push, in order. */
+      events: { type: string }[];
+      seq: number;
+      clockOffset: number;
+    } | null;
+  };
+};

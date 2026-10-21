@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { closeAfterDump, dumpPage, startGame, test } from "./helpers.ts";
+import { closeAfterDump, dumpPage, ROLL_PLAYBACK_MS, startGame, test } from "./helpers.ts";
 
 // The failure dump (#54): when a test fails, the shared fixture attaches one
 // JSON per registered page — the state that screen held — so a multi-browser
@@ -14,9 +14,10 @@ test("a dump carries the screen's room, view, playback and buttons", async ({ pa
   try {
     const room = await page.evaluate(() => window.universumTest!.room());
     // Roll is the creator's first decision; its control appears once the
-    // Push's Playback ends (ADR-0004), so polling also proves a later dump.
+    // Push's Playback ends (ADR-0004), so the poll gets the longest Roll
+    // Playback rather than Playwright's 5 s default.
     await expect
-      .poll(async () => (await dumpPage("creator", page)).buttons, { timeout: 15_000 })
+      .poll(async () => (await dumpPage("creator", page)).buttons, { timeout: ROLL_PLAYBACK_MS })
       .toContain("Roll");
 
     const dump = await dumpPage("creator", page);
