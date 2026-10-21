@@ -1,13 +1,11 @@
 import { expect, type Page } from "@playwright/test";
-import { closeAfterDump, startGame, test } from "./helpers.ts";
+import { closeAfterDump, fieldCenter, scale, startGame, test } from "./helpers.ts";
 
 // The Board's camera and the tap-to-inspect Field card (#38), on each
 // project's device (desktop Chromium and iPhone WebKit). The Board is driven
 // through the test-only hooks in apps/web/src/test-hooks.ts.
 test.use({ locale: "en-US" });
 
-const camera = (page: Page) => page.evaluate(() => window.universumTest?.camera() ?? null);
-const scale = async (page: Page) => (await camera(page))?.scale ?? 0;
 /** The scale once the camera has stopped moving (buttons animate it). */
 async function settledScale(page: Page): Promise<number> {
   let last = -1;
@@ -21,9 +19,6 @@ async function settledScale(page: Page): Promise<number> {
     .toBe(true);
   return last;
 }
-const fieldCenter = (page: Page, id: number) =>
-  page.evaluate((field) => window.universumTest!.fieldCenter(field), id);
-
 /** A tap on a phone, a click on desktop. */
 async function tapAt(page: Page, isMobile: boolean, point: { x: number; y: number }) {
   if (isMobile) await page.touchscreen.tap(point.x, point.y);

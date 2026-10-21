@@ -1,4 +1,12 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import {
+  closeAfterDump,
+  expectOneJoinSocket,
+  probeSockets,
+  registerPage,
+  scale,
+  test,
+} from "./helpers.ts";
 
 // The Tabletop visual direction (#40): theme, fonts and the responsive layouts.
 // Runs once per single-browser project: desktop Chromium (corner cards) and
@@ -50,6 +58,8 @@ test("Lobby and game screens: Seat cards, then Player cards or chips around the 
   browser,
   isMobile,
 }) => {
+  registerPage("creator", page);
+  await probeSockets(page);
   await page.goto("/create");
   await page.getByLabel("2", { exact: true }).check();
   await page.getByRole("button", { name: "Create Room" }).click();
@@ -68,73 +78,73 @@ test("Lobby and game screens: Seat cards, then Player cards or chips around the 
 
   // A second Guest joins in its own context, and either starts.
   const other = await browser.newContext();
-  try {
-    const guest = await other.newPage();
-    await guest.goto(`/room/${code}`);
-    await expect(page.locator("[data-testid=seat][data-open]")).toHaveCount(0);
-    await page.getByRole("button", { name: "Start" }).click();
-    await expect(page).toHaveURL(`/game/${code}`);
+  closeAfterDump(other);
+  const guest = await other.newPage();
+  registerPage("guest", guest);
+  await probeSockets(guest);
+  await guest.goto(`/room/${code}`);
+  await expect(page.locator("[data-testid=seat][data-open]")).toHaveCount(0);
+  await page.getByRole("button", { name: "Start" }).click();
+  await expect(page).toHaveURL(`/game/${code}`);
+  await Promise.all([expectOneJoinSocket(page, "creator"), expectOneJoinSocket(guest, "guest")]);
 
-    const board = await page.getByTestId("board").boundingBox();
-    const pill = await page.getByTestId("minute-pill").boundingBox();
-    expect(pill!.y + pill!.height).toBeLessThanOrEqual(board!.y); // never over the Board
+  const board = await page.getByTestId("board").boundingBox();
+  const pill = await page.getByTestId("minute-pill").boundingBox();
+  expect(pill!.y + pill!.height).toBeLessThanOrEqual(board!.y); // never over the Board
 
-    if (isMobile) {
-      await expect(page.getByTestId("player-chip")).toHaveCount(2);
-      await expect(page.getByTestId("player-card")).toHaveCount(0);
-      const chip = await page.getByTestId("player-chip").first().boundingBox();
-      expect(chip!.y + chip!.height).toBeLessThanOrEqual(pill!.y);
-    } else {
-      const cards = page.getByTestId("player-card");
-      await expect(cards).toHaveCount(2);
-      await expect(page.getByTestId("player-chip")).toHaveCount(0);
-      // One card per corner: the first Seat top left, the second top right.
-      const viewport = page.viewportSize()!;
-      const [first, second] = await Promise.all([
-        cards.nth(0).boundingBox(),
-        cards.nth(1).boundingBox(),
-      ]);
-      expect(first!.x).toBeLessThan(viewport.width / 4);
-      expect(second!.x + second!.width).toBeGreaterThan((viewport.width * 3) / 4);
-      // The current Player's card is larger.
-      expect(first!.width).toBeGreaterThan(second!.width);
-    }
-
-    // A landscape phone (852×393) is too short for the desktop layout: the Board
-    // keeps a tall fit area and the Field card becomes a strip at the bottom
-    // (story 103), never a side column.
-    await page.setViewportSize({ width: 852, height: 393 });
-    // The layout switches on the media-query change, then the camera re-fits.
+  if (isMobile) {
     await expect(page.getByTestId("player-chip")).toHaveCount(2);
-    const fit = await page.locator(".board-fit-area").boundingBox();
-    expect(fit!.height).toBeGreaterThanOrEqual(200);
-    let scale = -1;
-    await expect
-      .poll(async () => {
-        const now = await page.evaluate(() => window.universumTest?.camera().scale ?? 0);
-        const still = now > 0 && now === scale;
-        scale = now;
-        return still;
-      })
-      .toBe(true);
-
-    // Tap a Field the compact card does not cover: pick one whose centre is on
-    // the canvas (the turn card sits over the Board's bottom in this layout).
-    const target = await page.evaluate(() => {
-      const hooks = window.universumTest!;
-      for (let id = 0; id < 32; id++) {
-        const at = hooks.fieldCenter(id);
-        if (document.elementFromPoint(at.x, at.y)?.tagName === "CANVAS") return at;
-      }
-      return null;
-    });
-    expect(target).not.toBeNull();
-    if (isMobile) await page.touchscreen.tap(target!.x, target!.y);
-    else await page.mouse.click(target!.x, target!.y);
-    const card = await page.getByTestId("field-card").boundingBox();
-    expect(card!.y + card!.height).toBeGreaterThan(393 - 20);
-    expect(card!.width).toBeGreaterThan(300);
-  } finally {
-    await other.close();
+    await expect(page.getByTestId("player-card")).toHaveCount(0);
+    const chip = await page.getByTestId("player-chip").first().boundingBox();
+    expect(chip!.y + chip!.height).toBeLessThanOrEqual(pill!.y);
+  } else {
+    const cards = page.getByTestId("player-card");
+    await expect(cards).toHaveCount(2);
+    await expect(page.getByTestId("player-chip")).toHaveCount(0);
+    // One card per corner: the first Seat top left, the second top right.
+    const viewport = page.viewportSize()!;
+    const [first, second] = await Promise.all([
+      cards.nth(0).boundingBox(),
+      cards.nth(1).boundingBox(),
+    ]);
+    expect(first!.x).toBeLessThan(viewport.width / 4);
+    expect(second!.x + second!.width).toBeGreaterThan((viewport.width * 3) / 4);
+    // The current Player's card is larger.
+    expect(first!.width).toBeGreaterThan(second!.width);
   }
+
+  // A landscape phone (852×393) is too short for the desktop layout: the Board
+  // keeps a tall fit area and the Field card becomes a strip at the bottom
+  // (story 103), never a side column.
+  await page.setViewportSize({ width: 852, height: 393 });
+  // The layout switches on the media-query change, then the camera re-fits.
+  await expect(page.getByTestId("player-chip")).toHaveCount(2);
+  const fit = await page.locator(".board-fit-area").boundingBox();
+  expect(fit!.height).toBeGreaterThanOrEqual(200);
+  let steady = -1;
+  await expect
+    .poll(async () => {
+      const now = await scale(page);
+      const still = now > 0 && now === steady;
+      steady = now;
+      return still;
+    })
+    .toBe(true);
+
+  // Tap a Field the compact card does not cover: pick one whose centre is on
+  // the canvas (the turn card sits over the Board's bottom in this layout).
+  const target = await page.evaluate(() => {
+    const hooks = window.universumTest!;
+    for (let id = 0; id < 32; id++) {
+      const at = hooks.fieldCenter(id);
+      if (document.elementFromPoint(at.x, at.y)?.tagName === "CANVAS") return at;
+    }
+    return null;
+  });
+  expect(target).not.toBeNull();
+  if (isMobile) await page.touchscreen.tap(target!.x, target!.y);
+  else await page.mouse.click(target!.x, target!.y);
+  const card = await page.getByTestId("field-card").boundingBox();
+  expect(card!.y + card!.height).toBeGreaterThan(393 - 20);
+  expect(card!.width).toBeGreaterThan(300);
 });

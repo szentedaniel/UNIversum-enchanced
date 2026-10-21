@@ -94,8 +94,22 @@ export type FullView = {
   standings: { player: string; wealth: number }[] | null;
 };
 
-/** One WebSocket construction a page made, as the `typeof` its protocols argument (#61). */
-export type SocketCall = { protocols: string };
+/**
+ * One WebSocket construction a page made (#61): the `typeof` of the
+ * constructor's second argument — `"undefined"` for the browser form the app
+ * must use, `"object"` for the Node form whose first attempt throws.
+ */
+export type SocketCall = {
+  protocols:
+    | "undefined"
+    | "object"
+    | "boolean"
+    | "number"
+    | "bigint"
+    | "string"
+    | "symbol"
+    | "function";
+};
 
 declare global {
   interface Window {
