@@ -33,9 +33,11 @@ export const fieldCenter = (page: Page, id: number) =>
  * Records every WebSocket the page constructs, before the app's scripts run
  * (#61). A browser rejects the SDK's first attempt — `new WebSocket(url,
  * { headers, protocols })`, the Node form — and only the fallback serves the
- * game, so a page that recorded two constructions threw once.
+ * game, so a page that recorded two constructions threw once. `createAndJoin`
+ * installs it for the pages it drives; a hand-rolled flow calls it before the
+ * page reaches a Room.
  */
-async function probeSockets(page: Page): Promise<void> {
+export async function probeSockets(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const calls: SocketCall[] = [];
     window.universumWebSockets = calls;
@@ -99,9 +101,10 @@ const BOARD_UP_MS = 15_000;
 /**
  * A join opens one WebSocket, with the browser signature (#61): a page that
  * recorded two constructions threw on the first, and the throw costs a
- * `pageerror` in WebKit even though the SDK's fallback connects.
+ * `pageerror` in WebKit even though the SDK's fallback connects. A page that
+ * opened another socket first (the Lobby list) cannot use this count.
  */
-async function expectOneJoinSocket(page: Page, name: string): Promise<void> {
+export async function expectOneJoinSocket(page: Page, name: string): Promise<void> {
   const calls = await page.evaluate<SocketCall[]>(() => window.universumWebSockets ?? []);
   expect(calls, `${name} opened ${String(calls.length)} WebSockets to join`).toEqual([
     { protocols: "undefined" },

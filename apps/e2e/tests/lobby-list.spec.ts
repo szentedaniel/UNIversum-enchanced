@@ -1,4 +1,11 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import {
+  closeAfterDump,
+  expectOneJoinSocket,
+  probeSockets,
+  registerPage,
+  test,
+} from "./helpers.ts";
 
 test.use({ locale: "en-US" });
 
@@ -25,58 +32,62 @@ test("a password Lobby is listed with a lock, asks for its password, fills up an
     browser.newContext({ baseURL, locale: "en-US" }),
     browser.newContext({ baseURL, locale: "en-US" }),
   ]);
-  try {
-    const [joiner, watcher] = await Promise.all(contexts.map((c) => c.newPage()));
-    await watcher!.goto("/rooms");
-    await expect(watcher!.getByRole("heading", { name: "Open Lobbies" })).toBeVisible();
+  closeAfterDump(...contexts);
+  const [joiner, watcher] = await Promise.all(contexts.map((c) => c.newPage()));
+  registerPage("creator", creator);
+  registerPage("joiner", joiner!);
+  registerPage("watcher", watcher!);
+  // The joiner opens the Lobby list's socket first, so only the creator's
+  // direct create is a one-socket check; both are probed for the record.
+  await Promise.all([probeSockets(creator), probeSockets(joiner!)]);
+  await watcher!.goto("/rooms");
+  await expect(watcher!.getByRole("heading", { name: "Open Lobbies" })).toBeVisible();
 
-    // The creator sets every setting on the form; the Lobby shows them.
-    await creator.goto("/create");
-    await creator.getByLabel("Room name").fill("  Friday   game ");
-    await creator.getByLabel("2", { exact: true }).check();
-    await creator.getByLabel("15 minutes").check();
-    await creator.getByLabel("Password (optional)").fill("open sesame");
-    await creator.getByRole("button", { name: "Create Room" }).click();
-    await expect(creator).toHaveURL(/\/room\/[1-9]\d{5}$/);
-    const code = codeOf(creator);
-    await expect(creator.getByRole("heading", { name: "Friday game" })).toBeVisible();
-    await expect(creator.getByText("Password-protected")).toBeVisible();
-    await expect(creator.getByText("Players: 1/2")).toBeVisible();
+  // The creator sets every setting on the form; the Lobby shows them.
+  await creator.goto("/create");
+  await creator.getByLabel("Room name").fill("  Friday   game ");
+  await creator.getByLabel("2", { exact: true }).check();
+  await creator.getByLabel("15 minutes").check();
+  await creator.getByLabel("Password (optional)").fill("open sesame");
+  await creator.getByRole("button", { name: "Create Room" }).click();
+  await expect(creator).toHaveURL(/\/room\/[1-9]\d{5}$/);
+  const code = codeOf(creator);
+  await expect(creator.getByRole("heading", { name: "Friday game" })).toBeVisible();
+  await expect(creator.getByText("Password-protected")).toBeVisible();
+  await expect(creator.getByText("Players: 1/2")).toBeVisible();
 
-    // The list shows it live, with a lock.
-    const tile = watcher!.getByTestId(`lobby-${code}`);
-    await expect(tile.getByRole("heading", { name: "Friday game" })).toBeVisible();
-    await expect(tile).toContainText(`Room code: ${code}`);
-    await expect(tile).toContainText("Players: 1/2");
-    await expect(tile).toContainText("15 minutes");
-    await expect(tile).toContainText("Password");
+  // The list shows it live, with a lock.
+  const tile = watcher!.getByTestId(`lobby-${code}`);
+  await expect(tile.getByRole("heading", { name: "Friday game" })).toBeVisible();
+  await expect(tile).toContainText(`Room code: ${code}`);
+  await expect(tile).toContainText("Players: 1/2");
+  await expect(tile).toContainText("15 minutes");
+  await expect(tile).toContainText("Password");
 
-    // Joining asks for the password first; a wrong one is refused inline.
-    await joiner!.goto("/rooms");
-    const joinerTile = joiner!.getByTestId(`lobby-${code}`);
-    await joinerTile.getByRole("button", { name: "Join" }).click();
-    await joinerTile.getByLabel("Password").fill("open sesame?");
-    await joinerTile.getByRole("button", { name: "Join" }).click();
-    await expect(joinerTile.getByRole("alert")).toHaveText("Wrong password.");
-    await joinerTile.getByLabel("Password").fill("open sesame");
-    await joinerTile.getByRole("button", { name: "Join" }).click();
-    await expect(joiner!).toHaveURL(`/room/${code}`);
-    await expect(joiner!.getByText("Players: 2/2")).toBeVisible();
+  // Joining asks for the password first; a wrong one is refused inline.
+  await joiner!.goto("/rooms");
+  const joinerTile = joiner!.getByTestId(`lobby-${code}`);
+  await joinerTile.getByRole("button", { name: "Join" }).click();
+  await joinerTile.getByLabel("Password").fill("open sesame?");
+  await joinerTile.getByRole("button", { name: "Join" }).click();
+  await expect(joinerTile.getByRole("alert")).toHaveText("Wrong password.");
+  await joinerTile.getByLabel("Password").fill("open sesame");
+  await joinerTile.getByRole("button", { name: "Join" }).click();
+  await expect(joiner!).toHaveURL(`/room/${code}`);
+  await expect(joiner!.getByText("Players: 2/2")).toBeVisible();
 
-    // A full Lobby shows Full, with no Join button; joining by code says so.
-    await expect(tile).toContainText("Full");
-    await expect(tile.getByRole("button", { name: "Join" })).toHaveCount(0);
-    await watcher!.getByRole("textbox", { name: "Room code" }).fill(code);
-    await watcher!.locator("form.join").getByRole("button", { name: "Join" }).click();
-    await expect(watcher!.getByRole("alert")).toHaveText("This Lobby is full.");
+  // A full Lobby shows Full, with no Join button; joining by code says so.
+  await expect(tile).toContainText("Full");
+  await expect(tile.getByRole("button", { name: "Join" })).toHaveCount(0);
+  await watcher!.getByRole("textbox", { name: "Room code" }).fill(code);
+  await watcher!.locator("form.join").getByRole("button", { name: "Join" }).click();
+  await expect(watcher!.getByRole("alert")).toHaveText("This Lobby is full.");
 
-    // Started: the Room leaves the list.
-    await joiner!.getByRole("button", { name: "Start" }).click();
-    await expect(creator).toHaveURL(`/game/${code}`);
-    await expect(tile).toHaveCount(0);
-  } finally {
-    await Promise.all(contexts.map((c) => c.close()));
-  }
+  // Started: the Room leaves the list.
+  await joiner!.getByRole("button", { name: "Start" }).click();
+  await expect(creator).toHaveURL(`/game/${code}`);
+  await expect(tile).toHaveCount(0);
+  await expectOneJoinSocket(creator, "creator");
 });
 
 test("joining by Room code asks for the password, and an unknown code is refused inline", async ({
