@@ -47,6 +47,8 @@ export default defineConfig({
   testDir: "tests",
   forbidOnly: CI,
   retries: CI ? 1 : 0,
+  // The retry is for the report only: a test that passes only on retry fails the run.
+  failOnFlakyTests: CI,
   workers: CI ? 1 : undefined,
   reporter: CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
