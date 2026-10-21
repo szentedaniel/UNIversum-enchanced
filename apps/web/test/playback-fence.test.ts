@@ -31,21 +31,21 @@ import { describe, expect, it } from "vitest";
 const WEB_SRC = fileURLToPath(new URL("../src", import.meta.url));
 
 /** The keywords after which a `/` opens a regex literal, not a division. */
-const REGEX_KEYWORDS: Record<string, true> = {
-  await: true,
-  case: true,
-  delete: true,
-  do: true,
-  else: true,
-  in: true,
-  instanceof: true,
-  new: true,
-  of: true,
-  return: true,
-  typeof: true,
-  void: true,
-  yield: true,
-};
+const REGEX_KEYWORDS = new Set([
+  "await",
+  "case",
+  "delete",
+  "do",
+  "else",
+  "in",
+  "instanceof",
+  "new",
+  "of",
+  "return",
+  "typeof",
+  "void",
+  "yield",
+]);
 
 /** The characters after which a `/` opens a regex literal, not a division. */
 const REGEX_PUNCTUATION = "([{=,:;!&|?+-*%^~<>";
@@ -56,7 +56,7 @@ const REGEX_PUNCTUATION = "([{=,:;!&|?+-*%^~<>";
  * `"https://…"`, `` `…//…` `` or `/\/\//` must not swallow the rest of the
  * line, or a real violation after it would go unseen.
  */
-export function stripComments(source: string): string {
+function stripComments(source: string): string {
   const out: string[] = [];
   let last = ""; // the last non-space character kept: tells `/` (division) from a regex
   let i = 0;
@@ -130,7 +130,7 @@ function opensRegex(out: readonly string[], last: string): boolean {
     .join("")
     .trimEnd()
     .match(/(\w+)$/)?.[1];
-  return word !== undefined && REGEX_KEYWORDS[word] === true;
+  return word !== undefined && REGEX_KEYWORDS.has(word);
 }
 
 /** Every `.ts`/`.tsx` file under `dir`, minus the generated Paraglide output. */
@@ -159,33 +159,42 @@ type Violation = {
 };
 
 type Fence = {
+  /** Global: matching runs over the whole comment-stripped file, so `\s*` spans lines. */
   pattern: RegExp;
   rule: string;
   instead: string;
   /** Which files the fence covers; all of `src` by default. */
   only?: (file: string) => boolean;
-  /** The named exceptions: a line the fence lets through. */
+  /** The named exceptions: a start line the fence lets through. */
   except?: (file: string, line: string) => boolean;
 };
 
-/** Every line of `apps/web/src` that trips `fence`. */
+/**
+ * Every violation of `fence` in `source`, a file under `src`. The match runs
+ * over the whole file, so an expression oxfmt wrapped is still caught; the
+ * reported line is where the match starts.
+ */
+function scan(fence: Fence, source: string, file: string): Violation[] {
+  const text = stripComments(source);
+  const lines = text.split("\n");
+  const found: Violation[] = [];
+  for (const match of text.matchAll(fence.pattern)) {
+    const line = text.slice(0, match.index).split("\n").length;
+    if (found.some((violation) => violation.line === line)) continue;
+    const code = lines[line - 1]?.trim() ?? "";
+    if (fence.except?.(file, code)) continue;
+    found.push({ file, line, rule: fence.rule, instead: fence.instead, text: code });
+  }
+  return found;
+}
+
+/** Every violation of `fence` in `apps/web/src`. */
 function violations(fence: Fence): Violation[] {
   const found: Violation[] = [];
   for (const path of sourceFiles(WEB_SRC)) {
     const file = relative(WEB_SRC, path);
     if (fence.only && !fence.only(file)) continue;
-    const lines = stripComments(readFileSync(path, "utf8")).split("\n");
-    for (const [index, text] of lines.entries()) {
-      if (!fence.pattern.test(text)) continue;
-      if (fence.except?.(file, text)) continue;
-      found.push({
-        file,
-        line: index + 1,
-        rule: fence.rule,
-        instead: fence.instead,
-        text: text.trim(),
-      });
-    }
+    found.push(...scan(fence, readFileSync(path, "utf8"), file));
   }
   return found;
 }
@@ -197,12 +206,12 @@ function report(found: readonly Violation[]): string[] {
 
 const DURATIONS = "@universum/rules/playback (ADR-0004)";
 
-/** Arithmetic on a `PLAYBACK_MS` entry, either side of the operator. */
+/** Arithmetic on a `PLAYBACK_MS` entry, on either side of any operator. */
 const PLAYBACK_MS_ARITHMETIC = {
-  pattern: /PLAYBACK_MS(?:\.[A-Za-z_$][\w$]*|\[[^\]]*\])?\s*[+\-*/]|[*/]\s*PLAYBACK_MS/,
+  pattern: /PLAYBACK_MS(?:\.[A-Za-z_$][\w$]*|\[[^\]]*\])?\s*[+\-*/]|[+\-*/]\s*PLAYBACK_MS/g,
   rule: `Playback durations come only from ${DURATIONS}`,
   instead: "playbackOfEvent(event) or playbackOf(events), never arithmetic on a PLAYBACK_MS entry",
-} as const;
+} satisfies Fence;
 
 /**
  * Scaling a `Moved` step count into a length: `event.steps * 160`,
@@ -212,29 +221,31 @@ const PLAYBACK_MS_ARITHMETIC = {
  * not a violation.
  */
 const STEP_SCALING = {
-  pattern: /\.steps\s*\*|(?:\b\d[\d_]*(?:\.\d+)?|\b\w*_MS)\s*\*\s*[\w$?.]+\.steps/,
+  pattern:
+    /\.steps\s*\*|\bsteps\b\s*\*\s*(?:\b\d[\d_]*(?:\.\d+)?|\b\w*_MS)|(?:\b\d[\d_]*(?:\.\d+)?|\b\w*_MS)\s*\*\s*(?:[\w$?.]*\.)?steps\b/g,
   rule: `Playback durations come only from ${DURATIONS}`,
   instead: "playbackOfEvent(event) or playbackOf(events), never arithmetic on a Moved step count",
-} as const;
+} satisfies Fence;
 
 /** A numeric `*_MS` constant declared in `apps/web/src/playback/`. */
 const PLAYBACK_CONSTANT = {
-  pattern: /^\s*(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*_MS\b\s*(?::[^=]+)?=\s*[\d.]/,
+  pattern: /^\s*(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*_MS\b\s*(?::[^=]+)?=\s*[\d.]/gm,
   rule: `the playback modules hold no duration of their own (ADR-0004)`,
   instead: "an entry in PLAYBACK_MS (packages/rules/src/playback.ts), read through playbackOfEvent",
   only: (file: string) => file.startsWith("playback/"),
-} as const;
+} satisfies Fence;
 
 /** `clockOffset` added to or subtracted from a clock reading, on either side. */
 const CLOCK_ARITHMETIC = {
-  pattern: /[+\-*/]\s*[\w$?.]*\bclockOffset\b|\bclockOffset\b\s*[+\-*/]/,
+  pattern: /[+\-*/]\s*[\w$?.]*\bclockOffset\b|\bclockOffset\b\s*[+\-*/]/g,
   rule: "the server clock is estimated only in lib/server-clock.ts (ADR-0004)",
   instead: "serverNow(clockOffset) from #lib/server-clock.ts, never Date.now() + clockOffset",
   only: (file: string) => file !== "lib/server-clock.ts",
-  // The inverse conversion in decisionOpensAt: a server timestamp to a client one.
+  // The one inverse conversion, in decisionOpensAt: a server timestamp to a client one.
   except: (file: string, line: string) =>
-    file === "playback/playback-store.ts" && /\bactsAfter\s*-\s*[\w$?.]*clockOffset\b/.test(line),
-} as const;
+    file === "playback/playback-store.ts" &&
+    /^const actsAfter = push\.view\.actsAfter\s*-/.test(line),
+} satisfies Fence;
 
 describe("stripComments", () => {
   it("blanks line and block comments and keeps the line numbers", () => {
@@ -271,7 +282,7 @@ describe("stripComments", () => {
 });
 
 describe("ADR-0004 playback fence", () => {
-  it("scans every web source except the generated Paraglide messages", () => {
+  it("ADR-0004: scans every web source except the generated Paraglide messages", () => {
     const files = sourceFiles(WEB_SRC).map((path) => relative(WEB_SRC, path));
     expect(files).toContain("playback/timeline.ts");
     expect(files).toContain("lib/server-clock.ts");
@@ -279,19 +290,69 @@ describe("ADR-0004 playback fence", () => {
     expect(files.length).toBeGreaterThan(50);
   });
 
-  it("takes Playback durations only from @universum/rules/playback", () => {
+  it("ADR-0004: takes Playback durations only from @universum/rules/playback", () => {
     expect(report(violations(PLAYBACK_MS_ARITHMETIC))).toEqual([]);
   });
 
-  it("never scales a Moved step count into a duration", () => {
+  it("ADR-0004: catches PLAYBACK_MS arithmetic on either side of all four operators", () => {
+    const source = [
+      "const a = PLAYBACK_MS.Moved + 1;",
+      "const b = 1 + PLAYBACK_MS.Moved;",
+      "const c = PLAYBACK_MS.Moved - 1;",
+      "const d = 1 - PLAYBACK_MS.Moved;",
+      "const e = PLAYBACK_MS.Moved * 1;",
+      "const f = 1 * PLAYBACK_MS.Moved;",
+      "const g = PLAYBACK_MS.Moved / 1;",
+      "const h = 1 / PLAYBACK_MS.Moved;",
+    ].join("\n");
+    expect(scan(PLAYBACK_MS_ARITHMETIC, source, "scratch.ts").map(({ line }) => line)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8,
+    ]);
+  });
+
+  it("ADR-0004: catches an expression oxfmt wrapped, reporting the line it starts on", () => {
+    const source = ["const offset = Date.now() +", "  push.clockOffset;"].join("\n");
+    expect(report(scan(CLOCK_ARITHMETIC, source, "screens/Game.tsx"))).toEqual([
+      "screens/Game.tsx:1: the server clock is estimated only in lib/server-clock.ts (ADR-0004) — use serverNow(clockOffset) from #lib/server-clock.ts, never Date.now() + clockOffset. Line: const offset = Date.now() +",
+    ]);
+  });
+
+  it("ADR-0004: never scales a Moved step count into a duration", () => {
     expect(report(violations(STEP_SCALING))).toEqual([]);
   });
 
-  it("declares no Playback duration constant in playback/", () => {
+  it("ADR-0004: catches a bare step count scaled by a number or a *_MS constant", () => {
+    const source = [
+      "const a = event.steps * 160;",
+      "const b = steps * 160;",
+      "const c = 160 * steps;",
+      "const d = steps * STEP_MS;",
+      "const e = STEP_MS * steps;",
+    ].join("\n");
+    expect(scan(STEP_SCALING, source, "scratch.ts").map(({ line }) => line)).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
+    // The Board's interpolation, not a duration (board/board.ts:137).
+    expect(scan(STEP_SCALING, "const walked = progress * event.steps;", "board/board.ts")).toEqual(
+      [],
+    );
+  });
+
+  it("ADR-0004: declares no Playback duration constant in playback/", () => {
     expect(report(violations(PLAYBACK_CONSTANT))).toEqual([]);
   });
 
-  it("estimates the server clock only in lib/server-clock.ts", () => {
+  it("ADR-0004: estimates the server clock only in lib/server-clock.ts", () => {
     expect(report(violations(CLOCK_ARITHMETIC))).toEqual([]);
+  });
+
+  it("ADR-0004: exempts only decisionOpensAt's inverse conversion in playback-store.ts", () => {
+    const source = [
+      "const actsAfter = push.view.actsAfter - push.clockOffset;",
+      "const skewed = Date.now() + push.clockOffset;",
+    ].join("\n");
+    expect(report(scan(CLOCK_ARITHMETIC, source, "playback/playback-store.ts"))).toEqual([
+      "playback/playback-store.ts:2: the server clock is estimated only in lib/server-clock.ts (ADR-0004) — use serverNow(clockOffset) from #lib/server-clock.ts, never Date.now() + clockOffset. Line: const skewed = Date.now() + push.clockOffset;",
+    ]);
   });
 });
