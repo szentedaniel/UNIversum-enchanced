@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import { describe, expect, it, vi } from "vitest";
 import { captureLogs } from "./helpers.ts";
 import { colyseusLogger, createLogger } from "#observability/logger.ts";
 
@@ -59,5 +60,23 @@ describe("the logger", () => {
         err: expect.objectContaining({ message: "boom" }),
       }),
     ]);
+  });
+
+  it("writes stdout lines before the call returns, so lines logged just before exit keep their order", () => {
+    const writeSync = vi.spyOn(fs, "writeSync").mockImplementation((_fd, data) => data.length);
+    try {
+      const log = createLogger({ level: "info" });
+
+      log.info("Server shutting down");
+      log.info("Server stopped");
+
+      const written = writeSync.mock.calls.map(([fd, data]) => [fd, JSON.parse(data).msg]);
+      expect(written).toEqual([
+        [1, "Server shutting down"],
+        [1, "Server stopped"],
+      ]);
+    } finally {
+      writeSync.mockRestore();
+    }
   });
 });

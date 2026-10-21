@@ -44,8 +44,10 @@ export function createLogger(options: { level: LogLevel; stream?: DestinationStr
     base: undefined, // no pid/hostname: one process per container
     redact: { paths: REDACT_PATHS, censor: "[redacted]" },
   };
-  // Without a stream: synchronous writes to stdout, so no line is lost at exit.
-  return options.stream ? pino(settings, options.stream) : pino(settings);
+  // Without a stream: synchronous writes to stdout, so no line is lost or
+  // reordered at exit. pino's own default is async, and its exit flush can
+  // write queued lines ahead of one still in flight.
+  return pino(settings, options.stream ?? pino.destination({ dest: 1, sync: true }));
 }
 
 /** A logger that writes nothing (the default for in-process test servers). */
