@@ -25,7 +25,7 @@ Red → green → refactor, one behaviour at a time. The lines a test must not c
 ## 4. Commit as you go
 
 - Commit after every green slice — a cut-off session must lose nothing.
-- Commit messages are `type(scope): description`, with no AI attribution; `pnpm run check:commits` (§5) checks them, and `packages/repo-checks/src/commits.ts` lists the types.
+- Commit messages are `type(scope): description`, with no AI attribution; the `commit-msg` hook (`.githooks/`, installed by `pnpm install`) refuses a bad one, `pnpm run check:commits` (§5) checks the branch, and `packages/repo-checks/src/commits.ts` lists the types.
 - Never push, never open PRs, never touch GitHub issues. Never use a bare `git stash` (the stash is shared across worktrees).
 
 ## 5. Checks (all must be green, in CI order)

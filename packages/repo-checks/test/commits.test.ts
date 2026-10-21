@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -84,5 +84,51 @@ describe("pnpm run check:commits", () => {
 
     expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: "" });
     expect(result.stdout).toMatch(/^1 commits/);
+  });
+});
+
+const hook = fileURLToPath(new URL("../src/check-message.ts", import.meta.url));
+
+/** Runs the `commit-msg` check on `text`, from inside `dir`. */
+function checkMessage(dir: string, text: string) {
+  const file = join(dir, "COMMIT_EDITMSG");
+  writeFileSync(file, text);
+  return spawnSync(process.execPath, [hook, file], { cwd: dir, encoding: "utf8" });
+}
+
+describe("the commit-msg hook", () => {
+  it("refuses a bad message before the commit exists, saying why", () => {
+    const { dir } = repoWith(["chore: root"]);
+
+    const result = checkMessage(dir, "wip\n");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("subject is not");
+  });
+
+  it("skips what git strips: comment lines and everything below the scissors", () => {
+    const { dir } = repoWith(["chore: root"]);
+    const text = [
+      "# Please enter the commit message for your changes.",
+      "fix(web): a good subject",
+      "",
+      "# ------------------------ >8 ------------------------",
+      "Co-Authored-By: only in the diff below the scissors",
+    ].join("\n");
+
+    const result = checkMessage(dir, text);
+
+    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: "" });
+  });
+
+  it("lets git's merge subject through while a merge is in progress", () => {
+    const { dir } = repoWith(["chore: root"]);
+    const subject = "Merge branch 'v2-modernization' into ticket/1-x\n";
+    expect(checkMessage(dir, subject).status).toBe(1);
+
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" });
+    writeFileSync(join(dir, ".git", "MERGE_HEAD"), head);
+
+    expect(checkMessage(dir, subject).status).toBe(0);
   });
 });

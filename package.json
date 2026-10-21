@@ -12,7 +12,8 @@
     "build": "pnpm --filter @universum/web run build",
     "e2e": "pnpm --filter @universum/e2e run test",
     "loadtest": "pnpm --filter @universum/loadtest run start",
-    "check:commits": "node packages/repo-checks/src/check-commits.ts"
+    "check:commits": "node packages/repo-checks/src/check-commits.ts",
+    "prepare": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath .githooks || true"
   },
   "devDependencies": {
     "@types/node": "catalog:",
