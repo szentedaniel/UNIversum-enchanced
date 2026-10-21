@@ -36,7 +36,7 @@ Red → green → refactor, one behaviour at a time:
 ## 5. Checks (all must be green, in CI order)
 
 ```bash
-pnpm exec oxfmt --check apps packages
+pnpm exec oxfmt --check
 pnpm run lint
 pnpm -r run typecheck
 pnpm exec vitest run

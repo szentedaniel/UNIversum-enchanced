@@ -26,7 +26,7 @@ final Playback before the podium.
 - `kind`: `"dice"` (`DiceRolled`), `"card"` (`CardDrawn`), `"none"` (`Moved`,
   and every zero-length event: `TurnPassed`, `OfferDeclined`), else `"toast"`.
   **#52** renders the dice and the Chance card from `"dice"`/`"card"` steps.
-  The DOM needs step-scoped timing (dice for *its* step, not the whole walk):
+  The DOM needs step-scoped timing (dice for _its_ step, not the whole walk):
   derive the current step from `timelineOf(push.events)` plus
   `Date.now() - push.receivedAt`, or extend the step clock; `usePlaybackToast`
   below is text-scoped (it keeps the last text up through text-less steps).
@@ -89,7 +89,7 @@ final Playback before the podium.
 - The gate store subscribes to `roomStore` at import; both `Game.tsx` and
   `Board.tsx` import it, so it is live before the first push. Importing it in a
   Node unit test is fine (timers are the globals, not `window`).
-- `showView` pushes `events: []` and `receivedAt: now`. A made-up view *with*
+- `showView` pushes `events: []` and `receivedAt: now`. A made-up view _with_
   events would now delay its podium/controls by the local Playback; specs that
   need an immediate surface must keep `events` empty and `actsAfter` past.
 - The full 4-Guest Playwright game now takes ~2.1 min (each Turn waits out its
