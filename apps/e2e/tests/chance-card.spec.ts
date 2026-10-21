@@ -16,7 +16,7 @@ function showChance(page: Page, card: string) {
     const view = structuredClone(push!.view);
     // The server's clock lets the decision open at once; only this push's local
     // Playback (the card) holds it shut.
-    view.actsAfter = Date.now() + push!.clockOffset;
+    view.actsAfter = hooks.serverNow();
     hooks.showView(view, [
       { type: "CardDrawn", player: me, card: drawn },
       { type: "ChanceMoneyReceived", player: me, amount: 300_000 },

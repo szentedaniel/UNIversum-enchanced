@@ -6,6 +6,7 @@
  * constant (see vite.config.ts): false in production builds, so this code is
  * compiled out.
  */
+import { serverNow } from "@universum/protocol/messages";
 import type { GameEvent, PublicView } from "@universum/rules";
 import type { FieldId } from "@universum/rules/board";
 import type { Board } from "#board/board.ts";
@@ -21,6 +22,12 @@ export type TestHooks = {
   room(): RoomState;
   /** Whether the latest push's decision is open (local Playback and `actsAfter`, ADR-0004). */
   playback(): PlaybackState;
+  /**
+   * The server's clock estimated from this client's, for the latest push's
+   * `clockOffset` (or the Lobby's before the first push). Specs inside
+   * `page.evaluate` can't import `serverNow`; this is the one copy.
+   */
+  serverNow(): number;
   pick(): Board["pick"];
   /** Shows a made-up view, optionally with the events of the push that led to it. */
   showView(view: PublicView, events?: readonly GameEvent[]): void;
@@ -41,6 +48,10 @@ export function exposeBoard(board: Board | null): void {
         view: () => board.view,
         room: () => roomStore.getState(),
         playback: () => playbackStore.getState(),
+        serverNow: () => {
+          const { push, lobbyClockOffset } = roomStore.getState();
+          return serverNow(push?.clockOffset ?? lobbyClockOffset);
+        },
         pick: () => board.pick,
         showView(view, events = []) {
           const { push } = roomStore.getState();
