@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
-import { startGame } from "./helpers.ts";
+import { expect } from "@playwright/test";
+import { closeAfterDump, startGame, test } from "./helpers.ts";
 
 // Story 4 of ADR-0004, in the browser: the turn card's heading and Turn number
 // change when the decision gate opens, not when the push arrives. A random
@@ -61,6 +61,6 @@ test("the turn card's heading and Turn number wait for the Playback's end, then 
     await expect(turnNumber).toHaveText("Turn 2");
     await expect(guest.getByTestId("turn")).toHaveText("Turn 2");
   } finally {
-    await context.close();
+    closeAfterDump(context);
   }
 });

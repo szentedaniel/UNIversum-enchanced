@@ -1,4 +1,5 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import { closeAfterDump, startGame, test } from "./helpers.ts";
 
 // The Sale tray (#29), on each project's device. A random game can't be steered
 // into a Sale, so the test shows a made-up selling view through the test-only
@@ -23,25 +24,6 @@ async function tapField(page: Page, isMobile: boolean, id: number) {
   const point = await fieldCenter(page, id);
   if (isMobile) await page.touchscreen.tap(point.x, point.y);
   else await page.mouse.click(point.x, point.y);
-}
-
-/** Creates a 2-Player Room on `page`, fills it with a second Guest and starts. */
-async function startGame(page: Page, browser: Browser) {
-  await page.goto("/create");
-  await page.getByLabel("2", { exact: true }).check();
-  await page.getByRole("button", { name: "Create Room" }).click();
-  await expect(page).toHaveURL(/\/room\/[1-9]\d{5}$/);
-  const code = new URL(page.url()).pathname.split("/").at(-1) ?? "";
-  const other = await browser.newContext({ locale: "en-US" });
-  const guest = await other.newPage();
-  await guest.goto(`/room/${code}`);
-  await expect(page.locator("[data-testid=seat][data-open]")).toHaveCount(0);
-  await page.getByRole("button", { name: "Start" }).click();
-  await expect(page).toHaveURL(`/game/${code}`);
-  await expect
-    .poll(() => page.evaluate(() => window.universumTest?.camera().scale ?? 0))
-    .toBeGreaterThan(0);
-  return other;
 }
 
 /** This Guest owes Seattle's Rent: a Sale for a 300,000 Shortfall, with `msLeft` on the timer. */
@@ -86,7 +68,7 @@ test("in a Sale, taps snap to the Player's Fields and toggle them; Sell unlocks 
   browser,
   isMobile,
 }) => {
-  const other = await startGame(page, browser);
+  const { context } = await startGame(page, browser);
   try {
     await showSale(page, 15_000);
     const tray = page.getByTestId("sale-tray");
@@ -130,7 +112,7 @@ test("in a Sale, taps snap to the Player's Fields and toggle them; Sell unlocks 
     await expect.poll(async () => (await pick(page))?.picked).toEqual([VESZPREM]);
     await expect(sell).toBeDisabled();
   } finally {
-    await other.close();
+    closeAfterDump(context);
   }
 });
 
@@ -139,7 +121,7 @@ test("in the last 5 s of an uncovered Sale, Auto-sell's Fields are ringed; a Ban
   browser,
   isMobile,
 }) => {
-  const other = await startGame(page, browser);
+  const { context } = await startGame(page, browser);
   try {
     await showSale(page, 4_000, true);
     await expect.poll(async () => (await pick(page))?.ringed).toEqual([VESZPREM, BUDAPEST]);
@@ -153,7 +135,7 @@ test("in the last 5 s of an uncovered Sale, Auto-sell's Fields are ringed; a Ban
     await tapField(page, isMobile, BERLIN);
     await expect.poll(async () => (await pick(page))?.ringed).toEqual([]);
   } finally {
-    await other.close();
+    closeAfterDump(context);
   }
 });
 
@@ -161,7 +143,7 @@ test("the checklist lists the Sale cheapest first with Auto-sell's picks badged,
   page,
   browser,
 }) => {
-  const other = await startGame(page, browser);
+  const { context } = await startGame(page, browser);
   try {
     await showSale(page, 15_000);
     const tray = page.getByTestId("sale-tray");
@@ -200,7 +182,7 @@ test("the checklist lists the Sale cheapest first with Auto-sell's picks badged,
     await expect(tray.getByTestId("pick-checklist")).toHaveCount(0);
     await expect(tray.getByText("Tap your Fields on the Board to pick them")).toBeVisible();
   } finally {
-    await other.close();
+    closeAfterDump(context);
   }
 });
 
@@ -209,7 +191,7 @@ test("inspect mode opens the Field card for any Field without picking, and â€¹ â
   browser,
   isMobile,
 }) => {
-  const other = await startGame(page, browser);
+  const { context } = await startGame(page, browser);
   try {
     await showSale(page, 15_000);
     const tray = page.getByTestId("sale-tray");
@@ -247,6 +229,6 @@ test("inspect mode opens the Field card for any Field without picking, and â€¹ â
     await tapField(page, isMobile, BERLIN);
     await expect.poll(async () => (await pick(page))?.picked).toEqual([BERLIN]);
   } finally {
-    await other.close();
+    closeAfterDump(context);
   }
 });

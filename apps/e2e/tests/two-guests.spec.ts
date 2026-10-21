@@ -1,8 +1,11 @@
-import { chromium, devices, expect, test, webkit, type Page } from "@playwright/test";
+import { chromium, devices, expect, webkit, type Page } from "@playwright/test";
 import { playbackOf, type GameEvent } from "@universum/rules";
 import {
+  closeAfterDump,
   press as pressControl,
+  registerPage,
   resolveDecision as resolveSharedDecision,
+  test,
   type Interactor,
   type OfferChoice,
   type OfferPhase,
@@ -121,6 +124,8 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     });
     const desktop = await desktopContext.newPage();
     const phone = await phoneContext.newPage();
+    registerPage("desktop", desktop);
+    registerPage("phone", phone);
     // Count dice-sound plays before any app code runs: unlock once, then one per roll.
     await phone.addInitScript(() => {
       window.dicePlays = 0;
@@ -355,6 +360,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     await expect(phone.getByTestId("sound-toggle")).toHaveAttribute("aria-pressed", "true");
     await expect(phone.getByTestId("sound-toggle")).toContainText("Ton aus");
   } finally {
-    await Promise.all([desktopBrowser.close(), phoneBrowser.close()]);
+    closeAfterDump(desktopBrowser);
+    closeAfterDump(phoneBrowser);
   }
 });

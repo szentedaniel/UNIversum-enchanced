@@ -2,13 +2,20 @@ import {
   chromium,
   devices,
   expect,
-  test,
   webkit,
   type BrowserContext,
   type Page,
 } from "@playwright/test";
 import { playbackOf, type GameEvent } from "@universum/rules";
-import { press, resolveDecision, type OfferChoice, type OfferPhase } from "./helpers.ts";
+import {
+  closeAfterDump,
+  press,
+  registerPage,
+  resolveDecision,
+  test,
+  type OfferChoice,
+  type OfferPhase,
+} from "./helpers.ts";
 import type { FullView } from "./test-hooks.ts";
 
 /*
@@ -147,6 +154,7 @@ async function dropAndRejoin(guest: Guest, guests: readonly Guest[], code: strin
   await expect(again.getByTestId("turn-of")).toBeVisible({ timeout: 30_000 });
   await expect.poll(() => meOf(again), { timeout: 30_000 }).toBe(guest.id);
   guest.page = again;
+  registerPage(guest.name, again);
 }
 
 /** Waits for the server to time out the Turn in progress, and records its events. */
@@ -195,6 +203,7 @@ test("four Guests play a whole game to the podium, with a buy, a Rent, a tray pi
       { name: "phone-1", context: phoneOne, page: await phoneOne.newPage(), mobile: true, id: "" },
       { name: "phone-2", context: phoneTwo, page: await phoneTwo.newPage(), mobile: true, id: "" },
     ];
+    for (const guest of guests) registerPage(guest.name, guest.page);
     const [creator, ...joiners] = guests;
 
     // The creator opens a full 4-Player, 15-minute Room (shortened by env).
@@ -352,6 +361,7 @@ test("four Guests play a whole game to the podium, with a buy, a Rent, a tray pi
     // "Happy Tiger wins!" on every screen: one title, naming one winner.
     expect(new Set(titles).size).toBe(1);
   } finally {
-    await Promise.all([desktops.close(), phones.close()]);
+    closeAfterDump(desktops);
+    closeAfterDump(phones);
   }
 });

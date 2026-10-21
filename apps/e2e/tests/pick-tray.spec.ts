@@ -1,4 +1,5 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import { closeAfterDump, startGame, test } from "./helpers.ts";
 
 // The single-pick tray (#31): the Doubler and Erasmus. A random game can't be
 // steered into either corner, so the test shows a made-up view through the
@@ -22,25 +23,6 @@ async function tapField(page: Page, isMobile: boolean, id: number) {
   const point = await fieldCenter(page, id);
   if (isMobile) await page.touchscreen.tap(point.x, point.y);
   else await page.mouse.click(point.x, point.y);
-}
-
-/** Creates a 2-Player Room on `page`, fills it with a second Guest and starts. */
-async function startGame(page: Page, browser: Browser) {
-  await page.goto("/create");
-  await page.getByLabel("2", { exact: true }).check();
-  await page.getByRole("button", { name: "Create Room" }).click();
-  await expect(page).toHaveURL(/\/room\/[1-9]\d{5}$/);
-  const code = new URL(page.url()).pathname.split("/").at(-1) ?? "";
-  const other = await browser.newContext({ locale: "en-US" });
-  const guest = await other.newPage();
-  await guest.goto(`/room/${code}`);
-  await expect(page.locator("[data-testid=seat][data-open]")).toHaveCount(0);
-  await page.getByRole("button", { name: "Start" }).click();
-  await expect(page).toHaveURL(`/game/${code}`);
-  await expect
-    .poll(() => page.evaluate(() => window.universumTest?.camera().scale ?? 0))
-    .toBeGreaterThan(0);
-  return other;
 }
 
 /** This Guest is choosing: the view lists `fields`, the view carries their effect. */
@@ -89,7 +71,7 @@ test("placing the Doubler: taps snap to the Player's Fields, replace the choice 
   browser,
   isMobile,
 }) => {
-  const other = await startGame(page, browser);
+  const { context } = await startGame(page, browser);
   try {
     await showPick(page, "doubler");
     const tray = page.getByTestId("pick-tray");
@@ -120,7 +102,7 @@ test("placing the Doubler: taps snap to the Player's Fields, replace the choice 
     await expect(tray.getByRole("button", { name: "Put the Doubler" })).toBeDisabled();
     await expect.poll(async () => (await pick(page))?.picked).toEqual([]);
   } finally {
-    await other.close();
+    closeAfterDump(context);
   }
 });
 
@@ -129,7 +111,7 @@ test("choosing Erasmus: the tray shows the Fields ahead and whether Start is pas
   browser,
   isMobile,
 }) => {
-  const other = await startGame(page, browser);
+  const { context } = await startGame(page, browser);
   try {
     await showPick(page, "erasmus");
     const tray = page.getByTestId("pick-tray");
@@ -148,7 +130,7 @@ test("choosing Erasmus: the tray shows the Fields ahead and whether Start is pas
     await expect(tray.getByRole("button", { name: "Travel to Museum" })).toBeEnabled();
     await expect.poll(async () => (await pick(page))?.picked).toEqual([MUSEUM_4]);
   } finally {
-    await other.close();
+    closeAfterDump(context);
   }
 });
 
@@ -156,7 +138,7 @@ test("the checklist lists Erasmus destinations nearest first and stays expanded 
   page,
   browser,
 }) => {
-  const other = await startGame(page, browser);
+  const { context } = await startGame(page, browser);
   try {
     await showPick(page, "erasmus");
     const tray = page.getByTestId("pick-tray");
@@ -197,6 +179,6 @@ test("the checklist lists Erasmus destinations nearest first and stays expanded 
     await expect(page.getByTestId("pick-tray").getByTestId("pick-checklist")).toBeVisible();
     await expect(page.getByTestId("pick-checklist-toggle")).toHaveAttribute("aria-pressed", "true");
   } finally {
-    await other.close();
+    closeAfterDump(context);
   }
 });

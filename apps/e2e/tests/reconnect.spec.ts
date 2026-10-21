@@ -1,9 +1,11 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, type Browser, type Page } from "@playwright/test";
+import { closeAfterDump, registerPage, test } from "./helpers.ts";
 
 test.use({ locale: "en-US" });
 
 /** The creator opens a 2-Player Lobby and a second Guest joins it by code; returns the joiner's page. */
 async function twoInLobby(creator: Page, browser: Browser, baseURL: string | undefined) {
+  registerPage("creator", creator);
   await creator.goto("/create");
   await creator.getByLabel("2", { exact: true }).check();
   await creator.getByRole("button", { name: "Create Room" }).click();
@@ -11,6 +13,7 @@ async function twoInLobby(creator: Page, browser: Browser, baseURL: string | und
   const code = new URL(creator.url()).pathname.split("/").at(-1) ?? "";
   const context = await browser.newContext({ baseURL, locale: "en-US" });
   const joiner = await context.newPage();
+  registerPage("joiner", joiner);
   await joiner.goto(`/room/${code}`);
   for (const page of [creator, joiner]) {
     // oxlint-disable-next-line no-await-in-loop -- one page after the other
@@ -36,13 +39,14 @@ test("a Guest who closes the Lobby and opens it again gets their Seat back; the 
     await expect(creator.getByText("Players: 2/2")).toBeVisible();
 
     const again = await context.newPage();
+    registerPage("joiner", again);
     await again.goto(`/room/${code}`);
 
     await expect(again.getByText("Players: 2/2")).toBeVisible();
     await expect(again.getByTestId("seat").nth(1)).toContainText("you");
     await expect(held).toHaveCount(0);
   } finally {
-    await context.close();
+    closeAfterDump(context);
   }
 });
 
@@ -80,6 +84,6 @@ test("a Player who goes offline in a game sees the reconnecting overlay and is b
       .poll(() => again.evaluate(() => window.universumTest?.view()?.version ?? -1))
       .toBeGreaterThanOrEqual(version);
   } finally {
-    await context.close();
+    closeAfterDump(context);
   }
 });
