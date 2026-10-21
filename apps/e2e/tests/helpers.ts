@@ -95,7 +95,7 @@ async function expectOneJoinSocket(page: Page, name: string): Promise<void> {
   const calls = await page.evaluate<SocketCall[]>(() => window.universumWebSockets ?? []);
   expect(calls, `${name} opened ${String(calls.length)} WebSockets to join`).toEqual([
     { protocols: "undefined" },
-  ]);
+  ] satisfies SocketCall[]);
 }
 
 /** Creates a 2-Player Room on `page`, fills it with a second Guest and starts. */
