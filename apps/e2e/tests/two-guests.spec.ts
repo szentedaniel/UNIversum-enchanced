@@ -1,18 +1,26 @@
-import { chromium, devices, expect, test, webkit, type Locator, type Page } from "@playwright/test";
-import { PLAYBACK_MS } from "@universum/rules";
+import { chromium, devices, expect, test, webkit, type Page } from "@playwright/test";
+import { playbackOf, type GameEvent } from "@universum/rules";
+import {
+  press as pressControl,
+  resolveDecision as resolveSharedDecision,
+  type Interactor,
+  type OfferChoice,
+  type OfferPhase,
+} from "./helpers.ts";
 import type { FullView } from "./test-hooks.ts";
 
 /**
- * The longest Playback a Roll's push can carry: dice, a 12-Field walk, the
+ * The longest Playback a Roll's push can carry: the dice, a 12-Field walk, the
  * Chance card drawn on landing, its effect and the Round bonus. Waits for the
  * Playback use its length, not Playwright's 5 s default.
  */
-const ROLL_PLAYBACK_MS =
-  PLAYBACK_MS.DiceRolled +
-  12 * PLAYBACK_MS.Moved +
-  PLAYBACK_MS.CardDrawn +
-  PLAYBACK_MS.ChanceMoneyReceived +
-  PLAYBACK_MS.RoundBonusPaid;
+const ROLL_PLAYBACK_MS = playbackOf([
+  { type: "DiceRolled", player: "p1", dice: [6, 6] },
+  { type: "Moved", player: "p1", from: 0, to: 12, steps: 12 },
+  { type: "CardDrawn", player: "p1", card: "failedExams" },
+  { type: "ChanceMoneyReceived", player: "p1", amount: 0 },
+  { type: "RoundBonusPaid", player: "p1", amount: 0 },
+] satisfies readonly GameEvent[]);
 
 const viewOf = (page: Page) => page.evaluate(() => window.universumTest?.view() ?? null);
 
@@ -95,15 +103,6 @@ const stopPlaybackProbe = (page: Page) =>
     return window.playbackProbe ?? [];
   });
 
-/** The Player's Fields, cheapest Bank sale value first (Auto-sell's order). */
-function ownFields(view: FullView, player: string): number[] {
-  return view.fields
-    .map((field, id) => ({ field, id }))
-    .filter(({ field }) => field.owner === player)
-    .toSorted((a, b) => a.field.sale - b.field.sale || a.id - b.id)
-    .map(({ id }) => id);
-}
-
 test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and play", async ({
   baseURL,
 }) => {
@@ -172,10 +171,9 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     // taken; later offers (and every Buyout) are declined.
     let bought: { field: number; owner: string } | null = null;
     let museum = null as { field: number; owner: string } | null;
-    const press = (page: Page, name: string | RegExp) => {
-      const button = page.getByRole("button", { name });
-      return page === phone ? button.tap() : button.click();
-    };
+    const actor = (page: Page): Interactor => ({ page, mobile: page === phone });
+    const press = (page: Page, name: string | RegExp) =>
+      pressControl(actor(page), page.getByRole("button", { name }));
     /** After a Roll: neither screen shows the next decision's controls until actsAfter, and it then does. */
     const expectPlaybackHold = async (roller: Page, versionBefore: number) => {
       const view = await pushView(roller);
@@ -228,34 +226,11 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
       else await expect(current.getByRole("button", { name: /^Roll/ })).toBeVisible();
     };
 
-    /** A control a Locator finds: tap on a phone, click on a desktop. */
-    const pressControl = (page: Page, control: Locator) =>
-      page === phone ? control.tap() : control.click();
-
-    /**
-     * Taps a Field through the test-only `fieldCenter` hook and waits until the
-     * pick took effect: a tap right after a layout change can miss (#26 retries).
-     */
-    const tapPickField = async (page: Page, field: number) => {
-      await expect(async () => {
-        const point = await page.evaluate(
-          (id) => window.universumTest?.fieldCenter(id) ?? null,
-          field,
-        );
-        if (point === null) throw new Error("the Board is not ready");
-        if (page === phone) await page.touchscreen.tap(point.x, point.y);
-        else await page.mouse.click(point.x, point.y);
-        await expect
-          .poll(
-            () =>
-              page.evaluate(
-                (id) => window.universumTest?.pick()?.picked.includes(id) ?? false,
-                field,
-              ),
-            { timeout: 1_500 },
-          )
-          .toBe(true);
-      }).toPass({ timeout: 10_000 });
+    /** The offer this spec takes: the first University and the first Museum, then Decline. */
+    const takeOffer = (phase: OfferPhase): OfferChoice => {
+      if (!bought && (phase.levels?.length ?? 0) > 0) return "level";
+      if (!museum && phase.museum !== undefined) return "museum";
+      return "decline";
     };
 
     /**
@@ -266,68 +241,26 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     const resolveDecision = async (roller: Page, view: FullView) => {
       const [waiter] = roller === desktop ? [phone] : [desktop];
       const { phase } = view;
-      switch (phase.kind) {
-        case "offer": {
-          await expect(roller.getByTestId("offer")).toBeVisible();
-          await expect(waiter.getByTestId("offer")).toHaveCount(0);
-          const { field, levels = [], museum: museumPrice, buyout } = phase;
-          const taken = { field, owner: view.currentPlayer };
-          if (!bought && levels.length > 0) {
-            await press(roller, /^Level 1 · /);
-            bought = taken;
-          } else if (!museum && museumPrice !== undefined) {
-            await press(roller, /^Buy · /);
-            museum = taken;
-          } else {
-            if (buyout !== undefined) {
-              await expect(roller.getByRole("button", { name: /^Buy out · / })).toBeVisible();
-            }
-            await press(roller, "Decline");
-          }
-          break;
+      if (phase.kind === "offer") {
+        await expect(roller.getByTestId("offer")).toBeVisible();
+        await expect(waiter.getByTestId("offer")).toHaveCount(0);
+        const choice = takeOffer(phase);
+        if (choice === "decline" && phase.buyout !== undefined) {
+          await expect(roller.getByRole("button", { name: /^Buy out · / })).toBeVisible();
         }
-        case "placingDoubler":
-        case "choosingErasmus": {
-          const tray = roller.getByTestId("pick-tray");
-          await expect(tray).toBeVisible();
-          const field = phase.fields[0];
-          if (field === undefined) throw new Error(`${phase.kind} offered no Field`);
-          await tapPickField(roller, field);
-          await pressControl(
-            roller,
-            phase.kind === "placingDoubler"
-              ? tray.getByRole("button", { name: /^Put the Doubler on / })
-              : tray.getByRole("button", { name: /^Travel to / }),
-          );
-          break;
+        const result = await resolveSharedDecision(actor(roller), view, () => choice);
+        if (result?.kind === "buy") {
+          const taken = { field: result.field, owner: result.owner };
+          if (result.choice === "level") bought = taken;
+          else museum = taken;
         }
-        case "selling": {
-          const tray = roller.getByTestId("sale-tray");
-          await expect(tray).toBeVisible();
-          const sell = tray.getByRole("button", { name: /^Sell / });
-          for (const field of ownFields(view, view.currentPlayer)) {
-            // oxlint-disable-next-line no-await-in-loop -- the meter decides the next pick
-            if (await sell.isEnabled()) break;
-            // oxlint-disable-next-line no-await-in-loop -- one Field at a time
-            const already = await roller.evaluate(
-              (id) => window.universumTest?.pick()?.picked.includes(id) ?? false,
-              field,
-            );
-            if (!already) {
-              // oxlint-disable-next-line no-await-in-loop -- one pick at a time updates the meter
-              await tapPickField(roller, field);
-            }
-          }
-          await pressControl(roller, sell);
-          break;
-        }
-        case "quarantineChoice":
-          await press(roller, "Roll for 12");
-          break;
-        case "awaitingRoll":
-        case "gameOver":
-          break;
+        return;
       }
+      if (phase.kind === "quarantineChoice") {
+        await press(roller, "Roll for 12");
+        return;
+      }
+      await resolveSharedDecision(actor(roller), view, takeOffer);
     };
 
     const playTurn = async (turn: number, checkHold = false) => {

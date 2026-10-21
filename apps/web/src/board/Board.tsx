@@ -5,6 +5,7 @@ import { useStore } from "zustand";
 import { createBoard, type Board as BoardRenderer } from "#board/board.ts";
 import { fieldFacts } from "#board/field-facts.ts";
 import { Button } from "#components/ui/button.tsx";
+import { serverNow } from "#lib/server-clock.ts";
 import { selectedPick, singleMarks, singlePickFor } from "#pick/pick.ts";
 import { AUTO_SELL_WARNING_MS, saleFor, saleMarks } from "#pick/sale.ts";
 import { playbackStore } from "#playback/playback-store.ts";
@@ -122,7 +123,8 @@ export function Board() {
       const syncPick = () => {
         clearTimeout(warningTimer);
         const { push } = roomStore.getState();
-        if (!push || !playbackStore.getState().over) return renderer.setPick(null);
+        if (!push) return renderer.setPick(null);
+        // `currentSale`/`currentPick` are the one gate check: null until the Playback ends.
         const sale = currentSale();
         const pick = currentPick();
         const key = sale?.key ?? pick?.key ?? null;
@@ -138,7 +140,7 @@ export function Board() {
           return renderer.setPick(singleMarks(pick, field));
         }
         if (!sale || push.view.turnTimer === null) return renderer.setPick(null);
-        const msLeft = push.view.turnTimer.endsAt - (Date.now() + push.clockOffset);
+        const msLeft = push.view.turnTimer.endsAt - serverNow(push.clockOffset);
         const picks = salePicksFor(uiStore.getState().salePicks, sale.key);
         renderer.setPick(saleMarks(sale, push.view, picks, msLeft));
         if (msLeft > AUTO_SELL_WARNING_MS) {

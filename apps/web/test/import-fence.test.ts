@@ -37,7 +37,7 @@ it("lets the web app import rules types, the board and playback data and the pro
   const source = `
 import type { State } from "@universum/rules";
 import { FIELD_COUNT } from "@universum/rules/board";
-import { PLAYBACK_MS, playbackOf } from "@universum/rules/playback";
+import { PLAYBACK_MS, playbackOf, playbackOfEvent } from "@universum/rules/playback";
 import { INTENT_MESSAGE } from "@universum/protocol/messages";
 import type { IntentMessage } from "@universum/protocol/messages";
 export type { Board } from "@universum/rules";

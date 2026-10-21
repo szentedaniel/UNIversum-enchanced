@@ -5,11 +5,11 @@ import {
   test,
   webkit,
   type BrowserContext,
-  type Locator,
   type Page,
 } from "@playwright/test";
-import { PLAYBACK_MS } from "@universum/rules";
-import type { FullPhase, FullView } from "./test-hooks.ts";
+import { playbackOf, type GameEvent } from "@universum/rules";
+import { press, resolveDecision, type OfferChoice, type OfferPhase } from "./helpers.ts";
+import type { FullView } from "./test-hooks.ts";
 
 /*
  * Definition of done item 3 (spec: Testing Decisions, seam 3): four Guests on
@@ -34,13 +34,14 @@ test.setTimeout(300_000);
  * the GameEnded beat. The podium appears only after the local Playback (#51),
  * so its wait must allow this instead of Playwright's 5 s default.
  */
-const FINAL_PLAYBACK_MS =
-  PLAYBACK_MS.DiceRolled +
-  12 * PLAYBACK_MS.Moved +
-  PLAYBACK_MS.CardDrawn +
-  PLAYBACK_MS.ChanceChargePaid +
-  PLAYBACK_MS.RoundBonusPaid +
-  PLAYBACK_MS.GameEnded;
+const FINAL_PLAYBACK_MS = playbackOf([
+  { type: "DiceRolled", player: "p1", dice: [6, 6] },
+  { type: "Moved", player: "p1", from: 0, to: 12, steps: 12 },
+  { type: "CardDrawn", player: "p1", card: "failedExams" },
+  { type: "ChanceChargePaid", player: "p1", amount: 0 },
+  { type: "RoundBonusPaid", player: "p1", amount: 0 },
+  { type: "GameEnded", winner: "p1", reason: "timeUp" },
+] satisfies readonly GameEvent[]);
 
 type Guest = {
   name: string;
@@ -59,13 +60,6 @@ const meOf = (page: Page): Promise<string | null> =>
 
 const eventTypesOf = (page: Page): Promise<string[]> =>
   page.evaluate(() => window.universumTest?.room().push?.events.map((event) => event.type) ?? []);
-
-/** A control the view offers: tap on a phone, click on a desktop. */
-async function press(guest: Guest, target: Locator): Promise<void> {
-  await expect(target).toBeEnabled({ timeout: 15_000 });
-  if (guest.mobile) await target.tap();
-  else await target.click();
-}
 
 /** Waits until the server's answer to this action has arrived. */
 async function past(guest: Guest, version: number): Promise<void> {
@@ -93,131 +87,33 @@ async function scanEvents(guests: readonly Guest[], seen: Set<string>): Promise<
 }
 
 /**
- * Taps a Field through the test-only `fieldCenter` hook and waits until the
- * pick took effect (a tap right after a layout change can miss; #26 retries).
- */
-async function tapField(guest: Guest, field: number): Promise<void> {
-  await expect(async () => {
-    // The Board's Playback must be over: the dice and a Chance card overlay the
-    // Board for their own steps, and the last hop can still be drawing. Only
-    // the decision gate opening guarantees both are done.
-    await expect
-      .poll(() => guest.page.evaluate(() => window.universumTest?.playback().over ?? false), {
-        timeout: PLAYBACK_MS.CardDrawn,
-      })
-      .toBe(true);
-    // Two frames: the Board's queue draws its last hop on the frame after the gate.
-    await guest.page.evaluate(async () => {
-      await new Promise(requestAnimationFrame);
-      await new Promise(requestAnimationFrame);
-    });
-    const point = await guest.page.evaluate(
-      (id) => window.universumTest?.fieldCenter(id) ?? null,
-      field,
-    );
-    if (point === null) throw new Error("the Board is not ready");
-    if (guest.mobile) await guest.page.touchscreen.tap(point.x, point.y);
-    else await guest.page.mouse.click(point.x, point.y);
-    await expect
-      .poll(
-        () =>
-          guest.page.evaluate(
-            (id) => window.universumTest?.pick()?.picked.includes(id) ?? false,
-            field,
-          ),
-        { timeout: 1_500 },
-      )
-      .toBe(true);
-  }).toPass({ timeout: 10_000 });
-}
-
-/** The Player's Fields, cheapest Bank sale value first (Auto-sell's order). */
-function ownFields(view: FullView, player: string): number[] {
-  return view.fields
-    .map((field, id) => ({ field, id }))
-    .filter(({ field }) => field.owner === player)
-    .toSorted((a, b) => a.field.sale - b.field.sale || a.id - b.id)
-    .map(({ id }) => id);
-}
-
-/**
  * Plays the current decision through the controls it offers: Roll (or Roll for
  * 12), a buy or Decline, a Sale pick, or a Doubler/Erasmus pick. Returns once
  * the server has answered, with the step it covered (`null` for a plain Roll,
  * Decline or Quarantine roll).
  */
 async function playDecision(guest: Guest, view: FullView): Promise<"buy" | "pick" | null> {
-  const phase: FullPhase = view.phase;
+  const { phase } = view;
+  if (phase.kind === "gameOver") throw new Error("the game is over");
   let covered: "buy" | "pick" | null = null;
-  switch (phase.kind) {
-    case "awaitingRoll":
-      await press(guest, guest.page.getByRole("button", { name: "Roll", exact: true }));
-      break;
-    case "quarantineChoice":
-      // Rolling for 12 either frees the Player (and may stop at an offer) or
-      // uses one Quarantine round; both end the decision.
-      await press(guest, guest.page.getByRole("button", { name: "Roll for 12", exact: true }));
-      break;
-    case "offer": {
-      const panel = guest.page.getByTestId("offer");
-      await expect(panel).toBeVisible();
-      const level = phase.levels?.[0];
-      if (level !== undefined) {
-        const buy = panel.getByRole("button", { name: new RegExp(`^Level ${level.level} · `) });
-        await press(guest, buy);
-        covered = "buy";
-      } else if (phase.museum !== undefined) {
-        const buy = panel.getByRole("button", { name: /^Buy · / });
-        await press(guest, buy);
-        covered = "buy";
-      } else {
-        // A Buyout is offered: decline (the test never takes another Player's Field over).
-        const decline = panel.getByRole("button", { name: "Decline", exact: true });
-        await press(guest, decline);
-      }
-      break;
-    }
-    case "selling": {
-      const tray = guest.page.getByTestId("sale-tray");
-      await expect(tray).toBeVisible();
-      const sell = tray.getByRole("button", { name: /^Sell / });
-      for (const field of ownFields(view, guest.id)) {
-        // oxlint-disable-next-line no-await-in-loop -- the meter decides the next pick
-        if (await sell.isEnabled()) break;
-        // oxlint-disable-next-line no-await-in-loop -- one Field at a time
-        const already = await guest.page.evaluate(
-          (id) => window.universumTest?.pick()?.picked.includes(id) ?? false,
-          field,
-        );
-        if (!already) {
-          // oxlint-disable-next-line no-await-in-loop -- one pick at a time updates the meter
-          await tapField(guest, field);
-        }
-      }
-      await press(guest, sell);
-      covered = "pick";
-      break;
-    }
-    case "placingDoubler":
-    case "choosingErasmus": {
-      const tray = guest.page.getByTestId("pick-tray");
-      await expect(tray).toBeVisible();
-      const field = phase.fields[0];
-      if (field === undefined) throw new Error(`${phase.kind} offered no Field`);
-      await tapField(guest, field);
-      const commit =
-        phase.kind === "placingDoubler"
-          ? tray.getByRole("button", { name: /^Put the Doubler on / })
-          : tray.getByRole("button", { name: /^Travel to / });
-      await press(guest, commit);
-      covered = "pick";
-      break;
-    }
-    case "gameOver":
-      throw new Error("the game is over");
+  if (phase.kind === "awaitingRoll") {
+    await press(guest, guest.page.getByRole("button", { name: "Roll", exact: true }));
+  } else if (phase.kind === "quarantineChoice") {
+    // Rolling for 12 either frees the Player (and may stop at an offer) or
+    // uses one Quarantine round; both end the decision.
+    await press(guest, guest.page.getByRole("button", { name: "Roll for 12", exact: true }));
+  } else {
+    const result = await resolveDecision(guest, view, takeOffer);
+    covered = result?.kind === "buy" ? "buy" : result?.kind === "pick" ? "pick" : null;
   }
   await past(guest, view.version);
   return covered;
+}
+
+/** The offer this test takes: the first Level or Museum offered, otherwise Decline (never a Buyout). */
+function takeOffer(phase: OfferPhase): OfferChoice {
+  if ((phase.levels?.length ?? 0) > 0) return "level";
+  return phase.museum === undefined ? "decline" : "museum";
 }
 
 /**

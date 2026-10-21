@@ -6,8 +6,8 @@
  * rules change, so the server's wait and the client's Playback can't drift.
  *
  * The table lists every event type (a new event fails to compile until it has
- * a length). `Moved` is the hop of one Field, so `playbackOf` scales it by the
- * event's `steps`.
+ * a length). `Moved` is the hop of one Field, so `playbackOfEvent` scales it by
+ * the event's `steps`.
  */
 import type { GameEvent } from "#events.ts";
 
@@ -24,7 +24,7 @@ const NOTHING_MS = 0;
 
 /**
  * How long each event takes to show, in ms. `Moved` is per Field stepped:
- * multiply it by the event's `steps` (which `playbackOf` does).
+ * multiply it by the event's `steps` (which `playbackOfEvent` does).
  */
 export const PLAYBACK_MS: Readonly<Record<GameEvent["type"], number>> = {
   DiceRolled: DICE_MS,
@@ -53,11 +53,14 @@ export const PLAYBACK_MS: Readonly<Record<GameEvent["type"], number>> = {
   TurnPassed: NOTHING_MS,
 };
 
-/** The Playback length of an event list in ms: the sum of its events, `Moved` by its steps. */
+/** The Playback length of one event in ms: its constant, `Moved` scaled by its steps. */
+export function playbackOfEvent(event: GameEvent): number {
+  return event.type === "Moved" ? event.steps * PLAYBACK_MS.Moved : PLAYBACK_MS[event.type];
+}
+
+/** The Playback length of an event list in ms: the sum of its events' own lengths. */
 export function playbackOf(events: readonly GameEvent[]): number {
   let total = 0;
-  for (const event of events) {
-    total += event.type === "Moved" ? event.steps * PLAYBACK_MS.Moved : PLAYBACK_MS[event.type];
-  }
+  for (const event of events) total += playbackOfEvent(event);
   return total;
 }

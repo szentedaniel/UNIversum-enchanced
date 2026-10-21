@@ -14,6 +14,7 @@ import type { GameEvent } from "@universum/rules";
 import { playbackOf } from "@universum/rules/playback";
 import { subscribeWithSelector } from "zustand/middleware";
 import { createStore } from "zustand/vanilla";
+import { turnLabelToShow, type TurnLabel } from "#playback/turn-hold.ts";
 import { roomStore } from "#stores/room-store.ts";
 
 /** The parts of a push the gate reads. */
@@ -38,10 +39,15 @@ export type PlaybackState = {
   seq: number | null;
   /** Whether that push's decision is open: its Playback and `actsAfter` have both passed. */
   over: boolean;
+  /**
+   * What the turn card shows: the previous Turn while the gate is shut, then
+   * the current one, switched together with `over` (story 4).
+   */
+  shownTurn: TurnLabel | null;
 };
 
 export const playbackStore = createStore<PlaybackState>()(
-  subscribeWithSelector((): PlaybackState => ({ seq: null, over: true })),
+  subscribeWithSelector((): PlaybackState => ({ seq: null, over: true, shownTurn: null })),
 );
 
 let wakeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -52,11 +58,20 @@ function sync(): void {
   wakeTimer = undefined;
   const { push } = roomStore.getState();
   if (!push) {
-    playbackStore.setState({ seq: null, over: true });
+    playbackStore.setState({ seq: null, over: true, shownTurn: null });
     return;
   }
   const leftMs = decisionOpensAt(push) - Date.now();
-  playbackStore.setState({ seq: push.seq, over: leftMs <= 0 });
+  const current: TurnLabel = { turn: push.view.turn, currentPlayer: push.view.currentPlayer };
+  playbackStore.setState((prior) => {
+    const over = leftMs <= 0;
+    return {
+      seq: push.seq,
+      over,
+      // The heading and Turn number switch with the controls (story 4).
+      shownTurn: turnLabelToShow(prior.shownTurn, current, over, push.events.length > 0),
+    };
+  });
   // A few ms past the boundary, so a tap never races the clock.
   if (leftMs > 0) wakeTimer = setTimeout(sync, leftMs + 20);
 }

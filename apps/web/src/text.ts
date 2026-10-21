@@ -154,8 +154,8 @@ export const chanceCardText = (card: ChanceCardId): { title: string; text: strin
 
 /**
  * One Playback event as a line of text in the active language, or `null` for
- * an event with nothing to say (a walk, a Doubler placed). The popup and the
- * status row read this map; the server never sends text.
+ * an event with nothing to say (a walk, a Doubler placed). The status row
+ * reads this map; the server never sends text.
  */
 export function eventText(event: GameEvent, view: PublicView): string | null {
   const name = (id: string) => {

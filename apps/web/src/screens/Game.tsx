@@ -69,6 +69,8 @@ export function Game() {
   const [joinError, setJoinError] = useState<RejectionCode | null>(null);
   // Both clocks: the local Playback of this push and the server's `actsAfter` (ADR-0004).
   const playbackOver = useStore(playbackStore, (state) => state.over);
+  // Story 4: the heading and Turn number switch when the gate opens, not on the push.
+  const shownTurn = useStore(playbackStore, (state) => state.shownTurn);
   const toast = usePlaybackToast(push);
   // The dice and a drawn Chance card show for their own step of the Playback (ADR-0004).
   const step = usePlaybackStep(push);
@@ -106,9 +108,13 @@ export function Game() {
   const gameOver = view.phase.kind === "gameOver" ? view.phase : null;
   const current = view.players.find((p) => p.id === view.currentPlayer);
   const myTurn = view.currentPlayer === me;
+  // The turn card holds the previous Turn's values through the Playback (story 4, ADR-0004).
+  const shownPlayer = view.players.find((p) => p.id === shownTurn?.currentPlayer) ?? current;
+  const shownMyTurn = shownTurn?.currentPlayer === me;
+  const shownTurnNumber = shownTurn?.turn ?? view.turn;
   const answeredAt = Math.max(push.seq, rejection?.seq ?? 0);
   const pending = sentAt !== null && answeredAt <= sentAt;
-  // Decision controls wait out the Playback, from the server's clock only (ADR-0004).
+  // Decision controls wait for the decision gate: the local Playback and the server's actsAfter (ADR-0004).
   const canRoll = myTurn && playbackOver && view.phase.kind === "awaitingRoll" && !pending;
   const offer =
     myTurn && playbackOver && view.phase.kind === "offer" && !pending ? view.phase : null;
@@ -153,13 +159,12 @@ export function Game() {
     ),
   }));
   const rejected = rejection !== null && rejection.seq > push.seq;
-  const stepEvent = step?.event;
-  // The Playback's DOM layer: the Roll's dice, or a drawn Chance card for its 7 s.
+  // The Playback's DOM layer: the step's kind decides what shows, the dice or a drawn Chance card.
   const boardOverlay =
-    stepEvent?.type === "DiceRolled" ? (
-      <DiceOverlay dice={stepEvent.dice} />
-    ) : stepEvent?.type === "CardDrawn" ? (
-      <ChanceCardOverlay key={`${push.seq}:${step?.startMs ?? 0}`} card={stepEvent.card} />
+    step?.kind === "dice" ? (
+      <DiceOverlay dice={step.event.dice} />
+    ) : step?.kind === "card" ? (
+      <ChanceCardOverlay key={`${push.seq}:${step.startMs}`} card={step.event.card} />
     ) : null;
 
   const statusRow = (
@@ -180,12 +185,12 @@ export function Game() {
     <Card className="gap-2 p-3">
       <div className="flex items-baseline justify-between gap-2">
         <strong data-testid="turn-of" className="truncate text-lg font-black">
-          {myTurn
+          {shownMyTurn
             ? m.game_your_turn()
-            : m.game_turn_of({ name: current ? playerName(current.name) : "" })}
+            : m.game_turn_of({ name: shownPlayer ? playerName(shownPlayer.name) : "" })}
         </strong>
         <span data-testid="turn" className="tnum shrink-0 text-sm font-bold text-ink/70">
-          {m.game_turn({ turn: view.turn })}
+          {m.game_turn({ turn: shownTurnNumber })}
         </span>
       </div>
       {othersSale && (

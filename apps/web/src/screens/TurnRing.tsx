@@ -1,5 +1,6 @@
 import type { TurnTimer } from "@universum/rules";
 import { useState } from "react";
+import { serverNow } from "#lib/server-clock.ts";
 import { m } from "#text.ts";
 
 type Props = {
@@ -19,7 +20,7 @@ export function TurnRing({ timer, clockOffset }: Props) {
     // The ring stays full until the Playback ends (`endsAt - limitMs`), then
     // empties over the Turn limit. A ring mounted after it began (a reload, a
     // reconnect) starts partway through with a negative delay.
-    const leftMs = Math.max(0, timer.endsAt - (Date.now() + clockOffset));
+    const leftMs = Math.max(0, timer.endsAt - serverNow(clockOffset));
     return {
       animationDuration: `${timer.limitMs}ms`,
       animationDelay: `${leftMs - timer.limitMs}ms`,

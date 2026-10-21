@@ -5,6 +5,7 @@
  */
 import { Timer } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import { serverNow } from "#lib/server-clock.ts";
 import { cn } from "#lib/utils.ts";
 import { m } from "#text.ts";
 
@@ -28,9 +29,9 @@ export function MinutePill({
   clockOffset?: number;
   className?: string;
 }) {
-  const [now, setNow] = useState(() => Date.now() + clockOffset);
+  const [now, setNow] = useState(() => serverNow(clockOffset));
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now() + clockOffset), 1000);
+    const timer = setInterval(() => setNow(serverNow(clockOffset)), 1000);
     return () => clearInterval(timer);
   }, [clockOffset]);
   return (

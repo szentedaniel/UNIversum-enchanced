@@ -8,6 +8,7 @@ import { ScreenHeader } from "#components/ScreenHeader.tsx";
 import { SeatCard } from "#components/SeatCard.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
+import { serverNow } from "#lib/server-clock.ts";
 import { PasswordForm, RejectionText, retryAtOf, useCountdown, useJoin } from "#screens/join.tsx";
 import { roomStore } from "#stores/room-store.ts";
 import { m, playerName, roomNameText } from "#text.ts";
@@ -59,7 +60,7 @@ function HeldCountdown({ until, clockOffset }: { until: number; clockOffset: num
     return () => clearInterval(timer);
   }, []);
 
-  const seconds = Math.max(0, Math.ceil((until - (now + clockOffset)) / 1000));
+  const seconds = Math.max(0, Math.ceil((until - serverNow(clockOffset, now)) / 1000));
   const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
   return (
     <span data-testid="seat-held" className="tnum">
