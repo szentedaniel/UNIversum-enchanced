@@ -57,6 +57,26 @@ Both are timed from `Push.receivedAt`, and each shows for its own step only.
   asserts both screens saw it during the first Roll's hold.
 - `chance-card.spec.ts` shows a made-up `CardDrawn` push on both screens,
   closes it on one, and asserts the other still shows it.
+- **Playback-based e2e waits.** A gate or podium that opens only after a
+  Playback must not use Playwright's 5 s default: `full-game.spec.ts` passes
+  `FINAL_PLAYBACK_MS` (a Roll onto Chance with a 12-Field walk + `GameEnded`)
+  to the podium's `toBeVisible`, and `two-guests.spec.ts` passes
+  `ROLL_PLAYBACK_MS + 1_000` to the `actsAfter` poll. The e2e app imports
+  `PLAYBACK_MS` from `@universum/rules` (the root, so the event/phase
+  declaration merges are in the typecheck).
+- **`full-game.spec.ts` waits out the gate before a Board tap** (`tapField`):
+  the dice/Chance-card overlays and the last Board hop share the Playback, so
+  it polls `window.universumTest.playback().over` (bounded by
+  `PLAYBACK_MS.CardDrawn`) and waits two animation frames before reading
+  `fieldCenter`.
+- **Fixed e2e game seed.** `playwright.config.ts` sets `GAME_SEED`
+  (`4,29,55,129`), a test-only override (`GameTiming.seed` in the Room, parsed
+  outside production only, ignored with the clock overrides in production).
+  The Playback made each Turn take longer, so the 120 s game plays fewer Turns;
+  the fixed seed guarantees the required `RentPaid`, buy and early pick. `full-game`
+  picks at Turn 5 and `two-guests` buys on Turn 1. Use another seed only after
+  checking a full-game/2-Guest run, and keep it early enough that a slow runner
+  still reaches it.
 
 ## Gotchas
 

@@ -17,7 +17,7 @@ const log = createLogger({
   stream: config.prettyLogs ? (await import("pino-pretty")).default() : undefined,
 });
 if (timingIgnored()) {
-  log.warn("GAME_TURN_LIMIT_MS and GAME_MINUTE_MS are ignored in production");
+  log.warn("GAME_TURN_LIMIT_MS, GAME_MINUTE_MS and GAME_SEED are ignored in production");
 }
 const metrics = new GameMetrics({ release: config.release });
 

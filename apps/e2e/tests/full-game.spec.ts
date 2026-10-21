@@ -8,6 +8,7 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
+import { PLAYBACK_MS } from "@universum/rules";
 import type { FullPhase, FullView } from "./test-hooks.ts";
 
 /*
@@ -26,6 +27,20 @@ import type { FullPhase, FullView } from "./test-hooks.ts";
 test.use({ locale: "en-US" });
 // Setup, a deliberate timeout, the whole game and the final assertions.
 test.setTimeout(300_000);
+
+/**
+ * The longest Playback a game-ending push carries: a Roll onto Chance (the
+ * dice, a 12-Field walk, the 7 s card, its Charge and the Round bonus) plus
+ * the GameEnded beat. The podium appears only after the local Playback (#51),
+ * so its wait must allow this instead of Playwright's 5 s default.
+ */
+const FINAL_PLAYBACK_MS =
+  PLAYBACK_MS.DiceRolled +
+  12 * PLAYBACK_MS.Moved +
+  PLAYBACK_MS.CardDrawn +
+  PLAYBACK_MS.ChanceChargePaid +
+  PLAYBACK_MS.RoundBonusPaid +
+  PLAYBACK_MS.GameEnded;
 
 type Guest = {
   name: string;
@@ -83,6 +98,19 @@ async function scanEvents(guests: readonly Guest[], seen: Set<string>): Promise<
  */
 async function tapField(guest: Guest, field: number): Promise<void> {
   await expect(async () => {
+    // The Board's Playback must be over: the dice and a Chance card overlay the
+    // Board for their own steps, and the last hop can still be drawing. Only
+    // the decision gate opening guarantees both are done.
+    await expect
+      .poll(() => guest.page.evaluate(() => window.universumTest?.playback().over ?? false), {
+        timeout: PLAYBACK_MS.CardDrawn,
+      })
+      .toBe(true);
+    // Two frames: the Board's queue draws its last hop on the frame after the gate.
+    await guest.page.evaluate(async () => {
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+    });
     const point = await guest.page.evaluate(
       (id) => window.universumTest?.fieldCenter(id) ?? null,
       field,
@@ -399,7 +427,7 @@ test("four Guests play a whole game to the podium, with a buy, a Rent, a tray pi
       // oxlint-disable-next-line no-await-in-loop -- one screen at a time
       const podium = guest.page.getByTestId("podium");
       // oxlint-disable-next-line no-await-in-loop -- one screen at a time
-      await expect(podium).toBeVisible();
+      await expect(podium).toBeVisible({ timeout: FINAL_PLAYBACK_MS });
       // Exactly one winner: one first place, for the same Player on every screen.
       // oxlint-disable-next-line no-await-in-loop -- one screen at a time
       await expect(podium.getByTestId("podium-place")).toHaveCount(3);
