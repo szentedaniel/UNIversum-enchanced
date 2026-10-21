@@ -37,9 +37,9 @@ test("a password Lobby is listed with a lock, asks for its password, fills up an
   registerPage("creator", creator);
   registerPage("joiner", joiner!);
   registerPage("watcher", watcher!);
-  // The joiner opens the Lobby list's socket first, so only the creator's
-  // direct create is a one-socket check; both are probed for the record.
-  await Promise.all([probeSockets(creator), probeSockets(joiner!)]);
+  // The joiner opens the Lobby list's socket first, so its join is not a
+  // one-socket page; the creator's direct create is.
+  await probeSockets(creator);
   await watcher!.goto("/rooms");
   await expect(watcher!.getByRole("heading", { name: "Open Lobbies" })).toBeVisible();
 
