@@ -1,26 +1,7 @@
-import { expect, type Browser, type Page } from "@playwright/test";
-import { closeAfterDump, registerPage, test } from "./helpers.ts";
+import { expect, type Page } from "@playwright/test";
+import { closeAfterDump, registerPage, test, twoInLobby } from "./helpers.ts";
 
 test.use({ locale: "en-US" });
-
-/** The creator opens a 2-Player Lobby and a second Guest joins it by code; returns the joiner's page. */
-async function twoInLobby(creator: Page, browser: Browser, baseURL: string | undefined) {
-  registerPage("creator", creator);
-  await creator.goto("/create");
-  await creator.getByLabel("2", { exact: true }).check();
-  await creator.getByRole("button", { name: "Create Room" }).click();
-  await expect(creator).toHaveURL(/\/room\/[1-9]\d{5}$/);
-  const code = new URL(creator.url()).pathname.split("/").at(-1) ?? "";
-  const context = await browser.newContext({ baseURL, locale: "en-US" });
-  const joiner = await context.newPage();
-  registerPage("joiner", joiner);
-  await joiner.goto(`/room/${code}`);
-  for (const page of [creator, joiner]) {
-    // oxlint-disable-next-line no-await-in-loop -- one page after the other
-    await expect(page.getByText("Players: 2/2")).toBeVisible();
-  }
-  return { code, joiner };
-}
 
 const me = (page: Page) => page.evaluate(() => window.universumTest?.room().me ?? null);
 
@@ -77,6 +58,7 @@ test("a Player who goes offline in a game sees the reconnecting overlay and is b
     const version = await creator.evaluate(() => window.universumTest?.view()?.version ?? 0);
     await joiner.close();
     const again = await context.newPage();
+    registerPage("joiner", again);
     await again.goto(`/game/${code}`);
     await expect(again.getByTestId("turn-of")).toBeVisible();
     await expect.poll(() => me(again)).toBe(joinerId);

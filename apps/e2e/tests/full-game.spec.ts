@@ -361,7 +361,6 @@ test("four Guests play a whole game to the podium, with a buy, a Rent, a tray pi
     // "Happy Tiger wins!" on every screen: one title, naming one winner.
     expect(new Set(titles).size).toBe(1);
   } finally {
-    closeAfterDump(desktops);
-    closeAfterDump(phones);
+    closeAfterDump(desktops, phones);
   }
 });

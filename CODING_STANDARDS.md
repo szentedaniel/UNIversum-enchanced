@@ -5,8 +5,8 @@ The judgement calls a reviewer checks a diff against. A rule a check already enf
 ## Every area
 
 - **Match the neighbouring code.** The hunk keeps the comment density, naming and idioms of the file around it; a new pattern carries its reason in the diff.
-- **Tests drive the public interface.** They assert only what an outside caller sees: `apply` and `publicView` for rules, real SDK clients for the Room server, Playwright for the browser — never a private helper. ([spec #22, Testing Decisions](https://github.com/szentedaniel/UNIversum-enchanced/issues/22))
-- **Name a rules test by what it pins.** `it("R44: …")` for an inventory rule, `it("F12: …")` for an amendment, `it("ADR-0004: …")` for an ADR; the [rules inventory](docs/research/rules-inventory-v1.md) is the yardstick, and the spec's amendments win where they disagree.
+- **Tests drive the public interface.** They assert only what an outside caller sees: `apply` and `publicView` for rules, real SDK clients for the Room server, Playwright for the browser — never a private helper. A helper's own spec may call it directly: `failure-dump.spec.ts` tests `dumpPage`, because the fixture attaches only on failure. ([spec #22, Testing Decisions](https://github.com/szentedaniel/UNIversum-enchanced/issues/22))
+- **Name a test by what it pins.** `it("R44: …")` for an inventory rule, `it("F12: …")` for an amendment, `it("ADR-0004: …")` for an ADR — in any package or app; the [rules inventory](docs/research/rules-inventory-v1.md) is the yardstick, and the spec's amendments win where they disagree.
 - **Seed randomness, feed time in.** Randomness comes from a seed and time from `ctx.now` or the injected scheduler; a test never sleeps. ([spec #22, Testing Decisions](https://github.com/szentedaniel/UNIversum-enchanced/issues/22))
 
 ## Rules engine (`packages/rules`)
@@ -17,7 +17,7 @@ The judgement calls a reviewer checks a diff against. A rule a check already enf
 ## Protocol and server (`packages/protocol`, `apps/server`)
 
 - **The server owns the rules.** A Room handler validates the intent, calls `apply`, stores and broadcasts; the rule and every computed number stay in the rules package. ([ADR-0001](docs/adr/0001-server-owns-the-game-rules.md))
-- **Dependencies flow one way.** `web → protocol → rules` and `server → protocol → rules`; a package never imports the web app or the server. ([spec #22, Modules](https://github.com/szentedaniel/UNIversum-enchanced/issues/22))
+- **Dependencies flow one way.** `web → protocol → rules` and `server → protocol → rules`; a package never imports the web app or the server. The web side is enforced by the import fence (`.oxlintrc.json` `no-restricted-imports`, `apps/web/test/import-fence.test.ts`); the server's imports and the packages' have no check, so a review must catch them. ([spec #22, Modules](https://github.com/szentedaniel/UNIversum-enchanced/issues/22))
 
 ## Web client (`apps/web`)
 

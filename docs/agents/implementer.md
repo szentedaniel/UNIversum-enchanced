@@ -43,7 +43,7 @@ Always pass the e2e ports you were given: other implementers run Playwright at t
 
 - **One spec, repeated:** `CI=true E2E_SERVER_PORT=<sp> E2E_WEB_PORT=<wp> pnpm --filter @universum/e2e run test tests/<name>.spec.ts --repeat-each 6 --retries 0`. Pass the arguments straight after `test`: with `-- ` in front, Playwright drops them and runs the whole suite.
 - **Flaky is failing:** in CI mode a test that passes only on its retry fails the run (`failOnFlakyTests`). Before reporting DONE, repeat every spec you touched as above.
-- **Waits after a Playback:** a control, tray or podium that opens after a Playback can take longer than Playwright's 5 s default (a Chance card alone is 7 s). Give such a wait a timeout computed with `playbackOf` from `@universum/rules` over the worst-case events, never a bare number.
+- **Waits after a Playback:** see `CODING_STANDARDS.md` §E2E.
 - **When an e2e test fails, read the screens, not the spec:** a game spec imports `test` from `tests/helpers.ts` and registers each page it opens (`startGame` does the creator and guest; `registerPage(name, page)` for the rest), handing contexts and launched browsers to `closeAfterDump` instead of closing them. On failure the fixture attaches one JSON per page (`<name>.json`): the Player, connection status and last Rejection, the push's `seq`/`clockOffset`/event types, the view's Turn, current Player, phase, `actsAfter` and version, `playback()` and the visible button labels. The list reporter does not print `application/json` bodies, so read the attachments in the HTML report (`apps/e2e/playwright-report/`, the failed test's **Attachments**) or re-run with `--reporter=json`. A page that was closed reports `error` instead of state.
 
 ## 6. Finish
