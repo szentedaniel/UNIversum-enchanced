@@ -6,11 +6,12 @@ shared `apps/e2e/tests/helpers.ts`. Version: #58.
 ## The fixture
 
 - **Import `test` from `./helpers.ts`, not `@playwright/test`.** The exported
-  `test` is `base.extend` with one auto fixture (`failureDump`) that resets the
+  `test` is `base.extend` with two auto fixtures: `failureDump` resets the
   page registry, and on a failed test attaches one JSON per registered page
-  before closing what the spec handed over. `expect` still comes from
-  `@playwright/test`. Every game spec uses it; a spec that keeps
-  `@playwright/test`'s `test` silently loses the dump.
+  before closing what the spec handed over; `pageErrorGuard` (#62) fails a test
+  whose pages threw. `expect` still comes from `@playwright/test`. Every game
+  spec uses it; a spec that keeps `@playwright/test`'s `test` silently loses
+  both.
 - The fixture **depends on `page`** on purpose: fixtures tear down in reverse
   setup order, so the dump runs while the default page's context is still open.
   Dropping the dependency would close that context before the dump in every

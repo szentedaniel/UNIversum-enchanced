@@ -19,9 +19,13 @@ listeners recorded nothing, and `/errors` received only the control error.
 WebKit is the only side that surfaced the caught throw, as a Playwright
 `pageerror`; Chromium reported nothing.
 
-So it is a Playwright WebKit artefact: no `window.onerror`, no Sentry envelope,
-no false report from real Safari/iOS. The attempt still cost a second WebSocket
-construction per join, so it was fixed anyway.
+So it is a Playwright WebKit artefact: in the WebKit build Playwright ships,
+the caught throw reaches Playwright as a `pageerror`, but neither the page's
+`window` listeners nor `/errors` saw it. Whether real Safari/iOS reports it is
+unobserved — that check needs a physical device (or Safari's remote Web
+Inspector) running the instrumented build against a reachable server. The
+attempt still cost a second WebSocket construction per join, so it was fixed
+anyway.
 
 ## The fix: a pnpm patch, not a transport override
 
@@ -48,10 +52,11 @@ construction per join, so it was fixed anyway.
 ## The e2e guard
 
 - `apps/e2e/tests/helpers.ts`: `registerPage` attaches `page.on("pageerror")` to
-  each page (once per page), and the auto `failureDump` fixture fails a test
-  that passed while its pages threw — attaching the dumps first, as for any
-  failure. A spec that throws on purpose must stay off the shared `test`:
-  `error-reporting.spec.ts` imports `@playwright/test` directly and is safe.
+  each page (once per page), and the auto `pageErrorGuard` fixture (#62 split it
+  out of `failureDump`) fails a test whose pages threw — `failureDump` runs
+  first, so the dumps are attached, as for any failure. A spec that throws on
+  purpose must stay off the shared `test`: `error-reporting.spec.ts` imports
+  `@playwright/test` directly and is safe.
 - `createAndJoin` installs a socket probe (`class Probe extends WebSocket`)
   before the page's scripts; `startGame` asserts each page constructed exactly
   one WebSocket, with `protocols: "undefined"` — the browser form. A second
@@ -63,14 +68,16 @@ construction per join, so it was fixed anyway.
 
 ## Gotchas
 
-- The probe runs only through `createAndJoin`/`startGame`. Specs that build
+- The probe runs through `createAndJoin`/`startGame`, or through the exported
+  `probeSockets` in a hand-rolled flow (tabletop, lobby-list). Specs that build
   their own flow (`two-guests`, `full-game`) get the pageerror guard but not the
   socket count; register their pages before navigating if a load-time pageerror
   must be caught.
-- `SocketCall.protocols` is `typeof` of the constructor's second argument:
-  `"undefined"` for the one-argument call and for `undefined` protocols,
-  `"object"` for the Node form, `"string"` if a real subprotocol is ever set.
+- `SocketCall.protocols` is `typeof` of the constructor's second argument, typed
+  as its literal union: `"undefined"` for the one-argument call and for
+  `undefined` protocols, `"object"` for the Node form, `"string"` if a real
+  subprotocol is ever set.
 - `error.name` is empty for WebKit's DOMException; the guard reports
-  `page threw: <stack>`, so the message stays readable.
-- The pageerror check runs only when the test itself passed; a failing test
-  keeps its own error and still gets its dumps.
+  `<registered name> threw: <stack>`, so the message stays readable.
+- A test that already failed keeps its own error and still gets its dumps; the
+  guard's throw does not replace it.

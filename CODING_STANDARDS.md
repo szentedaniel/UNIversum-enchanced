@@ -33,6 +33,6 @@ The judgement calls a reviewer checks a diff against. A rule a check already enf
 
 ## Docs and commits
 
-- **Conventional commits.** `type(scope): description` (feat, fix, test, refactor, docs, chore, build), with no `Co-Authored-By` or "Generated with" lines.
+- **Conventional commits.** `type(scope): description` (feat, fix, test, refactor, docs, chore, build, ci — the last for CI workflow changes), with no `Co-Authored-By` or "Generated with" lines.
 - **Glossary terms in, avoided synonyms out.** Code, test names and messages use the term [`GLOSSARY.md`](GLOSSARY.md) defines, never the synonym it lists under _Avoid_.
 - **A changed decision lands in its ADR.** A diff that contradicts [`docs/adr/`](docs/adr/) amends that ADR in the same commit; a new domain concept goes into the glossary.
