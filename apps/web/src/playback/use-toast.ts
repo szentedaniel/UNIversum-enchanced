@@ -11,8 +11,8 @@ import type { ToastCue } from "#playback/toast.ts";
 import { cueAt, toastCues } from "#playback/toast.ts";
 import { timelineOf } from "#playback/timeline.ts";
 import { usePlayhead } from "#playback/use-playhead.ts";
+import { eventText } from "#playback/presentation.ts";
 import type { Push } from "#stores/room-store.ts";
-import { eventText } from "#text.ts";
 
 /** The step of the push's Playback the toast is showing, or `null` before the first. */
 export function usePlaybackToast(push: Push | null): ToastCue | null {

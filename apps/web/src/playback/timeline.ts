@@ -1,25 +1,25 @@
 /**
  * The local Playback (ADR-0004): one push's events become ordered steps, each
- * with its start offset and duration from the rules' `PLAYBACK_MS` — never a
- * table of its own. The Board's animation queue and the DOM layer both play
- * these steps, so the pawn, the dice, the cards and the toast stay in step and
- * together run exactly as long as the server's `actsAfter` wait
+ * with its start offset and duration from the rules' `PLAYBACK_MS` (durations
+ * are never a second table). The Board's animation queue and the DOM layer
+ * both play these steps, so the pawn, the dice, the cards and the toast stay in
+ * step and together run exactly as long as the server's `actsAfter` wait
  * (`playbackOf(events)`, the sum of every step's duration).
  *
- * A step's `kind` says what the DOM shows for it: the dice, a Chance card, the
- * status-row toast, or nothing of its own (`Moved` shows only on the Board).
+ * A step's `kind` is its event's `overlay` from the presentation table: the
+ * dice, a Chance card, the status-row toast, or nothing of its own (`Moved`
+ * shows only on the Board).
  */
 import type { EventOf, GameEvent } from "@universum/rules";
 import { playbackOfEvent } from "@universum/rules/playback";
-
-export type StepKind = "dice" | "card" | "toast" | "none";
+import { withOverlay, type Overlay } from "#playback/presentation.ts";
 
 type TimedStep = {
   /** Where the step starts, in ms from the push's arrival. */
   startMs: number;
   /** How long it shows, in ms (`Moved` counts its Fields). */
   durationMs: number;
-  kind: StepKind;
+  kind: Overlay;
 };
 
 /**
@@ -32,19 +32,9 @@ export type PlaybackStep =
   | (TimedStep & { kind: "toast"; event: GameEvent })
   | (TimedStep & { kind: "none"; event: GameEvent });
 
-/** What the DOM shows for an event; a step with no length has nothing to show. */
+/** What the DOM shows for an event: the presentation table's `overlay`. */
 function stepOf(event: GameEvent, startMs: number): PlaybackStep {
-  const durationMs = playbackOfEvent(event);
-  switch (event.type) {
-    case "DiceRolled":
-      return { event, startMs, durationMs, kind: "dice" };
-    case "CardDrawn":
-      return { event, startMs, durationMs, kind: "card" };
-    case "Moved":
-      return { event, startMs, durationMs, kind: "none" };
-    default:
-      return { event, startMs, durationMs, kind: durationMs > 0 ? "toast" : "none" };
-  }
+  return { ...withOverlay(event), startMs, durationMs: playbackOfEvent(event) };
 }
 
 /** One push's events as ordered steps, starting at 0. */
