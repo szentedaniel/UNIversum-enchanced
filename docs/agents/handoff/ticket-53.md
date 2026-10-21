@@ -37,6 +37,8 @@ the decision gate).
   is the one server-clock estimate. `TurnRing`, `MinutePill`, the Board's Sale
   marks and the Lobby's held-Seat countdown use it. `decisionOpensAt` keeps its
   inverse (`actsAfter - clockOffset`), which is not the same operation.
+  (**#64** moved `serverNow` to `@universum/protocol/messages` and deleted this
+  file — see `ticket-64.md`.)
 - `board/Board.tsx`: `currentSale`/`currentPick` hold the only decision-gate
   check; `syncPick` no longer repeats it. `onFieldTap` gets the same hold for
   free, because it goes through those two functions.
