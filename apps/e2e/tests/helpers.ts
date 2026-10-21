@@ -14,10 +14,30 @@ import {
   type TestInfo,
 } from "@playwright/test";
 import { PLAYBACK_MS, playbackOf, type GameEvent } from "@universum/rules";
-import type { FullPhase, FullView, PlaybackHook, Rejection } from "./test-hooks.ts";
+import type { FullPhase, FullView, PlaybackHook, Rejection, SocketCall } from "./test-hooks.ts";
 
 /** A screen the spec acts through: a phone taps, a desktop clicks. */
 export type Interactor = { page: Page; mobile: boolean };
+
+/**
+ * Records every WebSocket the page constructs, before the app's scripts run
+ * (#61). A browser rejects the SDK's first attempt — `new WebSocket(url,
+ * { headers, protocols })`, the Node form — and only the fallback serves the
+ * game, so a page that recorded two constructions threw once.
+ */
+async function probeSockets(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const calls: SocketCall[] = [];
+    window.universumWebSockets = calls;
+    class Probe extends WebSocket {
+      constructor(url: string | URL, protocols?: string | string[]) {
+        calls.push({ protocols: typeof protocols });
+        super(url, protocols);
+      }
+    }
+    window.WebSocket = Probe;
+  });
+}
 
 /**
  * The longest Playback a Roll's push can carry: the dice, a 12-Field walk, the
@@ -43,6 +63,7 @@ async function createAndJoin(
   baseURL?: string,
 ): Promise<{ code: string; context: BrowserContext; guest: Page }> {
   registerPage(names.creator, creator);
+  await probeSockets(creator);
   await creator.goto("/create");
   await creator.getByLabel("2", { exact: true }).check();
   await creator.getByRole("button", { name: "Create Room" }).click();
@@ -54,6 +75,7 @@ async function createAndJoin(
   });
   const guest = await context.newPage();
   registerPage(names.guest, guest);
+  await probeSockets(guest);
   await guest.goto(`/room/${code}`);
   return { code, context, guest };
 }
@@ -63,6 +85,18 @@ async function createAndJoin(
  * (WebKit on a Linux runner renders WebGL in software) takes over 5 s.
  */
 const BOARD_UP_MS = 15_000;
+
+/**
+ * A join opens one WebSocket, with the browser signature (#61): a page that
+ * recorded two constructions threw on the first, and the throw costs a
+ * `pageerror` in WebKit even though the SDK's fallback connects.
+ */
+async function expectOneJoinSocket(page: Page, name: string): Promise<void> {
+  const calls = await page.evaluate<SocketCall[]>(() => window.universumWebSockets ?? []);
+  expect(calls, `${name} opened ${String(calls.length)} WebSockets to join`).toEqual([
+    { protocols: "undefined" },
+  ]);
+}
 
 /** Creates a 2-Player Room on `page`, fills it with a second Guest and starts. */
 export async function startGame(
@@ -86,6 +120,7 @@ export async function startGame(
         .toBeGreaterThan(0),
     ),
   );
+  await Promise.all([expectOneJoinSocket(page, "creator"), expectOneJoinSocket(guest, "guest")]);
   return { context, guest };
 }
 
@@ -391,11 +426,23 @@ let registeredPages = new Map<string, Page>();
 let handedOver: (Browser | BrowserContext)[] = [];
 
 /**
+ * The uncaught exceptions the browsers reported for the current test (#61).
+ * A page's own `error` listeners never saw the SDK's caught `SyntaxError`, but
+ * WebKit still reports it as a page error, so the fixture fails the test on
+ * any of them and attaches the dumps.
+ */
+let pageErrors: { page: string; error: Error }[] = [];
+const watchedPages = new WeakSet<Page>();
+
+/**
  * Registers a page for the failure dump under `name` (the attachment's name);
  * registering the same name again replaces the page, e.g. after a reopen.
  */
 export function registerPage(name: string, page: Page): void {
   registeredPages.set(name, page);
+  if (watchedPages.has(page)) return;
+  watchedPages.add(page);
+  page.on("pageerror", (error) => pageErrors.push({ page: name, error }));
 }
 
 /**
@@ -424,16 +471,20 @@ async function attachDumps(testInfo: TestInfo): Promise<void> {
  * The `test` every game spec imports instead of `@playwright/test`. On failure
  * it attaches each registered page's state before the pages close (`page` is a
  * dependency, so this teardown runs first); a passing test attaches nothing.
- * `timeout` keeps the dump running even when the test itself timed out.
+ * A test whose pages reported an uncaught exception fails here too (#61), with
+ * the same dumps. `timeout` keeps the teardown running when the test timed out.
  */
 export const test = base.extend<{ failureDump: void }>({
   failureDump: [
     async ({ page: _page }, use, testInfo) => {
       registeredPages = new Map();
       handedOver = [];
+      pageErrors = [];
       await use();
+      const errors = pageErrors;
+      const failed = testInfo.status !== testInfo.expectedStatus;
       try {
-        if (testInfo.status !== testInfo.expectedStatus) await attachDumps(testInfo);
+        if (failed || errors.length > 0) await attachDumps(testInfo);
       } catch (error) {
         // Never let the dump replace the test's own error.
         console.warn(`the failure dump was not attached: ${String(error)}`);
@@ -444,6 +495,13 @@ export const test = base.extend<{ failureDump: void }>({
               console.warn(`a test resource was not closed: ${String(error)}`);
             }),
           ),
+        );
+      }
+      if (!failed && errors.length > 0) {
+        throw new Error(
+          errors
+            .map(({ page, error }) => `${page} threw: ${error.stack ?? error.message}`)
+            .join("\n\n"),
         );
       }
     },

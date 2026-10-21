@@ -94,10 +94,18 @@ export type FullView = {
   standings: { player: string; wealth: number }[] | null;
 };
 
+/** One WebSocket construction a page made, as the `typeof` its protocols argument (#61). */
+export type SocketCall = { protocols: string };
+
 declare global {
   interface Window {
     /** Counted by a spec that stubs `HTMLMediaElement.play` before the app loads. */
     dicePlays?: number;
+    /**
+     * Every `new WebSocket(...)` the page made, recorded by the probe that
+     * `helpers.ts` installs before the app's scripts run (#61).
+     */
+    universumWebSockets?: SocketCall[];
     /** Samples recorded per animation frame while the Playback probe runs. */
     playbackProbe?: PlaybackSample[];
     /** Stops the probe started by `two-guests.spec.ts`. */
