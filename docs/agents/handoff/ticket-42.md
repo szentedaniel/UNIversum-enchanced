@@ -1,7 +1,7 @@
 # Ticket #42 (Docker compose packaging) — facts for later tickets
 
 Branch `ticket/42-docker`. Files: root `Dockerfile`, `compose.yaml`, `Caddyfile`, `.dockerignore`; CI job `docker`
-(push to main only, `docker compose build`); README "Running with Docker"; `.env.example` `HTTP_PORT`.
+(every pull request and push to main, `docker compose build`); README "Running with Docker"; `.env.example` `HTTP_PORT`.
 
 ## Layout
 

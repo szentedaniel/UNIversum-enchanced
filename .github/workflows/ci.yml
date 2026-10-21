@@ -67,10 +67,9 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # Smoke test of the compose packaging on main only: the images are built and
+  # Smoke test of the compose packaging on every run: the images are built and
   # pushed nowhere.
   docker:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
