@@ -4,6 +4,7 @@ import {
   isRejection,
   PLAYBACK_MS,
   playbackOf,
+  playbackOfEvent,
   publicView,
   SYSTEM,
   TURN_LIMIT_MS,
@@ -51,6 +52,19 @@ describe("the Playback table", () => {
 
     expect(playbackOf(events)).toBe(PLAYBACK_MS.DiceRolled + 8 * PLAYBACK_MS.Moved);
     expect(playbackOf([])).toBe(0);
+  });
+
+  it("ADR-0004: playbackOfEvent is one event's length, and playbackOf sums it", () => {
+    const dice: GameEvent = { type: "DiceRolled", player: "p1", dice: [2, 3] };
+    const walk: GameEvent = { type: "Moved", player: "p1", from: 1, to: 9, steps: 8 };
+    const passed: GameEvent = { type: "TurnPassed", player: "p2", turn: 2 };
+
+    expect(playbackOfEvent(dice)).toBe(PLAYBACK_MS.DiceRolled);
+    expect(playbackOfEvent(walk)).toBe(8 * PLAYBACK_MS.Moved);
+    expect(playbackOfEvent(passed)).toBe(0);
+    expect(playbackOf([dice, walk, passed])).toBe(
+      playbackOfEvent(dice) + playbackOfEvent(walk) + playbackOfEvent(passed),
+    );
   });
 
   it("ADR-0004: a plain Roll's Playback is the dice, the walk, the Tax and the Turn passing", () => {

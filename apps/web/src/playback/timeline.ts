@@ -9,48 +9,54 @@
  * A step's `kind` says what the DOM shows for it: the dice, a Chance card, the
  * status-row toast, or nothing of its own (`Moved` shows only on the Board).
  */
-import type { GameEvent } from "@universum/rules";
-import { PLAYBACK_MS } from "@universum/rules/playback";
+import type { EventOf, GameEvent } from "@universum/rules";
+import { playbackOfEvent } from "@universum/rules/playback";
 
 export type StepKind = "dice" | "card" | "toast" | "none";
 
-export type PlaybackStep = {
-  event: GameEvent;
-  /** Where the step starts, in ms from the push's arrival. */
-  startMs: number;
-  /** How long it shows, in ms (`Moved` counts its Fields). */
-  durationMs: number;
-  kind: StepKind;
+type TimedStep = {
+ /** Where the step starts, in ms from the push's arrival. */
+ startMs: number;
+ /** How long it shows, in ms (`Moved` counts its Fields). */
+ durationMs: number;
+ kind: StepKind;
 };
 
-/** An event's length: the shared constant, `Moved` scaled by its Fields. */
-const durationOf = (event: GameEvent): number =>
-  event.type === "Moved" ? event.steps * PLAYBACK_MS.Moved : PLAYBACK_MS[event.type];
+/**
+ * A step of the Playback: `kind` is the single place that decides what the DOM
+ * shows, and it fixes the event type that carries that content.
+ */
+export type PlaybackStep =
+ | (TimedStep & { kind: "dice"; event: EventOf<"DiceRolled"> })
+ | (TimedStep & { kind: "card"; event: EventOf<"CardDrawn"> })
+ | (TimedStep & { kind: "toast"; event: GameEvent })
+ | (TimedStep & { kind: "none"; event: GameEvent });
 
-/** What the DOM shows for a step; a step with no length has nothing to show. */
-function kindOf(event: GameEvent, durationMs: number): StepKind {
-  switch (event.type) {
-    case "DiceRolled":
-      return "dice";
-    case "CardDrawn":
-      return "card";
-    case "Moved":
-      return "none";
-    default:
-      return durationMs > 0 ? "toast" : "none";
-  }
+/** What the DOM shows for an event; a step with no length has nothing to show. */
+function stepOf(event: GameEvent, startMs: number): PlaybackStep {
+ const durationMs = playbackOfEvent(event);
+ switch (event.type) {
+  case "DiceRolled":
+   return { event, startMs, durationMs, kind: "dice" };
+  case "CardDrawn":
+   return { event, startMs, durationMs, kind: "card" };
+  case "Moved":
+   return { event, startMs, durationMs, kind: "none" };
+  default:
+   return { event, startMs, durationMs, kind: durationMs > 0 ? "toast" : "none" };
+ }
 }
 
 /** One push's events as ordered steps, starting at 0. */
 export function timelineOf(events: readonly GameEvent[]): PlaybackStep[] {
-  const steps: PlaybackStep[] = [];
-  let startMs = 0;
-  for (const event of events) {
-    const durationMs = durationOf(event);
-    steps.push({ event, startMs, durationMs, kind: kindOf(event, durationMs) });
-    startMs += durationMs;
-  }
-  return steps;
+ const steps: PlaybackStep[] = [];
+ let startMs = 0;
+ for (const event of events) {
+  const step = stepOf(event, startMs);
+  steps.push(step);
+  startMs += step.durationMs;
+ }
+ return steps;
 }
 
 /**
@@ -59,9 +65,9 @@ export function timelineOf(events: readonly GameEvent[]): PlaybackStep[] {
  * the dice stop when the walk starts, and a zero-length step is never current.
  */
 export function stepAt(steps: readonly PlaybackStep[], elapsedMs: number): PlaybackStep | null {
-  for (const step of steps) {
-    if (step.startMs > elapsedMs) break;
-    if (elapsedMs < step.startMs + step.durationMs) return step;
-  }
-  return null;
+ for (const step of steps) {
+  if (step.startMs > elapsedMs) break;
+  if (elapsedMs < step.startMs + step.durationMs) return step;
+ }
+ return null;
 }
