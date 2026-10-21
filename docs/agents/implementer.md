@@ -31,7 +31,7 @@ Red → green → refactor, one behaviour at a time. The lines a test must not c
 ## 5. Checks (all must be green, in CI order)
 
 ```bash
-pnpm exec oxfmt --check apps packages
+pnpm exec oxfmt --check
 pnpm run lint
 pnpm -r run typecheck
 pnpm exec vitest run
