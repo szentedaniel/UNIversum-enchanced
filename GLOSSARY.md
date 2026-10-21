@@ -56,6 +56,10 @@ _Avoid_: Throw, dobás
 The showing, in order and on every screen, of everything one Player's action set off; the next decision, and its Turn timer, starts only once the Playback ends.
 _Avoid_: Animation, replay
 
+**Decision gate**:
+The moment the next decision opens, once the Playback before it has ended; the decision's controls and its Turn timer start there.
+_Avoid_: Playback over, unlock
+
 **Turn timer**:
 The countdown a Player has for one decision of their Turn, starting when the Playback before it ends.
 _Avoid_: Turn countdown
