@@ -40,6 +40,7 @@ import {
   type PlayerId,
   type PlayerIntent,
   type Rejection,
+  type Seed,
 } from "@universum/rules";
 import { FloodMeter } from "#abuse/flood.ts";
 import { REQUEST_ID_HEADER, type AbuseGuard } from "#abuse/guard.ts";
@@ -176,10 +177,11 @@ export class RestoreRoom {
 export const restoreOptions = (stored: StoredRoom) => ({ restore: new RestoreRoom(stored) });
 
 /**
- * Test-only clock overrides (`GAME_TURN_LIMIT_MS`, `GAME_MINUTE_MS`), so a
- * full game fits an e2e run. Empty in production, which uses the rules constants.
+ * Test-only overrides (`GAME_TURN_LIMIT_MS`, `GAME_MINUTE_MS`, `GAME_SEED`),
+ * so a full game fits an e2e run and its dice and cards are the same on every
+ * run. Empty in production, which uses the rules constants and a fresh seed.
  */
-export type GameTiming = { turnLimitMs?: number; minuteMs?: number };
+export type GameTiming = { turnLimitMs?: number; minuteMs?: number; seed?: Seed };
 
 function restoreFrom(options: unknown): StoredRoom | null {
   if (typeof options !== "object" || options === null || !("restore" in options)) return null;
@@ -607,9 +609,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     const game = setupGame({
       seats: this.seats.map(({ playerId, name }) => ({ playerId, name })),
       settings: this.settings,
-      seed: newSeed(),
+      seed: this.timing.seed ?? newSeed(),
       now: this.now(),
-      ...this.timing,
+      turnLimitMs: this.timing.turnLimitMs,
+      minuteMs: this.timing.minuteMs,
     });
     const refused = this.commit(game, []);
     if (refused) return refused;

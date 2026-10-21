@@ -6,7 +6,7 @@
  * constant (see vite.config.ts): false in production builds, so this code is
  * compiled out.
  */
-import type { PublicView } from "@universum/rules";
+import type { GameEvent, PublicView } from "@universum/rules";
 import type { FieldId } from "@universum/rules/board";
 import type { Board } from "#board/board.ts";
 import { playbackStore, type PlaybackState } from "#playback/playback-store.ts";
@@ -22,7 +22,8 @@ export type TestHooks = {
   /** Whether the latest push's decision is open (local Playback and `actsAfter`, ADR-0004). */
   playback(): PlaybackState;
   pick(): Board["pick"];
-  showView(view: PublicView): void;
+  /** Shows a made-up view, optionally with the events of the push that led to it. */
+  showView(view: PublicView, events?: readonly GameEvent[]): void;
 };
 
 declare global {
@@ -41,12 +42,12 @@ export function exposeBoard(board: Board | null): void {
         room: () => roomStore.getState(),
         playback: () => playbackStore.getState(),
         pick: () => board.pick,
-        showView(view) {
+        showView(view, events = []) {
           const { push } = roomStore.getState();
           roomStore.setState({
             push: {
               view,
-              events: [],
+              events,
               seq: (push?.seq ?? 0) + 1,
               clockOffset: push?.clockOffset ?? 0,
               receivedAt: Date.now(),

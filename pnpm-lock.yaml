@@ -322,6 +322,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.5
+      '@universum/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

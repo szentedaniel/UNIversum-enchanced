@@ -1,5 +1,18 @@
 import { chromium, devices, expect, test, webkit, type Locator, type Page } from "@playwright/test";
+import { PLAYBACK_MS } from "@universum/rules";
 import type { FullView } from "./test-hooks.ts";
+
+/**
+ * The longest Playback a Roll's push can carry: dice, a 12-Field walk, the
+ * Chance card drawn on landing, its effect and the Round bonus. Waits for the
+ * Playback use its length, not Playwright's 5 s default.
+ */
+const ROLL_PLAYBACK_MS =
+  PLAYBACK_MS.DiceRolled +
+  12 * PLAYBACK_MS.Moved +
+  PLAYBACK_MS.CardDrawn +
+  PLAYBACK_MS.ChanceMoneyReceived +
+  PLAYBACK_MS.RoundBonusPaid;
 
 const viewOf = (page: Page) => page.evaluate(() => window.universumTest?.view() ?? null);
 
@@ -34,6 +47,7 @@ async function startPlaybackProbe(page: Page) {
     // oxlint-disable-next-line unicorn/consistent-function-scoping -- must live in the page
     const tick = () => {
       const { push, me: viewer } = window.universumTest!.room();
+      const diceBox = document.querySelector('[data-testid="dice"]')?.getBoundingClientRect();
       if (push) {
         const { view } = push;
         const decision =
@@ -58,6 +72,14 @@ async function startPlaybackProbe(page: Page) {
           actsAfter: view.actsAfter,
           decision,
           open: window.universumTest!.playback().over,
+          dice:
+            diceBox !== undefined &&
+            diceBox.width > 0 &&
+            diceBox.height > 0 &&
+            diceBox.bottom > 0 &&
+            diceBox.right > 0 &&
+            diceBox.top < innerHeight &&
+            diceBox.left < innerWidth,
           ringDelayMs: Number.isFinite(delayMs) ? Math.round(delayMs) : null,
         });
       }
@@ -166,19 +188,22 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
       if (!current) throw new Error("no screen holds the current Player's Seat");
       // Both screens past the Playback by the server's clock.
       await expect
-        .poll(async () =>
-          (
-            await Promise.all(
-              both.map((page) =>
-                page.evaluate(() => {
-                  const { push } = window.universumTest!.room();
-                  return push === null
-                    ? false
-                    : Date.now() + push.clockOffset >= push.view.actsAfter + 100;
-                }),
-              ),
-            )
-          ).every(Boolean),
+        .poll(
+          async () =>
+            (
+              await Promise.all(
+                both.map((page) =>
+                  page.evaluate(() => {
+                    const { push } = window.universumTest!.room();
+                    return push === null
+                      ? false
+                      : Date.now() + push.clockOffset >= push.view.actsAfter + 100;
+                  }),
+                ),
+              )
+            ).every(Boolean),
+          // One poll interval past the Playback: the roll can be a 7 s Chance card.
+          { timeout: ROLL_PLAYBACK_MS + 1_000 },
         )
         .toBe(true);
       for (const samples of await Promise.all(both.map(stopPlaybackProbe))) {
@@ -189,6 +214,8 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
         expect(held.filter((sample) => sample.decision)).toEqual([]);
         // The ring waits full: its animation starts only when the Playback ends.
         expect(held.some((sample) => (sample.ringDelayMs ?? 0) > 100)).toBe(true);
+        // Every screen saw the Roll's dice before the pawn moved.
+        expect(held.some((sample) => sample.dice)).toBe(true);
       }
       // The decision's control appears once the Playback ends, by auto-wait.
       const phase = view?.phase.kind;

@@ -21,6 +21,11 @@ const SERVER_ENV = {
   // 8 s Turns (+3 s slack) and 8 s "minutes" (15 × 8 s = 2 min for a 15-minute Room).
   GAME_TURN_LIMIT_MS: "8000",
   GAME_MINUTE_MS: "8000",
+  // A fixed dice/card seed: the full game reaches a Doubler/Erasmus/Sale pick
+  // early (turn 5 in the 4-Guest game, turn 1's offer in the 2-Guest game), so
+  // every run covers the required steps even though the Playback makes each
+  // Turn take longer and the 120 s game has fewer of them.
+  GAME_SEED: "4,29,55,129",
 };
 
 // Every test Guest comes from 127.0.0.1, so the per-IP limits are raised (spec: e2e raises them

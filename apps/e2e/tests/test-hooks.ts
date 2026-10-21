@@ -29,6 +29,8 @@ export type PlaybackSample = {
   decision: boolean;
   /** Whether the decision gate was open: local Playback and `actsAfter` (ADR-0004). */
   open: boolean;
+  /** Whether the Roll's dice are in the DOM for their Playback step. */
+  dice: boolean;
   /** The current Player's ring's CSS animation delay in ms (`null` if not rendered). */
   ringDelayMs: number | null;
 };
@@ -107,8 +109,8 @@ declare global {
       /** Whether the latest push's decision is open (local Playback and `actsAfter`). */
       playback(): { seq: number | null; over: boolean };
       pick(): PickMarks | null;
-      /** Shows a made-up view (a full PublicView) as if the server had pushed it. */
-      showView(view: FullView): void;
+      /** Shows a made-up view (a full PublicView) as if the server had pushed it, with optional events. */
+      showView(view: FullView, events?: { type: string; [key: string]: unknown }[]): void;
       /** The room store (only the fields the specs read). */
       room(): {
         me: string | null;

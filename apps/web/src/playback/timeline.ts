@@ -52,3 +52,16 @@ export function timelineOf(events: readonly GameEvent[]): PlaybackStep[] {
   }
   return steps;
 }
+
+/**
+ * The step the DOM shows at `elapsedMs` from the push's arrival, or `null`
+ * once the Playback has ended. A step is current from its start until its end:
+ * the dice stop when the walk starts, and a zero-length step is never current.
+ */
+export function stepAt(steps: readonly PlaybackStep[], elapsedMs: number): PlaybackStep | null {
+  for (const step of steps) {
+    if (step.startMs > elapsedMs) break;
+    if (elapsedMs < step.startMs + step.durationMs) return step;
+  }
+  return null;
+}

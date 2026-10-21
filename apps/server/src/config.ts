@@ -1,4 +1,5 @@
 import { join, resolve } from "node:path";
+import type { Seed } from "@universum/rules";
 import { LOG_LEVELS, type LogLevel } from "#observability/logger.ts";
 import { parseDsn } from "#observability/dsn.ts";
 import { loadLimits, type Limits } from "#limits.ts";
@@ -34,8 +35,10 @@ export type ServerConfig = {
    */
   sentryDsn: string | null;
   /**
-   * Test-only clock overrides (`GAME_TURN_LIMIT_MS`, `GAME_MINUTE_MS`): shorter
-   * Turns and "minutes", so an e2e game reaches its end quickly. Unset in production.
+   * Test-only overrides (`GAME_TURN_LIMIT_MS`, `GAME_MINUTE_MS`, `GAME_SEED`):
+   * shorter Turns and "minutes", so an e2e game reaches its end quickly, and a
+   * fixed PRNG seed, so its dice and cards are the same on every run. Unset in
+   * production.
    */
   timing: GameTiming;
 };
@@ -58,22 +61,27 @@ export function loadConfig(env: Env = process.env): ServerConfig {
     release: env["RELEASE"] || "dev",
     sentryDsn: parseSentryDsn(env["SENTRY_DSN"]),
     limits: loadLimits(env),
-    // Test-only clock overrides: production uses the rules constants, so a
-    // restart with another value can never leave stored deadlines out of step
-    // with the Turn ring.
+    // Test-only overrides: production uses the rules constants and a fresh
+    // seed, so a restart with another value can never leave stored deadlines
+    // out of step with the Turn ring, or a game predictable.
     timing: production
       ? {}
       : {
           turnLimitMs: parseOptionalMs("GAME_TURN_LIMIT_MS", env["GAME_TURN_LIMIT_MS"]),
           minuteMs: parseOptionalMs("GAME_MINUTE_MS", env["GAME_MINUTE_MS"]),
+          seed: parseSeed("GAME_SEED", env["GAME_SEED"]),
         },
   };
 }
 
-/** Whether a production server was handed the test-only clock overrides, so boot can warn that it ignores them. */
+/** Whether a production server was handed the test-only overrides, so boot can warn that it ignores them. */
 export function timingIgnored(env: Env = process.env): boolean {
   if (env["NODE_ENV"] !== "production") return false;
-  return env["GAME_TURN_LIMIT_MS"] !== undefined || env["GAME_MINUTE_MS"] !== undefined;
+  return (
+    env["GAME_TURN_LIMIT_MS"] !== undefined ||
+    env["GAME_MINUTE_MS"] !== undefined ||
+    env["GAME_SEED"] !== undefined
+  );
 }
 
 /** A positive whole number of milliseconds, or `undefined` when the variable is unset. */
@@ -84,6 +92,25 @@ function parseOptionalMs(name: string, raw: string | undefined): number | undefi
     throw new Error(`${name} must be a whole number of milliseconds, got ${JSON.stringify(raw)}`);
   }
   return value;
+}
+
+/**
+ * Four comma-separated 32-bit integers for the rules PRNG, or `undefined`
+ * when unset. The engine rejects an all-zero seed, so that fails here too.
+ */
+function parseSeed(name: string, raw: string | undefined): Seed | undefined {
+  if (raw === undefined || raw === "") return undefined;
+  const words = raw.split(",").map((word) => Number(word.trim()));
+  if (
+    words.length !== 4 ||
+    words.some((word) => !Number.isInteger(word) || word < 0 || word > 0xffff_ffff) ||
+    words.every((word) => word === 0)
+  ) {
+    throw new Error(
+      `${name} must be four comma-separated 32-bit integers, not all zero, got ${JSON.stringify(raw)}`,
+    );
+  }
+  return [words[0]!, words[1]!, words[2]!, words[3]!] as const;
 }
 
 /** The DSN, or `null` when reporting is off; anything else must be a DSN, never silently ignored. */
