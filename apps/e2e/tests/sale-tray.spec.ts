@@ -47,8 +47,9 @@ function showSale(page: Page, msLeft: number, otherBankrupt = false) {
       view.fields[fields.seattle] = { owner: other.id, level: 1, value: 0, rent: 0, sale: 0 };
       view.autoSell = [fields.veszprem, fields.budapest];
       // A new decision each time (fresh picks), open now, with `msLeft` on the server's clock.
-      view.actsAfter = Date.now() + push!.clockOffset;
-      view.turnDeadline = Date.now() + push!.clockOffset + left + 3_000;
+      const now = hooks.serverNow();
+      view.actsAfter = now;
+      view.turnDeadline = now + left + 3_000;
       view.turnTimer = { endsAt: view.turnDeadline - 3_000, limitMs: 20_000 };
       hooks.showView(view);
     },

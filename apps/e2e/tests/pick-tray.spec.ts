@@ -52,8 +52,9 @@ function showPick(page: Page, pickKind: "doubler" | "erasmus") {
         ];
       }
       // A new decision each time (fresh picks), open now, with time on the server's clock.
-      view.actsAfter = Date.now() + push!.clockOffset;
-      view.turnDeadline = Date.now() + push!.clockOffset + 18_000;
+      const now = hooks.serverNow();
+      view.actsAfter = now;
+      view.turnDeadline = now + 18_000;
       view.turnTimer = { endsAt: view.turnDeadline - 3_000, limitMs: 20_000 };
       hooks.showView(view);
     },
