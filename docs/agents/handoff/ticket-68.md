@@ -2,7 +2,7 @@
 
 Branch `ticket/68-fence-import-rules` (on `v2-modernization`), spec #63. The
 358-line source scanner `apps/web/test/playback-fence.test.ts` is gone. Its two
-rules became an Oxlint import override and a 90-line server-clock check.
+rules became an Oxlint import override and a 105-line server-clock check.
 
 ## The Playback import rule (`.oxlintrc.json`)
 
@@ -24,10 +24,14 @@ rules became an Oxlint import override and a 90-line server-clock check.
 - Type-only imports of `@universum/rules/playback` outside `playback/` are
   refused too (no `allowTypeImports`). None exist; types the web app needs from
   rules are at the root or `board`.
-- `import-fence.test.ts` now lints sample files at real paths: one inside
-  `apps/web/src/playback/` (allowed) and one in `apps/web/src/board/` (refused).
-  The files are unique-named and removed in `afterAll`. Oxlint's custom
-  messages arrive in the JSON diagnostic's `help`, not `message`.
+- `import-fence.test.ts` runs its allowed and forbidden lists at three
+  locations: the scratch dir under `apps/web/test` (the base config), a sample
+  in `apps/web/src/board/` (the override), and one in `apps/web/src/playback/`
+  (the base config again, because the override excludes it). The two copies of
+  `no-restricted-imports` must stay in step; a drift fails at the location it
+  affects. Sample files are unique-named and removed in `afterAll`, also when a
+  case fails. Oxlint's custom messages arrive in the JSON diagnostic's `help`,
+  not `message`.
 
 ## The server-clock check (`apps/web/test/server-clock-fence.test.ts`)
 
