@@ -218,8 +218,8 @@ const PLAYBACK_MS_ARITHMETIC = {
  * Scaling a `Moved` step count into a length: `event.steps * 160`,
  * `steps * PLAYBACK_MS.Moved`, and the reverse order when the other side is a
  * number or a `*_MS` constant. `progress * event.steps` (the pawn's place
- * along the walk, `board/board.ts`) is interpolation, not a duration, and is
- * not a violation.
+ * along the walk, `playback/playback.ts`) is interpolation, not a duration,
+ * and is not a violation.
  */
 const STEP_SCALING = {
   pattern:
@@ -332,10 +332,10 @@ describe("ADR-0004 playback fence", () => {
     expect(scan(STEP_SCALING, source, "scratch.ts").map(({ line }) => line)).toEqual([
       1, 2, 3, 4, 5,
     ]);
-    // The Board's interpolation, not a duration (board/board.ts:137).
-    expect(scan(STEP_SCALING, "const walked = progress * event.steps;", "board/board.ts")).toEqual(
-      [],
-    );
+    // The core's interpolation, not a duration (playback/playback.ts).
+    expect(
+      scan(STEP_SCALING, "const walked = progress * event.steps;", "playback/playback.ts"),
+    ).toEqual([]);
   });
 
   it("ADR-0004: declares no Playback duration constant in playback/", () => {

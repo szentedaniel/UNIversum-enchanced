@@ -7,7 +7,7 @@
  * compiled out.
  */
 import { serverNow } from "@universum/protocol/messages";
-import type { GameEvent, PublicView } from "@universum/rules";
+import type { GameEvent, PlayerId, PublicView } from "@universum/rules";
 import type { FieldId } from "@universum/rules/board";
 import type { Board } from "#board/board.ts";
 import { gateOpenOf, playbackStore, type PlaybackGate } from "#playback/playback-store.ts";
@@ -17,6 +17,8 @@ declare const TEST_HOOKS_ENABLED: boolean;
 
 export type TestHooks = {
   fieldCenter(id: FieldId): { x: number; y: number };
+  /** Where the Board last placed a pawn (viewport CSS px), or `null` before its first placement. */
+  pawn(player: PlayerId): { x: number; y: number } | null;
   camera(): ReturnType<Board["camera"]>;
   view(): Board["view"];
   room(): RoomState;
@@ -44,6 +46,7 @@ export function exposeBoard(board: Board | null): void {
   window.universumTest = board
     ? {
         fieldCenter: (id) => board.fieldCenter(id),
+        pawn: (player) => board.pawn(player),
         camera: () => board.camera(),
         view: () => board.view,
         room: () => roomStore.getState(),
