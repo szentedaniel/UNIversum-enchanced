@@ -22,8 +22,8 @@ The judgement calls a reviewer checks a diff against. A rule a check already enf
 ## Web client (`apps/web`)
 
 - **Every visible string is a message.** Text lives in `apps/web/messages/{hu,en,de}.json` (Paraglide), money goes through `Intl.NumberFormat` in the active language, and the server sends only ids, codes and numbers. ([spec #22, Client](https://github.com/szentedaniel/UNIversum-enchanced/issues/22))
-- **Show the pushed view.** There is no optimistic UI: controls and overlays render from the last view in `roomStore`, a Rejection only clears the pending control, and the dice start on `DiceRolled`; a number or option the view carries is never hard-coded or recomputed. ([ADR-0001](docs/adr/0001-server-owns-the-game-rules.md), [spec #22, Client](https://github.com/szentedaniel/UNIversum-enchanced/issues/22))
-- **A Playback step decides what to show.** `apps/web/src/playback/timeline.ts` gives each step its `kind`; an overlay or control switches on that `kind`, never on `event.type` again. ([ADR-0004](docs/adr/0004-rules-engine-times-the-playback.md))
+- **Show the pushed view.** There is no optimistic UI: controls and overlays render from the latest push's `view`, which a screen reads from the Playback frame (`frame.view`), never from `push.view`; a Rejection only clears the pending control, and the dice start on `DiceRolled`; a number or option the view carries is never hard-coded or recomputed. ([ADR-0001](docs/adr/0001-server-owns-the-game-rules.md), [spec #22, Client](https://github.com/szentedaniel/UNIversum-enchanced/issues/22))
+- **A Playback step decides what to show.** Each event type's overlay, toast tone and toast line come from the presentation table in [`apps/web/src/playback/presentation.ts`](apps/web/src/playback/presentation.ts); a screen switches on its step's `kind`, never on `event.type` again. Only the Playback core ([`apps/web/src/playback/playback.ts`](apps/web/src/playback/playback.ts)) looks for the steps a pawn walks, by `event.type === "Moved"`. ([ADR-0004](docs/adr/0004-rules-engine-times-the-playback.md))
 
 ## E2E (`apps/e2e`)
 
