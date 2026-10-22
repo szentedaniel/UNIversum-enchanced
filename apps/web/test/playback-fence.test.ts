@@ -19,8 +19,8 @@
  * only place that adds it to a client clock reading is `serverNow` in
  * `@universum/protocol/messages` (ticket #64 moved it out of the web app, so
  * the e2e specs and the load test share it). Every module here — the ring, the
- * Minute pill, the Board, the Lobby — calls it. `decisionOpensAt` in
- * `playback/playback-store.ts` keeps its inverse (`actsAfter - clockOffset`),
+ * Minute pill, the Board, the Lobby — calls it. `playbackOfPush` in
+ * `playback/playback.ts` keeps its inverse (`actsAfter - clockOffset`),
  * which turns a server timestamp into a client one and is not the same
  * operation; it is the one named exception.
  */
@@ -242,10 +242,9 @@ const CLOCK_ARITHMETIC = {
   rule: "the server clock is estimated only by serverNow in @universum/protocol/messages (ADR-0004)",
   instead:
     "serverNow(clockOffset) from @universum/protocol/messages, never Date.now() + clockOffset",
-  // The one inverse conversion, in decisionOpensAt: a server timestamp to a client one.
+  // The one inverse conversion, in playbackOfPush: a server timestamp to a client one.
   except: (file: string, line: string) =>
-    file === "playback/playback-store.ts" &&
-    /^const actsAfter = push\.view\.actsAfter\s*-/.test(line),
+    file === "playback/playback.ts" && /^const actsAfter = push\.view\.actsAfter\s*-/.test(line),
 } satisfies Fence;
 
 describe("stripComments", () => {
@@ -347,13 +346,13 @@ describe("ADR-0004 playback fence", () => {
     expect(report(violations(CLOCK_ARITHMETIC))).toEqual([]);
   });
 
-  it("ADR-0004: exempts only decisionOpensAt's inverse conversion in playback-store.ts", () => {
+  it("ADR-0004: exempts only playbackOfPush's inverse conversion in playback.ts", () => {
     const source = [
       "const actsAfter = push.view.actsAfter - push.clockOffset;",
       "const skewed = Date.now() + push.clockOffset;",
     ].join("\n");
-    expect(report(scan(CLOCK_ARITHMETIC, source, "playback/playback-store.ts"))).toEqual([
-      "playback/playback-store.ts:2: the server clock is estimated only by serverNow in @universum/protocol/messages (ADR-0004) — use serverNow(clockOffset) from @universum/protocol/messages, never Date.now() + clockOffset. Line: const skewed = Date.now() + push.clockOffset;",
+    expect(report(scan(CLOCK_ARITHMETIC, source, "playback/playback.ts"))).toEqual([
+      "playback/playback.ts:2: the server clock is estimated only by serverNow in @universum/protocol/messages (ADR-0004) — use serverNow(clockOffset) from @universum/protocol/messages, never Date.now() + clockOffset. Line: const skewed = Date.now() + push.clockOffset;",
     ]);
   });
 });

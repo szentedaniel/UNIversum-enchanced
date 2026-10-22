@@ -21,13 +21,15 @@ const ZOOM_STEP = 1.5;
 /** This client's open Sale, from the latest push, once its Playback has ended. */
 function currentSale() {
   const { push, me } = roomStore.getState();
-  return push && playbackStore.getState().over ? saleFor(push.view, me) : null;
+  const { frame } = playbackStore.getState();
+  return push && (frame?.gateOpen ?? true) ? saleFor(push.view, me) : null;
 }
 
 /** This client's open Doubler or Erasmus pick, from the latest push, once its Playback has ended. */
 function currentPick() {
   const { push, me } = roomStore.getState();
-  return push && playbackStore.getState().over ? singlePickFor(push.view, me) : null;
+  const { frame } = playbackStore.getState();
+  return push && (frame?.gateOpen ?? true) ? singlePickFor(push.view, me) : null;
 }
 
 /**
@@ -158,7 +160,7 @@ export function Board() {
         ),
         // The store wakes at both clocks' opening, so the marks appear with the controls.
         playbackStore.subscribe(
-          (state) => state.over,
+          (state) => state.frame?.gateOpen ?? true,
           () => syncPick(),
         ),
         uiStore.subscribe((state) => state.salePicks, syncPick),

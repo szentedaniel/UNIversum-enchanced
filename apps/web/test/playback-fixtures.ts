@@ -1,0 +1,86 @@
+import type { GameEvent, PublicView } from "@universum/rules";
+
+/** A Roll, the walk, the Rent it stopped at and the Turn passing. */
+export const ROLL = (): GameEvent[] => [
+  { type: "DiceRolled", player: "p1", dice: [3, 4] },
+  { type: "Moved", player: "p1", from: 1, to: 8, steps: 7 },
+  { type: "RentPaid", player: "p1", owner: "p2", field: 8, amount: 50_000 },
+  { type: "TurnPassed", player: "p2", turn: 2 },
+];
+
+/** A Roll from the Field before Start: the walk pays the Round bonus on the way. */
+export const PAST_START = (): GameEvent[] => [
+  { type: "DiceRolled", player: "p1", dice: [2, 2] },
+  { type: "Moved", player: "p1", from: 30, to: 2, steps: 4 },
+  { type: "RoundBonusPaid", player: "p1", amount: 200_000 },
+  { type: "TurnPassed", player: "p2", turn: 2 },
+];
+
+/** A Roll onto Chance: the card is drawn, then its money arrives. */
+export const CHANCE = (): GameEvent[] => [
+  { type: "DiceRolled", player: "p1", dice: [1, 1] },
+  { type: "Moved", player: "p1", from: 12, to: 14, steps: 2 },
+  { type: "CardDrawn", player: "p1", card: "scholarship" },
+  { type: "ChanceMoneyReceived", player: "p1", amount: 300_000 },
+  { type: "TurnPassed", player: "p2", turn: 2 },
+];
+
+/** A Roll onto Chance: the card's Charge is paid, and its shortfall forces a Sale. */
+export const CHANCE_CHARGE = (): GameEvent[] => [
+  { type: "DiceRolled", player: "p1", dice: [6, 6] },
+  { type: "Moved", player: "p1", from: 5, to: 17, steps: 12 },
+  { type: "CardDrawn", player: "p1", card: "failedExams" },
+  { type: "ChanceChargePaid", player: "p1", amount: 200_000 },
+  { type: "FieldsSold", player: "p1", fields: [3], amount: 100_000, auto: true },
+  { type: "TurnPassed", player: "p2", turn: 2 },
+];
+
+/** A timeout: the timeout, the Auto-sell it forced and the penalty. */
+export const TIMEOUT = (): GameEvent[] => [
+  { type: "TimedOut", player: "p1" },
+  { type: "FieldsSold", player: "p1", fields: [1], amount: 100_000, auto: true },
+  { type: "TimeoutPenaltyPaid", player: "p1", amount: 50_000 },
+  { type: "TurnPassed", player: "p2", turn: 3 },
+];
+
+const player = (id: string, seat: number, position: number) => ({
+  id,
+  name: { adjective: "happy", noun: "tiger" },
+  seat,
+  cash: 100_000,
+  position,
+  bankrupt: false,
+  quarantineRounds: null,
+  hasPcrTest: false,
+  wealth: 100_000,
+});
+
+const BASE_VIEW: PublicView = {
+  stateVersion: 2,
+  version: 1,
+  turn: 2,
+  currentPlayer: "p1",
+  phase: { kind: "awaitingRoll" },
+  actsAfter: 0,
+  turnDeadline: null,
+  turnTimer: null,
+  settings: { maxPlayers: 2, minuteLimit: 15 },
+  endsAt: 0,
+  players: [],
+  fields: [],
+  doubler: null,
+  lastChanceCard: null,
+  autoSell: null,
+  pickOptions: null,
+  standings: null,
+};
+
+/** Two Players at the given Fields, with the push's view fields patched in. */
+export const viewOf = (
+  positions: { p1: number; p2: number } = { p1: 8, p2: 17 },
+  patch: Partial<PublicView> = {},
+): PublicView => ({
+  ...BASE_VIEW,
+  players: [player("p1", 0, positions.p1), player("p2", 1, positions.p2)],
+  ...patch,
+});

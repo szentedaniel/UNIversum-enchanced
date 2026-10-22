@@ -22,9 +22,6 @@ import { cn } from "#lib/utils.ts";
 import { singlePickFor } from "#pick/pick.ts";
 import { saleFor } from "#pick/sale.ts";
 import { playbackStore } from "#playback/playback-store.ts";
-import { toneOf } from "#playback/presentation.ts";
-import { usePlaybackStep } from "#playback/use-step.ts";
-import { usePlaybackToast } from "#playback/use-toast.ts";
 import { PickTray } from "#screens/PickTray.tsx";
 import { SaleTray } from "#screens/SaleTray.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
@@ -50,13 +47,13 @@ export function Game() {
   const [sentAt, setSentAt] = useState<number | null>(null);
   const wide = useWide();
   const [joinError, setJoinError] = useState<RejectionCode | null>(null);
-  // Both clocks: the local Playback of this push and the server's `actsAfter` (ADR-0004).
-  const playbackOver = useStore(playbackStore, (state) => state.over);
+  // The Playback core's frame: the gate, the held Turn, the toast and the overlay (ADR-0004).
+  const gateOpen = useStore(playbackStore, (state) => state.frame?.gateOpen ?? true);
   // Story 4: the heading and Turn number switch when the gate opens, not on the push.
-  const shownTurn = useStore(playbackStore, (state) => state.shownTurn);
-  const toast = usePlaybackToast(push);
+  const shownTurn = useStore(playbackStore, (state) => state.frame?.shownTurn ?? null);
+  const toast = useStore(playbackStore, (state) => state.frame?.toast ?? null);
   // The dice and a drawn Chance card show for their own step of the Playback (ADR-0004).
-  const step = usePlaybackStep(push);
+  const overlay = useStore(playbackStore, (state) => state.frame?.overlay ?? null);
 
   // The dice sound starts on the server's roll, never on a tap (spec: no optimistic UI).
   useEffect(() => {
@@ -98,19 +95,16 @@ export function Game() {
   const answeredAt = Math.max(push.seq, rejection?.seq ?? 0);
   const pending = sentAt !== null && answeredAt <= sentAt;
   // Decision controls wait for the decision gate: the local Playback and the server's actsAfter (ADR-0004).
-  const canRoll = myTurn && playbackOver && view.phase.kind === "awaitingRoll" && !pending;
-  const offer =
-    myTurn && playbackOver && view.phase.kind === "offer" && !pending ? view.phase : null;
+  const canRoll = myTurn && gateOpen && view.phase.kind === "awaitingRoll" && !pending;
+  const offer = myTurn && gateOpen && view.phase.kind === "offer" && !pending ? view.phase : null;
   const quarantineChoice =
-    myTurn && playbackOver && !pending && view.phase.kind === "quarantineChoice"
-      ? view.phase
-      : null;
-  const sale = playbackOver ? saleFor(view, me) : null;
-  const singlePick = playbackOver ? singlePickFor(view, me) : null;
-  const othersSale = !myTurn && playbackOver && view.phase.kind === "selling";
+    myTurn && gateOpen && !pending && view.phase.kind === "quarantineChoice" ? view.phase : null;
+  const sale = gateOpen ? saleFor(view, me) : null;
+  const singlePick = gateOpen ? singlePickFor(view, me) : null;
+  const othersSale = !myTurn && gateOpen && view.phase.kind === "selling";
   const othersPick =
     !myTurn &&
-    playbackOver &&
+    gateOpen &&
     (view.phase.kind === "placingDoubler" || view.phase.kind === "choosingErasmus");
 
   function send(intent: PlayerIntent) {
@@ -142,12 +136,12 @@ export function Game() {
     ),
   }));
   const rejected = rejection !== null && rejection.seq > push.seq;
-  // The Playback's DOM layer: the step's kind decides what shows, the dice or a drawn Chance card.
+  // The Playback's DOM layer: the frame's overlay is the dice or a drawn Chance card.
   const boardOverlay =
-    step?.kind === "dice" ? (
-      <DiceOverlay dice={step.event.dice} />
-    ) : step?.kind === "card" ? (
-      <ChanceCardOverlay key={`${push.seq}:${step.startMs}`} card={step.event.card} />
+    overlay?.kind === "dice" ? (
+      <DiceOverlay dice={overlay.event.dice} />
+    ) : overlay?.kind === "card" ? (
+      <ChanceCardOverlay key={`${push.seq}:${overlay.startMs}`} card={overlay.event.card} />
     ) : null;
 
   const statusRow = (
@@ -155,7 +149,7 @@ export function Game() {
       <MinutePill endsAt={view.endsAt} clockOffset={push.clockOffset} />
       <EventToast
         key={rejected ? `r${rejection.seq}` : push.seq}
-        tone={rejected ? "bad" : toast && toneOf(toast.event) === "notice" ? "good" : "neutral"}
+        tone={rejected ? "bad" : toast?.tone === "notice" ? "good" : "neutral"}
       >
         {rejected ? rejectionText(rejection.code) : toast?.text}
       </EventToast>
@@ -292,7 +286,7 @@ export function Game() {
     return (
       <main className="board-backdrop fixed inset-0 overflow-hidden">
         <ReconnectOverlay />
-        {gameOver && playbackOver && <Podium view={view} phase={gameOver} />}
+        {gameOver && gateOpen && <Podium view={view} phase={gameOver} />}
         {/* The Board's box: clear of the corner cards, the status row and the card; the
             fit area also keeps clear of the camera buttons on its right. */}
         <div className="absolute inset-x-[110px] top-[110px] bottom-[200px] [--board-inset-left:3.75rem] [--board-inset-right:3.75rem]">
@@ -321,7 +315,7 @@ export function Game() {
   return (
     <main className="board-backdrop fixed inset-0 flex flex-col overflow-hidden pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
       <ReconnectOverlay />
-      {gameOver && playbackOver && <Podium view={view} phase={gameOver} />}
+      {gameOver && gateOpen && <Podium view={view} phase={gameOver} />}
       <ul className="m-0 flex list-none justify-center gap-1.5 px-2" aria-label={m.game_players()}>
         {players.map((player) => (
           <PlayerChip key={player.seat} player={player} className="w-0 max-w-28 flex-1" />
