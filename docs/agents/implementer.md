@@ -54,7 +54,7 @@ Always pass the e2e ports you were given: other implementers run Playwright at t
 ## 6. Finish
 
 1. Merge the current integration tip: `git merge v2-modernization`, resolve conflicts keeping both sides' behaviour, regenerate Paraglide, re-run every check.
-2. Write `docs/agents/handoff/ticket-<N>.md`: extension points and gotchas later tickets need. Append one line for it at the end of `docs/agents/handoff/INDEX.md` (`` - `ticket-<N>.md`: what it covers. Read for: #… ``). Commit.
+2. Write `docs/agents/handoff/ticket-<N>.md`: extension points and gotchas later tickets need. Append one line for it at the end of `docs/agents/handoff/INDEX.md` (``- `ticket-<N>.md`: what it covers. Read for: #…``). Commit.
 3. Write the report file named in your prompt (see below), then stop and wait.
 
 ### Report file
