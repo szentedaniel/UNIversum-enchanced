@@ -44,15 +44,36 @@ async function restrictedImports(
     .toSorted((a, b) => a.line - b.line);
 }
 
-/** A unique sample file in `dir`, removed after the run. */
+/** A unique sample file in `dir`, removed after the run (even when a case fails). */
 function sample(dir: string): string {
   const file = join(dir, `sample-${Math.random().toString(36).slice(2)}.ts`);
   created.push(file);
   return file;
 }
 
-it("lets the web app import rules types, the board and playback data and the protocol messages", async () => {
-  const source = `
+// The base config reaches the scratch dir; the src override repeats it for the
+// rest of apps/web/src, and its playback/ exclusion puts that folder back on
+// the base config. Both copies are linted here, so a drift between them fails.
+// `playbackImport` is where the allowed source's playback import (line 4) is
+// refused at that location.
+const LOCATIONS = [
+  { name: "apps/web/test (the base config)", dir: scratch, playbackImport: [] },
+  {
+    name: "apps/web/src/board (the override)",
+    dir: join(repoRoot, "apps/web/src/board"),
+    playbackImport: [4],
+  },
+  {
+    name: "apps/web/src/playback (the base config)",
+    dir: join(repoRoot, "apps/web/src/playback"),
+    playbackImport: [],
+  },
+];
+
+it.each(LOCATIONS)(
+  "lets the web app import rules types, the board and playback data and the protocol messages ($name)",
+  async ({ dir, playbackImport }) => {
+    const source = `
 import type { State } from "@universum/rules";
 import { FIELD_COUNT } from "@universum/rules/board";
 import { PLAYBACK_MS, playbackOf, playbackOfEvent } from "@universum/rules/playback";
@@ -60,22 +81,23 @@ import { INTENT_MESSAGE } from "@universum/protocol/messages";
 import type { IntentMessage } from "@universum/protocol/messages";
 export type { Board } from "@universum/rules";
 `;
-  expect(await restrictedImports(sample(scratch), source)).toEqual([]);
-});
+    const lines = (await restrictedImports(sample(dir), source)).map(({ line }) => line);
+    expect(lines).toEqual(playbackImport);
+  },
+);
 
-it("lets only the Playback module import @universum/rules/playback", async () => {
+it("names the Playback module when it refuses its import outside playback/", async () => {
   const source = `import { playbackOf } from "@universum/rules/playback";\n`;
-  expect(await restrictedImports(sample(join(repoRoot, "apps/web/src/playback")), source)).toEqual(
-    [],
-  );
   const refused = await restrictedImports(sample(join(repoRoot, "apps/web/src/board")), source);
   expect(refused.map(({ line }) => line)).toEqual([1]);
   expect(refused[0]?.help).toContain("apps/web/src/playback/");
 });
 
-it("blocks rule logic, the Zod protocol and Zod itself in the web app", async () => {
-  // One forbidden import per line, lines 1 to 9.
-  const source = `import { apply } from "@universum/rules";
+it.each(LOCATIONS)(
+  "blocks rule logic, the Zod protocol and Zod itself in the web app ($name)",
+  async ({ dir }) => {
+    // One forbidden import per line, lines 1 to 9.
+    const source = `import { apply } from "@universum/rules";
 import { migrate } from "@universum/rules/migrations";
 import { INTENT_MESSAGE } from "@universum/protocol";
 import type { IntentMessage } from "@universum/protocol";
@@ -85,7 +107,7 @@ import { string } from "zod/mini";
 export { setup } from "@universum/rules";
 import { playbackOf } from "@universum/rules";
 `;
-  expect((await restrictedImports(sample(scratch), source)).map(({ line }) => line)).toEqual([
-    1, 2, 3, 4, 5, 6, 7, 8, 9,
-  ]);
-});
+    const lines = (await restrictedImports(sample(dir), source)).map(({ line }) => line);
+    expect(lines).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  },
+);
