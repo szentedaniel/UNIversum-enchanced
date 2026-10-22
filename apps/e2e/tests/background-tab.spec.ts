@@ -14,7 +14,11 @@ test.use({ locale: "en-US" });
 /** The push this spec makes: one walk of three Fields, so only the walk holds the gate. */
 const WALK_STEPS = 3;
 
-/** How long that walk plays: the spec's own budget for waiting out its gate (ADR-0004). */
+/**
+ * How long that walk plays: the spec's own budget for waiting out its gate
+ * (ADR-0004). Only `steps` decides a `Moved`'s length, so the placeholder
+ * player and `from` stand in for the walk the page builds.
+ */
 const WALK_PLAYBACK_MS = playbackOfEvent({
   type: "Moved",
   player: "p1",
@@ -22,6 +26,12 @@ const WALK_PLAYBACK_MS = playbackOfEvent({
   to: WALK_STEPS,
   steps: WALK_STEPS,
 } satisfies GameEvent);
+
+/**
+ * A second of slack on the poll: the store wakes ~20 ms past the boundary, and
+ * Playwright's poll ladder can leave a whole second between checks.
+ */
+const POLL_SLACK_MS = 1_000;
 
 /** Parks every animation frame the page requests, until `resumeBoardFrames`. */
 async function starveFrames(page: Page): Promise<void> {
@@ -67,11 +77,11 @@ test("a tab starved of frames puts the pawn where the Playback is on its first f
       },
       { fieldCount: FIELD_COUNT, steps: WALK_STEPS },
     );
-    // The walk runs out while the frames are parked, as it does in a hidden tab.
-    // One poll interval past the walk, so the check lands after the store's wake.
+    // The walk runs out while the frames are parked, as it does in a hidden tab,
+    // so the wait is the walk's own length plus the slack.
     await expect
       .poll(() => page.evaluate(() => window.universumTest!.playback().gateOpen), {
-        timeout: WALK_PLAYBACK_MS + 1_000,
+        timeout: WALK_PLAYBACK_MS + POLL_SLACK_MS,
       })
       .toBe(true);
     // The tab comes back: one frame, then the pawn must be at the walked Field.
