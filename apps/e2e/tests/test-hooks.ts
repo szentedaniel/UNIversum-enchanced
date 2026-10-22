@@ -124,6 +124,8 @@ declare global {
     playbackProbe?: PlaybackSample[];
     /** Stops the probe started by `two-guests.spec.ts`. */
     stopPlaybackProbe?: () => void;
+    /** Resumes the animation frames `background-tab.spec.ts` parked to starve the Board. */
+    resumeBoardFrames?: () => void;
     universumTest?: TestHooks;
   }
 }
@@ -141,6 +143,8 @@ export type PlaybackHook = {
 /** The test-only hooks the web app installs on `window.universumTest` (apps/web/src/test-hooks.ts). */
 export type TestHooks = {
   fieldCenter(id: number): { x: number; y: number };
+  /** Where the Board last placed the given Player's pawn (viewport CSS px). */
+  pawn(player: string): { x: number; y: number } | null;
   camera(): Camera;
   view(): ViewSummary | null;
   /**

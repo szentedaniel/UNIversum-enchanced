@@ -1,20 +1,22 @@
 /**
  * The Board renderer: plain PixiJS 8 behind a small imperative interface
- * (create it, hand it each view and its events, get Field taps back, drive the
+ * (create it, hand it each push's Playback, get Field taps back, drive the
  * camera, destroy it). React never sees Pixi objects; `Board.tsx` is the only
  * bridge.
  *
- * It renders on demand: nothing draws while nothing changes. Events animate
- * in order; a newer push first skips the running animations to their end.
- * The queue is the Playback's timeline: a `Moved` step walks over its own
- * step's duration, every other step pauses for its own, so the Board runs
- * exactly as long as the server's Playback and stays in step with the DOM.
+ * It draws the shared Playback (spec #63): while a push's decision gate is
+ * shut, each animation frame asks the core where every pawn is at
+ * `Date.now()` and puts it there. The Board keeps no clock of its own, so the
+ * pawn, the dice, the toast and the gate read one time; a tab whose frames
+ * were throttled seeks on its first frame. Once the gate opens the pawns rest
+ * where the view puts them, and frames are asked for only while the camera
+ * moves.
  *
  * Camera (prototype variant E): it starts fitted to the fit area and returns
  * to fit at each Turn change unless the Player turned Follow on. Taps open the
  * nearest Field; selecting or revealing a Field pans at most, never zooms.
  */
-import type { EventOf, GameEvent, PlayerId, PublicView } from "@universum/rules";
+import type { PlayerId, PublicView } from "@universum/rules";
 import { FIELD_COUNT, FIELDS, type FieldId } from "@universum/rules/board";
 import { Application, Assets, Container, Graphics, Sprite, type Spritesheet } from "pixi.js";
 import { createFieldArt, type FieldArt, type Frames } from "#board/art.ts";
@@ -34,7 +36,7 @@ import { INK } from "#board/colors.ts";
 import { attachGestures } from "#board/gestures.ts";
 import { FIELD_WIDTH, fieldPoint, type Point } from "#board/layout.ts";
 import type { PickMarks } from "#pick/sale.ts";
-import { timelineOf } from "#playback/timeline.ts";
+import type { Frame, Playback } from "#playback/playback.ts";
 
 export type BoardOptions = {
   /** The Field's name in the active language. */
@@ -51,8 +53,8 @@ export type BoardOptions = {
 };
 
 export type Board = {
-  /** Shows a new view, animating the events that led to it. */
-  update(view: PublicView, events: readonly GameEvent[]): void;
+  /** Shows a push's Playback: the view at once, the pawns seeked to its frames until its gate opens. */
+  update(playback: Playback): void;
   /** Rings and lifts the Field whose card is open. Never moves the camera. */
   setSelected(id: FieldId | null): void;
   /**
@@ -76,6 +78,8 @@ export type Board = {
   destroy(): void;
   /** Test hook: a Field's centre in viewport CSS pixels. */
   fieldCenter(id: FieldId): Point;
+  /** Test hook: where the Board last placed a pawn, in viewport CSS pixels. */
+  pawn(player: PlayerId): Point | null;
   /** Test hook: the camera (canvas CSS px per Board unit, and offset). */
   camera(): Camera;
   /** Test hook: the latest view handed to the Board. */
@@ -83,8 +87,6 @@ export type Board = {
   /** Test hook: the pick marks shown, or `null` outside a pick. */
   readonly pick: PickMarks | null;
 };
-
-type Animation = { duration: number; tick(progress: number): void };
 
 type Scene = {
   placePawn(player: PlayerId, at: Point): void;
@@ -127,20 +129,6 @@ const lerpPoint = (a: Point, b: Point, t: number): Point => ({
   y: lerp(a.y, b.y, t),
 });
 const easeOut = (t: number) => 1 - (1 - t) ** 3;
-
-const pause = (duration: number): Animation => ({ duration, tick: () => {} });
-
-/** The pawn walks Field by Field over the step's duration (from the Playback's timeline). */
-const walk = (event: EventOf<"Moved">, scene: Scene, durationMs: number): Animation => ({
-  duration: durationMs,
-  tick(progress) {
-    const walked = progress * event.steps;
-    const step = Math.min(Math.floor(walked), event.steps - 1);
-    const from = fieldPoint(event.from + step);
-    const to = fieldPoint(event.from + step + 1);
-    scene.placePawn(event.player, lerpPoint(from, to, walked - step));
-  },
-});
 
 // ------------------------------------------------------------ atlas
 
@@ -254,6 +242,8 @@ export async function createBoard(
 
   const pawns = new Map<PlayerId, Container>();
   const seats = new Map<PlayerId, number>();
+  /** Where each pawn was last drawn, in Board units: the `pawn` test hook reads it. */
+  const placed = new Map<PlayerId, Point>();
   /** The pawn the camera follows: the one walking, else the current Player's. */
   let focus: PlayerId | null = null;
   const scene: Scene = {
@@ -263,7 +253,7 @@ export async function createBoard(
       const offset = PAWN_OFFSETS[seats.get(player) ?? 0] ?? { x: 0, y: 0 };
       pawn.position.set(at.x + offset.x, at.y + offset.y);
       pawn.zIndex = pawn.y;
-      focus = player;
+      placed.set(player, at);
     },
   };
 
@@ -289,11 +279,6 @@ export async function createBoard(
       }
       pawns.get(player.id)!.visible = !player.bankrupt;
     }
-  }
-
-  function placeAll(view: PublicView): void {
-    for (const player of view.players) scene.placePawn(player.id, fieldPoint(player.position));
-    focus = view.currentPlayer;
   }
 
   function syncFields(view: PublicView): void {
@@ -432,23 +417,31 @@ export async function createBoard(
   // ------------------------------------------------------------ render loop
 
   let frameId = 0;
-  let running: { animation: Animation; startedAt: number } | null = null;
-  const queue: Animation[] = [];
+  /** The latest push's Playback: every frame reads the pawns from it. */
+  let playback: Playback | null = null;
+
+  /** Puts every pawn where the Playback has it at `at`'s instant, and follows the walker. */
+  function placePawns(at: Frame): void {
+    for (const [player, place] of at.pawns) {
+      const from = fieldPoint(place.field);
+      scene.placePawn(
+        player,
+        place.toward === null ? from : lerpPoint(from, fieldPoint(place.toward), place.progress),
+      );
+    }
+    focus = at.walking ?? at.view.currentPlayer;
+  }
 
   function frame(now: number): void {
     frameId = 0;
     let busy = false;
-    if (!running) {
-      const next = queue.shift();
-      if (next) running = { animation: next, startedAt: now };
-    }
-    if (running) {
-      const { animation, startedAt } = running;
-      const progress =
-        animation.duration > 0 ? Math.min(1, (now - startedAt) / animation.duration) : 1;
-      animation.tick(progress);
-      if (progress >= 1) running = null;
-      busy = true;
+    // Pawns are read on the DOM's clock, not the frame's own timestamp, so the
+    // Board and the rest of the screen agree however late this frame is: a tab
+    // whose frames were throttled seeks to the Playback on its first frame.
+    const at = playback?.frameAt(Date.now()) ?? null;
+    if (at) {
+      placePawns(at);
+      busy = !at.gateOpen;
     }
     if (tween) {
       const t = Math.min(1, Math.max(0, (now - tween.startedAt) / tween.duration));
@@ -468,10 +461,10 @@ export async function createBoard(
     if (follow && focus) {
       const pawn = pawns.get(focus);
       if (pawn) {
-        const at = toScreen(camera, pawn.position);
+        const onScreen = toScreen(camera, pawn.position);
         const target = centreOf(area);
-        const dx = target.x - at.x;
-        const dy = target.y - at.y;
+        const dx = target.x - onScreen.x;
+        const dy = target.y - onScreen.y;
         if (Math.abs(dx) + Math.abs(dy) > 0.5) {
           setCamera({ ...camera, x: camera.x + dx * FOLLOW_EASE, y: camera.y + dy * FOLLOW_EASE });
           busy = true;
@@ -479,18 +472,11 @@ export async function createBoard(
       }
     }
     app.render();
-    if (busy || queue.length > 0) invalidate();
+    if (busy) invalidate();
   }
 
   function invalidate(): void {
     if (!frameId) frameId = requestAnimationFrame(frame);
-  }
-
-  /** Jumps every running and queued animation to its end. */
-  function skipToEnd(): void {
-    running?.animation.tick(1);
-    running = null;
-    for (const animation of queue.splice(0)) animation.tick(1);
   }
 
   const resizeObserver = new ResizeObserver(resize);
@@ -505,24 +491,14 @@ export async function createBoard(
   let shown: PublicView | null = null;
 
   return {
-    update(view, events) {
-      skipToEnd();
-      if (shown) placeAll(shown);
+    update(next) {
+      playback = next;
+      // The view (Fields, cash, ownership) changes at once; only the pawns seek.
+      const view = next.frameAt(Date.now()).view;
       const turnChanged = shown !== null && view.turn !== shown.turn;
       shown = view;
       syncPawns(view);
       syncFields(view);
-      if (events.length === 0) placeAll(view);
-      // The Playback's steps, each over its own duration: the pawn walks a
-      // `Moved` step, every other step is a pause that keeps the DOM in step.
-      for (const step of timelineOf(events)) {
-        queue.push(
-          step.event.type === "Moved"
-            ? walk(step.event, scene, step.durationMs)
-            : pause(step.durationMs),
-        );
-      }
-      queue.push({ duration: 0, tick: () => placeAll(view) });
       if (turnChanged && !follow) fitNow(true);
       invalidate();
     },
@@ -589,6 +565,13 @@ export async function createBoard(
       const at = toScreen(camera, boardCentre(id));
       const rect = app.canvas.getBoundingClientRect();
       return { x: rect.left + at.x, y: rect.top + at.y };
+    },
+    pawn(player) {
+      const at = placed.get(player);
+      if (!at) return null;
+      const screen = toScreen(camera, at);
+      const rect = app.canvas.getBoundingClientRect();
+      return { x: rect.left + screen.x, y: rect.top + screen.y };
     },
     camera: () => ({ ...camera }),
     get view() {

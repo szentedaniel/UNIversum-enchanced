@@ -8,7 +8,7 @@ import { fieldFacts } from "#board/field-facts.ts";
 import { Button } from "#components/ui/button.tsx";
 import { selectedPick, singleMarks, singlePickFor } from "#pick/pick.ts";
 import { AUTO_SELL_WARNING_MS, saleFor, saleMarks } from "#pick/sale.ts";
-import { gateOpenOf, playbackStore } from "#playback/playback-store.ts";
+import { currentPlayback, gateOpenOf, playbackStore } from "#playback/playback-store.ts";
 import { roomStore } from "#stores/room-store.ts";
 import { salePicksFor, uiStore } from "#stores/ui-store.ts";
 import { exposeBoard } from "#test-hooks.ts";
@@ -54,10 +54,11 @@ function onFieldTap(id: FieldId | null): void {
 }
 
 /**
- * The one React component around the PixiJS Board. It feeds the renderer
- * every push from `roomStore` and the open Field card and Sale picks from
- * `uiStore` (both outside React), sends Field taps to `uiStore`, and holds the
- * camera buttons.
+ * The one React component around the PixiJS Board. It hands the renderer each
+ * push's Playback (`currentPlayback()`, the store's one core, so the pawns
+ * read the same clock as the dice, the toast and the gate), and the open Field
+ * card and Sale picks from `uiStore` (both outside React), sends Field taps to
+ * `uiStore`, and holds the camera buttons.
  *
  * The camera fits the Board into `.board-fit-area`: the Board minus the
  * `--board-inset-*` space that the screen reserves for these buttons and the
@@ -94,8 +95,8 @@ export function Board() {
         return;
       }
       created = renderer;
-      const first = roomStore.getState().push;
-      if (first) renderer.update(first.view, []);
+      const first = currentPlayback();
+      if (first) renderer.update(first);
       /** The decision the marks belong to; a new one starts without focus or inspect mode. */
       let pickKey: string | null = null;
 
@@ -152,7 +153,10 @@ export function Board() {
         roomStore.subscribe(
           (state) => state.push,
           (push) => {
-            if (push) renderer.update(push.view, push.events);
+            // The store builds a core per push before this subscription runs, so the
+            // Board seeks the same Playback the rest of the screen shows.
+            const playback = currentPlayback();
+            if (push && playback) renderer.update(playback);
             syncPick();
           },
         ),
