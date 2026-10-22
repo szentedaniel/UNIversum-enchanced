@@ -26,11 +26,12 @@ supersedes the shapes #65–#68 describe where they disagree.
   publishes the frame synchronously inside the `roomStore.push` subscription,
   which runs before React's subscribers, so the guard is never reached in
   practice; `push` stays the source for `seq`, `clockOffset` and `events`.
-- `Board.tsx`: `currentSale()`, `currentPick()` and `syncPick()` read
-  `playbackStore.getState().frame` — the gate check is `frame.gateOpen`, the
-  view is `frame.view`, and `push` is still read only for `clockOffset`
-  (`serverNow`). `gateOpenOf` is still the selector for `Game` and the Board's
-  `playbackStore.subscribe(gateOpenOf, …)`.
+- `Board.tsx`: `openView()` returns `frame.view` while the gate is open and
+  `null` otherwise (a frame implies a push); `currentSale()`, `currentPick()`
+  and `syncPick()` all go through it, and `push` is read only for
+  `clockOffset` (with the Lobby's offset as the pre-push fallback, as the
+  `serverNow()` hook does). `gateOpenOf` is still the selector for `Game` and
+  the Board's `playbackStore.subscribe(gateOpenOf, …)`.
 - `board.ts`: `update(playback)` now only stores the core and calls
   `invalidate()`. The render loop's `frame()` compares `at.view !== shown`
   (object identity) and, on a different object, syncs pawn visibility and the
@@ -52,8 +53,8 @@ supersedes the shapes #65–#68 describe where they disagree.
   screen did before; the Board shows the Doubler itself.
 - `presentation.test.ts` gains two pins over every event type: a `toast` row
   has a `text`, and an event whose `PLAYBACK_MS` is `0` has `overlay: "none"`
-  (with the zero-length set pinned as `OfferDeclined`, `TurnPassed`). Reverting
-  `DoublerPlaced` to a textless toast fails both.
+  (the test derives the zero-length set from the rules, it does not copy it).
+  Reverting `DoublerPlaced` to a textless toast fails both.
 - `presentationOf` is no longer exported; `toneOf`, `eventText` and
   `withOverlay` are the module's surface. The test builds its view from
   `playback-fixtures.ts` (`viewOf()`), not a local copy.
@@ -70,17 +71,21 @@ supersedes the shapes #65–#68 describe where they disagree.
 ## E2E
 
 - `background-tab.spec.ts` budgets its gate poll with
-  `playbackOfEvent({ type: "Moved", … steps: WALK_STEPS })` + one poll
-  interval, over the `Moved` the spec itself pushes (no bare `5_000`).
-  `starveFrames` parks callbacks and returns one plain id (`1`): nothing
-  cancels a parked frame.
+  `playbackOfEvent({ type: "Moved", … steps: WALK_STEPS })` plus a second of
+  slack (`POLL_SLACK_MS`, because the store wakes ~20 ms past the boundary and
+  Playwright's poll ladder can leave a second between checks), over the `Moved`
+  the spec itself pushes (no bare `5_000`). `starveFrames` parks callbacks and
+  returns one plain id (`1`): nothing cancels a parked frame.
 - `tapField` still waits for the gate (the dice and the Chance card cover the
   Board); its timeout stays `PLAYBACK_MS.CardDrawn`.
 
 ## Test names
 
-Store-wiring tests are named by behaviour ("reads the frame at each boundary
-and never a moment early", "holds one core for the whole life of a push");
-the `ADR-0004:` prefix stays only on the durations/gate/server-clock claims —
-in the store test that is "the gate opens at the server's `actsAfter` when it
-is later". The presentation tests carry no prefix.
+The `ADR-0004:` prefix stays only on the tests that pin an ADR-0004 claim —
+the durations, the gate and the server clock. In `playback-store.test.ts` that
+is the boundary timing ("reads the frame at each boundary and never a moment
+early"), "a push with no events has one boundary, its actsAfter" and "the gate
+opens at the server's `actsAfter` when it is later". The other store tests
+("holds one core for the whole life of a push", "a new push replaces the
+previous frame and its timer", the frame's contents at each boundary) and the
+presentation-table tests carry no prefix and are named by behaviour.
