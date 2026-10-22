@@ -8,7 +8,7 @@ import { fieldFacts } from "#board/field-facts.ts";
 import { Button } from "#components/ui/button.tsx";
 import { selectedPick, singleMarks, singlePickFor } from "#pick/pick.ts";
 import { AUTO_SELL_WARNING_MS, saleFor, saleMarks } from "#pick/sale.ts";
-import { playbackStore } from "#playback/playback-store.ts";
+import { gateOpenOf, playbackStore } from "#playback/playback-store.ts";
 import { roomStore } from "#stores/room-store.ts";
 import { salePicksFor, uiStore } from "#stores/ui-store.ts";
 import { exposeBoard } from "#test-hooks.ts";
@@ -21,13 +21,13 @@ const ZOOM_STEP = 1.5;
 /** This client's open Sale, from the latest push, once its Playback has ended. */
 function currentSale() {
   const { push, me } = roomStore.getState();
-  return push && playbackStore.getState().over ? saleFor(push.view, me) : null;
+  return push && gateOpenOf(playbackStore.getState()) ? saleFor(push.view, me) : null;
 }
 
 /** This client's open Doubler or Erasmus pick, from the latest push, once its Playback has ended. */
 function currentPick() {
   const { push, me } = roomStore.getState();
-  return push && playbackStore.getState().over ? singlePickFor(push.view, me) : null;
+  return push && gateOpenOf(playbackStore.getState()) ? singlePickFor(push.view, me) : null;
 }
 
 /**
@@ -157,10 +157,7 @@ export function Board() {
           },
         ),
         // The store wakes at both clocks' opening, so the marks appear with the controls.
-        playbackStore.subscribe(
-          (state) => state.over,
-          () => syncPick(),
-        ),
+        playbackStore.subscribe(gateOpenOf, () => syncPick()),
         uiStore.subscribe((state) => state.salePicks, syncPick),
         uiStore.subscribe((state) => state.singlePick, syncPick),
         uiStore.subscribe((state) => state.selectedField, applySelection, {

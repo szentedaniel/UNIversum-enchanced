@@ -1,10 +1,10 @@
 /**
  * The local Playback (ADR-0004): one push's events become ordered steps, each
  * with its start offset and duration from the rules' `PLAYBACK_MS` (durations
- * are never a second table). The Board's animation queue and the DOM layer
- * both play these steps, so the pawn, the dice, the cards and the toast stay in
- * step and together run exactly as long as the server's `actsAfter` wait
- * (`playbackOf(events)`, the sum of every step's duration).
+ * are never a second table). The Playback core reads these steps for the DOM
+ * and the Board's own queue still plays them, so the pawn, the dice, the cards
+ * and the toast stay in step and together run exactly as long as the server's
+ * `actsAfter` wait (`playbackOf(events)`, the sum of every step's duration).
  *
  * A step's `kind` is its event's `overlay` from the presentation table: the
  * dice, a Chance card, the status-row toast, or nothing of its own (`Moved`

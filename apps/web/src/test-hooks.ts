@@ -10,7 +10,7 @@ import { serverNow } from "@universum/protocol/messages";
 import type { GameEvent, PublicView } from "@universum/rules";
 import type { FieldId } from "@universum/rules/board";
 import type { Board } from "#board/board.ts";
-import { playbackStore, type PlaybackState } from "#playback/playback-store.ts";
+import { gateOpenOf, playbackStore, type PlaybackGate } from "#playback/playback-store.ts";
 import { roomStore, type RoomState } from "#stores/room-store.ts";
 
 declare const TEST_HOOKS_ENABLED: boolean;
@@ -21,7 +21,7 @@ export type TestHooks = {
   view(): Board["view"];
   room(): RoomState;
   /** Whether the latest push's decision is open (local Playback and `actsAfter`, ADR-0004). */
-  playback(): PlaybackState;
+  playback(): PlaybackGate;
   /**
    * The server's clock estimated from this client's, for the latest push's
    * `clockOffset` (or the Lobby's before the first push). Specs inside
@@ -47,7 +47,15 @@ export function exposeBoard(board: Board | null): void {
         camera: () => board.camera(),
         view: () => board.view,
         room: () => roomStore.getState(),
-        playback: () => playbackStore.getState(),
+        playback: () => {
+          const state = playbackStore.getState();
+          const { frame } = state;
+          return {
+            seq: frame?.seq ?? null,
+            over: gateOpenOf(state),
+            shownTurn: frame?.shownTurn ?? null,
+          };
+        },
         serverNow: () => {
           const { push, lobbyClockOffset } = roomStore.getState();
           return serverNow(push?.clockOffset ?? lobbyClockOffset);
