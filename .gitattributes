@@ -1,0 +1,2 @@
+# One line per handoff note, appended at the end: union merge keeps every parallel ticket's line (docs/agents/handoff/INDEX.md).
+docs/agents/handoff/INDEX.md merge=union
