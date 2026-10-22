@@ -7,30 +7,48 @@ import { afterAll, expect, it } from "vitest";
 
 // The web app may import only types and the `board` subpath from the rules
 // package, only the Zod-free `messages` subpath from the protocol package, and
-// never Zod (spec: Modules). Oxlint's no-restricted-imports enforces it; this
-// test lints sample files inside apps/web with the repo's real Oxlint config.
+// never Zod (spec: Modules). The Playback durations come from
+// `@universum/rules/playback`, which only the Playback module may import (spec
+// #63, Fence). Oxlint's no-restricted-imports enforces it; this test lints
+// sample files inside apps/web with the repo's real Oxlint config.
 
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const scratch = mkdtempSync(join(fileURLToPath(new URL(".", import.meta.url)), "fence-"));
-afterAll(() => rmSync(scratch, { recursive: true, force: true }));
+const created: string[] = [];
+afterAll(() => {
+  rmSync(scratch, { recursive: true, force: true });
+  for (const file of created) rmSync(file, { force: true });
+});
 
-type Diagnostic = { code: string; labels: { span: { line: number } }[] };
+type Diagnostic = {
+  code: string;
+  help: string | null;
+  labels: { span: { line: number } }[];
+};
 
-async function restrictedImportLines(source: string): Promise<number[]> {
-  const file = join(scratch, `sample-${Math.random().toString(36).slice(2)}.ts`);
+/** Writes `source` at `file` and returns its restricted imports, by line. */
+async function restrictedImports(
+  file: string,
+  source: string,
+): Promise<{ line: number; help: string | null }[]> {
   writeFileSync(file, source);
   const result = await promisify(execFile)(
     "pnpm",
     ["exec", "oxlint", "--disable-nested-config", "--format=json", file],
-    {
-      cwd: repoRoot,
-    },
+    { cwd: repoRoot },
   ).catch((error: { stdout: string }) => error);
   const { diagnostics }: { diagnostics: Diagnostic[] } = JSON.parse(result.stdout);
   return diagnostics
     .filter((d) => d.code.endsWith("(no-restricted-imports)"))
-    .map((d) => d.labels[0]?.span.line ?? 0)
-    .toSorted((a, b) => a - b);
+    .map((d) => ({ line: d.labels[0]?.span.line ?? 0, help: d.help }))
+    .toSorted((a, b) => a.line - b.line);
+}
+
+/** A unique sample file in `dir`, removed after the run. */
+function sample(dir: string): string {
+  const file = join(dir, `sample-${Math.random().toString(36).slice(2)}.ts`);
+  created.push(file);
+  return file;
 }
 
 it("lets the web app import rules types, the board and playback data and the protocol messages", async () => {
@@ -42,7 +60,17 @@ import { INTENT_MESSAGE } from "@universum/protocol/messages";
 import type { IntentMessage } from "@universum/protocol/messages";
 export type { Board } from "@universum/rules";
 `;
-  expect(await restrictedImportLines(source)).toEqual([]);
+  expect(await restrictedImports(sample(scratch), source)).toEqual([]);
+});
+
+it("lets only the Playback module import @universum/rules/playback", async () => {
+  const source = `import { playbackOf } from "@universum/rules/playback";\n`;
+  expect(await restrictedImports(sample(join(repoRoot, "apps/web/src/playback")), source)).toEqual(
+    [],
+  );
+  const refused = await restrictedImports(sample(join(repoRoot, "apps/web/src/board")), source);
+  expect(refused.map(({ line }) => line)).toEqual([1]);
+  expect(refused[0]?.help).toContain("apps/web/src/playback/");
 });
 
 it("blocks rule logic, the Zod protocol and Zod itself in the web app", async () => {
@@ -57,5 +85,7 @@ import { string } from "zod/mini";
 export { setup } from "@universum/rules";
 import { playbackOf } from "@universum/rules";
 `;
-  expect(await restrictedImportLines(source)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  expect((await restrictedImports(sample(scratch), source)).map(({ line }) => line)).toEqual([
+    1, 2, 3, 4, 5, 6, 7, 8, 9,
+  ]);
 });

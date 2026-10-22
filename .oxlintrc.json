@@ -116,6 +116,58 @@
           }
         ]
       }
+    },
+    {
+      // Only the Playback module reads the Playback durations (spec #63,
+      // Fence). An override's rule config replaces the base one instead of
+      // merging, so the web app's `no-restricted-imports` is repeated with
+      // `@universum/rules/playback` added to `paths`.
+      "files": ["apps/web/src/**/*.{ts,tsx}"],
+      "excludeFiles": ["apps/web/src/playback/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@universum/rules/playback",
+                "message": "Only the Playback module (apps/web/src/playback/) may import @universum/rules/playback."
+              },
+              {
+                "name": "@universum/rules",
+                "allowTypeImports": true,
+                "message": "The web app may import only types from @universum/rules; static Board data comes from @universum/rules/board."
+              },
+              {
+                "name": "@universum/protocol",
+                "message": "The web app may import only @universum/protocol/messages (Zod-free)."
+              },
+              {
+                "name": "zod",
+                "message": "Zod stays on the server: the web app gets parsed data from the server's view."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "@universum/rules/*",
+                  "!@universum/rules/board",
+                  "!@universum/rules/playback"
+                ],
+                "message": "Outside apps/web/src/playback/ the web app may import only types and @universum/rules/board from @universum/rules."
+              },
+              {
+                "group": ["@universum/protocol/*", "!@universum/protocol/messages"],
+                "message": "The web app may import only @universum/protocol/messages (Zod-free)."
+              },
+              {
+                "group": ["zod/*"],
+                "message": "Zod stays on the server: the web app gets parsed data from the server's view."
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }
