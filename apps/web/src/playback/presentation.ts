@@ -6,10 +6,12 @@
  * `@universum/rules/playback`, and a new event type fails to compile until it
  * has a row here.
  *
- * `overlay: "none"` makes a hidden event explicit: a walk, a Turn passing and
- * a declined offer have no layer of their own (and, today, no length).
+ * `overlay: "none"` makes a hidden event explicit: a walk, a Turn passing, a
+ * declined offer and a placed Doubler (the Board shows it) have no layer of
+ * their own, so the previous toast line stays up through their step.
  * `text` is absent for an event that has nothing to say; the status row keeps
- * the previous line up through it.
+ * the previous line up through it. Every `toast` row has a `text` and every
+ * event the rules give no length is hidden (`presentation.test.ts` pins both).
  */
 import type { EventOf, GameEvent, PublicView } from "@universum/rules";
 import { FIELDS } from "@universum/rules/board";
@@ -197,7 +199,7 @@ export const EVENT_PRESENTATION: PresentationTable = {
         amount: formatMoney(event.amount),
       }),
   },
-  DoublerPlaced: { overlay: "toast", tone: "routine" },
+  DoublerPlaced: { overlay: "none", tone: "routine" },
   GameEnded: {
     overlay: "toast",
     tone: "notice",
@@ -209,8 +211,10 @@ export const EVENT_PRESENTATION: PresentationTable = {
 /**
  * The table's row for one event type, with its `text` still typed for that
  * event (the table's annotation is what keeps the row and the event in step).
+ * The table is the module's only surface: readers go through `toneOf`,
+ * `eventText` and `withOverlay`.
  */
-export function presentationOf<T extends GameEvent["type"]>(type: T): Presentation<T> {
+function presentationOf<T extends GameEvent["type"]>(type: T): Presentation<T> {
   return EVENT_PRESENTATION[type];
 }
 
