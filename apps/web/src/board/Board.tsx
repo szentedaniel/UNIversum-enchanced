@@ -1,4 +1,5 @@
 import { serverNow } from "@universum/protocol/messages";
+import type { PublicView } from "@universum/rules";
 import { FIELDS, type FieldId } from "@universum/rules/board";
 import { LocateFixed, Maximize, Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -18,18 +19,26 @@ import { fieldName, formatCompactMoney, m } from "#text.ts";
 const OBSTACLES = "[data-board-obstacle]";
 const ZOOM_STEP = 1.5;
 
-/** This client's open Sale, from the frame's view, once its Decision gate is open. */
-function currentSale() {
+/**
+ * The view the controls belong to, once the Decision gate is open: the latest
+ * frame's view, or `null` while its Playback still holds them. A frame implies
+ * a push, so this is also "there is a game to act on".
+ */
+function openView(): PublicView | null {
   const { frame } = playbackStore.getState();
-  if (!frame?.gateOpen) return null;
-  return saleFor(frame.view, roomStore.getState().me);
+  return frame?.gateOpen ? frame.view : null;
 }
 
-/** This client's open Doubler or Erasmus pick, from the frame's view, once its Decision gate is open. */
+/** This client's open Sale, from the frame's view. */
+function currentSale() {
+  const view = openView();
+  return view === null ? null : saleFor(view, roomStore.getState().me);
+}
+
+/** This client's open Doubler or Erasmus pick, from the frame's view. */
 function currentPick() {
-  const { frame } = playbackStore.getState();
-  if (!frame?.gateOpen) return null;
-  return singlePickFor(frame.view, roomStore.getState().me);
+  const view = openView();
+  return view === null ? null : singlePickFor(view, roomStore.getState().me);
 }
 
 /**
@@ -125,11 +134,9 @@ export function Board() {
        */
       const syncPick = () => {
         clearTimeout(warningTimer);
-        const { push } = roomStore.getState();
-        const { frame } = playbackStore.getState();
-        if (!push || !frame) return renderer.setPick(null);
-        // The view is the frame's: `currentSale`/`currentPick` are its one gate check.
-        const { view } = frame;
+        const view = openView();
+        if (view === null) return renderer.setPick(null);
+        // `currentSale`/`currentPick` make the same gate check; the marks also need the view.
         const sale = currentSale();
         const pick = currentPick();
         const key = sale?.key ?? pick?.key ?? null;
@@ -145,7 +152,9 @@ export function Board() {
           return renderer.setPick(singleMarks(pick, field));
         }
         if (!sale || view.turnTimer === null) return renderer.setPick(null);
-        const msLeft = view.turnTimer.endsAt - serverNow(push.clockOffset);
+        // A frame implies a push; its offset is the only thing the marks need from it.
+        const { push, lobbyClockOffset } = roomStore.getState();
+        const msLeft = view.turnTimer.endsAt - serverNow(push?.clockOffset ?? lobbyClockOffset);
         const picks = salePicksFor(uiStore.getState().salePicks, sale.key);
         renderer.setPick(saleMarks(sale, view, picks, msLeft));
         if (msLeft > AUTO_SELL_WARNING_MS) {
