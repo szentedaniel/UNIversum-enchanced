@@ -201,6 +201,35 @@ export async function tapField(actor: Interactor, field: number): Promise<void> 
   }).toPass({ timeout: 10_000 });
 }
 
+/** A Chance card's effect on the Player who drew it; `showChance` fills in `player`. */
+export type ChanceEffect = { type: "ChanceMoneyReceived" | "ChanceChargePaid"; amount: number };
+
+/**
+ * Shows a made-up push that drew the given Chance card, as if the server had
+ * just sent it (#52). The server's clock lets the decision open at once, so
+ * only the push's local Playback (the card, 7 s) holds it shut; `effects` are
+ * the card's own money events, in order.
+ */
+export function showChance(
+  page: Page,
+  card: string,
+  effects: readonly ChanceEffect[] = [],
+): Promise<void> {
+  return page.evaluate(
+    ({ drawn, extra }) => {
+      const hooks = window.universumTest!;
+      const { me, push } = hooks.room();
+      const view = structuredClone(push!.view);
+      view.actsAfter = hooks.serverNow();
+      hooks.showView(view, [
+        { type: "CardDrawn", player: me!, card: drawn },
+        ...extra.map((effect) => ({ ...effect, player: me! })),
+      ]);
+    },
+    { drawn: card, extra: effects },
+  );
+}
+
 export type OfferPhase = Extract<FullPhase, { kind: "offer" }>;
 export type OfferChoice = "level" | "museum" | "buyout" | "decline";
 

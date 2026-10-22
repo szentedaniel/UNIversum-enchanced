@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
-import { closeAfterDump, fieldCenter, scale, startGame, test } from "./helpers.ts";
+import { PLAYBACK_MS } from "@universum/rules";
+import { closeAfterDump, fieldCenter, scale, showChance, startGame, test } from "./helpers.ts";
 
 // The Sale tray (#29), on each project's device. A random game can't be steered
 // into a Sale, so the test shows a made-up selling view through the test-only
@@ -13,6 +14,11 @@ const BUDAPEST = 2; // sale 198,000
 const CHANCE = 14; // not the Player's; next to Berlin
 const BERLIN = 15; // sale 792,000
 const SEATTLE = 17;
+/**
+ * The card reset runs on the push, so a quarter of the Chance card's step is
+ * ample and still well inside the card's Playback.
+ */
+const CARD_RESET_MS = PLAYBACK_MS.CardDrawn / 4;
 
 const pick = (page: Page) => page.evaluate(() => window.universumTest?.pick() ?? null);
 
@@ -231,9 +237,6 @@ test("inspect mode opens the Field card for any Field without picking, and â€¹ â
   }
 });
 
-/** The reset runs on the push, so this is generous and still well inside the 7 s Chance card. */
-const CARD_RESET_MS = 2_000;
-
 test("a push that starts a Playback closes the open Field card at once, not when the gate opens", async ({
   page,
   browser,
@@ -248,13 +251,7 @@ test("a push that starts a Playback closes the open Field card at once, not when
     await expect(card).toBeVisible();
 
     // A made-up push whose Chance card holds the Decision gate shut for 7 s.
-    await page.evaluate(() => {
-      const hooks = window.universumTest!;
-      const { me, push } = hooks.room();
-      hooks.showView(structuredClone(push!.view), [
-        { type: "CardDrawn", player: me!, card: "scholarship" },
-      ]);
-    });
+    await showChance(page, "scholarship");
     // The new decision's key is null while the gate is shut, so the card closes now.
     await expect(card).toHaveCount(0, { timeout: CARD_RESET_MS });
     expect(await page.evaluate(() => window.universumTest!.playback().gateOpen)).toBe(false);

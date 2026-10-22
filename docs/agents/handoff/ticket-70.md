@@ -17,7 +17,9 @@ supersedes the shapes #65–#68 describe where they disagree.
   test is what pins the field name at runtime; the type mirror is what pins
   it for specs.
 - `CODING_STANDARDS.md` §Docs already forbids the avoided word; the hook now
-  follows its own rule.
+  follows its own rule. The stale lines in `ticket-66.md` (the store's state and
+  the hook's shape) and the `INDEX.md` ticket-66 line were corrected in place,
+  each with a "(since #70)" note.
 
 ## `Frame.view` is the only view a screen reads (#69 builds on this)
 
@@ -83,8 +85,14 @@ supersedes the shapes #65–#68 describe where they disagree.
 - `tapField` still waits for the gate (the dice and the Chance card cover the
   Board); its timeout stays `PLAYBACK_MS.CardDrawn`.
 - `sale-tray.spec.ts` pins the Board's reset order: with a Field card open in a
-  Sale's inspect mode, a made-up push whose 7 s Chance card shuts the gate
-  closes the card within 2 s, while the gate is still shut.
+  Sale's inspect mode, a made-up push whose Chance card shuts the gate closes
+  the card within a quarter of `PLAYBACK_MS.CardDrawn`, while the gate is still
+  shut.
+- `helpers.ts` has the one `showChance(page, card, effects?)` step (#70 round
+  3): it clones the latest push's view, opens the decision at once on the
+  server's clock and pushes a `CardDrawn` plus the card's money effects, whose
+  `player` it fills in. `chance-card.spec.ts` and `sale-tray.spec.ts` both call
+  it; do not copy it back into a spec.
 
 ## Test names
 

@@ -1,5 +1,5 @@
-import { expect, type Page } from "@playwright/test";
-import { closeAfterDump, startGame, test } from "./helpers.ts";
+import { expect } from "@playwright/test";
+import { closeAfterDump, showChance, startGame, test } from "./helpers.ts";
 
 // The Chance card's Playback step (#52, ADR-0004), on each project's device. A
 // random game can't be steered onto a Chance Field, so the test shows a made-up
@@ -8,29 +8,16 @@ import { closeAfterDump, startGame, test } from "./helpers.ts";
 // never on the other Player's. Nothing is sent to the server.
 test.use({ locale: "en-US" });
 
-/** Shows a push that drew the given Chance card, as if the server had just sent it. */
-function showChance(page: Page, card: string) {
-  return page.evaluate((drawn) => {
-    const hooks = window.universumTest!;
-    const { me, push } = hooks.room();
-    const view = structuredClone(push!.view);
-    // The server's clock lets the decision open at once; only this push's local
-    // Playback (the card) holds it shut.
-    view.actsAfter = hooks.serverNow();
-    hooks.showView(view, [
-      { type: "CardDrawn", player: me, card: drawn },
-      { type: "ChanceMoneyReceived", player: me, amount: 300_000 },
-    ]);
-  }, card);
-}
-
 test("a drawn Chance card shows on both screens, and closing it hides it only on that screen", async ({
   page,
   browser,
 }) => {
   const { context, guest } = await startGame(page, browser);
   try {
-    await Promise.all([showChance(page, "scholarship"), showChance(guest, "scholarship")]);
+    await Promise.all([
+      showChance(page, "scholarship", [{ type: "ChanceMoneyReceived", amount: 300_000 }]),
+      showChance(guest, "scholarship", [{ type: "ChanceMoneyReceived", amount: 300_000 }]),
+    ]);
     const mine = page.getByTestId("chance-card");
     const theirs = guest.getByTestId("chance-card");
     await Promise.all([expect(mine).toBeVisible(), expect(theirs).toBeVisible()]);

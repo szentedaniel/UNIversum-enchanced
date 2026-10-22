@@ -47,8 +47,8 @@ test in `apps/web/test/playback-fixtures.ts`).
 
 ## The store (`apps/web/src/playback/playback-store.ts`)
 
-- State is `{ frame: Frame | null, opensAt: number | null }`; both are `null`
-  before the first push.
+- State is `{ frame: Frame | null }` (since #70; it also held the push's
+  `opensAt` before), `null` before the first push.
 - It subscribes to `roomStore.push` at import. A new push builds the core once
   (`playbackOfPush` with the previous frame's `shownTurn`), publishes the frame
   synchronously and schedules one `setTimeout` at `next boundary + 20 ms`; a
@@ -64,9 +64,10 @@ test in `apps/web/test/playback-fixtures.ts`).
   it and call `frameAt(Date.now())` per animation frame — `Date.now()`, not the
   frame timestamp, so the Board and the DOM read one clock. Do not add a second
   timer: animation frames are for drawing and the camera tween only.
-- **`PlaybackGate`** / `playback()` test hook: `{ seq, over, shownTurn }`, with
-  `over = frame.gateOpen` and `seq`/`shownTurn` from the frame. The e2e
-  `PlaybackHook` mirror needs no change.
+- **`PlaybackGate`** / `playback()` test hook: `{ seq, gateOpen, shownTurn }`
+  (since #70; `gateOpen` was called `over` before), with `gateOpen =
+  frame.gateOpen` and `seq`/`shownTurn` from the frame. The e2e `PlaybackHook`
+  mirror changed with it in #70.
 - `Game.tsx` reads `gateOpen`, `shownTurn`, `toast` (including its `tone`) and
   `overlay` with `useStore` selectors; `Board.tsx`'s `currentSale` /
   `currentPick` read `gateOpen` and the Board subscribes to it. The Chance
