@@ -1,3 +1,4 @@
+import { serverNow } from "@universum/protocol/messages";
 import { FIELDS, type FieldId } from "@universum/rules/board";
 import { LocateFixed, Maximize, Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -5,7 +6,6 @@ import { useStore } from "zustand";
 import { createBoard, type Board as BoardRenderer } from "#board/board.ts";
 import { fieldFacts } from "#board/field-facts.ts";
 import { Button } from "#components/ui/button.tsx";
-import { serverNow } from "#lib/server-clock.ts";
 import { selectedPick, singleMarks, singlePickFor } from "#pick/pick.ts";
 import { AUTO_SELL_WARNING_MS, saleFor, saleMarks } from "#pick/sale.ts";
 import { playbackStore } from "#playback/playback-store.ts";

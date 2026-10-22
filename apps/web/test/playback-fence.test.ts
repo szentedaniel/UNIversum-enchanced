@@ -17,8 +17,9 @@
  *
  * Rule 2 — one server-clock estimate. Every push carries `clockOffset`; the
  * only place that adds it to a client clock reading is `serverNow` in
- * `lib/server-clock.ts`. Every other module — the ring, the Minute pill, the
- * Board, the Lobby — calls `serverNow`. `decisionOpensAt` in
+ * `@universum/protocol/messages` (ticket #64 moved it out of the web app, so
+ * the e2e specs and the load test share it). Every module here — the ring, the
+ * Minute pill, the Board, the Lobby — calls it. `decisionOpensAt` in
  * `playback/playback-store.ts` keeps its inverse (`actsAfter - clockOffset`),
  * which turns a server timestamp into a client one and is not the same
  * operation; it is the one named exception.
@@ -238,9 +239,9 @@ const PLAYBACK_CONSTANT = {
 /** `clockOffset` added to or subtracted from a clock reading, on either side. */
 const CLOCK_ARITHMETIC = {
   pattern: /[+\-*/]\s*[\w$?.]*\bclockOffset\b|\bclockOffset\b\s*[+\-*/]/g,
-  rule: "the server clock is estimated only in lib/server-clock.ts (ADR-0004)",
-  instead: "serverNow(clockOffset) from #lib/server-clock.ts, never Date.now() + clockOffset",
-  only: (file: string) => file !== "lib/server-clock.ts",
+  rule: "the server clock is estimated only by serverNow in @universum/protocol/messages (ADR-0004)",
+  instead:
+    "serverNow(clockOffset) from @universum/protocol/messages, never Date.now() + clockOffset",
   // The one inverse conversion, in decisionOpensAt: a server timestamp to a client one.
   except: (file: string, line: string) =>
     file === "playback/playback-store.ts" &&
@@ -285,7 +286,7 @@ describe("ADR-0004 playback fence", () => {
   it("ADR-0004: scans every web source except the generated Paraglide messages", () => {
     const files = sourceFiles(WEB_SRC).map((path) => relative(WEB_SRC, path));
     expect(files).toContain("playback/timeline.ts");
-    expect(files).toContain("lib/server-clock.ts");
+    expect(files).toContain("playback/playback-store.ts");
     expect(files.some((file) => file.startsWith("paraglide/"))).toBe(false);
     expect(files.length).toBeGreaterThan(50);
   });
@@ -313,7 +314,7 @@ describe("ADR-0004 playback fence", () => {
   it("ADR-0004: catches an expression oxfmt wrapped, reporting the line it starts on", () => {
     const source = ["const offset = Date.now() +", "  push.clockOffset;"].join("\n");
     expect(report(scan(CLOCK_ARITHMETIC, source, "screens/Game.tsx"))).toEqual([
-      "screens/Game.tsx:1: the server clock is estimated only in lib/server-clock.ts (ADR-0004) — use serverNow(clockOffset) from #lib/server-clock.ts, never Date.now() + clockOffset. Line: const offset = Date.now() +",
+      "screens/Game.tsx:1: the server clock is estimated only by serverNow in @universum/protocol/messages (ADR-0004) — use serverNow(clockOffset) from @universum/protocol/messages, never Date.now() + clockOffset. Line: const offset = Date.now() +",
     ]);
   });
 
@@ -342,7 +343,7 @@ describe("ADR-0004 playback fence", () => {
     expect(report(violations(PLAYBACK_CONSTANT))).toEqual([]);
   });
 
-  it("ADR-0004: estimates the server clock only in lib/server-clock.ts", () => {
+  it("ADR-0004: estimates the server clock only through serverNow from @universum/protocol/messages", () => {
     expect(report(violations(CLOCK_ARITHMETIC))).toEqual([]);
   });
 
@@ -352,7 +353,7 @@ describe("ADR-0004 playback fence", () => {
       "const skewed = Date.now() + push.clockOffset;",
     ].join("\n");
     expect(report(scan(CLOCK_ARITHMETIC, source, "playback/playback-store.ts"))).toEqual([
-      "playback/playback-store.ts:2: the server clock is estimated only in lib/server-clock.ts (ADR-0004) — use serverNow(clockOffset) from #lib/server-clock.ts, never Date.now() + clockOffset. Line: const skewed = Date.now() + push.clockOffset;",
+      "playback/playback-store.ts:2: the server clock is estimated only by serverNow in @universum/protocol/messages (ADR-0004) — use serverNow(clockOffset) from @universum/protocol/messages, never Date.now() + clockOffset. Line: const skewed = Date.now() + push.clockOffset;",
     ]);
   });
 });

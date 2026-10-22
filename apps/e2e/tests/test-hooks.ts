@@ -148,6 +148,12 @@ export type TestHooks = {
    * Playback and `actsAfter`), and the Turn the card shows while it waits.
    */
   playback(): PlaybackHook;
+  /**
+   * The server's clock estimated from this client's (`serverNow` from
+   * `@universum/protocol/messages`): the latest push's offset, or the
+   * Lobby's before the first push.
+   */
+  serverNow(): number;
   pick(): PickMarks | null;
   /** Shows a made-up view (a full PublicView) as if the server had pushed it, with optional events. */
   showView(view: FullView, events?: { type: string; [key: string]: unknown }[]): void;

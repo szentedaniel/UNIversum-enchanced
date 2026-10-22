@@ -102,6 +102,19 @@ export type GameMessage = {
 /** `retryAfter`: whole seconds to wait before trying again (`RATE_LIMITED`, `PASSWORD_LOCKED`). */
 export type RejectionMessage = { code: RejectionCode; retryAfter?: number };
 
+// ---------------------------------------------------------------- clocks
+
+/**
+ * The server's clock, estimated from this client's. Every push carries
+ * `clockOffset` (the server's `now` minus this client's at arrival), and every
+ * countdown compares a server timestamp with this estimate. One function, so
+ * the ring, the Minute pill, the Board, the Lobby, the e2e specs and the load
+ * test can't disagree.
+ */
+export function serverNow(clockOffset: number, clientNow = Date.now()): number {
+  return clientNow + clockOffset;
+}
+
 // ---------------------------------------------------------------- Room options
 
 export const PLAYER_COUNTS = [2, 3, 4] as const;

@@ -65,7 +65,7 @@ async function startPlaybackProbe(page: Page) {
           : Number.NaN;
         samples.push({
           version: view.version,
-          now: Date.now() + push.clockOffset,
+          now: window.universumTest!.serverNow(),
           actsAfter: view.actsAfter,
           decision,
           open: window.universumTest!.playback().over,
@@ -189,7 +189,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
                     const { push } = window.universumTest!.room();
                     return push === null
                       ? false
-                      : Date.now() + push.clockOffset >= push.view.actsAfter + 100;
+                      : window.universumTest!.serverNow() >= push.view.actsAfter + 100;
                   }),
                 ),
               )

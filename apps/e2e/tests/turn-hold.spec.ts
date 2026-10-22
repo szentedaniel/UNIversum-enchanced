@@ -37,7 +37,7 @@ test("the turn card's heading and Turn number wait for the Playback's end, then 
           view.turn += 1;
           view.currentPlayer = other.id;
           // The server's clock is already past: only the local Playback holds.
-          view.actsAfter = Date.now() + push!.clockOffset;
+          view.actsAfter = hooks.serverNow();
           hooks.showView(view, [
             { type: "DiceRolled", player: me ?? "", dice: [6, 6] },
             { type: "Moved", player: me ?? "", from: 0, to: 12, steps: 12 },

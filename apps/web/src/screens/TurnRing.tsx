@@ -1,6 +1,6 @@
+import { serverNow } from "@universum/protocol/messages";
 import type { TurnTimer } from "@universum/rules";
 import { useState } from "react";
-import { serverNow } from "#lib/server-clock.ts";
 import { m } from "#text.ts";
 
 type Props = {

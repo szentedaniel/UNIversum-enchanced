@@ -18,6 +18,9 @@ when either of two ADR-0004 patterns comes back. No product code changed.
    - no file except `lib/server-clock.ts` does arithmetic with `clockOffset`
      or a member expression ending in it (`Date.now() + push.clockOffset`);
    - the replacement is `serverNow(clockOffset)` from `#lib/server-clock.ts`;
+   - (**#64**: `serverNow` and its home moved to
+     `@universum/protocol/messages`, `lib/server-clock.ts` is deleted, and the
+     fence exempts no web file — see `ticket-64.md`.)
    - the one named exception is `decisionOpensAt`'s `actsAfter - clockOffset`
      in `playback/playback-store.ts` (a server timestamp becomes a client one;
      not the same operation as `serverNow`).
