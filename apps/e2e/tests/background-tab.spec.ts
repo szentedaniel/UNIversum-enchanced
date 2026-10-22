@@ -54,7 +54,9 @@ test("a tab starved of frames puts the pawn where the Playback is on its first f
     }, FIELD_COUNT);
     // The Playback runs out while the frames are parked, as it does in a hidden tab.
     await expect
-      .poll(() => page.evaluate(() => window.universumTest!.playback().over), { timeout: 5_000 })
+      .poll(() => page.evaluate(() => window.universumTest!.playback().gateOpen), {
+        timeout: 5_000,
+      })
       .toBe(true);
     // The tab comes back: one frame, then the pawn must be at the walked Field.
     await page.evaluate(async () => {

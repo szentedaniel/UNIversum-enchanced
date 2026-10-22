@@ -136,7 +136,7 @@ export type Rejection = { code: string; seq: number };
 /** `playback()`: the push the decision gate is for, whether it is open, and the shown Turn. */
 export type PlaybackHook = {
   seq: number | null;
-  over: boolean;
+  gateOpen: boolean;
   shownTurn: { turn: number; currentPlayer: string } | null;
 };
 

@@ -170,14 +170,14 @@ export function ownFields(view: FullView, player: string): number[] {
 
 /**
  * Taps a Field through the test-only `fieldCenter` hook and waits until the
- * pick took effect. The Board's Playback must be over first: the dice and a
+ * pick took effect. The Decision gate must be open first: the dice and a
  * Chance card overlay the Board for their own steps, and a tap right after a
  * layout change can miss (#26), so a miss retries with a fresh Field centre.
  */
 export async function tapField(actor: Interactor, field: number): Promise<void> {
   await expect(async () => {
     await expect
-      .poll(() => actor.page.evaluate(() => window.universumTest?.playback().over ?? false), {
+      .poll(() => actor.page.evaluate(() => window.universumTest?.playback().gateOpen ?? false), {
         timeout: PLAYBACK_MS.CardDrawn,
       })
       .toBe(true);

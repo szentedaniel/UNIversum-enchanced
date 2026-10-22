@@ -68,7 +68,7 @@ async function startPlaybackProbe(page: Page) {
           now: window.universumTest!.serverNow(),
           actsAfter: view.actsAfter,
           decision,
-          open: window.universumTest!.playback().over,
+          open: window.universumTest!.playback().gateOpen,
           dice:
             diceBox !== undefined &&
             diceBox.width > 0 &&

@@ -23,7 +23,7 @@ export type PlaybackState = {
 /** `playback()` in the test hooks: which push the gate is for, whether it is open, and the shown Turn. */
 export type PlaybackGate = {
   seq: number | null;
-  over: boolean;
+  gateOpen: boolean;
   shownTurn: TurnLabel | null;
 };
 
