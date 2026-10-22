@@ -11,7 +11,7 @@
  */
 import { subscribeWithSelector } from "zustand/middleware";
 import { createStore } from "zustand/vanilla";
-import { playbackOfPush, type Frame, type TurnLabel } from "#playback/playback.ts";
+import { playbackOfPush, type Frame, type Playback, type TurnLabel } from "#playback/playback.ts";
 import { roomStore } from "#stores/room-store.ts";
 
 export type PlaybackState = {
@@ -33,6 +33,15 @@ export const playbackStore = createStore<PlaybackState>()(
 );
 
 let wakeTimer: ReturnType<typeof setTimeout> | undefined;
+let current: Playback | null = null;
+
+/**
+ * The latest push's core, for a render loop that needs its own reading
+ * (`frameAt(Date.now())` per animation frame). React reads the store's frame.
+ */
+export function currentPlayback(): Playback | null {
+  return current;
+}
 
 /** Re-reads the latest push's frame and wakes once at its next boundary. */
 function sync(): void {
@@ -40,6 +49,7 @@ function sync(): void {
   wakeTimer = undefined;
   const { push } = roomStore.getState();
   if (!push) {
+    current = null;
     playbackStore.setState({ frame: null, opensAt: null });
     return;
   }
@@ -47,6 +57,7 @@ function sync(): void {
   // What the screen shows now is what it keeps showing until the new gate opens.
   const previousTurn = playbackStore.getState().frame?.shownTurn ?? null;
   const playback = playbackOfPush(push, previousTurn);
+  current = playback;
   playbackStore.setState({ frame: playback.frameAt(now), opensAt: playback.opensAt });
   const next = playback.boundaries.find((at) => at > now);
   // A few ms past the boundary, so a tap never races the clock.

@@ -1,7 +1,7 @@
 import type { GameEvent } from "@universum/rules";
 import { PLAYBACK_MS } from "@universum/rules/playback";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { playbackStore } from "#playback/playback-store.ts";
+import { currentPlayback, playbackStore } from "#playback/playback-store.ts";
 import { playbackOfPush } from "#playback/playback.ts";
 import { roomStore } from "#stores/room-store.ts";
 import { ROLL, viewOf } from "./playback-fixtures.ts";
@@ -37,6 +37,7 @@ beforeEach(() => {
 
 afterEach(() => {
   roomStore.setState({ push: null });
+  expect(currentPlayback()).toBeNull();
   vi.useRealTimers();
 });
 
@@ -51,6 +52,8 @@ describe("the Playback store", () => {
     expect(opening.frame?.overlay?.kind).toBe("dice");
     expect(opening.frame?.toast?.event.type).toBe("DiceRolled");
     expect(opening.frame?.gateOpen).toBe(false);
+    // The Board's render loop (#67) gets the same push's core for its own reads.
+    expect(currentPlayback()?.frameAt(Date.now()).seq).toBe(1);
 
     advanceTo(T0 + PLAYBACK_MS.DiceRolled + 20);
     expect(playbackStore.getState().frame?.overlay).toBeNull();
