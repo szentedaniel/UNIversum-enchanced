@@ -18,16 +18,18 @@ import { fieldName, formatCompactMoney, m } from "#text.ts";
 const OBSTACLES = "[data-board-obstacle]";
 const ZOOM_STEP = 1.5;
 
-/** This client's open Sale, from the latest push, once its Playback has ended. */
+/** This client's open Sale, from the frame's view, once its Decision gate is open. */
 function currentSale() {
-  const { push, me } = roomStore.getState();
-  return push && gateOpenOf(playbackStore.getState()) ? saleFor(push.view, me) : null;
+  const { frame } = playbackStore.getState();
+  if (!frame?.gateOpen) return null;
+  return saleFor(frame.view, roomStore.getState().me);
 }
 
-/** This client's open Doubler or Erasmus pick, from the latest push, once its Playback has ended. */
+/** This client's open Doubler or Erasmus pick, from the frame's view, once its Decision gate is open. */
 function currentPick() {
-  const { push, me } = roomStore.getState();
-  return push && gateOpenOf(playbackStore.getState()) ? singlePickFor(push.view, me) : null;
+  const { frame } = playbackStore.getState();
+  if (!frame?.gateOpen) return null;
+  return singlePickFor(frame.view, roomStore.getState().me);
 }
 
 /**
@@ -118,14 +120,16 @@ export function Board() {
 
       /**
        * Marks this client's open pick on the Board, and wakes up again when the
-       * last seconds start. The playback store wakes it once when the Playback
-       * ends (local and server clocks, ADR-0004); until then no marks are shown.
+       * last seconds start. The playback store wakes it once when the Decision
+       * gate opens (local and server clocks, ADR-0004); until then no marks are shown.
        */
       const syncPick = () => {
         clearTimeout(warningTimer);
         const { push } = roomStore.getState();
-        if (!push) return renderer.setPick(null);
-        // `currentSale`/`currentPick` are the one gate check: null until the Playback ends.
+        const { frame } = playbackStore.getState();
+        if (!push || !frame) return renderer.setPick(null);
+        // The view is the frame's: `currentSale`/`currentPick` are its one gate check.
+        const { view } = frame;
         const sale = currentSale();
         const pick = currentPick();
         const key = sale?.key ?? pick?.key ?? null;
@@ -135,15 +139,15 @@ export function Board() {
           uiStore.getState().setInspect(false);
           if (uiStore.getState().selectedField !== null) uiStore.getState().selectField(null);
         }
-        if (!push || (!sale && !pick)) return renderer.setPick(null);
+        if (!sale && !pick) return renderer.setPick(null);
         if (pick) {
           const field = selectedPick(pick, uiStore.getState().singlePick);
           return renderer.setPick(singleMarks(pick, field));
         }
-        if (!sale || push.view.turnTimer === null) return renderer.setPick(null);
-        const msLeft = push.view.turnTimer.endsAt - serverNow(push.clockOffset);
+        if (!sale || view.turnTimer === null) return renderer.setPick(null);
+        const msLeft = view.turnTimer.endsAt - serverNow(push.clockOffset);
         const picks = salePicksFor(uiStore.getState().salePicks, sale.key);
-        renderer.setPick(saleMarks(sale, push.view, picks, msLeft));
+        renderer.setPick(saleMarks(sale, view, picks, msLeft));
         if (msLeft > AUTO_SELL_WARNING_MS) {
           warningTimer = window.setTimeout(syncPick, msLeft - AUTO_SELL_WARNING_MS + 50);
         }

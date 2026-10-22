@@ -49,6 +49,8 @@ export function Game() {
   const [joinError, setJoinError] = useState<RejectionCode | null>(null);
   // The Playback core's frame: the gate, the held Turn, the toast and the overlay (ADR-0004).
   const gateOpen = useStore(playbackStore, gateOpenOf);
+  // The view the screen draws is the frame's, never the push's: one reading for every layer.
+  const view = useStore(playbackStore, (state) => state.frame?.view ?? null);
   // Story 4: the heading and Turn number switch when the gate opens, not on the push.
   const shownTurn = useStore(playbackStore, (state) => state.frame?.shownTurn ?? null);
   const toast = useStore(playbackStore, (state) => state.frame?.toast ?? null);
@@ -67,7 +69,7 @@ export function Game() {
     });
   }, [code]);
 
-  if (!push) {
+  if (!push || view === null) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-4 text-center">
         <p className="m-0 font-bold">
@@ -84,7 +86,6 @@ export function Game() {
     );
   }
 
-  const { view } = push;
   const gameOver = view.phase.kind === "gameOver" ? view.phase : null;
   const current = view.players.find((p) => p.id === view.currentPlayer);
   const myTurn = view.currentPlayer === me;
