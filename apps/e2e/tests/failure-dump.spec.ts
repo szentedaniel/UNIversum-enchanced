@@ -42,7 +42,7 @@ test("a dump carries the screen's room, view, playback and buttons", async ({ pa
     });
     expect(dump.playback).toEqual({
       seq: room.push!.seq,
-      over: true,
+      gateOpen: true,
       shownTurn: { turn: 1, currentPlayer: room.me },
     });
     // The labels are there for a failure where the phase is not the whole story.

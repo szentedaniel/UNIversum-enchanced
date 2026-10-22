@@ -1,4 +1,5 @@
 import type { GameEvent, PublicView } from "@universum/rules";
+import { PLAYBACK_MS } from "@universum/rules/playback";
 import { afterEach, describe, expect, it } from "vitest";
 import { baseLocale, overwriteGetLocale, type Locale } from "#paraglide/runtime.js";
 import {
@@ -8,6 +9,7 @@ import {
   type Overlay,
   type Tone,
 } from "#playback/presentation.ts";
+import { viewOf } from "./playback-fixtures.ts";
 
 // The presentation table (spec #63): one exhaustive row per event type saying
 // what it shows (the dice, a Chance card, a toast or nothing), whether its
@@ -46,38 +48,8 @@ const SAMPLES = {
 const isEventType = (key: string): key is GameEvent["type"] => key in SAMPLES;
 const EVENT_TYPES = Object.keys(SAMPLES).filter(isEventType);
 
-const player = (id: string, seat: number) => ({
-  id,
-  name: { adjective: "happy", noun: "tiger" },
-  seat,
-  cash: 100_000,
-  position: 17,
-  bankrupt: false,
-  quarantineRounds: null,
-  hasPcrTest: false,
-  wealth: 100_000,
-});
-
 // The text helpers read only the Players' names; the rest is a view they never touch.
-const VIEW: PublicView = {
-  stateVersion: 2,
-  version: 1,
-  turn: 2,
-  currentPlayer: "p1",
-  phase: { kind: "awaitingRoll" },
-  actsAfter: 0,
-  turnDeadline: null,
-  turnTimer: null,
-  settings: { maxPlayers: 2, minuteLimit: 15 },
-  endsAt: 0,
-  players: [player("p1", 0), player("p2", 1)],
-  fields: [],
-  doubler: null,
-  lastChanceCard: null,
-  autoSell: null,
-  pickOptions: null,
-  standings: null,
-};
+const VIEW: PublicView = viewOf();
 
 /** Every event with what the screen shows for it: the table's only decision. */
 const SHOWN: Record<GameEvent["type"], { overlay: Overlay; tone: Tone }> = {
@@ -102,7 +74,7 @@ const SHOWN: Record<GameEvent["type"], { overlay: Overlay; tone: Tone }> = {
   WentBankrupt: { overlay: "toast", tone: "notice" },
   TimedOut: { overlay: "toast", tone: "routine" },
   TimeoutPenaltyPaid: { overlay: "toast", tone: "routine" },
-  DoublerPlaced: { overlay: "toast", tone: "routine" },
+  DoublerPlaced: { overlay: "none", tone: "routine" },
   GameEnded: { overlay: "toast", tone: "notice" },
   TurnPassed: { overlay: "none", tone: "routine" },
 };
@@ -135,6 +107,20 @@ describe("the presentation table", () => {
     });
 
     expect(empty).toEqual([]);
+  });
+
+  it("gives every toast entry a line", () => {
+    const toasts = EVENT_TYPES.filter((type) => EVENT_PRESENTATION[type].overlay === "toast");
+    const textless = toasts.filter((type) => EVENT_PRESENTATION[type].text === undefined);
+
+    expect(textless).toEqual([]);
+  });
+
+  it("hides every event the rules give no length", () => {
+    const noLength = EVENT_TYPES.filter((type) => PLAYBACK_MS[type] === 0);
+    const shown = noLength.filter((type) => EVENT_PRESENTATION[type].overlay !== "none");
+
+    expect(shown).toEqual([]);
   });
 
   it("has no line for a walk, a Turn passing, a declined offer or a Doubler", () => {

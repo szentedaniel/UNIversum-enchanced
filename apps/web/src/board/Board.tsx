@@ -1,4 +1,5 @@
 import { serverNow } from "@universum/protocol/messages";
+import type { PublicView } from "@universum/rules";
 import { FIELDS, type FieldId } from "@universum/rules/board";
 import { LocateFixed, Maximize, Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -18,16 +19,26 @@ import { fieldName, formatCompactMoney, m } from "#text.ts";
 const OBSTACLES = "[data-board-obstacle]";
 const ZOOM_STEP = 1.5;
 
-/** This client's open Sale, from the latest push, once its Playback has ended. */
-function currentSale() {
-  const { push, me } = roomStore.getState();
-  return push && gateOpenOf(playbackStore.getState()) ? saleFor(push.view, me) : null;
+/**
+ * The view the controls belong to, once the Decision gate is open: the latest
+ * frame's view, or `null` while its Playback still holds them. A frame implies
+ * a push, so this is also "there is a game to act on".
+ */
+function openView(): PublicView | null {
+  const { frame } = playbackStore.getState();
+  return frame?.gateOpen ? frame.view : null;
 }
 
-/** This client's open Doubler or Erasmus pick, from the latest push, once its Playback has ended. */
+/** This client's open Sale, from the frame's view. */
+function currentSale() {
+  const view = openView();
+  return view === null ? null : saleFor(view, roomStore.getState().me);
+}
+
+/** This client's open Doubler or Erasmus pick, from the frame's view. */
 function currentPick() {
-  const { push, me } = roomStore.getState();
-  return push && gateOpenOf(playbackStore.getState()) ? singlePickFor(push.view, me) : null;
+  const view = openView();
+  return view === null ? null : singlePickFor(view, roomStore.getState().me);
 }
 
 /**
@@ -118,14 +129,14 @@ export function Board() {
 
       /**
        * Marks this client's open pick on the Board, and wakes up again when the
-       * last seconds start. The playback store wakes it once when the Playback
-       * ends (local and server clocks, ADR-0004); until then no marks are shown.
+       * last seconds start. The playback store wakes it once when the Decision
+       * gate opens (local and server clocks, ADR-0004); until then no marks are shown.
        */
       const syncPick = () => {
         clearTimeout(warningTimer);
-        const { push } = roomStore.getState();
-        if (!push) return renderer.setPick(null);
-        // `currentSale`/`currentPick` are the one gate check: null until the Playback ends.
+        const view = openView();
+        // `currentSale`/`currentPick` are the gate check: both are null while it is shut,
+        // so the key becomes null at the Playback's start and the open card resets at once.
         const sale = currentSale();
         const pick = currentPick();
         const key = sale?.key ?? pick?.key ?? null;
@@ -135,15 +146,19 @@ export function Board() {
           uiStore.getState().setInspect(false);
           if (uiStore.getState().selectedField !== null) uiStore.getState().selectField(null);
         }
-        if (!push || (!sale && !pick)) return renderer.setPick(null);
+        if (!sale && !pick) return renderer.setPick(null);
         if (pick) {
           const field = selectedPick(pick, uiStore.getState().singlePick);
           return renderer.setPick(singleMarks(pick, field));
         }
-        if (!sale || push.view.turnTimer === null) return renderer.setPick(null);
-        const msLeft = push.view.turnTimer.endsAt - serverNow(push.clockOffset);
+        // A Sale comes from the open gate's view, so that view exists too.
+        if (view === null || !sale || view.turnTimer === null) return renderer.setPick(null);
+        // The marks count down on the server's clock: only the push's offset applies.
+        const { push } = roomStore.getState();
+        if (push === null) return renderer.setPick(null);
+        const msLeft = view.turnTimer.endsAt - serverNow(push.clockOffset);
         const picks = salePicksFor(uiStore.getState().salePicks, sale.key);
-        renderer.setPick(saleMarks(sale, push.view, picks, msLeft));
+        renderer.setPick(saleMarks(sale, view, picks, msLeft));
         if (msLeft > AUTO_SELL_WARNING_MS) {
           warningTimer = window.setTimeout(syncPick, msLeft - AUTO_SELL_WARNING_MS + 50);
         }

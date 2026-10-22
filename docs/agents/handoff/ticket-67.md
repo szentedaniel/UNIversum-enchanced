@@ -42,7 +42,7 @@ test is red on the old queue (the pawn is at the walk's start).
 
 ## `tapField` (`apps/e2e/tests/helpers.ts`)
 
-The two-frame `requestAnimationFrame` wait after `playback().over` is gone. It
+The two-frame `requestAnimationFrame` wait after `playback().gateOpen` is gone. It
 existed because the old queue drew its last hop one frame after the gate; the
 Board now seeks on every frame and a tap hit-tests the camera's Field
 geometry, not the drawn pawn. `full-game`, `sale-tray`, `pick-tray` and

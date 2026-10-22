@@ -66,7 +66,7 @@ Both are timed from `Push.receivedAt`, and each shows for its own step only.
   declaration merges are in the typecheck).
 - **`full-game.spec.ts` waits out the gate before a Board tap** (`tapField`):
   the dice/Chance-card overlays and the last Board hop share the Playback, so
-  it polls `window.universumTest.playback().over` (bounded by
+  it polls `window.universumTest.playback().gateOpen` (bounded by
   `PLAYBACK_MS.CardDrawn`) and waits two animation frames before reading
   `fieldCenter`.
 - **Fixed e2e game seed.** `playwright.config.ts` sets `GAME_SEED`

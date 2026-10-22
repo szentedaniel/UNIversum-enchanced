@@ -55,7 +55,7 @@ export function exposeBoard(board: Board | null): void {
           const { frame } = state;
           return {
             seq: frame?.seq ?? null,
-            over: gateOpenOf(state),
+            gateOpen: gateOpenOf(state),
             shownTurn: frame?.shownTurn ?? null,
           };
         },

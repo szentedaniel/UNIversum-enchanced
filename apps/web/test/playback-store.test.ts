@@ -41,18 +41,32 @@ afterEach(() => {
 });
 
 describe("the Playback store", () => {
-  it("ADR-0004: re-reads the frame at every boundary and at opensAt", () => {
+  it("ADR-0004: reads the frame at each boundary and never a moment early", () => {
     // The server's wait ends long after the local Playback: the boundaries are
-    // the dice, the walk, the Rent, the zero-length Turn passing and the opening.
+    // the dice, the walk, the Rent, the zero-length Turn passing and the gate.
+    setPush(1, T0, ROLL(), 5_000);
+    const core = currentPlayback();
+    expect(core?.opensAt).toBe(5_000);
+
+    // One publication per boundary: the frame object stays the same until the
+    // boundary passes, however often React reads it.
+    let shown = playbackStore.getState().frame;
+    for (const at of core!.boundaries) {
+      advanceTo(at - 1);
+      expect(playbackStore.getState().frame).toBe(shown);
+      advanceTo(at + 20);
+      expect(playbackStore.getState().frame).not.toBe(shown);
+      shown = playbackStore.getState().frame;
+    }
+    expect(shown?.gateOpen).toBe(true);
+  });
+
+  it("shows the dice, the walk, the Rent and the opening where the core puts them", () => {
     setPush(1, T0, ROLL(), 5_000);
 
-    const opening = playbackStore.getState();
-    expect(opening.opensAt).toBe(5_000);
-    expect(opening.frame?.overlay?.kind).toBe("dice");
-    expect(opening.frame?.toast?.event.type).toBe("DiceRolled");
-    expect(opening.frame?.gateOpen).toBe(false);
-    // The Board's render loop (#67) gets the same push's core for its own reads.
-    expect(currentPlayback()?.frameAt(Date.now()).seq).toBe(1);
+    expect(playbackStore.getState().frame?.overlay?.kind).toBe("dice");
+    expect(playbackStore.getState().frame?.toast?.event.type).toBe("DiceRolled");
+    expect(playbackStore.getState().frame?.gateOpen).toBe(false);
 
     advanceTo(T0 + PLAYBACK_MS.DiceRolled + 20);
     expect(playbackStore.getState().frame?.overlay).toBeNull();
@@ -66,16 +80,16 @@ describe("the Playback store", () => {
 
     advanceTo(5_020);
     expect(playbackStore.getState().frame?.gateOpen).toBe(true);
-    expect(playbackStore.getState().frame?.shownTurn).toEqual({
-      turn: 2,
-      currentPlayer: "p1",
-    });
+    // Story 4: the Turn card switches with the controls.
+    expect(playbackStore.getState().frame?.shownTurn).toEqual({ turn: 2, currentPlayer: "p1" });
   });
 
-  it("ADR-0004: keeps one core for the whole life of a push", () => {
+  it("holds one core for the whole life of a push", () => {
     setPush(1, T0, ROLL(), 5_000);
     const core = currentPlayback();
     expect(core).not.toBeNull();
+    // The Board's render loop (#67) gets that same core for its own reads.
+    expect(currentPlayback()?.frameAt(Date.now()).seq).toBe(1);
 
     advanceTo(T0 + PLAYBACK_MS.DiceRolled + 20);
     expect(playbackStore.getState().frame?.overlay).toBeNull();
@@ -86,7 +100,7 @@ describe("the Playback store", () => {
     expect(currentPlayback()).toBe(core);
   });
 
-  it("ADR-0004: a new push replaces the previous frame and its timer", () => {
+  it("a new push replaces the previous frame and its timer", () => {
     setPush(1, T0, [], 60_000);
     expect(playbackStore.getState().frame?.seq).toBe(1);
 
@@ -94,7 +108,7 @@ describe("the Playback store", () => {
     setPush(2, T0, ROLL(), 5_000);
     expect(playbackStore.getState().frame?.seq).toBe(2);
     expect(playbackStore.getState().frame?.overlay?.kind).toBe("dice");
-    expect(playbackStore.getState().opensAt).toBe(5_000);
+    expect(currentPlayback()?.opensAt).toBe(5_000);
 
     // The first push's opening never surfaces: the frame stays the second one's.
     advanceTo(60_100);
@@ -106,7 +120,7 @@ describe("the Playback store", () => {
     expect(playbackStore.getState().frame).toBeNull();
   });
 
-  it("ADR-0004: a push with no events opens at actsAfter", () => {
+  it("ADR-0004: a push with no events has one boundary, its actsAfter", () => {
     setPush(1, T0, [], 6_000);
 
     expect(playbackStore.getState().frame?.gateOpen).toBe(false);
@@ -127,7 +141,7 @@ describe("the Playback store", () => {
     expect(playbackStore.getState().frame?.gateOpen).toBe(true);
   });
 
-  it("ADR-0004: the server's later opening is a boundary of its own", () => {
+  it("ADR-0004: the gate opens at the server's actsAfter when it is later", () => {
     setPush(1, T0, ROLL(), T0 + 10_000);
 
     advanceTo(playbackOfPush(roomStore.getState().push!).opensAt);

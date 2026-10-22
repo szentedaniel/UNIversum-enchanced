@@ -53,7 +53,7 @@ export type BoardOptions = {
 };
 
 export type Board = {
-  /** Shows a push's Playback: the view at once, the pawns seeked to its frames until its gate opens. */
+  /** Draws a push's Playback: every frame reads its view and its pawns from the frame at `Date.now()`. */
   update(playback: Playback): void;
   /** Rings and lifts the Field whose card is open. Never moves the camera. */
   setSelected(id: FieldId | null): void;
@@ -82,7 +82,7 @@ export type Board = {
   pawn(player: PlayerId): Point | null;
   /** Test hook: the camera (canvas CSS px per Board unit, and offset). */
   camera(): Camera;
-  /** Test hook: the latest view handed to the Board. */
+  /** Test hook: the view the Board drew last. */
   readonly view: PublicView | null;
   /** Test hook: the pick marks shown, or `null` outside a pick. */
   readonly pick: PickMarks | null;
@@ -417,8 +417,10 @@ export async function createBoard(
   // ------------------------------------------------------------ render loop
 
   let frameId = 0;
-  /** The latest push's Playback: every frame reads the pawns from it. */
+  /** The latest push's Playback: every frame reads the view and the pawns from it. */
   let playback: Playback | null = null;
+  /** The view last drawn; the next frame that carries another one re-syncs the Board. */
+  let shown: PublicView | null = null;
 
   /** Puts every pawn where the Playback has it at `at`'s instant, and follows the walker. */
   function placePawns(at: Frame): void {
@@ -440,6 +442,15 @@ export async function createBoard(
     // whose frames were throttled seeks to the Playback on its first frame.
     const at = playback?.frameAt(Date.now()) ?? null;
     if (at) {
+      // The Fields, the owner rings and the notes change at once, with the view;
+      // only the pawns seek. A frame whose view is the same object needs neither.
+      if (at.view !== shown) {
+        const turnChanged = shown !== null && at.view.turn !== shown.turn;
+        shown = at.view;
+        syncPawns(at.view);
+        syncFields(at.view);
+        if (turnChanged && !follow) fitNow(true);
+      }
       placePawns(at);
       busy = !at.gateOpen;
     }
@@ -488,18 +499,10 @@ export async function createBoard(
 
   // ------------------------------------------------------------ interface
 
-  let shown: PublicView | null = null;
-
   return {
     update(next) {
+      // The next animation frame draws the new core's view and seeks its pawns.
       playback = next;
-      // The view (Fields, cash, ownership) changes at once; only the pawns seek.
-      const view = next.frameAt(Date.now()).view;
-      const turnChanged = shown !== null && view.turn !== shown.turn;
-      shown = view;
-      syncPawns(view);
-      syncFields(view);
-      if (turnChanged && !follow) fitNow(true);
       invalidate();
     },
     setSelected(id) {

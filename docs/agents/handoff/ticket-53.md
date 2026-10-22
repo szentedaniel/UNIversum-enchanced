@@ -52,7 +52,7 @@ the decision gate).
     for both Boards' test hooks (`chance-card`, `turn-hold`).
   - `press(actor, locator)` waits for `toBeEnabled` (15 s), then taps or clicks.
   - `ownFields(view, player)`.
-  - `tapField(actor, field)` waits for `playback().over` (bounded by
+  - `tapField(actor, field)` waits for `playback().gateOpen` (bounded by
     `PLAYBACK_MS.CardDrawn`), waits two animation frames, taps through
     `fieldCenter` and retries a missed tap.
   - `resolveDecision(actor, view, chooseOffer)` resolves an offer (the spec's

@@ -216,7 +216,7 @@ describe("the Playback core's opening time", () => {
     expect(
       playbackOfPush(pushOf(ROLL(), { view: viewOf(undefined, { actsAfter: 6_000 }) })).opensAt,
     ).toBe(6_000);
-    // The server's wait is already over: the local Playback keeps the controls shut.
+    // The server's wait has already ended: the local Playback keeps the controls shut.
     expect(
       playbackOfPush(pushOf(ROLL(), { view: viewOf(undefined, { actsAfter: 1_500 }) })).opensAt,
     ).toBe(1_000 + playbackOf(ROLL()));
