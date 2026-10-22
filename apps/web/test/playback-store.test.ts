@@ -37,7 +37,6 @@ beforeEach(() => {
 
 afterEach(() => {
   roomStore.setState({ push: null });
-  expect(currentPlayback()).toBeNull();
   vi.useRealTimers();
 });
 
@@ -87,6 +86,10 @@ describe("the Playback store", () => {
     advanceTo(60_100);
     expect(playbackStore.getState().frame?.seq).toBe(2);
     expect(playbackStore.getState().frame?.gateOpen).toBe(true);
+
+    roomStore.setState({ push: null });
+    expect(currentPlayback()).toBeNull();
+    expect(playbackStore.getState().frame).toBeNull();
   });
 
   it("ADR-0004: a push with no events opens at actsAfter", () => {
