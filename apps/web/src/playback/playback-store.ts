@@ -15,11 +15,9 @@ import { createStore } from "zustand/vanilla";
 import { playbackOfPush, type Frame, type Playback, type TurnLabel } from "#playback/playback.ts";
 import { roomStore } from "#stores/room-store.ts";
 
+/** The latest push's frame, or `null` before the first push. */
 export type PlaybackState = {
-  /** The latest push's frame, or `null` before the first push. */
   frame: Frame | null;
-  /** When that push's decision opens, on this client's clock; `null` before the first push. */
-  opensAt: number | null;
 };
 
 /** `playback()` in the test hooks: which push the gate is for, whether it is open, and the shown Turn. */
@@ -30,7 +28,7 @@ export type PlaybackGate = {
 };
 
 export const playbackStore = createStore<PlaybackState>()(
-  subscribeWithSelector((): PlaybackState => ({ frame: null, opensAt: null })),
+  subscribeWithSelector((): PlaybackState => ({ frame: null })),
 );
 
 /**
@@ -63,7 +61,7 @@ function armNext(playback: Playback, now: number): void {
 
 /** Publishes the core's frame at `now`, then waits for the next boundary. */
 function publish(playback: Playback, now: number): void {
-  playbackStore.setState({ frame: playback.frameAt(now), opensAt: playback.opensAt });
+  playbackStore.setState({ frame: playback.frameAt(now) });
   armNext(playback, now);
 }
 
@@ -80,7 +78,7 @@ function start(): void {
   const { push } = roomStore.getState();
   if (!push) {
     current = null;
-    playbackStore.setState({ frame: null, opensAt: null });
+    playbackStore.setState({ frame: null });
     return;
   }
   // The previous push's shown Turn is what this one holds until its gate opens.
