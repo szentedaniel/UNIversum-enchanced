@@ -15,8 +15,9 @@ import { createStore } from "zustand/vanilla";
 import { playbackOfPush, type Frame, type Playback, type TurnLabel } from "#playback/playback.ts";
 import { roomStore } from "#stores/room-store.ts";
 
-/** The latest push's frame, or `null` before the first push. */
+/** What the Playback store publishes (spec #63). */
 export type PlaybackState = {
+  /** The latest push's frame, or `null` before the first push. */
   frame: Frame | null;
 };
 

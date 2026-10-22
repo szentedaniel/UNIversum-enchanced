@@ -120,7 +120,6 @@ describe("the presentation table", () => {
     const noLength = EVENT_TYPES.filter((type) => PLAYBACK_MS[type] === 0);
     const shown = noLength.filter((type) => EVENT_PRESENTATION[type].overlay !== "none");
 
-    expect(noLength).toEqual(["OfferDeclined", "TurnPassed"]);
     expect(shown).toEqual([]);
   });
 

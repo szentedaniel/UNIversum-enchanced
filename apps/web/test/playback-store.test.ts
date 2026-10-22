@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 describe("the Playback store", () => {
-  it("reads the frame at each boundary and never a moment early", () => {
+  it("ADR-0004: reads the frame at each boundary and never a moment early", () => {
     // The server's wait ends long after the local Playback: the boundaries are
     // the dice, the walk, the Rent, the zero-length Turn passing and the gate.
     setPush(1, T0, ROLL(), 5_000);
@@ -120,7 +120,7 @@ describe("the Playback store", () => {
     expect(playbackStore.getState().frame).toBeNull();
   });
 
-  it("a push with no events has one boundary, its actsAfter", () => {
+  it("ADR-0004: a push with no events has one boundary, its actsAfter", () => {
     setPush(1, T0, [], 6_000);
 
     expect(playbackStore.getState().frame?.gateOpen).toBe(false);
