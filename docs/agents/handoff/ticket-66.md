@@ -47,9 +47,8 @@ test in `apps/web/test/playback-fixtures.ts`).
 
 ## The store (`apps/web/src/playback/playback-store.ts`)
 
-- State is `{ frame: Frame | null, opensAt: number | null }`. Before the first
-  push `frame` is `null`; readers default the gate to open
-  (`frame?.gateOpen ?? true`).
+- State is `{ frame: Frame | null, opensAt: number | null }`; both are `null`
+  before the first push.
 - It subscribes to `roomStore.push` at import. A new push builds the core once
   (`playbackOfPush` with the previous frame's `shownTurn`), publishes the frame
   synchronously and schedules one `setTimeout` at `next boundary + 20 ms`; a
