@@ -72,6 +72,20 @@ describe("the Playback store", () => {
     });
   });
 
+  it("ADR-0004: keeps one core for the whole life of a push", () => {
+    setPush(1, T0, ROLL(), 5_000);
+    const core = currentPlayback();
+    expect(core).not.toBeNull();
+
+    advanceTo(T0 + PLAYBACK_MS.DiceRolled + 20);
+    expect(playbackStore.getState().frame?.overlay).toBeNull();
+    expect(currentPlayback()).toBe(core);
+
+    advanceTo(5_020);
+    expect(playbackStore.getState().frame?.gateOpen).toBe(true);
+    expect(currentPlayback()).toBe(core);
+  });
+
   it("ADR-0004: a new push replaces the previous frame and its timer", () => {
     setPush(1, T0, [], 60_000);
     expect(playbackStore.getState().frame?.seq).toBe(1);

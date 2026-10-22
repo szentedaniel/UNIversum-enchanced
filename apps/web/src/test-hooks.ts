@@ -10,7 +10,7 @@ import { serverNow } from "@universum/protocol/messages";
 import type { GameEvent, PublicView } from "@universum/rules";
 import type { FieldId } from "@universum/rules/board";
 import type { Board } from "#board/board.ts";
-import { playbackStore, type PlaybackGate } from "#playback/playback-store.ts";
+import { gateOpenOf, playbackStore, type PlaybackGate } from "#playback/playback-store.ts";
 import { roomStore, type RoomState } from "#stores/room-store.ts";
 
 declare const TEST_HOOKS_ENABLED: boolean;
@@ -48,10 +48,11 @@ export function exposeBoard(board: Board | null): void {
         view: () => board.view,
         room: () => roomStore.getState(),
         playback: () => {
-          const { frame } = playbackStore.getState();
+          const state = playbackStore.getState();
+          const { frame } = state;
           return {
             seq: frame?.seq ?? null,
-            over: frame?.gateOpen ?? true,
+            over: gateOpenOf(state),
             shownTurn: frame?.shownTurn ?? null,
           };
         },

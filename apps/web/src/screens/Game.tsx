@@ -21,7 +21,7 @@ import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
 import { singlePickFor } from "#pick/pick.ts";
 import { saleFor } from "#pick/sale.ts";
-import { playbackStore } from "#playback/playback-store.ts";
+import { gateOpenOf, playbackStore } from "#playback/playback-store.ts";
 import { PickTray } from "#screens/PickTray.tsx";
 import { SaleTray } from "#screens/SaleTray.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
@@ -48,7 +48,7 @@ export function Game() {
   const wide = useWide();
   const [joinError, setJoinError] = useState<RejectionCode | null>(null);
   // The Playback core's frame: the gate, the held Turn, the toast and the overlay (ADR-0004).
-  const gateOpen = useStore(playbackStore, (state) => state.frame?.gateOpen ?? true);
+  const gateOpen = useStore(playbackStore, gateOpenOf);
   // Story 4: the heading and Turn number switch when the gate opens, not on the push.
   const shownTurn = useStore(playbackStore, (state) => state.frame?.shownTurn ?? null);
   const toast = useStore(playbackStore, (state) => state.frame?.toast ?? null);

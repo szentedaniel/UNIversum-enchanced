@@ -50,15 +50,21 @@ test in `apps/web/test/playback-fixtures.ts`).
 - State is `{ frame: Frame | null, opensAt: number | null }`. Before the first
   push `frame` is `null`; readers default the gate to open
   (`frame?.gateOpen ?? true`).
-- It subscribes to `roomStore.push` at import, computes `playbackOfPush` with
-  the previous frame's `shownTurn`, publishes synchronously and schedules one
-  `setTimeout` at `next boundary + 20 ms`. A new push clears that timer and
-  replaces the frame; a push with no events has one boundary, `opensAt`.
-- **`currentPlayback()`** returns the latest push's core (or `null`). #67's
-  Board calls `currentPlayback()?.frameAt(Date.now())` per animation frame —
-  `Date.now()`, not the frame timestamp, so the Board and the DOM read one
-  clock. Do not add a second timer: animation frames are for drawing and the
-  camera tween only.
+- It subscribes to `roomStore.push` at import. A new push builds the core once
+  (`playbackOfPush` with the previous frame's `shownTurn`), publishes the frame
+  synchronously and schedules one `setTimeout` at `next boundary + 20 ms`; a
+  timer wake only calls `current.frameAt(Date.now())` on that same core and
+  arms the next boundary. A new push clears the timer and replaces both; a push
+  with no events has one boundary, `opensAt`.
+- **`gateOpenOf(state)`** is the one gate selector (`frame?.gateOpen ?? true`):
+  `Game`, both `Board` reads, the Board subscription and the `playback()` hook
+  use it. There is no frame before the first push, which means nothing to wait
+  for, so the gate is open.
+- **`currentPlayback()`** returns the latest push's core (or `null`). It is the
+  same object for the whole life of a push, so #67's Board render loop may hold
+  it and call `frameAt(Date.now())` per animation frame — `Date.now()`, not the
+  frame timestamp, so the Board and the DOM read one clock. Do not add a second
+  timer: animation frames are for drawing and the camera tween only.
 - **`PlaybackGate`** / `playback()` test hook: `{ seq, over, shownTurn }`, with
   `over = frame.gateOpen` and `seq`/`shownTurn` from the frame. The e2e
   `PlaybackHook` mirror needs no change.
