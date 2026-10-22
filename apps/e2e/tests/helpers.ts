@@ -171,9 +171,8 @@ export function ownFields(view: FullView, player: string): number[] {
 /**
  * Taps a Field through the test-only `fieldCenter` hook and waits until the
  * pick took effect. The Board's Playback must be over first: the dice and a
- * Chance card overlay the Board for their own steps, and the last hop can
- * still be drawing. A tap right after a layout change can miss (#26), so a
- * miss retries with a fresh Field centre.
+ * Chance card overlay the Board for their own steps, and a tap right after a
+ * layout change can miss (#26), so a miss retries with a fresh Field centre.
  */
 export async function tapField(actor: Interactor, field: number): Promise<void> {
   await expect(async () => {
@@ -182,11 +181,6 @@ export async function tapField(actor: Interactor, field: number): Promise<void> 
         timeout: PLAYBACK_MS.CardDrawn,
       })
       .toBe(true);
-    // Two frames: the Board's queue draws its last hop on the frame after the gate.
-    await actor.page.evaluate(async () => {
-      await new Promise(requestAnimationFrame);
-      await new Promise(requestAnimationFrame);
-    });
     const point = await actor.page.evaluate(
       (id) => window.universumTest?.fieldCenter(id) ?? null,
       field,
