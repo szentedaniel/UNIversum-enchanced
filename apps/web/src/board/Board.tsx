@@ -135,8 +135,8 @@ export function Board() {
       const syncPick = () => {
         clearTimeout(warningTimer);
         const view = openView();
-        if (view === null) return renderer.setPick(null);
-        // `currentSale`/`currentPick` make the same gate check; the marks also need the view.
+        // `currentSale`/`currentPick` are the gate check: both are null while it is shut,
+        // so the key becomes null at the Playback's start and the open card resets at once.
         const sale = currentSale();
         const pick = currentPick();
         const key = sale?.key ?? pick?.key ?? null;
@@ -151,10 +151,12 @@ export function Board() {
           const field = selectedPick(pick, uiStore.getState().singlePick);
           return renderer.setPick(singleMarks(pick, field));
         }
-        if (!sale || view.turnTimer === null) return renderer.setPick(null);
-        // A frame implies a push; its offset is the only thing the marks need from it.
-        const { push, lobbyClockOffset } = roomStore.getState();
-        const msLeft = view.turnTimer.endsAt - serverNow(push?.clockOffset ?? lobbyClockOffset);
+        // A Sale comes from the open gate's view, so that view exists too.
+        if (view === null || !sale || view.turnTimer === null) return renderer.setPick(null);
+        // The marks count down on the server's clock: only the push's offset applies.
+        const { push } = roomStore.getState();
+        if (push === null) return renderer.setPick(null);
+        const msLeft = view.turnTimer.endsAt - serverNow(push.clockOffset);
         const picks = salePicksFor(uiStore.getState().salePicks, sale.key);
         renderer.setPick(saleMarks(sale, view, picks, msLeft));
         if (msLeft > AUTO_SELL_WARNING_MS) {

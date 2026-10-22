@@ -27,11 +27,15 @@ supersedes the shapes #65–#68 describe where they disagree.
   which runs before React's subscribers, so the guard is never reached in
   practice; `push` stays the source for `seq`, `clockOffset` and `events`.
 - `Board.tsx`: `openView()` returns `frame.view` while the gate is open and
-  `null` otherwise (a frame implies a push); `currentSale()`, `currentPick()`
-  and `syncPick()` all go through it, and `push` is read only for
-  `clockOffset` (with the Lobby's offset as the pre-push fallback, as the
-  `serverNow()` hook does). `gateOpenOf` is still the selector for `Game` and
-  the Board's `playbackStore.subscribe(gateOpenOf, …)`.
+  `null` otherwise; `currentSale()`, `currentPick()` and `syncPick()` all go
+  through it. `syncPick()` computes the Sale and the pick (both null while the
+  gate is shut) and runs its decision-change reset **before** it returns, so a
+  push that starts a Playback closes the open Field card and leaves inspect
+  mode at once, as it always did — an early `view === null` return there
+  defers that reset to the gate's opening. `push` is read only for
+  `clockOffset`, and a missing push returns early (no Lobby fallback).
+  `gateOpenOf` is still the selector for `Game` and the Board's
+  `playbackStore.subscribe(gateOpenOf, …)`.
 - `board.ts`: `update(playback)` now only stores the core and calls
   `invalidate()`. The render loop's `frame()` compares `at.view !== shown`
   (object identity) and, on a different object, syncs pawn visibility and the
@@ -78,6 +82,9 @@ supersedes the shapes #65–#68 describe where they disagree.
   returns one plain id (`1`): nothing cancels a parked frame.
 - `tapField` still waits for the gate (the dice and the Chance card cover the
   Board); its timeout stays `PLAYBACK_MS.CardDrawn`.
+- `sale-tray.spec.ts` pins the Board's reset order: with a Field card open in a
+  Sale's inspect mode, a made-up push whose 7 s Chance card shuts the gate
+  closes the card within 2 s, while the gate is still shut.
 
 ## Test names
 

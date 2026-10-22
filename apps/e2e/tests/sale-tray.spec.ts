@@ -230,3 +230,35 @@ test("inspect mode opens the Field card for any Field without picking, and â€¹ â
     closeAfterDump(context);
   }
 });
+
+/** The reset runs on the push, so this is generous and still well inside the 7 s Chance card. */
+const CARD_RESET_MS = 2_000;
+
+test("a push that starts a Playback closes the open Field card at once, not when the gate opens", async ({
+  page,
+  browser,
+  isMobile,
+}) => {
+  const { context } = await startGame(page, browser);
+  try {
+    await showSale(page, 15_000);
+    await page.getByTestId("sale-tray").getByTestId("pick-inspect-toggle").click();
+    await tapField(page, isMobile, CHANCE);
+    const card = page.getByTestId("field-card");
+    await expect(card).toBeVisible();
+
+    // A made-up push whose Chance card holds the Decision gate shut for 7 s.
+    await page.evaluate(() => {
+      const hooks = window.universumTest!;
+      const { me, push } = hooks.room();
+      hooks.showView(structuredClone(push!.view), [
+        { type: "CardDrawn", player: me!, card: "scholarship" },
+      ]);
+    });
+    // The new decision's key is null while the gate is shut, so the card closes now.
+    await expect(card).toHaveCount(0, { timeout: CARD_RESET_MS });
+    expect(await page.evaluate(() => window.universumTest!.playback().gateOpen)).toBe(false);
+  } finally {
+    closeAfterDump(context);
+  }
+});
