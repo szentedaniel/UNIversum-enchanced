@@ -1,5 +1,4 @@
 import { serverNow } from "@universum/protocol/messages";
-import type { PublicView } from "@universum/rules";
 import { FIELDS, type FieldId } from "@universum/rules/board";
 import { LocateFixed, Maximize, Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -7,10 +6,11 @@ import { useStore } from "zustand";
 import { createBoard, type Board as BoardRenderer } from "#board/board.ts";
 import { fieldFacts } from "#board/field-facts.ts";
 import { Button } from "#components/ui/button.tsx";
-import { selectedPick, singleMarks, singlePickFor } from "#pick/pick.ts";
-import { AUTO_SELL_WARNING_MS, saleFor, saleMarks } from "#pick/sale.ts";
+import { decisionKey, fieldTap, openDecision, type OpenDecision } from "#decision/decision.ts";
+import { selectedPick, singleMarks } from "#pick/pick.ts";
+import { AUTO_SELL_WARNING_MS, saleMarks } from "#pick/sale.ts";
 import { currentPlayback, gateOpenOf, playbackStore } from "#playback/playback-store.ts";
-import { roomStore } from "#stores/room-store.ts";
+import { inFlightOf, roomStore } from "#stores/room-store.ts";
 import { salePicksFor, uiStore } from "#stores/ui-store.ts";
 import { exposeBoard } from "#test-hooks.ts";
 import { fieldName, formatCompactMoney, m } from "#text.ts";
@@ -20,48 +20,39 @@ const OBSTACLES = "[data-board-obstacle]";
 const ZOOM_STEP = 1.5;
 
 /**
- * The view the controls belong to, once the Decision gate is open: the latest
- * frame's view, or `null` while its Playback still holds them. A frame implies
- * a push, so this is also "there is a game to act on".
+ * This client's Decision: the latest frame, this client and the in-flight lock
+ * (spec #72). The one place the Board asks what it may do; `fieldTap` and
+ * `decisionKey` read that answer.
  */
-function openView(): PublicView | null {
-  const { frame } = playbackStore.getState();
-  return frame?.gateOpen ? frame.view : null;
-}
-
-/** This client's open Sale, from the frame's view. */
-function currentSale() {
-  const view = openView();
-  return view === null ? null : saleFor(view, roomStore.getState().me);
-}
-
-/** This client's open Doubler or Erasmus pick, from the frame's view. */
-function currentPick() {
-  const view = openView();
-  return view === null ? null : singlePickFor(view, roomStore.getState().me);
+function currentDecision(): OpenDecision | null {
+  return openDecision(
+    playbackStore.getState().frame,
+    roomStore.getState().me,
+    inFlightOf(roomStore.getState()),
+  );
 }
 
 /**
- * A tap on the Board: during this client's pick it selects the (pickable)
- * Field and never commits; in inspect mode it opens any Field's card instead;
- * otherwise it opens the Field card.
+ * A tap on the Board: the Decision module says what it does (pick or unpick a
+ * Field, open a Field card, or nothing while an intent is in flight), and this
+ * applies it to the UI store.
  */
 function onFieldTap(id: FieldId | null): void {
-  const sale = currentSale();
-  const pick = sale ? null : currentPick();
-  if ((sale || pick) && uiStore.getState().inspect) {
-    uiStore.getState().selectField(id);
-    return;
+  const ui = uiStore.getState();
+  const tap = fieldTap(currentDecision(), { inspect: ui.inspect }, id);
+  switch (tap.kind) {
+    case "selectField":
+      ui.selectField(tap.field);
+      return;
+    case "toggleSale":
+      ui.toggleSalePick(tap.key, tap.field);
+      return;
+    case "choosePick":
+      ui.choosePick(tap.key, tap.field);
+      return;
+    case "ignore":
+      return;
   }
-  if (sale) {
-    if (id !== null) uiStore.getState().toggleSalePick(sale.key, id);
-    return;
-  }
-  if (pick) {
-    if (id !== null) uiStore.getState().choosePick(pick.key, id);
-    return;
-  }
-  uiStore.getState().selectField(id);
 }
 
 /**
@@ -134,31 +125,37 @@ export function Board() {
        */
       const syncPick = () => {
         clearTimeout(warningTimer);
-        const view = openView();
-        // `currentSale`/`currentPick` are the gate check: both are null while it is shut,
-        // so the key becomes null at the Playback's start and the open card resets at once.
-        const sale = currentSale();
-        const pick = currentPick();
-        const key = sale?.key ?? pick?.key ?? null;
+        const { frame } = playbackStore.getState();
+        const decision = openDecision(
+          frame,
+          roomStore.getState().me,
+          inFlightOf(roomStore.getState()),
+        );
+        // `openDecision` is the gate check: it is null while the gate is shut,
+        // so the key becomes null at the Playback's start and the open card
+        // resets at once. It ignores `busy`, so a send never resets the picks.
+        const key = decisionKey(decision);
         if (key !== pickKey) {
           pickKey = key;
           uiStore.getState().focusPick(null);
           uiStore.getState().setInspect(false);
           if (uiStore.getState().selectedField !== null) uiStore.getState().selectField(null);
         }
-        if (!sale && !pick) return renderer.setPick(null);
-        if (pick) {
-          const field = selectedPick(pick, uiStore.getState().singlePick);
-          return renderer.setPick(singleMarks(pick, field));
+        // Only this client's Sale or pick carries the value; another Player's is
+        // a waiting line with neither property.
+        if (decision !== null && "pick" in decision) {
+          const field = selectedPick(decision.pick, uiStore.getState().singlePick);
+          return renderer.setPick(singleMarks(decision.pick, field));
         }
+        if (decision === null || !("sale" in decision)) return renderer.setPick(null);
         // A Sale comes from the open gate's view, so that view exists too.
-        if (view === null || !sale || view.turnTimer === null) return renderer.setPick(null);
+        if (frame === null || frame.view.turnTimer === null) return renderer.setPick(null);
         // The marks count down on the server's clock: only the push's offset applies.
         const { push } = roomStore.getState();
         if (push === null) return renderer.setPick(null);
-        const msLeft = view.turnTimer.endsAt - serverNow(push.clockOffset);
-        const picks = salePicksFor(uiStore.getState().salePicks, sale.key);
-        renderer.setPick(saleMarks(sale, view, picks, msLeft));
+        const msLeft = frame.view.turnTimer.endsAt - serverNow(push.clockOffset);
+        const picks = salePicksFor(uiStore.getState().salePicks, decision.sale.key);
+        renderer.setPick(saleMarks(decision.sale, frame.view, picks, msLeft));
         if (msLeft > AUTO_SELL_WARNING_MS) {
           warningTimer = window.setTimeout(syncPick, msLeft - AUTO_SELL_WARNING_MS + 50);
         }
