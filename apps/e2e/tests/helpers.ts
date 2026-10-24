@@ -16,6 +16,7 @@ import {
 import {
   PLAYBACK_MS,
   playbackOf,
+  type ChanceCardId,
   type GameEvent,
   type Phase,
   type PhaseOf,
@@ -219,7 +220,7 @@ export type ChanceEffect = { type: "ChanceMoneyReceived" | "ChanceChargePaid"; a
  */
 export function showChance(
   page: Page,
-  card: string,
+  card: ChanceCardId,
   effects: readonly ChanceEffect[] = [],
 ): Promise<void> {
   return page.evaluate(
