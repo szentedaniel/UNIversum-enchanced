@@ -97,6 +97,10 @@ export async function ensureJoined(code: string): Promise<void> {
 }
 
 export function sendIntent(intent: ClientIntent): void {
+  // No optimistic UI: lock the controls until a push or Rejection with a later
+  // `seq` answers this send (also when no Room is attached, as the screen did).
+  const { push, rejection } = roomStore.getState();
+  roomStore.setState({ sentAt: Math.max(push?.seq ?? 0, rejection?.seq ?? 0) });
   room?.send(MESSAGE.intent, intent);
 }
 
