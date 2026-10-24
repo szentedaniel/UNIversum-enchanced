@@ -47,7 +47,8 @@ refactor: no behaviour, no message and no rule changed. The proof is `tsc` on
 
 ## Verified on this branch
 
-- `pnpm -r run typecheck`, the loadtest vitest (87), the whole vitest run
-  (951), `TEST_HOOKS=1` web build and the full e2e suite on 3171/5271, with
-  `sale-tray`, `pick-tray`, `podium`, `chance-card` and `two-guests` repeated
-  `--repeat-each 6 --retries 0`.
+- `pnpm -r run typecheck`, the whole vitest run (951, the loadtest's 87 among
+  them), `TEST_HOOKS=1` web build, `docker compose build` and the full e2e
+  suite on 3171/5271 (67 passed, 1 skipped), with `sale-tray`, `pick-tray`,
+  `podium`, `chance-card`, `two-guests` and `full-game` repeated
+  `--repeat-each 6 --retries 0` (138 + 6 passed, 0 failed).
