@@ -64,12 +64,14 @@ screen alone.
 
 ## Test hooks (`apps/e2e/tests/test-hooks.ts`)
 
-- `FullPhase` is the real phase union (`offer` optional keys, `selling`,
-  picks, `gameOver` winner/reason); add a member when a new decision phase
-  arrives or the spec's exhaustive switch fails to compile.
-- `FullView.version` and `room().push.{events, seq}` are declared and read by
-  the spec; `events` is only `{ type }[]`, so a spec that needs a payload must
-  widen it.
+- The pushed view's phase is the rules engine's `Phase` union (since #71 the
+  hand-written `FullPhase` mirror is gone): `offer` has required `levels` and
+  optional `buyout`/`museum`, plus `selling`, the picks and `gameOver`
+  winner/reason. A new decision phase arrives through the rules' declaration
+  merging alone.
+- `PublicView.version` and `room().push.{events, seq}` (the view is the rules
+  `PublicView` since #71) are declared and read by the spec; `events` is only
+  `{ type }[]`, so a spec that needs a payload must widen it.
 
 ## Gotchas seen
 

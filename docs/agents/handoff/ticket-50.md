@@ -90,9 +90,10 @@ stay in #51.
 
 ## E2E / load test
 
-- `apps/e2e/tests/test-hooks.ts`: `ViewSummary`/`FullView` carry `actsAfter`.
+- `apps/e2e/tests/test-hooks.ts`: the pushed view carries `actsAfter` (since #71
+  the hooks use the rules engine's `PublicView`).
   Made-up views pushed through `showView` must set `actsAfter` to
-  `Date.now() + push.clockOffset` (pick-tray, sale-tray, podium specs do).
+  `hooks.serverNow()` (#64; pick-tray, sale-tray, podium specs do).
 - `two-guests.spec.ts` samples every animation frame in-page
   (`window.playbackProbe`/`stopPlaybackProbe`) during the first Roll and
   asserts no decision control is visible while

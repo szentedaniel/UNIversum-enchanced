@@ -1,4 +1,5 @@
 import { chromium, devices, expect, webkit, type Page } from "@playwright/test";
+import type { PublicView } from "@universum/rules";
 import {
   closeAfterDump,
   expectBoardUp,
@@ -12,12 +13,11 @@ import {
   type OfferChoice,
   type OfferPhase,
 } from "./helpers.ts";
-import type { FullView } from "./test-hooks.ts";
 
 const viewOf = (page: Page) => page.evaluate(() => window.universumTest?.view() ?? null);
 
-/** The full pushed view, with every phase's options (the Board's view is a summary). */
-const pushView = (page: Page): Promise<FullView | null> =>
+/** The latest push's view, with every phase's options; `view()` is the view the Board last drew. */
+const pushView = (page: Page): Promise<PublicView | null> =>
   page.evaluate(() => window.universumTest?.room().push?.view ?? null);
 
 const me = (page: Page) => page.evaluate(() => window.universumTest?.room().me ?? null);
@@ -222,7 +222,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
 
     /** The offer this spec takes: the first University and the first Museum, then Decline. */
     const takeOffer = (phase: OfferPhase): OfferChoice => {
-      if (!bought && (phase.levels?.length ?? 0) > 0) return "level";
+      if (!bought && phase.levels.length > 0) return "level";
       if (!museum && phase.museum !== undefined) return "museum";
       return "decline";
     };
@@ -232,7 +232,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
      * offers. Every control appears only once its Playback ends (ADR-0004), so
      * Playwright's auto-wait is what waits it out.
      */
-    const resolveDecision = async (roller: Page, view: FullView) => {
+    const resolveDecision = async (roller: Page, view: PublicView) => {
       const [waiter] = roller === desktop ? [phone] : [desktop];
       const { phase } = view;
       if (phase.kind === "offer") {

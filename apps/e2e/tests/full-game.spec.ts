@@ -6,7 +6,7 @@ import {
   type BrowserContext,
   type Page,
 } from "@playwright/test";
-import { playbackOf, type GameEvent } from "@universum/rules";
+import { playbackOf, type GameEvent, type PublicView } from "@universum/rules";
 import {
   closeAfterDump,
   press,
@@ -16,7 +16,6 @@ import {
   type OfferChoice,
   type OfferPhase,
 } from "./helpers.ts";
-import type { FullView } from "./test-hooks.ts";
 
 /*
  * Definition of done item 3 (spec: Testing Decisions, seam 3): four Guests on
@@ -59,7 +58,7 @@ type Guest = {
   id: string;
 };
 
-const viewOf = (page: Page): Promise<FullView | null> =>
+const viewOf = (page: Page): Promise<PublicView | null> =>
   page.evaluate(() => window.universumTest?.room().push?.view ?? null);
 
 const meOf = (page: Page): Promise<string | null> =>
@@ -76,10 +75,10 @@ async function past(guest: Guest, version: number): Promise<void> {
 }
 
 /** The newest view any client holds: pushes reach the four clients a moment apart. */
-async function latestView(guests: readonly Guest[]): Promise<FullView> {
+async function latestView(guests: readonly Guest[]): Promise<PublicView> {
   const views = await Promise.all(guests.map((guest) => viewOf(guest.page)));
-  const present = views.filter((view): view is FullView => view !== null);
-  const newest = present.reduce<FullView | null>(
+  const present = views.filter((view): view is PublicView => view !== null);
+  const newest = present.reduce<PublicView | null>(
     (latest, view) => (latest === null || view.version > latest.version ? view : latest),
     null,
   );
@@ -99,7 +98,7 @@ async function scanEvents(guests: readonly Guest[], seen: Set<string>): Promise<
  * the server has answered, with the step it covered (`null` for a plain Roll,
  * Decline or Quarantine roll).
  */
-async function playDecision(guest: Guest, view: FullView): Promise<"buy" | "pick" | null> {
+async function playDecision(guest: Guest, view: PublicView): Promise<"buy" | "pick" | null> {
   const { phase } = view;
   if (phase.kind === "gameOver") throw new Error("the game is over");
   let covered: "buy" | "pick" | null = null;
@@ -119,7 +118,7 @@ async function playDecision(guest: Guest, view: FullView): Promise<"buy" | "pick
 
 /** The offer this test takes: the first Level or Museum offered, otherwise Decline (never a Buyout). */
 function takeOffer(phase: OfferPhase): OfferChoice {
-  if ((phase.levels?.length ?? 0) > 0) return "level";
+  if (phase.levels.length > 0) return "level";
   return phase.museum === undefined ? "decline" : "museum";
 }
 

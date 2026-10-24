@@ -13,8 +13,15 @@ import {
   type Page,
   type TestInfo,
 } from "@playwright/test";
-import { PLAYBACK_MS, playbackOf, type GameEvent } from "@universum/rules";
-import type { FullPhase, FullView, PlaybackHook, Rejection, SocketCall } from "./test-hooks.ts";
+import {
+  PLAYBACK_MS,
+  playbackOf,
+  type ChanceCardId,
+  type GameEvent,
+  type PhaseOf,
+  type PublicView,
+} from "@universum/rules";
+import type { PlaybackHook, Rejection, SocketCall } from "./test-hooks.ts";
 
 /** A screen the spec acts through: a phone taps, a desktop clicks. */
 export type Interactor = { page: Page; mobile: boolean };
@@ -160,7 +167,7 @@ export async function press(actor: Interactor, target: Locator): Promise<void> {
 }
 
 /** The Player's Fields, cheapest Bank sale value first (Auto-sell's order). */
-export function ownFields(view: FullView, player: string): number[] {
+export function ownFields(view: PublicView, player: string): number[] {
   return view.fields
     .map((field, id) => ({ field, id }))
     .filter(({ field }) => field.owner === player)
@@ -212,7 +219,7 @@ export type ChanceEffect = { type: "ChanceMoneyReceived" | "ChanceChargePaid"; a
  */
 export function showChance(
   page: Page,
-  card: string,
+  card: ChanceCardId,
   effects: readonly ChanceEffect[] = [],
 ): Promise<void> {
   return page.evaluate(
@@ -230,7 +237,7 @@ export function showChance(
   );
 }
 
-export type OfferPhase = Extract<FullPhase, { kind: "offer" }>;
+export type OfferPhase = PhaseOf<"offer">;
 export type OfferChoice = "level" | "museum" | "buyout" | "decline";
 
 /** What resolving a decision did, for each spec's bookkeeping. */
@@ -254,7 +261,7 @@ export type DecisionResult =
  */
 export async function resolveDecision(
   actor: Interactor,
-  view: FullView,
+  view: PublicView,
   chooseOffer: (phase: OfferPhase) => OfferChoice,
 ): Promise<DecisionResult> {
   const { phase } = view;
@@ -264,7 +271,7 @@ export async function resolveDecision(
       await expect(panel).toBeVisible();
       const choice = chooseOffer(phase);
       if (choice === "level") {
-        const level = phase.levels?.[0];
+        const level = phase.levels[0];
         if (level === undefined) throw new Error("the offer has no Level to buy");
         await press(
           actor,
@@ -347,13 +354,7 @@ export type PageDump = {
   /** The latest push: its `seq`, the server clock offset and the event types, in order. */
   push: { seq: number; clockOffset: number; events: string[] } | null;
   /** The pushed view's Turn, current Player, phase, gate and version. */
-  view: {
-    turn: number;
-    currentPlayer: string;
-    phase: FullPhase;
-    actsAfter: number;
-    version: number;
-  } | null;
+  view: Pick<PublicView, "turn" | "currentPlayer" | "phase" | "actsAfter" | "version"> | null;
   /** `universumTest.playback()`: the push the gate is for, whether it is open, and the shown Turn. */
   playback: PlaybackHook | null;
   /** The labels of the buttons on screen when the dump ran. */
