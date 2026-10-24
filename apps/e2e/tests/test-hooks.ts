@@ -159,6 +159,12 @@ export type TestHooks = {
    */
   serverNow(): number;
   pick(): PickMarks | null;
+  /**
+   * Leaves an intent in flight (the lock `sendIntent` sets, with no answer), so
+   * a spec can check the screen while a Sale or pick is busy. A `showView` push
+   * clears it, like the server's answer.
+   */
+  holdIntent(): void;
   /** Shows a made-up view (a full PublicView) as if the server had pushed it, with optional events. */
   showView(view: FullView, events?: { type: string; [key: string]: unknown }[]): void;
   /** The room store (only the fields the specs read). */

@@ -11,7 +11,7 @@ import type { GameEvent, PlayerId, PublicView } from "@universum/rules";
 import type { FieldId } from "@universum/rules/board";
 import type { Board } from "#board/board.ts";
 import { gateOpenOf, playbackStore, type PlaybackGate } from "#playback/playback-store.ts";
-import { roomStore, type RoomState } from "#stores/room-store.ts";
+import { answeredAtOf, roomStore, type RoomState } from "#stores/room-store.ts";
 
 declare const TEST_HOOKS_ENABLED: boolean;
 
@@ -31,6 +31,12 @@ export type TestHooks = {
    */
   serverNow(): number;
   pick(): Board["pick"];
+  /**
+   * Leaves an intent in flight: the lock is set as `sendIntent` sets it and no
+   * answer comes, so a Board tap can be checked while a Sale or pick is busy.
+   * A `showView` push clears it, like the server's answer.
+   */
+  holdIntent(): void;
   /** Shows a made-up view, optionally with the events of the push that led to it. */
   showView(view: PublicView, events?: readonly GameEvent[]): void;
 };
@@ -64,6 +70,9 @@ export function exposeBoard(board: Board | null): void {
           return serverNow(push?.clockOffset ?? lobbyClockOffset);
         },
         pick: () => board.pick,
+        holdIntent() {
+          roomStore.setState({ sentAt: answeredAtOf(roomStore.getState()) });
+        },
         showView(view, events = []) {
           const { push } = roomStore.getState();
           roomStore.setState({

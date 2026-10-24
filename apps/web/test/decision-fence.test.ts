@@ -22,8 +22,8 @@ const DECISION_FILE = "apps/web/src/decision/decision.ts";
 
 /** The functions' own definitions, and the only lines that may name them. */
 const DEFINITIONS: Record<string, RegExp> = {
- "apps/web/src/pick/sale.ts": /^export function saleFor\b/,
- "apps/web/src/pick/pick.ts": /^export function singlePickFor\b/,
+  "apps/web/src/pick/sale.ts": /^export function saleFor\b/,
+  "apps/web/src/pick/pick.ts": /^export function singlePickFor\b/,
 };
 
 const READ = /\b(?:saleFor|singlePickFor)\b/g;
@@ -33,60 +33,67 @@ const INSTEAD = "openDecision/fieldTap/decisionKey from #decision/decision.ts";
 
 /** `source` with its comments blanked; block comments keep their newlines. */
 function withoutComments(source: string): string {
- return source
-  .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ""))
-  .replace(/\/\/.*$/gm, "");
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ""))
+    .replace(/\/\/.*$/gm, "");
 }
 
 /** Every violation in `source`, as `file:line: rule — use replacement. Line: code`. */
 function scan(source: string, file: string): string[] {
- if (file === DECISION_FILE) return [];
- const code = withoutComments(source);
- const lines = code.split("\n");
- const found = new Set<number>();
- for (const match of code.matchAll(READ)) {
-  const line = code.slice(0, match.index).split("\n").length;
-  if (DEFINITIONS[file]?.test(lines[line - 1] ?? "")) continue;
-  found.add(line);
- }
- return [...found]
-  .toSorted((a, b) => a - b)
-  .map((line) => `${file}:${line}: ${RULE} — use ${INSTEAD}. Line: ${lines[line - 1]?.trim()}`);
+  if (file === DECISION_FILE) return [];
+  const code = withoutComments(source);
+  const lines = code.split("\n");
+  const found = new Set<number>();
+  for (const match of code.matchAll(READ)) {
+    const line = code.slice(0, match.index).split("\n").length;
+    if (DEFINITIONS[file]?.test(lines[line - 1] ?? "")) continue;
+    found.add(line);
+  }
+  return [...found]
+    .toSorted((a, b) => a - b)
+    .map((line) => `${file}:${line}: ${RULE} — use ${INSTEAD}. Line: ${lines[line - 1]?.trim()}`);
 }
 
 /** Every `.ts`/`.tsx` file under `dir`, minus the generated Paraglide messages. */
 function sourceFiles(dir: string): string[] {
- return readdirSync(dir, { recursive: true, withFileTypes: true })
-  .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
-  .map((entry) => join(entry.parentPath, entry.name))
-  .filter((file) => !file.includes("/paraglide/"));
+  return readdirSync(dir, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
+    .map((entry) => join(entry.parentPath, entry.name))
+    .filter((file) => !file.includes("/paraglide/"));
 }
 
 it("spec #72: scans the web app's source, the Decision module included", () => {
- const files = sourceFiles(join(ROOT, TREE)).map((file) => relative(ROOT, file));
- expect(files).toEqual(
-  expect.arrayContaining([DECISION_FILE, "apps/web/src/board/Board.tsx"]),
- );
+  const files = sourceFiles(join(ROOT, TREE)).map((file) => relative(ROOT, file));
+  expect(files).toEqual(expect.arrayContaining([DECISION_FILE, "apps/web/src/board/Board.tsx"]));
 });
 
 it("spec #72: reads a Sale or pick only through the Decision module", () => {
- const violations = sourceFiles(join(ROOT, TREE)).flatMap((file) =>
-  scan(readFileSync(file, "utf8"), relative(ROOT, file)),
- );
- expect(violations).toEqual([]);
+  const violations = sourceFiles(join(ROOT, TREE)).flatMap((file) =>
+    scan(readFileSync(file, "utf8"), relative(ROOT, file)),
+  );
+  expect(violations).toEqual([]);
 });
 
 it("spec #72: catches a Sale or pick read outside the Decision module", () => {
- for (const file of ["apps/web/src/board/Board.tsx", "apps/web/src/screens/Game.tsx"]) {
-  expect(scan("const mine = saleFor(view, me);\n", file)).toEqual([
-   `${file}:1: ${RULE} — use ${INSTEAD}. Line: const mine = saleFor(view, me);`,
-  ]);
-  expect(scan("const mine = singlePickFor(view, me);", file)).toHaveLength(1);
- }
+  for (const file of ["apps/web/src/board/Board.tsx", "apps/web/src/screens/Game.tsx"]) {
+    expect(scan("const mine = saleFor(view, me);\n", file)).toEqual([
+      `${file}:1: ${RULE} — use ${INSTEAD}. Line: const mine = saleFor(view, me);`,
+    ]);
+    expect(scan("const mine = singlePickFor(view, me);", file)).toHaveLength(1);
+  }
 });
 
 it("spec #72: allows the readers' definitions and ignores comments", () => {
- expect(scan("export function saleFor(view: PublicView, me: PlayerId | null) {", "apps/web/src/pick/sale.ts")).toEqual([]);
- expect(scan("export function singlePickFor(view: PublicView) {", "apps/web/src/pick/pick.ts")).toEqual([]);
- expect(scan("// saleFor(view, me)\n/* singlePickFor(view, me) */", "apps/web/src/board/Board.tsx")).toEqual([]);
+  expect(
+    scan(
+      "export function saleFor(view: PublicView, me: PlayerId | null) {",
+      "apps/web/src/pick/sale.ts",
+    ),
+  ).toEqual([]);
+  expect(
+    scan("export function singlePickFor(view: PublicView) {", "apps/web/src/pick/pick.ts"),
+  ).toEqual([]);
+  expect(
+    scan("// saleFor(view, me)\n/* singlePickFor(view, me) */", "apps/web/src/board/Board.tsx"),
+  ).toEqual([]);
 });
