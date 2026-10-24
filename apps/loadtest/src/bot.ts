@@ -8,11 +8,9 @@ import type { ClientIntent, GameMessage } from "@universum/protocol/messages";
 
 type View = GameMessage["view"];
 
-/** Phases that mean the game is over. #32 names its own; match the likely ids. */
-const FINISHED_PHASES = new Set(["gameOver", "ended"]);
-
+/** The view's phases are typed (`PhaseKind`), so the game's end is the one `gameOver` phase. */
 export function isGameOver(view: View): boolean {
-  return FINISHED_PHASES.has(view.phase.kind);
+  return view.phase.kind === "gameOver";
 }
 
 export function isMyTurn(view: View, me: string): boolean {

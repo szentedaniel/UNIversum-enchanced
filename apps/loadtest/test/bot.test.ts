@@ -171,5 +171,7 @@ describe("bot decisions", () => {
   it("recognises the game-over phase", () => {
     expect(isGameOver(view({ kind: "gameOver", winner: "p0", reason: "timeUp" }))).toBe(true);
     expect(isGameOver(view({ kind: "awaitingRoll" }))).toBe(false);
+    // Only a phase the view types can end the game: no invented "ended" id does.
+    expect(isGameOver(view(futurePhase("ended")))).toBe(false);
   });
 });
