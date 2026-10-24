@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Tests import app modules (src/players.ts, src/audio.ts) and their browser types.
+    "lib": ["esnext", "dom", "dom.iterable"],
+    // vite/client: tests import app modules that import assets (src/players.ts).
+    "types": ["node", "vite/client"],
+    // Tests import Paraglide's generated JS (src/paraglide, gitignored).
+    "allowJs": true
+  },
+  "include": ["vite.config.ts", "scripts", "test"]
+}

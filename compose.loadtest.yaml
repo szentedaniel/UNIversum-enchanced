@@ -1,0 +1,19 @@
+# The load test's compose override (spec: Load test). `apps/loadtest/src/runner.ts`
+# layers this on compose.yaml with the `monitoring` profile.
+#
+# The server gets the sign-off box: 2 CPUs and 2 GB. Every scripted Guest reaches
+# it through Caddy, so they all share one IP bucket; the per-IP limits are raised
+# (as e2e does). The flood limits, maxPayload and the Lobby cap deliberately stay
+# at their production values.
+services:
+  server:
+    cpus: 2
+    mem_limit: 2g
+    environment:
+      LIMIT_ROOM_CREATIONS_PER_MINUTE: "100000"
+      LIMIT_ROOM_CREATIONS_PER_HOUR: "100000"
+      LIMIT_OPEN_LOBBIES_PER_IP: "100000"
+      LIMIT_JOINS_PER_MINUTE: "100000"
+      LIMIT_SEAT_RESERVATIONS_PER_IP: "100000"
+      LIMIT_SOCKETS_PER_IP: "100000"
+      LIMIT_PASSWORD_FAILURES_PER_IP: "100000"

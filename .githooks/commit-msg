@@ -1,0 +1,4 @@
+#!/bin/sh
+# Checks the commit message (packages/repo-checks/src/check-message.ts).
+# Installed by `pnpm install` (the root `prepare` script sets core.hooksPath).
+exec node packages/repo-checks/src/check-message.ts "$1"

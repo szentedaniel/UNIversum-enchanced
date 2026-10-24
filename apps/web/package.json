@@ -1,0 +1,53 @@
+{
+  "name": "@universum/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#assets/*": "./assets/*",
+    "#*": "./src/*"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "atlas": "node scripts/atlas.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
+    "paraglide": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy localStorage preferredLanguage baseLocale --silent",
+    "postinstall": "pnpm run paraglide"
+  },
+  "dependencies": {
+    "@base-ui/react": "catalog:",
+    "@colyseus/sdk": "catalog:",
+    "@fontsource-variable/nunito": "catalog:",
+    "@fontsource/sigmar-one": "catalog:",
+    "@sentry/react": "catalog:",
+    "@universum/protocol": "workspace:*",
+    "@universum/rules": "workspace:*",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "lucide-react": "catalog:",
+    "pixi.js": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router": "catalog:",
+    "tailwind-merge": "catalog:",
+    "zustand": "catalog:"
+  },
+  "devDependencies": {
+    "@assetpack/core": "catalog:",
+    "@inlang/paraglide-js": "catalog:",
+    "@inlang/plugin-message-format": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "oxlint": "catalog:",
+    "sharp": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

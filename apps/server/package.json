@@ -1,0 +1,33 @@
+{
+  "name": "@universum/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#*": "./src/*"
+  },
+  "scripts": {
+    "dev": "node --watch --env-file-if-exists=../../.env src/main.ts",
+    "start": "node src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@colyseus/core": "catalog:",
+    "@colyseus/ws-transport": "catalog:",
+    "@prometheus-io/client": "catalog:",
+    "@sentry/node": "catalog:",
+    "@universum/protocol": "workspace:*",
+    "@universum/rules": "workspace:*",
+    "pino": "catalog:",
+    "rate-limiter-flexible": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@colyseus/sdk": "catalog:",
+    "@sentry/core": "catalog:",
+    "@types/node": "catalog:",
+    "pino-pretty": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

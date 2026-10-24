@@ -48,8 +48,28 @@ _Avoid_: Username, nickname
 One Player's go, from their roll (or Quarantine choice) until play passes to the next Player.
 _Avoid_: Move, round
 
+**Roll**:
+The two dice a Player throws to start their Turn (or to try to leave Quarantine); their total is how many Fields the Player moves.
+_Avoid_: Throw, dobás
+
+**Decision**:
+One choice the game waits for from the current Player: a Roll, an Offer, a Quarantine choice, a Sale, or a Doubler or Erasmus pick; each has its own Turn timer.
+_Avoid_: Prompt, action
+
+**Offer**:
+The Decision on landing on a Field the Player may buy or build on: buy a Level, buy the Museum, make a Buyout, or decline.
+_Avoid_: Purchase prompt
+
+**Playback**:
+The showing, in order and on every screen, of everything one Player's action set off; the next decision, and its Turn timer, starts only once the Playback ends.
+_Avoid_: Animation, replay
+
+**Decision gate**:
+The moment the next decision opens, once the Playback before it has ended; the decision's controls and its Turn timer start there.
+_Avoid_: Playback over, unlock
+
 **Turn timer**:
-The countdown a Player has to finish their Turn before it ends for them.
+The countdown a Player has for one decision of their Turn, starting when the Playback before it ends.
 _Avoid_: Turn countdown
 
 **Timeout penalty**:

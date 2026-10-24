@@ -1,0 +1,212 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "warn"
+  },
+  "options": {
+    "typeAware": true,
+    "denyWarnings": true
+  },
+  "env": {
+    "es2024": true
+  },
+  // .claude/ and .agents/ are untracked local tooling folders (they may hold
+  // other git worktrees).
+  "ignorePatterns": [".claude/**", ".agents/**", "**/dist/**", "apps/web/src/paraglide/**"],
+  "rules": {
+    "import/no-cycle": "error",
+    // House style: explicit `.ts`/`.tsx` extensions, also where Vite resolves imports.
+    "import/extensions": [
+      "error",
+      "always",
+      {
+        "ignorePackages": true,
+        "checkTypeImports": true
+      }
+    ],
+    "typescript/consistent-type-imports": "error",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error"
+  },
+  "overrides": [
+    {
+      "files": ["apps/web/**/*.{ts,tsx}"],
+      "plugins": [
+        "typescript",
+        "unicorn",
+        "oxc",
+        "import",
+        "promise",
+        "react",
+        "react-perf",
+        "jsx-a11y",
+        "vitest"
+      ],
+      "env": {
+        "browser": true
+      },
+      "rules": {
+        "react/rules-of-hooks": "error",
+        "react/exhaustive-deps": "error",
+        "react/jsx-key": "error",
+        "react/react-in-jsx-scope": "off",
+        // Inline handlers and `<Route element={<Screen />}>` are idiomatic React
+        // (no memoised children here); these two rules would flag every one.
+        "react-perf/jsx-no-new-function-as-prop": "off",
+        "react-perf/jsx-no-jsx-as-prop": "off",
+        // Same for inline `style={{ … }}` (Player colours and sizes are runtime values).
+        "react-perf/jsx-no-new-object-as-prop": "off",
+        // Side-effect imports are only for CSS.
+        "import/no-unassigned-import": [
+          "error",
+          {
+            "allow": ["**/*.css"]
+          }
+        ],
+        // PixiJS `Graphics.fill({ … })` is not `Array.prototype.fill`.
+        "unicorn/no-array-fill-with-reference-type": "off",
+        // The web app holds no rule logic and no Zod (spec: Modules). It may
+        // import only types and the static Board and Playback data from rules,
+        // and only the Zod-free `messages` subpath from protocol.
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@universum/rules",
+                "allowTypeImports": true,
+                "message": "The web app may import only types from @universum/rules; static Board data comes from @universum/rules/board and the Playback durations from @universum/rules/playback."
+              },
+              {
+                "name": "@universum/protocol",
+                "message": "The web app may import only @universum/protocol/messages (Zod-free)."
+              },
+              {
+                "name": "zod",
+                "message": "Zod stays on the server: the web app gets parsed data from the server's view."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "@universum/rules/*",
+                  "!@universum/rules/board",
+                  "!@universum/rules/playback"
+                ],
+                "message": "From @universum/rules the web app may import only types, @universum/rules/board and @universum/rules/playback."
+              },
+              {
+                "group": ["@universum/protocol/*", "!@universum/protocol/messages"],
+                "message": "The web app may import only @universum/protocol/messages (Zod-free)."
+              },
+              {
+                "group": ["zod/*"],
+                "message": "Zod stays on the server: the web app gets parsed data from the server's view."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      // Only the Playback module reads the Playback durations (spec #63,
+      // Fence). An override's rule config replaces the base one instead of
+      // merging, so the web app's `no-restricted-imports` is repeated with
+      // `@universum/rules/playback` added to `paths`.
+      // apps/web/test/import-fence.test.ts lints a sample under all three
+      // copies (the base config, this one and the test one), so a drift
+      // between them fails.
+      "files": ["apps/web/src/**/*.{ts,tsx}"],
+      "excludeFiles": ["apps/web/src/playback/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@universum/rules/playback",
+                "message": "Only the Playback module (apps/web/src/playback/) may import @universum/rules/playback."
+              },
+              {
+                "name": "@universum/rules",
+                "allowTypeImports": true,
+                "message": "The web app may import only types from @universum/rules; static Board data comes from @universum/rules/board."
+              },
+              {
+                "name": "@universum/protocol",
+                "message": "The web app may import only @universum/protocol/messages (Zod-free)."
+              },
+              {
+                "name": "zod",
+                "message": "Zod stays on the server: the web app gets parsed data from the server's view."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "@universum/rules/*",
+                  "!@universum/rules/board",
+                  "!@universum/rules/playback"
+                ],
+                "message": "Outside apps/web/src/playback/ the web app may import only types and @universum/rules/board from @universum/rules."
+              },
+              {
+                "group": ["@universum/protocol/*", "!@universum/protocol/messages"],
+                "message": "The web app may import only @universum/protocol/messages (Zod-free)."
+              },
+              {
+                "group": ["zod/*"],
+                "message": "Zod stays on the server: the web app gets parsed data from the server's view."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      // Tests run in Node, never in the browser bundle the fence guards, and
+      // drive the real rules engine (spec #72, Testing Decisions): they may
+      // import it at runtime. The protocol and Zod stay out of both. The
+      // import-fence test lints a sample here too.
+      "files": ["apps/web/test/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@universum/protocol",
+                "message": "The web app may import only @universum/protocol/messages (Zod-free)."
+              },
+              {
+                "name": "zod",
+                "message": "Zod stays on the server: tests get parsed data from the rules or the server."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "@universum/rules/*",
+                  "!@universum/rules/board",
+                  "!@universum/rules/playback"
+                ],
+                "message": "Tests may import @universum/rules and its board and playback subpaths."
+              },
+              {
+                "group": ["@universum/protocol/*", "!@universum/protocol/messages"],
+                "message": "The web app may import only @universum/protocol/messages (Zod-free)."
+              },
+              {
+                "group": ["zod/*"],
+                "message": "Zod stays on the server: tests get parsed data from the rules or the server."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

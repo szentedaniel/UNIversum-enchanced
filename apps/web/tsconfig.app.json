@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    // Paraglide generates JS with JSDoc types (src/paraglide, gitignored).
+    "allowJs": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,122 @@
+diff --git a/build/transport/WebSocketTransport.cjs b/build/transport/WebSocketTransport.cjs
+index 7c94aad3cb16177d569a22d747463d7bb9850bac..f83299a024339c5d67df4c925bae64bf39816cee 100644
+--- a/build/transport/WebSocketTransport.cjs
++++ b/build/transport/WebSocketTransport.cjs
+@@ -10,6 +10,10 @@ var NodeWebSocket = require('ws');
+ var sharedTypes = require('@colyseus/shared-types');
+ 
+ const WebSocket = globalThis.WebSocket || NodeWebSocket;
++// A browser takes only the `(url, protocols)` signature and rejects the Node
++// options object with a SyntaxError, which WebKit reports as a page error even
++// though the caller catches it; pick the form up front instead of by the throw.
++const inBrowser = typeof document !== "undefined";
+ // Once per process — the fallback is per-send, and a 60Hz input ring would
+ // otherwise flood the console.
+ let warnedNoUnreliableChannel = false;
+@@ -45,14 +49,19 @@ class WebSocketTransport {
+      * @param headers custom headers to send with the connection (only supported in Node.js. Web Browsers do not allow setting custom headers)
+      */
+     connect(url, headers) {
+-        try {
+-            // Node or Bun environments (supports custom headers)
+-            this.ws = new WebSocket(url, { headers, protocols: this.protocols });
+-        }
+-        catch (e) {
+-            // browser environment (custom headers not supported)
++        if (inBrowser) {
+             this.ws = new WebSocket(url, this.protocols);
+         }
++        else {
++            try {
++                // Node or Bun environments (supports custom headers)
++                this.ws = new WebSocket(url, { headers, protocols: this.protocols });
++            }
++            catch (e) {
++                // browser environment (custom headers not supported)
++                this.ws = new WebSocket(url, this.protocols);
++            }
++        }
+         this.ws.binaryType = 'arraybuffer';
+         this.ws.onopen = (event) => { var _a, _b; return (_b = (_a = this.events).onopen) === null || _b === void 0 ? void 0 : _b.call(_a, event); };
+         this.ws.onmessage = (event) => { var _a, _b; return (_b = (_a = this.events).onmessage) === null || _b === void 0 ? void 0 : _b.call(_a, event); };
+diff --git a/build/transport/WebSocketTransport.mjs b/build/transport/WebSocketTransport.mjs
+index fbe564a318f401c02d5d9f690484fb46a65053ba..724a4d01598a15f49ba2bc6e7bd5d9fc848137b1 100644
+--- a/build/transport/WebSocketTransport.mjs
++++ b/build/transport/WebSocketTransport.mjs
+@@ -8,6 +8,10 @@ import NodeWebSocket from 'ws';
+ import { CloseCode } from '@colyseus/shared-types';
+ 
+ const WebSocket = globalThis.WebSocket || NodeWebSocket;
++// A browser takes only the `(url, protocols)` signature and rejects the Node
++// options object with a SyntaxError, which WebKit reports as a page error even
++// though the caller catches it; pick the form up front instead of by the throw.
++const inBrowser = typeof document !== "undefined";
+ // Once per process — the fallback is per-send, and a 60Hz input ring would
+ // otherwise flood the console.
+ let warnedNoUnreliableChannel = false;
+@@ -46,14 +50,19 @@ class WebSocketTransport {
+      * @param headers custom headers to send with the connection (only supported in Node.js. Web Browsers do not allow setting custom headers)
+      */
+     connect(url, headers) {
+-        try {
+-            // Node or Bun environments (supports custom headers)
+-            this.ws = new WebSocket(url, { headers, protocols: this.protocols });
+-        }
+-        catch (e) {
+-            // browser environment (custom headers not supported)
++        if (inBrowser) {
+             this.ws = new WebSocket(url, this.protocols);
+         }
++        else {
++            try {
++                // Node or Bun environments (supports custom headers)
++                this.ws = new WebSocket(url, { headers, protocols: this.protocols });
++            }
++            catch (e) {
++                // browser environment (custom headers not supported)
++                this.ws = new WebSocket(url, this.protocols);
++            }
++        }
+         this.ws.binaryType = 'arraybuffer';
+         this.ws.onopen = (event) => this.events.onopen?.(event);
+         this.ws.onmessage = (event) => this.events.onmessage?.(event);
+diff --git a/src/transport/WebSocketTransport.ts b/src/transport/WebSocketTransport.ts
+index 92e86383eca4ec2b15ffb2ee406e9b41597a1b85..97cef6578bc77c94a52668a9132bbe9add001706 100644
+--- a/src/transport/WebSocketTransport.ts
++++ b/src/transport/WebSocketTransport.ts
+@@ -3,6 +3,10 @@ import { CloseCode } from "@colyseus/shared-types";
+ import type { ITransport, ITransportEventMap } from "./ITransport.ts";
+ 
+ const WebSocket = globalThis.WebSocket || NodeWebSocket;
++// A browser takes only the `(url, protocols)` signature and rejects the Node
++// options object with a SyntaxError, which WebKit reports as a page error even
++// though the caller catches it; pick the form up front instead of by the throw.
++const inBrowser = typeof document !== "undefined";
+ 
+ // Once per process — the fallback is per-send, and a 60Hz input ring would
+ // otherwise flood the console.
+@@ -48,13 +52,18 @@ export class WebSocketTransport implements ITransport {
+      * @param headers custom headers to send with the connection (only supported in Node.js. Web Browsers do not allow setting custom headers)
+      */
+     public connect(url: string, headers?: any): void {
+-        try {
+-            // Node or Bun environments (supports custom headers)
+-            this.ws = new WebSocket(url, { headers, protocols: this.protocols });
+-
+-        } catch (e) {
+-            // browser environment (custom headers not supported)
++        if (inBrowser) {
+             this.ws = new WebSocket(url, this.protocols);
++
++        } else {
++            try {
++                // Node or Bun environments (supports custom headers)
++                this.ws = new WebSocket(url, { headers, protocols: this.protocols });
++
++            } catch (e) {
++                // browser environment (custom headers not supported)
++                this.ws = new WebSocket(url, this.protocols);
++            }
+         }
+ 
+         this.ws.binaryType = 'arraybuffer';

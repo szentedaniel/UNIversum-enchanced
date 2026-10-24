@@ -1,0 +1,284 @@
+/*
+ * The "B · Tabletop" visual direction (spec: Client → Visual direction).
+ * Tailwind v4, CSS-first, with shadcn-style token names. v1's sunset purple and
+ * cream as chunky sticker cards; light and dark follow the OS (dark is the
+ * reference look, and cards stay cream in dark).
+ *
+ * The colour tokens are checked against the spec table and for WCAG AA
+ * contrast by test/theme.test.ts. Player colours and shapes are in
+ * src/players.ts (one source for the DOM and the Board).
+ */
+@import "tailwindcss";
+/* Self-hosted fonts: Sigmar One (display, latin + latin-ext for Hungarian
+   ő/ű) and Nunito variable (body and numbers). */
+@import "@fontsource/sigmar-one/latin.css";
+@import "@fontsource/sigmar-one/latin-ext.css";
+@import "@fontsource-variable/nunito/wght.css";
+
+/* "Desktop" layouts: wide and landscape with enough height for the corner
+   cards (a landscape phone is shorter than 36rem and keeps the phone layout). */
+@custom-variant wide (@media (min-width: 48rem) and (orientation: landscape) and (min-height: 36rem));
+
+:root {
+  --background: #ffe8cc;
+  --foreground: #2b2238;
+  --card: #fffaf3;
+  --card-foreground: #2b2238;
+  --popover: #fffaf3;
+  --popover-foreground: #2b2238;
+  --primary: #ff7a1a;
+  --primary-foreground: #2b2238;
+  --secondary: #ffd3a1;
+  --secondary-foreground: #2b2238;
+  --muted: #ffdcb5;
+  --muted-foreground: #7a5a6a;
+  --accent: #2bb59a;
+  --accent-foreground: #2b2238;
+  --border: #2b2238;
+  --input: #2b2238;
+  --ring: #ff7a1a;
+  --success: #1f9d6e;
+  --warning: #e0790b;
+  --danger: #d6334a;
+  --board-backdrop: radial-gradient(ellipse at 50% 40%, #fff6ea, #ffd3a1 75%);
+  --radius: 18px;
+  /* The ink on Player colours and on cream, in both themes. */
+  --ink: #2b2238;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #262335;
+    --foreground: #fff3e4;
+    --card: #f5ece3;
+    --card-foreground: #2b2238;
+    --popover: #f5ece3;
+    --popover-foreground: #2b2238;
+    --primary: #ff9f43;
+    --primary-foreground: #2b2238;
+    --secondary: #3b2f44;
+    --secondary-foreground: #ffe3c4;
+    --muted: #3b2f44;
+    --muted-foreground: #c7b3c9;
+    --accent: #7ee0c3;
+    --accent-foreground: #2b2238;
+    --border: #14111c;
+    --input: #14111c;
+    --ring: #ffbb6c;
+    --success: #5fd38d;
+    --warning: #ffb547;
+    --danger: #ff6b6b;
+    --board-backdrop: radial-gradient(ellipse at 50% 40%, #6a4a62, #262335 72%);
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-destructive: var(--danger);
+  --color-ink: var(--ink);
+  --font-display: "Sigmar One", "Nunito Variable", system-ui, sans-serif;
+  --font-sans: "Nunito Variable", system-ui, sans-serif;
+  --radius-ui: var(--radius);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* The Board's host (board/Board.tsx) fills the box the screen gives it. */
+  .board {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .board canvas {
+    position: absolute;
+    inset: 0;
+    touch-action: none;
+  }
+
+  .board-canvas {
+    position: absolute;
+    inset: 0;
+  }
+
+  /* The camera fits the Board into this box: the Board minus the space the
+     screen reserves (--board-inset-*) for the camera buttons and the Field
+     card or pick tray, so opening a card never changes the zoom. */
+  .board-fit-area {
+    position: absolute;
+    inset: var(--board-inset-top, 0px) var(--board-inset-right, 0px) var(--board-inset-bottom, 0px)
+      var(--board-inset-left, 0px);
+    pointer-events: none;
+  }
+
+  /* The Playback's DOM overlays (the dice, a Chance card, #52) sit over the
+     Board in the same box the camera fits into: clear of the camera buttons
+     and of the card or tray the screen reserves at the bottom. Only the
+     overlay's own controls take taps; the Board stays reachable around it. */
+  .playback-overlay {
+    position: absolute;
+    inset: var(--board-inset-top, 0px) var(--board-inset-right, 0px) var(--board-inset-bottom, 0px)
+      var(--board-inset-left, 0px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+    pointer-events: none;
+  }
+
+  /* The Turn timer (screens/TurnRing.tsx) around the current Player's figure
+     (components/TimerRing.tsx): a primary arc that empties over the Turn limit. */
+  .turn-ring {
+    position: absolute;
+    inset: 0;
+    transform: rotate(-90deg);
+  }
+
+  .turn-ring circle {
+    fill: none;
+    stroke-width: 4;
+  }
+
+  .turn-ring-track {
+    stroke: rgb(43 34 56 / 0.2);
+  }
+
+  .turn-ring-left {
+    stroke: var(--primary);
+    stroke-dasharray: 100;
+    stroke-linecap: round;
+    animation-name: turn-ring;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+}
+
+@keyframes turn-ring {
+  to {
+    stroke-dashoffset: 100;
+  }
+}
+
+/* A sticker: a thick outline with a hard offset shadow in the border colour. */
+@utility sticker {
+  border: 3px solid var(--border);
+  box-shadow: 4px 4px 0 var(--border);
+}
+
+/* The smaller sticker for small controls (buttons, chips, pills). */
+@utility sticker-sm {
+  border: 2.5px solid var(--border);
+  box-shadow: 2px 2px 0 var(--border);
+}
+
+/* Pressing moves a sticker into its shadow. */
+@utility press {
+  transition:
+    transform 80ms ease-out,
+    box-shadow 80ms ease-out;
+
+  &:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 var(--border);
+  }
+}
+
+/* Tabular figures for money, counters and the Room code. */
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility board-backdrop {
+  background: var(--board-backdrop);
+}
+
+/* The Logo's outlined display lettering, and its small version. */
+@utility logo-outline {
+  -webkit-text-stroke: 2px var(--border);
+  paint-order: stroke fill;
+  text-shadow: 4px 4px 0 var(--border);
+}
+
+@utility logo-outline-sm {
+  -webkit-text-stroke: 1px var(--border);
+  paint-order: stroke fill;
+  text-shadow: 2px 2px 0 var(--border);
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility pop-in {
+  animation: pop-in 0.25s ease-out;
+}
+
+@keyframes confetti {
+  0% {
+    transform: translateY(-20vh) rotate(0);
+  }
+
+  100% {
+    transform: translateY(110vh) rotate(720deg);
+  }
+}
+
+/* Less motion, but the Turn ring keeps its timing (its animation is the clock). */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.turn-ring-left),
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

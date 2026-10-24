@@ -1,0 +1,6 @@
+{
+  // Browser code (src) and Node-side code (vite.config.ts, tests) get different
+  // libs and types, so the web app has two projects.
+  "files": [],
+  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }]
+}

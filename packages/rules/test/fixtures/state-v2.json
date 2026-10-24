@@ -1,0 +1,203 @@
+{
+  "stateVersion": 2,
+  "version": 2,
+  "turn": 2,
+  "currentPlayer": "p2",
+  "phase": {
+    "kind": "awaitingRoll"
+  },
+  "actsAfter": 1792411201890,
+  "turnDeadline": 1792411224890,
+  "settings": {
+    "maxPlayers": 4,
+    "minuteLimit": 50
+  },
+  "endsAt": 1792414200000,
+  "players": [
+    {
+      "id": "p1",
+      "name": {
+        "adjective": "adj0",
+        "noun": "noun0"
+      },
+      "seat": 0,
+      "cash": 2500000,
+      "position": 9,
+      "bankrupt": false,
+      "quarantineRounds": null,
+      "hasPcrTest": false
+    },
+    {
+      "id": "p2",
+      "name": {
+        "adjective": "adj1",
+        "noun": "noun1"
+      },
+      "seat": 1,
+      "cash": 2500000,
+      "position": 0,
+      "bankrupt": false,
+      "quarantineRounds": null,
+      "hasPcrTest": false
+    },
+    {
+      "id": "p3",
+      "name": {
+        "adjective": "adj2",
+        "noun": "noun2"
+      },
+      "seat": 2,
+      "cash": 2500000,
+      "position": 0,
+      "bankrupt": false,
+      "quarantineRounds": null,
+      "hasPcrTest": false
+    },
+    {
+      "id": "p4",
+      "name": {
+        "adjective": "adj3",
+        "noun": "noun3"
+      },
+      "seat": 3,
+      "cash": 2500000,
+      "position": 0,
+      "bankrupt": false,
+      "quarantineRounds": null,
+      "hasPcrTest": false
+    }
+  ],
+  "fields": [
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    },
+    {
+      "owner": null,
+      "level": 0
+    }
+  ],
+  "doubler": null,
+  "lastChanceCard": null,
+  "rng": [87508179, 634340146, -777097033, -801932180]
+}
