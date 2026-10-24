@@ -36,8 +36,9 @@ refactor: no behaviour, no message and no rule changed. The proof is `tsc` on
   now the real union, `phase` must be a whole phase: `offer.levels` is required
   (`buyout`/`museum` only when offered), `selling.resume` is a `PendingCharge`,
   `PlayerView` carries `wealth`, `FieldView` carries `sale`.
-- `PublicView` is the full view, not the Board's summary: the old `ViewSummary`
-  was a subset and lied about `fields[].sale` and the phase options.
+- The old `ViewSummary` was the e2e's own mirror of the view: a subset that lied
+  about `fields[].sale` and the phase options. Both hooks now report the real
+  `PublicView`.
 - A new decision phase reaches the specs through the rules declaration merging
   alone; the view type carries it. `helpers.ts`'s `resolveDecision` switch ends
   in `return null`, so a new phase compiles there and resolves to nothing —

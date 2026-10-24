@@ -69,9 +69,9 @@ screen alone.
   optional `buyout`/`museum`, plus `selling`, the picks and `gameOver`
   winner/reason. A new decision phase arrives through the rules' declaration
   merging alone.
-- `PublicView.version` (since #71) and `room().push.{events, seq}` are declared and read by
-  the spec; `events` is only `{ type }[]`, so a spec that needs a payload must
-  widen it.
+- `PublicView.version` and `room().push.{events, seq}` (the view is the rules
+  `PublicView` since #71) are declared and read by the spec; `events` is only
+  `{ type }[]`, so a spec that needs a payload must widen it.
 
 ## Gotchas seen
 

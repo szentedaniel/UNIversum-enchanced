@@ -13,7 +13,7 @@ Branch `ticket/48-review-fixes`, merged into `v2-modernization` after a6cc342.
 ## Rules / view
 
 - **Final standings (#6).** `publicView.standings: Standing[] | null` (`{ player, wealth }`) is filled only at `gameOver`: the named winner first, then non-Bankrupt Players by Wealth → cash → earlier Seat, then Bankrupt Players (`standingsOf` in `rules/game-end.ts`, sharing `byWealth` with the winner ranking). The web `podiumOrder(players, standings)` now only maps ids to `PlayerView`s; it holds no ranking. The e2e podium spec must set `view.standings` when it fakes a game-over view.
-- Every `PublicView` fixture (web tests, loadtest `bot.test.ts`, e2e `FullView`) needs a `standings` key.
+- Every `PublicView` fixture (web tests, loadtest `bot.test.ts`, the e2e pushed view — `FullView` then, the rules `PublicView` since #71) needs a `standings` key.
 
 ## Web layout
 
