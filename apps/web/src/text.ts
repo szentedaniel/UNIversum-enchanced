@@ -161,6 +161,12 @@ export const formatMoney = (amount: number): string =>
     maximumFractionDigits: 0,
   }).format(amount);
 
+/** `m:ss` for a number of milliseconds (never negative). */
+export function formatClock(ms: number): string {
+  const seconds = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 /** Money in short form for the Board's tiles (e.g. "1.2M"), in the active language. */
 export const formatCompactMoney = (amount: number): string =>
   new Intl.NumberFormat(getLocale(), { notation: "compact", maximumFractionDigits: 1 }).format(

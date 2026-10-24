@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatClock } from "#components/GameHud.tsx";
+import { formatClock } from "#text.ts";
 
 // R74: the Minute pill shows the minutes and seconds left until the Minute
 // limit's end. This is the text half of the rule; tabletop.spec.ts's R74 test
 // watches the pill against the view's `endsAt` in a running game.
 
-describe("R74: the countdown text", () => {
+describe("formatClock", () => {
   it("R74: shows m:ss with zero-padded seconds", () => {
     expect(formatClock(9_000)).toBe("0:09");
     expect(formatClock(60_000)).toBe("1:00");
