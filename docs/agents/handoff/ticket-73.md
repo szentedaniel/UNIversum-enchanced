@@ -1,6 +1,6 @@
 # Ticket #73: the in-flight lock in `roomStore`
 
-Branch `ticket/73-in-flight-lock`, spec #72, *In-flight (`roomStore`)*. The
+Branch `ticket/73-in-flight-lock`, spec #72, _In-flight (`roomStore`)_. The
 "No optimistic UI" lock left `Game.tsx`'s `useState` and now lives next to the
 `seq` it compares.
 
