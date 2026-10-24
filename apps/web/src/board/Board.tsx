@@ -31,11 +31,8 @@ const ZOOM_STEP = 1.5;
  * `decisionKey` read that answer.
  */
 function currentDecision(): OpenDecision | null {
-  return openDecision(
-    playbackStore.getState().frame,
-    roomStore.getState().me,
-    inFlightOf(roomStore.getState()),
-  );
+  const room = roomStore.getState();
+  return openDecision(playbackStore.getState().frame, room.me, inFlightOf(room));
 }
 
 /**
