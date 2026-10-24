@@ -170,6 +170,48 @@
           }
         ]
       }
+    },
+    {
+      // Tests run in Node, never in the browser bundle the fence guards, and
+      // drive the real rules engine (spec #72, Testing Decisions): they may
+      // import it at runtime. The protocol and Zod stay out of both. The
+      // import-fence test lints a sample here too.
+      "files": ["apps/web/test/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@universum/protocol",
+                "message": "The web app may import only @universum/protocol/messages (Zod-free)."
+              },
+              {
+                "name": "zod",
+                "message": "Zod stays on the server: tests get parsed data from the rules or the server."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "@universum/rules/*",
+                  "!@universum/rules/board",
+                  "!@universum/rules/playback"
+                ],
+                "message": "Tests may import @universum/rules and its board and playback subpaths."
+              },
+              {
+                "group": ["@universum/protocol/*", "!@universum/protocol/messages"],
+                "message": "The web app may import only @universum/protocol/messages (Zod-free)."
+              },
+              {
+                "group": ["zod/*"],
+                "message": "Zod stays on the server: tests get parsed data from the rules or the server."
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

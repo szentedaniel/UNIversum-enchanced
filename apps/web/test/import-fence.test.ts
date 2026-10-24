@@ -5,12 +5,14 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterAll, expect, it } from "vitest";
 
-// The web app may import only types and the `board` subpath from the rules
-// package, only the Zod-free `messages` subpath from the protocol package, and
-// never Zod (spec: Modules). The Playback durations come from
-// `@universum/rules/playback`, which only the Playback module may import (spec
-// #63, Fence). Oxlint's no-restricted-imports enforces it; this test lints
-// sample files inside apps/web with the repo's real Oxlint config.
+// The web app's browser bundle may import only types and the `board` subpath
+// from the rules package, only the Zod-free `messages` subpath from the
+// protocol package, and never Zod (spec: Modules). The Playback durations come
+// from `@universum/rules/playback`, which only the Playback module may import
+// (spec #63, Fence). Tests run in Node and drive the real rules engine (spec
+// #72, Testing Decisions), so the fence lets them import it at runtime. Oxlint's
+// no-restricted-imports enforces it; this test lints sample files inside
+// apps/web with the repo's real Oxlint config.
 
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const scratch = mkdtempSync(join(fileURLToPath(new URL(".", import.meta.url)), "fence-"));
@@ -51,22 +53,29 @@ function sample(dir: string): string {
   return file;
 }
 
-// The base config reaches the scratch dir; the src override repeats it for the
-// rest of apps/web/src, and its playback/ exclusion puts that folder back on
-// the base config. Both copies are linted here, so a drift between them fails.
+// Each location lints the repo's real config for that path: the test override,
+// the src override (which repeats the base fence and adds the playback path),
+// and the base config that `apps/web/src/playback/` falls back to.
 // `playbackImport` is where the allowed source's playback import (line 4) is
-// refused at that location.
+// refused; `ruleLogic` is where the blocked source's lines are refused.
 const LOCATIONS = [
-  { name: "apps/web/test (the base config)", dir: scratch, playbackImport: [] },
   {
-    name: "apps/web/src/board (the override)",
+    name: "apps/web/test (the test override)",
+    dir: scratch,
+    playbackImport: [],
+    ruleLogic: [2, 3, 4, 5, 6, 7],
+  },
+  {
+    name: "apps/web/src/board (the src override)",
     dir: join(repoRoot, "apps/web/src/board"),
     playbackImport: [4],
+    ruleLogic: [1, 2, 3, 4, 5, 6, 7, 8, 9],
   },
   {
     name: "apps/web/src/playback (the base config)",
     dir: join(repoRoot, "apps/web/src/playback"),
     playbackImport: [],
+    ruleLogic: [1, 2, 3, 4, 5, 6, 7, 8, 9],
   },
 ];
 
@@ -94,8 +103,8 @@ it("names the Playback module when it refuses its import outside playback/", asy
 });
 
 it.each(LOCATIONS)(
-  "blocks rule logic, the Zod protocol and Zod itself in the web app ($name)",
-  async ({ dir }) => {
+  "refuses the imports each location fences off ($name)",
+  async ({ dir, ruleLogic }) => {
     // One forbidden import per line, lines 1 to 9.
     const source = `import { apply } from "@universum/rules";
 import { migrate } from "@universum/rules/migrations";
@@ -108,6 +117,6 @@ export { setup } from "@universum/rules";
 import { playbackOf } from "@universum/rules";
 `;
     const lines = (await restrictedImports(sample(dir), source)).map(({ line }) => line);
-    expect(lines).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(lines).toEqual(ruleLogic);
   },
 );
