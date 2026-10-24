@@ -382,18 +382,23 @@ describe("waitingLine", () => {
 describe("bottomSlot", () => {
   it("shows nothing on the result screen until the gate opens, then the podium", () => {
     const view = publicView(gameOverState());
+    const { phase } = view;
+    if (phase.kind !== "gameOver") throw new Error("the game is not over");
 
     expect(bottomSlot(null, frameOf(view, "shut"), uiOf())).toEqual({ kind: "none" });
-    expect(bottomSlot(null, frameOf(view), uiOf())).toEqual({ kind: "podium" });
+    expect(bottomSlot(null, frameOf(view), uiOf())).toEqual({ kind: "podium", phase });
   });
 
   it("shows the result screen ahead of an open Field card", () => {
     const view = publicView(gameOverState());
+    const { phase } = view;
+    if (phase.kind !== "gameOver") throw new Error("the game is not over");
 
     expect(
       bottomSlot(null, frameOf(view), uiOf({ selectedField: SEATTLE, inspect: true })),
     ).toEqual({
       kind: "podium",
+      phase,
     });
   });
 

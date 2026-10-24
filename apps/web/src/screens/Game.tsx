@@ -84,7 +84,6 @@ export function Game() {
   // the dice and a drawn Chance card show for their own step of the Playback (ADR-0004).
   const { shownTurn, toast, overlay } = frame;
   const { clockOffset } = push;
-  const gameOver = view.phase.kind === "gameOver" ? view.phase : null;
   const current = view.players.find((p) => p.id === view.currentPlayer);
   // The turn card holds the previous Turn's values through the Playback (story 4, ADR-0004).
   const shownPlayer = view.players.find((p) => p.id === shownTurn.currentPlayer) ?? current;
@@ -273,8 +272,7 @@ export function Game() {
     return null;
   }
   const card = bottomCard();
-  const podium =
-    slot.kind === "podium" && gameOver !== null ? <Podium view={view} phase={gameOver} /> : null;
+  const podium = slot.kind === "podium" ? <Podium view={view} phase={slot.phase} /> : null;
 
   if (wide) {
     return (

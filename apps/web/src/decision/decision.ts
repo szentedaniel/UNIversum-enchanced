@@ -65,7 +65,7 @@ export function waitingLine(decision: OpenDecision | null): "sale" | "pick" | nu
 /** What the bottom slot shows, in the screen's order. */
 export type BottomSlot =
   | { kind: "none" }
-  | { kind: "podium" }
+  | { kind: "podium"; phase: PhaseOf<"gameOver"> }
   | { kind: "fieldCard"; field: FieldId; stepThrough?: readonly FieldId[] }
   | { kind: "sale"; sale: SalePick; busy: boolean }
   | { kind: "pick"; pick: SinglePick; busy: boolean }
@@ -136,7 +136,9 @@ export function bottomSlot(
 ): BottomSlot {
   if (frame === null) return { kind: "none" };
   const { phase } = frame.view;
-  if (phase.kind === "gameOver") return frame.gateOpen ? { kind: "podium" } : { kind: "none" };
+  if (phase.kind === "gameOver") {
+    return frame.gateOpen ? { kind: "podium", phase } : { kind: "none" };
+  }
   const mine = mySaleOrPick(decision);
   if (mine !== null) {
     if (ui.inspect && ui.selectedField !== null) {
