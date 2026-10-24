@@ -26,6 +26,9 @@ const SERVER_ENV = {
   // every run covers the required steps even though the Playback makes each
   // Turn take longer and the 120 s game has fewer of them.
   GAME_SEED: "4,29,55,129",
+  // Only errors and the crash handler's `fatal` reach the run's output (stdout is
+  // piped below), so a Room server that dies mid-run says why.
+  LOG_LEVEL: "error",
 };
 
 // Every test Guest comes from 127.0.0.1, so the per-IP limits are raised (spec: e2e raises them
@@ -72,6 +75,8 @@ export default defineConfig({
       cwd: repoRoot,
       env: { ...SERVER_ENV, ...PER_IP_LIMITS },
       url: `http://127.0.0.1:${SERVER_PORT}/__healthcheck`,
+      // pino writes to stdout, which Playwright ignores by default.
+      stdout: "pipe",
       reuseExistingServer: !CI,
     },
     {
