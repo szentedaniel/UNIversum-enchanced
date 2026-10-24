@@ -51,6 +51,17 @@ export function mySaleOrPick(decision: OpenDecision | null): MySaleOrPick | null
   return null;
 }
 
+/**
+ * Another Player's Sale or pick as the Turn card's waiting line, else `null`.
+ * Keyed on the absence of the Sale or pick payload, not on `owner` (`PlayerId`
+ * is a string, so it cannot tell "me" from another Player).
+ */
+export function waitingLine(decision: OpenDecision | null): "sale" | "pick" | null {
+  if (decision === null || mySaleOrPick(decision) !== null) return null;
+  if (decision.kind === "sale" || decision.kind === "pick") return decision.kind;
+  return null;
+}
+
 /** What the bottom slot shows, in the screen's order. */
 export type BottomSlot =
   | { kind: "none" }

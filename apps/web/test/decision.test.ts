@@ -19,6 +19,7 @@ import {
   fieldTap,
   mySaleOrPick,
   openDecision,
+  waitingLine,
 } from "#decision/decision.ts";
 import type { Frame } from "#playback/playback.ts";
 import { playbackOfPush } from "#playback/playback.ts";
@@ -352,6 +353,29 @@ describe("mySaleOrPick", () => {
     expect(mySaleOrPick(myDecision(publicView(quarantinedState())))).toBeNull();
     expect(mySaleOrPick(openDecision(frameOf(sale), "p1", false))).toBeNull();
     expect(mySaleOrPick(openDecision(frameOf(pick), "p1", false))).toBeNull();
+  });
+});
+
+describe("waitingLine", () => {
+  it("is another Player's Sale or pick", () => {
+    const sale = publicView(sellingState());
+    const pick = publicView(doublerState("p2"));
+
+    expect(waitingLine(openDecision(frameOf(sale), "p1", false))).toBe("sale");
+    expect(waitingLine(openDecision(frameOf(pick), "p1", false))).toBe("pick");
+  });
+
+  it("is null for my own Sale and pick", () => {
+    expect(waitingLine(myDecision(publicView(sellingState())))).toBeNull();
+    expect(waitingLine(myDecision(publicView(doublerState())))).toBeNull();
+  });
+
+  it("is null for every other Decision, another Player's included", () => {
+    expect(waitingLine(null)).toBeNull();
+    expect(waitingLine(myDecision(publicView(newGame())))).toBeNull();
+    expect(waitingLine(myDecision(publicView(rollOnto(newGame(), VIENNA).state)))).toBeNull();
+    expect(waitingLine(myDecision(publicView(quarantinedState())))).toBeNull();
+    expect(waitingLine(openDecision(frameOf(publicView(newGame())), "p2", false))).toBeNull();
   });
 });
 

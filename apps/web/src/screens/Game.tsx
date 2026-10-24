@@ -17,7 +17,7 @@ import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { Card } from "#components/ui/card.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
-import { bottomSlot, openDecision } from "#decision/decision.ts";
+import { bottomSlot, openDecision, waitingLine } from "#decision/decision.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
 import { playbackStore } from "#playback/playback-store.ts";
@@ -93,6 +93,7 @@ export function Game() {
   // One answer for the Turn card, the trays, the bottom slot and the Podium (spec #72).
   const decision = openDecision(frame, me, inFlight);
   const slot = bottomSlot(decision, frame, { selectedField, inspect });
+  const waiting = waitingLine(decision);
 
   const players: PlayerSummary[] = view.players.map((p) => ({
     seat: p.seat,
@@ -152,12 +153,12 @@ export function Game() {
           {m.game_turn({ turn: shownTurnNumber })}
         </span>
       </div>
-      {decision !== null && decision.owner !== "me" && decision.kind === "sale" && (
+      {waiting === "sale" && (
         <p className="m-0 text-sm font-bold text-ink/70" data-testid="sale-waiting">
           {m.sale_waiting({ name: current ? playerName(current.name) : "" })}
         </p>
       )}
-      {decision !== null && decision.owner !== "me" && decision.kind === "pick" && (
+      {waiting === "pick" && (
         <p className="m-0 text-sm font-bold text-ink/70" data-testid="pick-waiting">
           {m.pick_waiting({ name: current ? playerName(current.name) : "" })}
         </p>
