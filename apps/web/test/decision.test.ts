@@ -136,7 +136,7 @@ function sellingRoll(): Applied {
   return rollOnto({ ...state, currentPlayer: "p2" }, SEATTLE);
 }
 
-/** The second Seat has 100,000 and two Fields; they land on the first Seat's Level 4 Seattle. */
+/** The state `sellingRoll` leaves: the second Seat's Sale is open. */
 function sellingState(): GameState {
   return sellingRoll().state;
 }
