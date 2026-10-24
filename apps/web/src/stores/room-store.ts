@@ -34,7 +34,7 @@ export type RoomState = {
   push: Push | null;
   /** The latest Rejection of one of this client's intents. */
   rejection: { code: RejectionCode; seq: number } | null;
-  /** The `seq` this client last sent an intent at; see `inFlightOf`. */
+  /** The latest answered `seq` when this client sent its last intent; see `inFlightOf`. */
   sentAt: number | null;
   /** The server's clock minus this client's, when the last Lobby message arrived (for held Seats' countdowns). */
   lobbyClockOffset: number;
@@ -55,13 +55,19 @@ export const initialRoomState: RoomState = {
 };
 
 /**
+ * The latest `seq` the server has answered at. Pushes and Rejections share one
+ * counter in `#connection.ts`, so the newer of the two is the newest answer.
+ */
+export const answeredAtOf = (state: RoomState): number =>
+  Math.max(state.push?.seq ?? 0, state.rejection?.seq ?? 0);
+
+/**
  * The in-flight lock ("No optimistic UI"): this client sent an intent and no
- * push or Rejection with a later `seq` has answered it yet. `sendIntent`
- * (`#connection.ts`) sets `sentAt`; a comparison of the two `seq` counters
- * and a reset to `initialRoomState` clear it.
+ * push or Rejection with a later `seq` has arrived. The two share one counter,
+ * so a single comparison with `answeredAtOf` covers both; a reset to
+ * `initialRoomState` clears the lock too.
  */
 export const inFlightOf = (state: RoomState): boolean =>
-  state.sentAt !== null &&
-  Math.max(state.push?.seq ?? 0, state.rejection?.seq ?? 0) <= state.sentAt;
+  state.sentAt !== null && answeredAtOf(state) <= state.sentAt;
 
 export const roomStore = createStore<RoomState>()(subscribeWithSelector(() => initialRoomState));

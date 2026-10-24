@@ -8,12 +8,12 @@ Branch `ticket/73-in-flight-lock`, spec #72, _In-flight (`roomStore`)_. The
 
 - `RoomState` gains `sentAt: number | null`; `initialRoomState.sentAt` is
   `null`.
-- `sendIntent` (`connection.ts`) writes `sentAt` to
-  `Math.max(push.seq, rejection?.seq ?? 0)` before `room?.send(...)`, so the
-  store still records the send when no Room is attached (the `seq` is 0 then),
-  as the old `send()` did.
+- `answeredAtOf(state)` is the latest push or Rejection `seq` (they share one
+  counter in `connection.ts`). `sendIntent` writes it to `sentAt` before
+  `room?.send(...)`, so the store still records the send when no Room is
+  attached (the answer is 0 then).
 - `inFlightOf(state)` is beside `RoomState`: true while `sentAt !== null` and
-  `Math.max(push.seq, rejection?.seq ?? 0) <= sentAt`. In React:
+  `answeredAtOf(state) <= sentAt`. In React:
   `useStore(roomStore, inFlightOf)`; outside React (the Board, #75):
   `inFlightOf(roomStore.getState())`.
 - A reset to `initialRoomState` (`leaveRoom`) clears it. A rejoin always brings
