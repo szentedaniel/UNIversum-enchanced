@@ -18,7 +18,6 @@ import {
   playbackOf,
   type ChanceCardId,
   type GameEvent,
-  type Phase,
   type PhaseOf,
   type PublicView,
 } from "@universum/rules";
@@ -355,13 +354,7 @@ export type PageDump = {
   /** The latest push: its `seq`, the server clock offset and the event types, in order. */
   push: { seq: number; clockOffset: number; events: string[] } | null;
   /** The pushed view's Turn, current Player, phase, gate and version. */
-  view: {
-    turn: number;
-    currentPlayer: string;
-    phase: Phase;
-    actsAfter: number;
-    version: number;
-  } | null;
+  view: Pick<PublicView, "turn" | "currentPlayer" | "phase" | "actsAfter" | "version"> | null;
   /** `universumTest.playback()`: the push the gate is for, whether it is open, and the shown Turn. */
   playback: PlaybackHook | null;
   /** The labels of the buttons on screen when the dump ran. */

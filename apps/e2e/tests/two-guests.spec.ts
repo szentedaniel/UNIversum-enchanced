@@ -1,4 +1,5 @@
 import { chromium, devices, expect, webkit, type Page } from "@playwright/test";
+import type { PublicView } from "@universum/rules";
 import {
   closeAfterDump,
   expectBoardUp,
@@ -12,11 +13,10 @@ import {
   type OfferChoice,
   type OfferPhase,
 } from "./helpers.ts";
-import type { PublicView } from "@universum/rules";
 
 const viewOf = (page: Page) => page.evaluate(() => window.universumTest?.view() ?? null);
 
-/** The full pushed view, with every phase's options (the Board's view is a summary). */
+/** The latest push's view, with every phase's options; `view()` is the view the Board last drew. */
 const pushView = (page: Page): Promise<PublicView | null> =>
   page.evaluate(() => window.universumTest?.room().push?.view ?? null);
 
