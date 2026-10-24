@@ -1,23 +1,9 @@
 // The web app's test-only hooks (apps/web/src/test-hooks.ts), as the specs
-// see them inside `page.evaluate`. One declaration for every spec.
+// see them inside `page.evaluate`. One declaration for every spec. The pushed
+// view and every phase are the rules engine's types (type-only: `evaluate`
+// callbacks are serialized), so a spec cannot drift from the server.
+import type { PublicView } from "@universum/rules";
 
-export type ViewSummary = {
-  turn: number;
-  version: number;
-  currentPlayer: string;
-  /** When the latest push's Playback ends, by the server's clock (ADR-0004). */
-  actsAfter: number;
-  phase: {
-    kind: string;
-    field?: number;
-    levels?: { level: number; price: number }[];
-    /** The Museum's price on a Museum offer. */
-    museum?: number;
-    /** The Buyout price on a Buyout offer. */
-    buyout?: number;
-  };
-  fields: { owner: string | null; level: number; value: number; rent: number }[];
-};
 export type Camera = { scale: number; x: number; y: number };
 /** One animation frame's sample of the Playback hold (ADR-0004), as two-guests.spec.ts records it. */
 export type PlaybackSample = {
@@ -35,64 +21,6 @@ export type PlaybackSample = {
   ringDelayMs: number | null;
 };
 export type PickMarks = { pickable: number[]; picked: number[]; ringed: number[] };
-/** A Player as a full pushed view carries them (PlayerView). */
-export type ViewPlayer = {
-  id: string;
-  seat: number;
-  name: { adjective: string; noun: string };
-  cash: number;
-  wealth: number;
-  position: number;
-  bankrupt: boolean;
-  quarantineRounds: number | null;
-  hasPcrTest: boolean;
-};
-
-export type FullPickOption =
-  | { kind: "doubler"; field: number; rent: number; rentAfter: number }
-  | {
-      kind: "erasmus";
-      field: number;
-      steps: number;
-      passesStart: boolean;
-      bonus: number | null;
-    };
-/** A decision phase as the full pushed view (PublicView) carries it. */
-export type FullPhase =
-  | { kind: "awaitingRoll" }
-  | {
-      kind: "quarantineChoice";
-      canBuyPcrTest: boolean;
-      canUsePcrTest: boolean;
-      pcrTestPrice: number;
-    }
-  | {
-      kind: "offer";
-      field: number;
-      levels?: { level: number; price: number }[];
-      museum?: number;
-      buyout?: number;
-    }
-  | { kind: "selling"; shortfall: number; resume: unknown }
-  | { kind: "placingDoubler"; fields: number[] }
-  | { kind: "choosingErasmus"; fields: number[] }
-  | { kind: "gameOver"; winner: string; reason: string };
-/** The parts of a full pushed view (PublicView) that specs change before `showView`. */
-export type FullView = {
-  turn: number;
-  version: number;
-  currentPlayer: string;
-  phase: FullPhase;
-  players: ViewPlayer[];
-  fields: { owner: string | null; level: number; value: number; rent: number; sale: number }[];
-  doubler: { field: number; count: number } | null;
-  autoSell: number[] | null;
-  pickOptions: FullPickOption[] | null;
-  actsAfter: number;
-  turnDeadline: number | null;
-  turnTimer: { endsAt: number; limitMs: number } | null;
-  standings: { player: string; wealth: number }[] | null;
-};
 
 /**
  * One WebSocket construction a page made (#61): the `typeof` of the
@@ -146,7 +74,7 @@ export type TestHooks = {
   /** Where the Board last placed the given Player's pawn (viewport CSS px). */
   pawn(player: string): { x: number; y: number } | null;
   camera(): Camera;
-  view(): ViewSummary | null;
+  view(): PublicView | null;
   /**
    * Which push the decision gate is for and whether it is open (local
    * Playback and `actsAfter`), and the Turn the card shows while it waits.
@@ -166,7 +94,7 @@ export type TestHooks = {
    */
   holdIntent(): void;
   /** Shows a made-up view (a full PublicView) as if the server had pushed it, with optional events. */
-  showView(view: FullView, events?: { type: string; [key: string]: unknown }[]): void;
+  showView(view: PublicView, events?: { type: string; [key: string]: unknown }[]): void;
   /** The room store (only the fields the specs read). */
   room(): {
     me: string | null;
@@ -174,7 +102,7 @@ export type TestHooks = {
     /** The latest Rejection of one of this client's intents. */
     rejection: Rejection | null;
     push: {
-      view: FullView;
+      view: PublicView;
       /** The events of the push, in order. */
       events: { type: string }[];
       seq: number;
