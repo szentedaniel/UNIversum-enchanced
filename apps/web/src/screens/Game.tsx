@@ -1,4 +1,4 @@
-import type { PhaseOf, PlayerIntent, PublicView } from "@universum/rules";
+import type { PhaseOf, PublicView } from "@universum/rules";
 import { FIELDS } from "@universum/rules/board";
 import type { RejectionCode } from "@universum/protocol/messages";
 import { useEffect, useState } from "react";
@@ -24,7 +24,7 @@ import { playbackStore } from "#playback/playback-store.ts";
 import { PickTray } from "#screens/PickTray.tsx";
 import { SaleTray } from "#screens/SaleTray.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
-import { roomStore } from "#stores/room-store.ts";
+import { inFlightOf, roomStore } from "#stores/room-store.ts";
 import { salePicksFor, uiStore } from "#stores/ui-store.ts";
 import { fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
 
@@ -42,8 +42,8 @@ export function Game() {
   const singleSelection = useStore(uiStore, (s) => s.singlePick);
   const checklistOpen = useStore(uiStore, (s) => s.checklistOpen);
   const inspect = useStore(uiStore, (s) => s.inspect);
-  // No optimistic UI: after a tap the control stays hidden until the next push or a Rejection.
-  const [sentAt, setSentAt] = useState<number | null>(null);
+  // No optimistic UI: a tap locks the controls until the server answers.
+  const inFlight = useStore(roomStore, inFlightOf);
   const wide = useWide();
   const [joinError, setJoinError] = useState<RejectionCode | null>(null);
   // The Playback core's frame: the gate, the view, the held Turn, the toast and the overlay (ADR-0004).
@@ -90,16 +90,9 @@ export function Game() {
   const shownPlayer = view.players.find((p) => p.id === shownTurn.currentPlayer) ?? current;
   const shownMyTurn = shownTurn.currentPlayer === me;
   const shownTurnNumber = shownTurn.turn;
-  const answeredAt = Math.max(push.seq, rejection?.seq ?? 0);
-  const pending = sentAt !== null && answeredAt <= sentAt;
   // One answer for the Turn card, the trays, the bottom slot and the Podium (spec #72).
-  const decision = openDecision(frame, me, pending);
+  const decision = openDecision(frame, me, inFlight);
   const slot = bottomSlot(decision, frame, { selectedField, inspect });
-
-  function send(intent: PlayerIntent) {
-    setSentAt(answeredAt);
-    sendIntent(intent);
-  }
 
   const players: PlayerSummary[] = view.players.map((p) => ({
     seat: p.seat,
@@ -170,7 +163,7 @@ export function Game() {
         </p>
       )}
       {decision?.kind === "roll" && (
-        <Button size="lg" onClick={() => send({ type: "Roll", turn: view.turn })}>
+        <Button size="lg" onClick={() => sendIntent({ type: "Roll", turn: view.turn })}>
           {m.game_roll()}
         </Button>
       )}
@@ -178,10 +171,10 @@ export function Game() {
         <OfferPanel
           view={view}
           offer={decision.offer}
-          onBuy={(level) => send({ type: "BuyLevel", turn: view.turn, level })}
-          onBuyMuseum={() => send({ type: "BuyMuseum", turn: view.turn })}
-          onBuyout={() => send({ type: "Buyout", turn: view.turn })}
-          onDecline={() => send({ type: "DeclineOffer", turn: view.turn })}
+          onBuy={(level) => sendIntent({ type: "BuyLevel", turn: view.turn, level })}
+          onBuyMuseum={() => sendIntent({ type: "BuyMuseum", turn: view.turn })}
+          onBuyout={() => sendIntent({ type: "Buyout", turn: view.turn })}
+          onDecline={() => sendIntent({ type: "DeclineOffer", turn: view.turn })}
         />
       )}
       {decision?.kind === "quarantine" && (
@@ -189,7 +182,7 @@ export function Game() {
           <p className="m-0 text-sm font-bold text-ink/70">
             {m.game_quarantine_rounds({ rounds: quarantineRoundsOf(view, view.currentPlayer) })}
           </p>
-          <Button size="lg" onClick={() => send({ type: "RollForTwelve", turn: view.turn })}>
+          <Button size="lg" onClick={() => sendIntent({ type: "RollForTwelve", turn: view.turn })}>
             {m.game_roll_for_twelve()}
           </Button>
           <div className="flex flex-wrap gap-2">
@@ -197,7 +190,7 @@ export function Game() {
               <Button
                 variant="plain"
                 className="flex-1"
-                onClick={() => send({ type: "BuyPcrTest", turn: view.turn })}
+                onClick={() => sendIntent({ type: "BuyPcrTest", turn: view.turn })}
               >
                 {m.game_buy_pcr_test({ price: formatMoney(decision.choice.pcrTestPrice) })}
               </Button>
@@ -206,7 +199,7 @@ export function Game() {
               <Button
                 variant="accent"
                 className="flex-1"
-                onClick={() => send({ type: "UsePcrTest", turn: view.turn })}
+                onClick={() => sendIntent({ type: "UsePcrTest", turn: view.turn })}
               >
                 {m.game_use_pcr_test()}
               </Button>
@@ -244,8 +237,8 @@ export function Game() {
             onToggle={(field) => uiStore.getState().toggleSalePick(slot.sale.key, field)}
             onFocus={(field) => uiStore.getState().focusPick(field)}
             onUnpick={(field) => uiStore.getState().toggleSalePick(slot.sale.key, field)}
-            onAutoSell={() => send({ type: "AutoSell", turn: view.turn })}
-            onSell={(fields) => send({ type: "SellFields", turn: view.turn, fields })}
+            onAutoSell={() => sendIntent({ type: "AutoSell", turn: view.turn })}
+            onSell={(fields) => sendIntent({ type: "SellFields", turn: view.turn, fields })}
           />
         );
       case "pick":
@@ -265,7 +258,7 @@ export function Game() {
             onFocus={(field) => uiStore.getState().focusPick(field)}
             onPick={(field) => uiStore.getState().choosePick(slot.pick.key, field)}
             onCommit={(field) =>
-              send(
+              sendIntent(
                 slot.pick.kind === "doubler"
                   ? { type: "PlaceDoubler", turn: view.turn, field }
                   : { type: "TravelErasmus", turn: view.turn, field },
