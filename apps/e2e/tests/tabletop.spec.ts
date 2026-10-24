@@ -9,9 +9,9 @@ import {
   test,
 } from "./helpers.ts";
 
-// The Tabletop visual direction (#40): theme, fonts and the responsive layouts.
-// Runs once per single-browser project: desktop Chromium (corner cards) and
-// iPhone WebKit (chips).
+// The Tabletop visual direction (#40): theme, fonts, the responsive layouts and
+// the R74 Minute pill countdown. Runs once per single-browser project: desktop
+// Chromium (corner cards) and iPhone WebKit (chips).
 
 const backgroundOf = (page: Page) =>
   page.evaluate(() => getComputedStyle(document.body).backgroundColor);
@@ -180,7 +180,7 @@ async function expectCountdownLeft(page: Page): Promise<number> {
 // limit's end. GAME_MINUTE_MS makes a "minute" 8 s here, so the default
 // 50-minute Room ends 400 s after Start; the pill is checked against
 // `endsAt - serverNow()`, never a wall-clock minute. The text itself is pinned
-// in apps/web/test/game-hud.test.ts.
+// in apps/web/test/clock.test.ts.
 test("R74: the minute pill counts down the time left in the game", async ({ page, browser }) => {
   await startGame(page, browser);
 
