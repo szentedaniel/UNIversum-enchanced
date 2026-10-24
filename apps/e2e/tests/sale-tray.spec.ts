@@ -259,3 +259,45 @@ test("a push that starts a Playback closes the open Field card at once, not when
     closeAfterDump(context);
   }
 });
+
+test("a Board tap while an intent is in flight leaves the picks alone; inspect still opens the card", async ({
+  page,
+  browser,
+  isMobile,
+}) => {
+  const { context } = await startGame(page, browser);
+  try {
+    await showSale(page, 15_000);
+    await tapField(page, isMobile, BERLIN);
+    await expect.poll(async () => (await pick(page))?.picked).toEqual([BERLIN]);
+
+    // The Sell is out and no answer has come: taps must not change the picks
+    // (spec #72, story 2), and none may open a Field card either.
+    await page.evaluate(() => window.universumTest!.holdIntent());
+    await tapField(page, isMobile, VESZPREM);
+    expect((await pick(page))?.picked).toEqual([BERLIN]);
+    await expect(page.getByTestId("field-card")).toHaveCount(0);
+    await expect(
+      page.getByTestId("sale-tray").getByRole("button", { name: /^Sell 1 for 792K$/ }),
+    ).toBeDisabled();
+
+    // Inspect mode still wins over the lock: it opens a card and picks nothing.
+    await page.getByTestId("sale-tray").getByTestId("pick-inspect-toggle").click();
+    await tapField(page, isMobile, CHANCE);
+    const card = page.getByTestId("field-card");
+    await expect(card).toBeVisible();
+    expect((await pick(page))?.picked).toEqual([BERLIN]);
+
+    // The answer arrives (a push clears the lock): taps pick again.
+    await page.evaluate(() => {
+      const hooks = window.universumTest!;
+      hooks.showView(hooks.room().push!.view);
+    });
+    await card.getByRole("button", { name: "Close" }).click();
+    await page.getByTestId("sale-tray").getByTestId("pick-inspect-toggle").click();
+    await tapField(page, isMobile, VESZPREM);
+    await expect.poll(async () => (await pick(page))?.picked).toEqual([BERLIN, VESZPREM]);
+  } finally {
+    closeAfterDump(context);
+  }
+});
