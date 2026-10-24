@@ -23,7 +23,7 @@ has gained plenty of popularity recently, and boasting an ever-growing playerbas
 
 ## Development (v2)
 
-v1 lives untouched in `v1/` as the rules reference. v2 is a pnpm workspace:
+v1 was removed after the parity sign-off (#47); its last commit is tagged `v1-final`. v2 is a pnpm workspace:
 `apps/web`, `apps/server`, `apps/e2e`, `apps/loadtest`, `packages/rules` and `packages/protocol`.
 
 Needs Node 26 (`.node-version`) and pnpm 12 (`packageManager`).

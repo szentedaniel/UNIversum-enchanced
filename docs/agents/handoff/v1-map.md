@@ -1,5 +1,7 @@
 # v1 code map (main @ 5c8d359; moves to `v1/client`, `v1/server` in #23)
 
+> v1 was deleted in #47. Read any file below at the tag: `git show v1-final:v1/<path>` (e.g. `git show v1-final:v1/client/src/gameConfig.js`).
+
 All paths below are on `main` today. After #23's `git mv`, prefix them with `v1/` (e.g. `v1/client/src/gameConfig.js`).
 Read any file with `git show main:<path>`. The full rule catalogue with `file:line` citations is
 `docs/research/rules-inventory-v1.md` (R1–R80, flags F1–F30) — use it instead of re-reading the reducers.

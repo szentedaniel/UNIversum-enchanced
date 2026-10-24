@@ -13,15 +13,9 @@
   "env": {
     "es2024": true
   },
-  // v1/ is the frozen reference implementation; .claude/ and .agents/ are
-  // untracked local tooling folders (they may hold other git worktrees).
-  "ignorePatterns": [
-    "v1/**",
-    ".claude/**",
-    ".agents/**",
-    "**/dist/**",
-    "apps/web/src/paraglide/**"
-  ],
+  // .claude/ and .agents/ are untracked local tooling folders (they may hold
+  // other git worktrees).
+  "ignorePatterns": [".claude/**", ".agents/**", "**/dist/**", "apps/web/src/paraglide/**"],
   "rules": {
     "import/no-cycle": "error",
     // House style: explicit `.ts`/`.tsx` extensions, also where Vite resolves imports.

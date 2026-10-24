@@ -50,7 +50,7 @@ describe("the message files", () => {
 });
 
 /**
- * Every Hungarian string v1 shows (v1/client: gameConfig.js, the i18n files and
+ * Every Hungarian string v1 shows (v1/client at tag `v1-final`: gameConfig.js, the i18n files and
  * the hard-coded JSX), and where it lives now. `stem` is a word the cleaned-up
  * Hungarian keeps, so a key can't silently point at the wrong text. `dropped`
  * strings belong to v1 screens that v2 doesn't have.

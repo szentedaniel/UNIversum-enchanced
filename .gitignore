@@ -103,8 +103,6 @@ dist
 # TernJS port file
 .tern-port
 
-v1/client/build
-
 # v2
 .DS_Store
 # SQLite data (DATA_DIR default)

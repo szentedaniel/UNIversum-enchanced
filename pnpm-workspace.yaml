@@ -1,5 +1,5 @@
-# v1/ (and the untracked .claude/ and .agents/ folders) are deliberately not
-# listed here, so pnpm never installs or runs anything in them.
+# The untracked .claude/ and .agents/ folders are deliberately not listed
+# here, so pnpm never installs or runs anything in them.
 packages:
   - apps/*
   - packages/*
