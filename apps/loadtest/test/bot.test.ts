@@ -37,9 +37,9 @@ const view = (phase: View["phase"], extra: Partial<View> = {}): View => ({
   ...extra,
 });
 
-// A phase a later ticket adds: outside today's union, as a stale client would see it.
-const futurePhase = (kind: string): View["phase"] =>
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- #31/#32 add these phases
+// A kind this client does not know: outside the rules' union, as a stale client would see it.
+const unknownPhase = (kind: string): View["phase"] =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- a stale client sees a kind the rules do not define
   ({ kind }) as View["phase"];
 
 const types = (intents: ClientIntent[]) => intents.map((intent) => intent.type).toSorted();
@@ -146,7 +146,7 @@ describe("bot decisions", () => {
   });
 
   it("leaves a phase it does not know to the Turn timer", () => {
-    expect(offeredIntents(view(futurePhase("someFuturePhase")), "p0")).toEqual([]);
+    expect(offeredIntents(view(unknownPhase("someFuturePhase")), "p0")).toEqual([]);
   });
 
   it("picks uniformly from what the view offers", () => {
@@ -172,6 +172,6 @@ describe("bot decisions", () => {
     expect(isGameOver(view({ kind: "gameOver", winner: "p0", reason: "timeUp" }))).toBe(true);
     expect(isGameOver(view({ kind: "awaitingRoll" }))).toBe(false);
     // Only a phase the view types can end the game: no invented "ended" id does.
-    expect(isGameOver(view(futurePhase("ended")))).toBe(false);
+    expect(isGameOver(view(unknownPhase("ended")))).toBe(false);
   });
 });
