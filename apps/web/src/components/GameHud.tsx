@@ -7,13 +7,7 @@ import { serverNow } from "@universum/protocol/messages";
 import { Timer } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "#lib/utils.ts";
-import { m } from "#text.ts";
-
-/** `m:ss` for a number of milliseconds (never negative). */
-export function formatClock(ms: number): string {
-  const seconds = Math.max(0, Math.ceil(ms / 1000));
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-}
+import { formatClock, m } from "#text.ts";
 
 /**
  * The game's time left, from `view.endsAt` (server epoch ms), ticking every

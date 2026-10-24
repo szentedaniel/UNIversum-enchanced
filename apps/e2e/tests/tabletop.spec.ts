@@ -5,12 +5,13 @@ import {
   probeSockets,
   registerPage,
   scale,
+  startGame,
   test,
 } from "./helpers.ts";
 
-// The Tabletop visual direction (#40): theme, fonts and the responsive layouts.
-// Runs once per single-browser project: desktop Chromium (corner cards) and
-// iPhone WebKit (chips).
+// The Tabletop visual direction (#40): theme, fonts, the responsive layouts and
+// the R74 Minute pill countdown. Runs once per single-browser project: desktop
+// Chromium (corner cards) and iPhone WebKit (chips).
 
 const backgroundOf = (page: Page) =>
   page.evaluate(() => getComputedStyle(document.body).backgroundColor);
@@ -147,4 +148,47 @@ test("Lobby and game screens: Seat cards, then Player cards or chips around the 
   const card = await page.getByTestId("field-card").boundingBox();
   expect(card!.y + card!.height).toBeGreaterThan(393 - 20);
   expect(card!.width).toBeGreaterThan(300);
+});
+
+/**
+ * The Minute pill's `m:ss` text in milliseconds, and the time left from the
+ * view's `endsAt` on the page's own server clock (`serverNow`, #64).
+ */
+async function countdown(page: Page): Promise<{ shownMs: number; remainingMs: number }> {
+  const text = await page.getByTestId("minute-pill").innerText();
+  const shown = /(\d+):(\d{2})/.exec(text);
+  expect(shown, `the minute pill reads m:ss (got ${JSON.stringify(text)})`).not.toBeNull();
+  const remainingMs = await page.evaluate(() => {
+    const hooks = window.universumTest!;
+    return hooks.room().push!.view.endsAt - hooks.serverNow();
+  });
+  return { shownMs: (Number(shown![1]) * 60 + Number(shown![2])) * 1000, remainingMs };
+}
+
+/**
+ * The pill shows the time left from `endsAt`, within the display's own tick: a
+ * whole second rounded up, rendered up to a tick before the clock is read.
+ */
+async function expectCountdownLeft(page: Page): Promise<number> {
+  const { shownMs, remainingMs } = await countdown(page);
+  expect(shownMs).toBeLessThanOrEqual(Math.ceil(remainingMs / 1000) * 1000 + 2_000);
+  expect(shownMs).toBeGreaterThanOrEqual(remainingMs - 2_000);
+  return shownMs;
+}
+
+// R74: the countdown reads the minutes and seconds left until the Minute
+// limit's end. GAME_MINUTE_MS makes a "minute" 8 s here, so the default
+// 50-minute Room ends 400 s after Start; the pill is checked against
+// `endsAt - serverNow()`, never a wall-clock minute. The text itself is pinned
+// in apps/web/test/clock.test.ts.
+test("R74: the minute pill counts down the time left in the game", async ({ page, browser }) => {
+  await startGame(page, browser);
+
+  const first = await expectCountdownLeft(page);
+  // The pill ticks once a second on the server's clock: the text goes down
+  // while the page is watched, and still tracks `endsAt` after the tick.
+  await expect
+    .poll(async () => (await countdown(page)).shownMs, { timeout: 10_000 })
+    .toBeLessThan(first);
+  await expectCountdownLeft(page);
 });
