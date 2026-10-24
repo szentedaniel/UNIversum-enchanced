@@ -181,7 +181,7 @@ async function expectCountdownLeft(page: Page): Promise<number> {
 // 50-minute Room ends 400 s after Start; the pill is checked against
 // `endsAt - serverNow()`, never a wall-clock minute. The text itself is pinned
 // in apps/web/test/game-hud.test.ts.
-test("R74: the minute pill counts down from the view's end time", async ({ page, browser }) => {
+test("R74: the minute pill counts down the time left in the game", async ({ page, browser }) => {
   await startGame(page, browser);
 
   const first = await expectCountdownLeft(page);

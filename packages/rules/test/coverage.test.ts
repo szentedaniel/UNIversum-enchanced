@@ -27,7 +27,7 @@ const OUT_OF_SCOPE: Readonly<Record<number, string>> = {
   5: "R5: Start unlocks only when the Lobby is full, which is the Room server's Start gate (#36); setupGame's 2–4 Seat guard is tested under R6.",
   12: "R12: v1 found the local Player by username; superseded by ADR-0001 — the server owns the Seat and the client gets its own id. Nothing in the engine.",
   22: "R22: v1 let the active browser roll and relayed the values; superseded by ADR-0001 — the Room server rolls. R21 tests the seeded roll.",
-  74: "R74: the Board countdown is client rendering of `endsAt` (MinutePill), pinned outside the engine by the `R74: …` tests in apps/web/test/game-hud.test.ts (the `m:ss` text) and apps/e2e/tests/tabletop.spec.ts (the pill against the view's end time).",
+  74: "R74: the Board countdown is client rendering of `endsAt` (MinutePill), pinned outside the engine by the `R74: …` tests in apps/web/test/game-hud.test.ts (the `m:ss` text) and apps/e2e/tests/tabletop.spec.ts (the pill against the view in a running game).",
 };
 
 const RULE_IDS = Array.from({ length: 80 }, (_, index) => index + 1);
