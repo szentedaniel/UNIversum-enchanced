@@ -34,7 +34,7 @@ import {
   type WelcomeMessage,
 } from "@universum/protocol/messages";
 import { guestToken } from "#guest-token.ts";
-import { initialRoomState, roomStore } from "#stores/room-store.ts";
+import { answeredAtOf, initialRoomState, roomStore } from "#stores/room-store.ts";
 
 /** Vite (dev) and Caddy (production) forward this path to the Room server. */
 const COLYSEUS_PATH = "/colyseus";
@@ -97,6 +97,9 @@ export async function ensureJoined(code: string): Promise<void> {
 }
 
 export function sendIntent(intent: ClientIntent): void {
+  // No optimistic UI: the lock is set even with no Room attached (`answeredAtOf`
+  // is 0 then); the push a rejoin brings has a later `seq` and clears it.
+  roomStore.setState({ sentAt: answeredAtOf(roomStore.getState()) });
   room?.send(MESSAGE.intent, intent);
 }
 
