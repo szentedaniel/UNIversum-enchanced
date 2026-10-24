@@ -1,6 +1,6 @@
 # Coding standards
 
-The judgement calls a reviewer checks a diff against. A rule a check already enforces is left out: `oxfmt`, `oxlint` and `tsc`; the import fence (`.oxlintrc.json` `no-restricted-imports`, `apps/web/test/import-fence.test.ts`), which also keeps `@universum/rules/playback` inside `apps/web/src/playback/`; the engine purity guard (`packages/rules/test/purity.test.ts`); the server-clock fence (`apps/web/test/server-clock-fence.test.ts`); R-id coverage (`packages/rules/test/coverage.test.ts`); the state-shape snapshot guard (`packages/rules/test/migrate.test.ts`); message-key parity in hu/en/de (`apps/web/test/messages.test.ts`); flaky e2e (`failOnFlakyTests`); commit messages (`pnpm run check:commits`, `packages/repo-checks/src/commits.ts`); the implementer protocol's check list against CI (`packages/repo-checks/test/ci-protocol.test.ts`).
+The judgement calls a reviewer checks a diff against. A rule a check already enforces is left out: `oxfmt`, `oxlint` and `tsc`; the browser-bundle import fence (`.oxlintrc.json` `no-restricted-imports`, `apps/web/test/import-fence.test.ts`: `apps/web/src` may import only rules types and the `board`/`playback` subpaths, which keeps `@universum/rules/playback` inside `apps/web/src/playback/`, while `apps/web/test` runs in Node and may import the rules engine at runtime); the engine purity guard (`packages/rules/test/purity.test.ts`); the server-clock fence (`apps/web/test/server-clock-fence.test.ts`); R-id coverage (`packages/rules/test/coverage.test.ts`); the state-shape snapshot guard (`packages/rules/test/migrate.test.ts`); message-key parity in hu/en/de (`apps/web/test/messages.test.ts`); flaky e2e (`failOnFlakyTests`); commit messages (`pnpm run check:commits`, `packages/repo-checks/src/commits.ts`); the implementer protocol's check list against CI (`packages/repo-checks/test/ci-protocol.test.ts`).
 
 ## Every area
 
@@ -17,7 +17,7 @@ The judgement calls a reviewer checks a diff against. A rule a check already enf
 ## Protocol and server (`packages/protocol`, `apps/server`)
 
 - **The server owns the rules.** A Room handler validates the intent, calls `apply`, stores and broadcasts; the rule and every computed number stay in the rules package. ([ADR-0001](docs/adr/0001-server-owns-the-game-rules.md))
-- **Dependencies flow one way.** `web → protocol → rules` and `server → protocol → rules`; a package never imports the web app or the server. The web side is enforced by the import fence (`.oxlintrc.json` `no-restricted-imports`, `apps/web/test/import-fence.test.ts`); the server's imports and the packages' have no check, so a review must catch them. ([spec #22, Modules](https://github.com/szentedaniel/UNIversum-enchanced/issues/22))
+- **Dependencies flow one way.** `web → protocol → rules` and `server → protocol → rules`; a package never imports the web app or the server. The browser bundle's side is enforced by the import fence (`.oxlintrc.json` `no-restricted-imports`, `apps/web/test/import-fence.test.ts`); `apps/web/test` runs in Node and may import the rules engine at runtime. The server's imports and the packages' have no check, so a review must catch them. ([spec #22, Modules](https://github.com/szentedaniel/UNIversum-enchanced/issues/22))
 
 ## Web client (`apps/web`)
 

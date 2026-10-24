@@ -21,9 +21,10 @@ Board still has its own copy of the Sale/pick reads until #75.
   slots carry the value and `busy` so `Game.tsx`'s switch has no unreachable
   branch (the spec names the tags without payloads).
 - **`fieldTap(decision, { inspect }, field)`** → `selectField | toggleSale {
-  key, field } | choosePick { key, field } | ignore`. Busy wins over inspect
-  mode: every tap on the Board is ignored while my Sale/pick is in flight. A
-  `null` tap while picking is ignored; elsewhere it closes the Field card.
+  key, field } | choosePick { key, field } | ignore`. Inspect mode wins over
+  `busy`: an inspect tap only opens a Field card and never changes a pick. While
+  a busy Sale/pick is not in inspect mode every tap is ignored. A `null` tap
+  while picking is ignored; elsewhere it closes the Field card.
 - **`decisionKey(decision)`** → my Sale's or pick's `key`, else `null`; ignores
   `busy`, so a send never resets the picks.
 - **Type narrowing gotcha:** `PlayerId` is `string`, so `owner === "me"` cannot
@@ -69,5 +70,5 @@ Board still has its own copy of the Sale/pick reads until #75.
   `ignore` does nothing) and `decisionKey(...)` for `syncPick`'s reset key. The
   reset (focus, inspect, open Field card) and the Sale warning timer stay in
   `syncPick`.
-- `fieldTap` ignores every tap while the Decision is busy — that is the Board
-  half of "no optimistic UI" (spec story 2).
+- A busy Sale/pick ignores picking taps but still opens Field cards in inspect
+  mode — the Board half of "no optimistic UI" (spec story 2).

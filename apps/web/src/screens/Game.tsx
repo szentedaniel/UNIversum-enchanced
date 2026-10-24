@@ -48,11 +48,6 @@ export function Game() {
   const [joinError, setJoinError] = useState<RejectionCode | null>(null);
   // The Playback core's frame: the gate, the view, the held Turn, the toast and the overlay (ADR-0004).
   const frame = useStore(playbackStore, (state) => state.frame);
-  // Story 4: the heading and Turn number switch when the gate opens, not on the push.
-  const shownTurn = useStore(playbackStore, (state) => state.frame?.shownTurn ?? null);
-  const toast = useStore(playbackStore, (state) => state.frame?.toast ?? null);
-  // The dice and a drawn Chance card show for their own step of the Playback (ADR-0004).
-  const overlay = useStore(playbackStore, (state) => state.frame?.overlay ?? null);
 
   // The dice sound starts on the server's roll, never on a tap (spec: no optimistic UI).
   useEffect(() => {
@@ -85,13 +80,16 @@ export function Game() {
 
   // The view the screen draws is the frame's, never the push's: one reading for every layer.
   const view = frame.view;
+  // Story 4: the heading and Turn number hold the previous label until the gate opens;
+  // the dice and a drawn Chance card show for their own step of the Playback (ADR-0004).
+  const { shownTurn, toast, overlay } = frame;
   const { clockOffset } = push;
   const gameOver = view.phase.kind === "gameOver" ? view.phase : null;
   const current = view.players.find((p) => p.id === view.currentPlayer);
   // The turn card holds the previous Turn's values through the Playback (story 4, ADR-0004).
-  const shownPlayer = view.players.find((p) => p.id === shownTurn?.currentPlayer) ?? current;
-  const shownMyTurn = shownTurn?.currentPlayer === me;
-  const shownTurnNumber = shownTurn?.turn ?? view.turn;
+  const shownPlayer = view.players.find((p) => p.id === shownTurn.currentPlayer) ?? current;
+  const shownMyTurn = shownTurn.currentPlayer === me;
+  const shownTurnNumber = shownTurn.turn;
   const answeredAt = Math.max(push.seq, rejection?.seq ?? 0);
   const pending = sentAt !== null && answeredAt <= sentAt;
   // One answer for the Turn card, the trays, the bottom slot and the Podium (spec #72).

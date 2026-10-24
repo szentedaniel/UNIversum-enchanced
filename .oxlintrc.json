@@ -122,8 +122,9 @@
       // Fence). An override's rule config replaces the base one instead of
       // merging, so the web app's `no-restricted-imports` is repeated with
       // `@universum/rules/playback` added to `paths`.
-      // apps/web/test/import-fence.test.ts lints a sample under both copies,
-      // so a drift between them fails.
+      // apps/web/test/import-fence.test.ts lints a sample under all three
+      // copies (the base config, this one and the test one), so a drift
+      // between them fails.
       "files": ["apps/web/src/**/*.{ts,tsx}"],
       "excludeFiles": ["apps/web/src/playback/**"],
       "rules": {

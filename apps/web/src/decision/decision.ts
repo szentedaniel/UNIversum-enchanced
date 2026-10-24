@@ -121,8 +121,10 @@ export function bottomSlot(
 
 /**
  * A tap on the Board: during my Sale or pick it picks (or unpicks) the Field
- * and never commits; in inspect mode it opens any Field's card instead; while
- * that Decision is busy it does nothing. Otherwise it opens the Field card.
+ * and never commits; in inspect mode it opens any Field's card instead, even
+ * while the Decision is busy (inspect never changes a pick). While a busy
+ * Decision is not in inspect mode it does nothing. Otherwise it opens the
+ * Field card.
  */
 export function fieldTap(
   decision: OpenDecision | null,
@@ -130,15 +132,15 @@ export function fieldTap(
   field: FieldId | null,
 ): FieldTap {
   if (decision !== null && "sale" in decision) {
-    if (decision.busy) return { kind: "ignore" };
     if (ui.inspect) return { kind: "selectField", field };
+    if (decision.busy) return { kind: "ignore" };
     return field === null
       ? { kind: "ignore" }
       : { kind: "toggleSale", key: decision.sale.key, field };
   }
   if (decision !== null && "pick" in decision) {
-    if (decision.busy) return { kind: "ignore" };
     if (ui.inspect) return { kind: "selectField", field };
+    if (decision.busy) return { kind: "ignore" };
     return field === null
       ? { kind: "ignore" }
       : { kind: "choosePick", key: decision.pick.key, field };

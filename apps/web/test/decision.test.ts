@@ -259,7 +259,7 @@ describe("openDecision", () => {
     expect(openDecision(frameOf(quarantine), "p2", false)).toBeNull();
   });
 
-  it("opens no Decision while the gate is shut", () => {
+  it("ADR-0004: opens no Decision while the gate is shut", () => {
     const offer = publicView(rollOnto(newGame(), VIENNA).state);
     expect(openDecision(frameOf(offer, "shut"), offer.currentPlayer, false)).toBeNull();
 
@@ -432,13 +432,21 @@ describe("fieldTap", () => {
     });
   });
 
-  it("ignores every tap while my Sale or pick is in flight", () => {
+  it("ignores picking while my Sale or pick is in flight, but inspect still opens Field cards", () => {
     const sale = myDecision(publicView(sellingState()), true);
     expect(fieldTap(sale, { inspect: false }, SEATTLE)).toEqual({ kind: "ignore" });
-    expect(fieldTap(sale, { inspect: true }, SEATTLE)).toEqual({ kind: "ignore" });
+    expect(fieldTap(sale, { inspect: true }, SEATTLE)).toEqual({
+      kind: "selectField",
+      field: SEATTLE,
+    });
+    expect(fieldTap(sale, { inspect: true }, null)).toEqual({ kind: "selectField", field: null });
 
     const pick = myDecision(publicView(doublerState()), true);
     expect(fieldTap(pick, { inspect: false }, BUDAPEST)).toEqual({ kind: "ignore" });
+    expect(fieldTap(pick, { inspect: true }, BUDAPEST)).toEqual({
+      kind: "selectField",
+      field: BUDAPEST,
+    });
   });
 
   it("opens a Field card when no Sale or pick is mine", () => {
@@ -479,7 +487,7 @@ describe("decisionKey", () => {
     expect(decisionKey(null)).toBeNull();
   });
 
-  it("goes to null as the next Playback starts", () => {
+  it("ADR-0004: goes to null as the next Playback starts", () => {
     const view = publicView(sellingState());
 
     expect(decisionKey(myDecision(view))).not.toBeNull();
