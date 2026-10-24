@@ -6,7 +6,13 @@ import { useStore } from "zustand";
 import { createBoard, type Board as BoardRenderer } from "#board/board.ts";
 import { fieldFacts } from "#board/field-facts.ts";
 import { Button } from "#components/ui/button.tsx";
-import { decisionKey, fieldTap, openDecision, type OpenDecision } from "#decision/decision.ts";
+import {
+  decisionKey,
+  fieldTap,
+  mySaleOrPick,
+  openDecision,
+  type OpenDecision,
+} from "#decision/decision.ts";
 import { selectedPick, singleMarks } from "#pick/pick.ts";
 import { AUTO_SELL_WARNING_MS, saleMarks } from "#pick/sale.ts";
 import { currentPlayback, gateOpenOf, playbackStore } from "#playback/playback-store.ts";
@@ -25,11 +31,8 @@ const ZOOM_STEP = 1.5;
  * `decisionKey` read that answer.
  */
 function currentDecision(): OpenDecision | null {
-  return openDecision(
-    playbackStore.getState().frame,
-    roomStore.getState().me,
-    inFlightOf(roomStore.getState()),
-  );
+  const room = roomStore.getState();
+  return openDecision(playbackStore.getState().frame, room.me, inFlightOf(room));
 }
 
 /**
@@ -138,20 +141,21 @@ export function Board() {
           if (uiStore.getState().selectedField !== null) uiStore.getState().selectField(null);
         }
         // Only this client's Sale or pick carries the value; another Player's is
-        // a waiting line with neither property.
-        if (decision !== null && "pick" in decision) {
-          const field = selectedPick(decision.pick, uiStore.getState().singlePick);
-          return renderer.setPick(singleMarks(decision.pick, field));
+        // a waiting line, which the helper reads as neither.
+        const mine = mySaleOrPick(decision);
+        if (mine?.kind === "pick") {
+          const field = selectedPick(mine.pick, uiStore.getState().singlePick);
+          return renderer.setPick(singleMarks(mine.pick, field));
         }
-        if (decision === null || !("sale" in decision)) return renderer.setPick(null);
+        if (mine?.kind !== "sale") return renderer.setPick(null);
         // A Sale comes from the open gate's view, so that view exists too.
         if (frame === null || frame.view.turnTimer === null) return renderer.setPick(null);
         // The marks count down on the server's clock: only the push's offset applies.
         const { push } = roomStore.getState();
         if (push === null) return renderer.setPick(null);
         const msLeft = frame.view.turnTimer.endsAt - serverNow(push.clockOffset);
-        const picks = salePicksFor(uiStore.getState().salePicks, decision.sale.key);
-        renderer.setPick(saleMarks(decision.sale, frame.view, picks, msLeft));
+        const picks = salePicksFor(uiStore.getState().salePicks, mine.sale.key);
+        renderer.setPick(saleMarks(mine.sale, frame.view, picks, msLeft));
         if (msLeft > AUTO_SELL_WARNING_MS) {
           warningTimer = window.setTimeout(syncPick, msLeft - AUTO_SELL_WARNING_MS + 50);
         }

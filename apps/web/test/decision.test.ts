@@ -13,7 +13,14 @@ import {
 } from "@universum/rules";
 import { FIELD_COUNT, type FieldId } from "@universum/rules/board";
 import { describe, expect, it } from "vitest";
-import { bottomSlot, decisionKey, fieldTap, openDecision } from "#decision/decision.ts";
+import {
+  bottomSlot,
+  decisionKey,
+  fieldTap,
+  mySaleOrPick,
+  openDecision,
+  waitingLine,
+} from "#decision/decision.ts";
 import type { Frame } from "#playback/playback.ts";
 import { playbackOfPush } from "#playback/playback.ts";
 
@@ -121,12 +128,17 @@ function playTurn(state: GameState): GameState {
   return current;
 }
 
-/** The second Seat has 100,000 and two Fields; they land on the first Seat's Level 4 Seattle. */
-function sellingState(): GameState {
+/** The Roll that opens the second Seat's Sale: 100,000 and two Fields, landing on the first's Level 4 Seattle. */
+function sellingRoll(): Applied {
   let state = owning(newGame(), "p2", { [VESZPREM]: 1, [BERLIN]: 4 });
   state = withField(state, SEATTLE, { owner: "p1", level: 4 });
   state = withPlayer(state, "p2", { cash: 100_000 });
-  return rollOnto({ ...state, currentPlayer: "p2" }, SEATTLE).state;
+  return rollOnto({ ...state, currentPlayer: "p2" }, SEATTLE);
+}
+
+/** The state `sellingRoll` leaves: the second Seat's Sale is open. */
+function sellingState(): GameState {
+  return sellingRoll().state;
 }
 
 /** `owner` holds three Fields and lands on the Doubler Field. */
@@ -207,10 +219,11 @@ describe("openDecision", () => {
     expect(view.phase.kind).toBe("selling");
     const decision = myDecision(view);
     expect(decision).toMatchObject({ owner: "me", kind: "sale", busy: false });
-    if (decision === null || !("sale" in decision)) throw new Error("no Sale opened");
-    expect(decision.sale.key).toBe(`${view.turn}:${view.turnDeadline}`);
-    expect(decision.sale.shortfall).toBe(824_000);
-    expect(decision.sale.pickable).toEqual([VESZPREM, BERLIN]);
+    const mine = mySaleOrPick(decision);
+    if (mine?.kind !== "sale") throw new Error("no Sale opened");
+    expect(mine.sale.key).toBe(`${view.turn}:${view.turnDeadline}`);
+    expect(mine.sale.shortfall).toBe(824_000);
+    expect(mine.sale.pickable).toEqual([VESZPREM, BERLIN]);
   });
 
   it("offers me my Doubler pick", () => {
@@ -219,9 +232,10 @@ describe("openDecision", () => {
     expect(view.phase.kind).toBe("placingDoubler");
     const decision = myDecision(view);
     expect(decision).toMatchObject({ owner: "me", kind: "pick", busy: false });
-    if (decision === null || !("pick" in decision)) throw new Error("no pick opened");
-    expect(decision.pick.kind).toBe("doubler");
-    expect(decision.pick.pickable).toEqual([VESZPREM, BUDAPEST, MUSEUM_1]);
+    const mine = mySaleOrPick(decision);
+    if (mine?.kind !== "pick") throw new Error("no pick opened");
+    expect(mine.pick.kind).toBe("doubler");
+    expect(mine.pick.pickable).toEqual([VESZPREM, BUDAPEST, MUSEUM_1]);
   });
 
   it("offers me my Erasmus pick", () => {
@@ -230,9 +244,10 @@ describe("openDecision", () => {
     expect(view.phase.kind).toBe("choosingErasmus");
     const decision = myDecision(view);
     expect(decision).toMatchObject({ owner: "me", kind: "pick", busy: false });
-    if (decision === null || !("pick" in decision)) throw new Error("no pick opened");
-    expect(decision.pick.kind).toBe("erasmus");
-    expect(decision.pick.pickable.length).toBeGreaterThan(0);
+    const mine = mySaleOrPick(decision);
+    if (mine?.kind !== "pick") throw new Error("no pick opened");
+    expect(mine.pick.kind).toBe("erasmus");
+    expect(mine.pick.pickable.length).toBeGreaterThan(0);
   });
 
   it("shows another Player's Sale as a waiting line", () => {
@@ -304,21 +319,91 @@ describe("openDecision", () => {
   });
 });
 
+describe("mySaleOrPick", () => {
+  it("reads my Sale's key, pickable Fields and busy state", () => {
+    const view = publicView(sellingState());
+    const key = `${view.turn}:${view.turnDeadline}`;
+
+    expect(mySaleOrPick(myDecision(view))).toMatchObject({
+      kind: "sale",
+      key,
+      pickable: [VESZPREM, BERLIN],
+      busy: false,
+      sale: { key, shortfall: 824_000 },
+    });
+    expect(mySaleOrPick(myDecision(view, true))).toMatchObject({ kind: "sale", busy: true });
+  });
+
+  it("reads my pick's key, pickable Fields and busy state", () => {
+    const view = publicView(doublerState());
+    const key = `${view.turn}:${view.turnDeadline}`;
+
+    expect(mySaleOrPick(myDecision(view))).toMatchObject({
+      kind: "pick",
+      key,
+      pickable: [VESZPREM, BUDAPEST, MUSEUM_1],
+      busy: false,
+      pick: { kind: "doubler" },
+    });
+    expect(mySaleOrPick(myDecision(view, true))).toMatchObject({ kind: "pick", busy: true });
+  });
+
+  it("is null for every other Decision, a waiting line included", () => {
+    const sale = publicView(sellingState());
+    const pick = publicView(doublerState("p2"));
+
+    expect(mySaleOrPick(null)).toBeNull();
+    expect(mySaleOrPick(myDecision(publicView(newGame())))).toBeNull();
+    expect(mySaleOrPick(myDecision(publicView(rollOnto(newGame(), VIENNA).state)))).toBeNull();
+    expect(mySaleOrPick(myDecision(publicView(quarantinedState())))).toBeNull();
+    expect(mySaleOrPick(openDecision(frameOf(sale), "p1", false))).toBeNull();
+    expect(mySaleOrPick(openDecision(frameOf(pick), "p1", false))).toBeNull();
+  });
+});
+
+describe("waitingLine", () => {
+  it("is another Player's Sale or pick", () => {
+    const sale = publicView(sellingState());
+    const pick = publicView(doublerState("p2"));
+
+    expect(waitingLine(openDecision(frameOf(sale), "p1", false))).toBe("sale");
+    expect(waitingLine(openDecision(frameOf(pick), "p1", false))).toBe("pick");
+  });
+
+  it("is null for my own Sale and pick", () => {
+    expect(waitingLine(myDecision(publicView(sellingState())))).toBeNull();
+    expect(waitingLine(myDecision(publicView(doublerState())))).toBeNull();
+  });
+
+  it("is null for every other Decision, another Player's included", () => {
+    expect(waitingLine(null)).toBeNull();
+    expect(waitingLine(myDecision(publicView(newGame())))).toBeNull();
+    expect(waitingLine(myDecision(publicView(rollOnto(newGame(), VIENNA).state)))).toBeNull();
+    expect(waitingLine(myDecision(publicView(quarantinedState())))).toBeNull();
+    expect(waitingLine(openDecision(frameOf(publicView(newGame())), "p2", false))).toBeNull();
+  });
+});
+
 describe("bottomSlot", () => {
   it("shows nothing on the result screen until the gate opens, then the podium", () => {
     const view = publicView(gameOverState());
+    const { phase } = view;
+    if (phase.kind !== "gameOver") throw new Error("the game is not over");
 
     expect(bottomSlot(null, frameOf(view, "shut"), uiOf())).toEqual({ kind: "none" });
-    expect(bottomSlot(null, frameOf(view), uiOf())).toEqual({ kind: "podium" });
+    expect(bottomSlot(null, frameOf(view), uiOf())).toEqual({ kind: "podium", phase });
   });
 
   it("shows the result screen ahead of an open Field card", () => {
     const view = publicView(gameOverState());
+    const { phase } = view;
+    if (phase.kind !== "gameOver") throw new Error("the game is not over");
 
     expect(
       bottomSlot(null, frameOf(view), uiOf({ selectedField: SEATTLE, inspect: true })),
     ).toEqual({
       kind: "podium",
+      phase,
     });
   });
 
@@ -487,10 +572,26 @@ describe("decisionKey", () => {
     expect(decisionKey(null)).toBeNull();
   });
 
-  it("ADR-0004: goes to null as the next Playback starts", () => {
-    const view = publicView(sellingState());
+  it("ADR-0004: is null through the Playback that opens my Sale, then my Sale's key", () => {
+    const { state, events } = sellingRoll();
+    const view = publicView(state);
+    const key = `${view.turn}:${view.turnDeadline}`;
+    // The push that opens my Sale carries the Playback that leads to it: the dice and the hop.
+    const playback = playbackOfPush({
+      view,
+      events,
+      seq: 2,
+      clockOffset: 0,
+      receivedAt: RECEIVED_AT,
+    });
+    const keyAt = (clientNow: number) =>
+      decisionKey(openDecision(playback.frameAt(clientNow), view.currentPlayer, false));
 
-    expect(decisionKey(myDecision(view))).not.toBeNull();
-    expect(decisionKey(openDecision(frameOf(view, "shut"), view.currentPlayer, false))).toBeNull();
+    expect(events.length).toBeGreaterThan(0);
+    expect(playback.frameAt(RECEIVED_AT).overlay).toMatchObject({ kind: "dice" });
+    expect(playback.opensAt).toBeGreaterThan(RECEIVED_AT);
+    expect(keyAt(RECEIVED_AT)).toBeNull();
+    expect(keyAt(playback.opensAt - 1)).toBeNull();
+    expect(keyAt(playback.opensAt)).toBe(key);
   });
 });

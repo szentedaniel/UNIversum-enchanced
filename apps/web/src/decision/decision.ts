@@ -24,10 +24,48 @@ export type OpenDecision =
   | { owner: "me"; kind: "pick"; pick: SinglePick; busy: boolean }
   | { owner: PlayerId; kind: "sale" | "pick" };
 
+/**
+ * This client's Sale or pick, read the one way the slot, a tap and the pick UI
+ * read it: the value, the key that marks a new Decision, the Fields a tap may
+ * pick, and whether an intent is in flight.
+ */
+export type MySaleOrPick =
+  | { kind: "sale"; sale: SalePick; key: string; pickable: readonly FieldId[]; busy: boolean }
+  | { kind: "pick"; pick: SinglePick; key: string; pickable: readonly FieldId[]; busy: boolean };
+
+/**
+ * This client's Sale or pick, or `null` for every other Decision. Only this
+ * client's Decision carries `sale` or `pick`; a waiting line has neither, and
+ * `owner` cannot tell them apart (`PlayerId` is a string).
+ */
+export function mySaleOrPick(decision: OpenDecision | null): MySaleOrPick | null {
+  if (decision === null) return null;
+  if ("sale" in decision) {
+    const { key, pickable } = decision.sale;
+    return { kind: "sale", sale: decision.sale, key, pickable, busy: decision.busy };
+  }
+  if ("pick" in decision) {
+    const { key, pickable } = decision.pick;
+    return { kind: "pick", pick: decision.pick, key, pickable, busy: decision.busy };
+  }
+  return null;
+}
+
+/**
+ * Another Player's Sale or pick as the Turn card's waiting line, else `null`.
+ * Keyed on the absence of the Sale or pick payload, not on `owner` (`PlayerId`
+ * is a string, so it cannot tell "me" from another Player).
+ */
+export function waitingLine(decision: OpenDecision | null): "sale" | "pick" | null {
+  if (decision === null || mySaleOrPick(decision) !== null) return null;
+  if (decision.kind === "sale" || decision.kind === "pick") return decision.kind;
+  return null;
+}
+
 /** What the bottom slot shows, in the screen's order. */
 export type BottomSlot =
   | { kind: "none" }
-  | { kind: "podium" }
+  | { kind: "podium"; phase: PhaseOf<"gameOver"> }
   | { kind: "fieldCard"; field: FieldId; stepThrough?: readonly FieldId[] }
   | { kind: "sale"; sale: SalePick; busy: boolean }
   | { kind: "pick"; pick: SinglePick; busy: boolean }
@@ -98,22 +136,17 @@ export function bottomSlot(
 ): BottomSlot {
   if (frame === null) return { kind: "none" };
   const { phase } = frame.view;
-  if (phase.kind === "gameOver") return frame.gateOpen ? { kind: "podium" } : { kind: "none" };
-  // Only this client's Sale or pick carries the value; another Player's is a
-  // waiting line with neither property.
-  if (decision !== null) {
-    if ("sale" in decision) {
-      if (ui.inspect && ui.selectedField !== null) {
-        return { kind: "fieldCard", field: ui.selectedField, stepThrough: decision.sale.pickable };
-      }
-      return { kind: "sale", sale: decision.sale, busy: decision.busy };
+  if (phase.kind === "gameOver") {
+    return frame.gateOpen ? { kind: "podium", phase } : { kind: "none" };
+  }
+  const mine = mySaleOrPick(decision);
+  if (mine !== null) {
+    if (ui.inspect && ui.selectedField !== null) {
+      return { kind: "fieldCard", field: ui.selectedField, stepThrough: mine.pickable };
     }
-    if ("pick" in decision) {
-      if (ui.inspect && ui.selectedField !== null) {
-        return { kind: "fieldCard", field: ui.selectedField, stepThrough: decision.pick.pickable };
-      }
-      return { kind: "pick", pick: decision.pick, busy: decision.busy };
-    }
+    return mine.kind === "sale"
+      ? { kind: "sale", sale: mine.sale, busy: mine.busy }
+      : { kind: "pick", pick: mine.pick, busy: mine.busy };
   }
   if (ui.selectedField !== null) return { kind: "fieldCard", field: ui.selectedField };
   return { kind: "turnCard" };
@@ -131,21 +164,12 @@ export function fieldTap(
   ui: { inspect: boolean },
   field: FieldId | null,
 ): FieldTap {
-  if (decision !== null && "sale" in decision) {
-    if (ui.inspect) return { kind: "selectField", field };
-    if (decision.busy) return { kind: "ignore" };
-    return field === null
-      ? { kind: "ignore" }
-      : { kind: "toggleSale", key: decision.sale.key, field };
-  }
-  if (decision !== null && "pick" in decision) {
-    if (ui.inspect) return { kind: "selectField", field };
-    if (decision.busy) return { kind: "ignore" };
-    return field === null
-      ? { kind: "ignore" }
-      : { kind: "choosePick", key: decision.pick.key, field };
-  }
-  return { kind: "selectField", field };
+  const mine = mySaleOrPick(decision);
+  if (mine === null || ui.inspect) return { kind: "selectField", field };
+  if (mine.busy || field === null) return { kind: "ignore" };
+  return mine.kind === "sale"
+    ? { kind: "toggleSale", key: mine.key, field }
+    : { kind: "choosePick", key: mine.key, field };
 }
 
 /**
@@ -153,8 +177,5 @@ export function fieldTap(
  * `null`. It ignores `busy`, so a send does not reset the picks.
  */
 export function decisionKey(decision: OpenDecision | null): string | null {
-  if (decision === null) return null;
-  if ("sale" in decision) return decision.sale.key;
-  if ("pick" in decision) return decision.pick.key;
-  return null;
+  return mySaleOrPick(decision)?.key ?? null;
 }
