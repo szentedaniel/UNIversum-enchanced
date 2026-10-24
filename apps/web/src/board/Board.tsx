@@ -126,12 +126,8 @@ export function Board() {
       const syncPick = () => {
         clearTimeout(warningTimer);
         const { frame } = playbackStore.getState();
-        const decision = openDecision(
-          frame,
-          roomStore.getState().me,
-          inFlightOf(roomStore.getState()),
-        );
-        // `openDecision` is the gate check: it is null while the gate is shut,
+        const decision = currentDecision();
+        // `currentDecision` is the gate check: it is null while the gate is shut,
         // so the key becomes null at the Playback's start and the open card
         // resets at once. It ignores `busy`, so a send never resets the picks.
         const key = decisionKey(decision);

@@ -30,14 +30,17 @@ tap on the Board while an intent is in flight no longer changes the picks.
   Only `decision/decision.ts` may name them; the two definitions in
   `pick/sale.ts` and `pick/pick.ts` are allowed by their `export function` line.
   A new caller belongs behind `openDecision`, not in the fence's allow-list.
+- The scan (`withoutComments`, `sourceFiles`, the violation format) is shared
+  with the server-clock fence in `apps/web/test/source-scan.ts`; change it there.
 - The scan blanks comments, so a comment may mention the names.
 
 ## Test hook (`holdIntent`)
 
-- `window.universumTest.holdIntent()` sets `sentAt` as `sendIntent` sets it and
-  sends nothing: the in-flight lock stays, so a spec can tap the Board while a
-  Sale or pick is busy without a timing race (`sale-tray.spec.ts`, "a Board tap
-  while an intent is in flight…"). It is in both hook types
+- `window.universumTest.holdIntent()` applies `inFlightPatch(state)` from
+  `#stores/room-store.ts` — the same write `sendIntent` makes — and sends
+  nothing: the in-flight lock stays, so a spec can tap the Board while a Sale or
+  pick is busy without a timing race (`sale-tray.spec.ts`, "a Board tap while an
+  intent is in flight…"). It is in both hook types
   (`apps/web/src/test-hooks.ts`, `apps/e2e/tests/test-hooks.ts`).
 - A `showView` push bumps `seq` and clears the lock, like the server's answer;
   pass it the current `room().push.view` to keep the same Decision (and so the

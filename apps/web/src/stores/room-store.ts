@@ -62,6 +62,15 @@ export const answeredAtOf = (state: RoomState): number =>
   Math.max(state.push?.seq ?? 0, state.rejection?.seq ?? 0);
 
 /**
+ * The in-flight lock's one write: `sentAt` at the latest answered `seq`.
+ * `sendIntent` applies it before sending, and the `holdIntent` test hook applies
+ * it to hold an intent the server never answered.
+ */
+export const inFlightPatch = (state: RoomState): Pick<RoomState, "sentAt"> => ({
+  sentAt: answeredAtOf(state),
+});
+
+/**
  * The in-flight lock ("No optimistic UI"): this client sent an intent and no
  * push or Rejection with a later `seq` has arrived. The two share one counter,
  * so a single comparison with `answeredAtOf` covers both; a reset to

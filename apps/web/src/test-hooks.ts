@@ -11,7 +11,7 @@ import type { GameEvent, PlayerId, PublicView } from "@universum/rules";
 import type { FieldId } from "@universum/rules/board";
 import type { Board } from "#board/board.ts";
 import { gateOpenOf, playbackStore, type PlaybackGate } from "#playback/playback-store.ts";
-import { answeredAtOf, roomStore, type RoomState } from "#stores/room-store.ts";
+import { inFlightPatch, roomStore, type RoomState } from "#stores/room-store.ts";
 
 declare const TEST_HOOKS_ENABLED: boolean;
 
@@ -71,7 +71,7 @@ export function exposeBoard(board: Board | null): void {
         },
         pick: () => board.pick,
         holdIntent() {
-          roomStore.setState({ sentAt: answeredAtOf(roomStore.getState()) });
+          roomStore.setState(inFlightPatch(roomStore.getState()));
         },
         showView(view, events = []) {
           const { push } = roomStore.getState();

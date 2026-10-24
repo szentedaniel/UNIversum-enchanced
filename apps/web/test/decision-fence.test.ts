@@ -9,10 +9,11 @@
  * particular, must go through `fieldTap` to ignore picks while an intent is in
  * flight.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
+import { sourceFiles, violation, withoutComments } from "./source-scan.ts";
 
 const ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 const TREE = "apps/web/src";
@@ -31,13 +32,6 @@ const READ = /\b(?:saleFor|singlePickFor)\b/g;
 const RULE = "the Decision module is the one reader of a Sale or pick (spec #72)";
 const INSTEAD = "openDecision/fieldTap/decisionKey from #decision/decision.ts";
 
-/** `source` with its comments blanked; block comments keep their newlines. */
-function withoutComments(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ""))
-    .replace(/\/\/.*$/gm, "");
-}
-
 /** Every violation in `source`, as `file:line: rule — use replacement. Line: code`. */
 function scan(source: string, file: string): string[] {
   if (file === DECISION_FILE) return [];
@@ -51,15 +45,7 @@ function scan(source: string, file: string): string[] {
   }
   return [...found]
     .toSorted((a, b) => a - b)
-    .map((line) => `${file}:${line}: ${RULE} — use ${INSTEAD}. Line: ${lines[line - 1]?.trim()}`);
-}
-
-/** Every `.ts`/`.tsx` file under `dir`, minus the generated Paraglide messages. */
-function sourceFiles(dir: string): string[] {
-  return readdirSync(dir, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
-    .map((entry) => join(entry.parentPath, entry.name))
-    .filter((file) => !file.includes("/paraglide/"));
+    .map((line) => violation(file, line, lines[line - 1]?.trim() ?? "", RULE, INSTEAD));
 }
 
 it("spec #72: scans the web app's source, the Decision module included", () => {
