@@ -45,8 +45,9 @@ Board still has its own copy of the Sale/pick reads until #75.
   `consistent-return`). `<Podium>` renders from `slot.kind === "podium"`.
 - The tray `busy` and the Sale/pick value come from the slot (which copies them
   from the Decision); `saleFor`/`singlePickFor` no longer appear in the screen.
-- `inFlight` is still `Game.tsx`'s `pending` (`sentAt`); #73 replaces it with
-  `roomStore`'s `inFlightOf`. Do not add another lock here.
+- `inFlight` is `useStore(roomStore, inFlightOf)` (#73; `sentAt`/`answeredAtOf`
+  in `room-store.ts`, set by `sendIntent`). Handlers call `sendIntent` directly;
+  do not add another lock here.
 
 ## Import fence
 
