@@ -128,12 +128,17 @@ function playTurn(state: GameState): GameState {
   return current;
 }
 
-/** The second Seat has 100,000 and two Fields; they land on the first Seat's Level 4 Seattle. */
-function sellingState(): GameState {
+/** The Roll that opens the second Seat's Sale: 100,000 and two Fields, landing on the first's Level 4 Seattle. */
+function sellingRoll(): Applied {
   let state = owning(newGame(), "p2", { [VESZPREM]: 1, [BERLIN]: 4 });
   state = withField(state, SEATTLE, { owner: "p1", level: 4 });
   state = withPlayer(state, "p2", { cash: 100_000 });
-  return rollOnto({ ...state, currentPlayer: "p2" }, SEATTLE).state;
+  return rollOnto({ ...state, currentPlayer: "p2" }, SEATTLE);
+}
+
+/** The second Seat has 100,000 and two Fields; they land on the first Seat's Level 4 Seattle. */
+function sellingState(): GameState {
+  return sellingRoll().state;
 }
 
 /** `owner` holds three Fields and lands on the Doubler Field. */
@@ -567,10 +572,26 @@ describe("decisionKey", () => {
     expect(decisionKey(null)).toBeNull();
   });
 
-  it("ADR-0004: goes to null as the next Playback starts", () => {
-    const view = publicView(sellingState());
+  it("ADR-0004: is null through the Playback that opens my Sale, then my Sale's key", () => {
+    const { state, events } = sellingRoll();
+    const view = publicView(state);
+    const key = `${view.turn}:${view.turnDeadline}`;
+    // The push that opens my Sale carries the Playback that leads to it: the dice and the hop.
+    const playback = playbackOfPush({
+      view,
+      events,
+      seq: 2,
+      clockOffset: 0,
+      receivedAt: RECEIVED_AT,
+    });
+    const keyAt = (clientNow: number) =>
+      decisionKey(openDecision(playback.frameAt(clientNow), view.currentPlayer, false));
 
-    expect(decisionKey(myDecision(view))).not.toBeNull();
-    expect(decisionKey(openDecision(frameOf(view, "shut"), view.currentPlayer, false))).toBeNull();
+    expect(events.length).toBeGreaterThan(0);
+    expect(playback.frameAt(RECEIVED_AT).overlay).toMatchObject({ kind: "dice" });
+    expect(playback.opensAt).toBeGreaterThan(RECEIVED_AT);
+    expect(keyAt(RECEIVED_AT)).toBeNull();
+    expect(keyAt(playback.opensAt - 1)).toBeNull();
+    expect(keyAt(playback.opensAt)).toBe(key);
   });
 });
