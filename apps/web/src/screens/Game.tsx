@@ -17,11 +17,10 @@ import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { Card } from "#components/ui/card.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
+import { bottomSlot, openDecision } from "#decision/decision.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
-import { singlePickFor } from "#pick/pick.ts";
-import { saleFor } from "#pick/sale.ts";
-import { gateOpenOf, playbackStore } from "#playback/playback-store.ts";
+import { playbackStore } from "#playback/playback-store.ts";
 import { PickTray } from "#screens/PickTray.tsx";
 import { SaleTray } from "#screens/SaleTray.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
@@ -47,10 +46,8 @@ export function Game() {
   const [sentAt, setSentAt] = useState<number | null>(null);
   const wide = useWide();
   const [joinError, setJoinError] = useState<RejectionCode | null>(null);
-  // The Playback core's frame: the gate, the held Turn, the toast and the overlay (ADR-0004).
-  const gateOpen = useStore(playbackStore, gateOpenOf);
-  // The view the screen draws is the frame's, never the push's: one reading for every layer.
-  const view = useStore(playbackStore, (state) => state.frame?.view ?? null);
+  // The Playback core's frame: the gate, the view, the held Turn, the toast and the overlay (ADR-0004).
+  const frame = useStore(playbackStore, (state) => state.frame);
   // Story 4: the heading and Turn number switch when the gate opens, not on the push.
   const shownTurn = useStore(playbackStore, (state) => state.frame?.shownTurn ?? null);
   const toast = useStore(playbackStore, (state) => state.frame?.toast ?? null);
@@ -69,7 +66,7 @@ export function Game() {
     });
   }, [code]);
 
-  if (!push || view === null) {
+  if (!push || frame === null) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-4 text-center">
         <p className="m-0 font-bold">
@@ -86,27 +83,20 @@ export function Game() {
     );
   }
 
+  // The view the screen draws is the frame's, never the push's: one reading for every layer.
+  const view = frame.view;
+  const { clockOffset } = push;
   const gameOver = view.phase.kind === "gameOver" ? view.phase : null;
   const current = view.players.find((p) => p.id === view.currentPlayer);
-  const myTurn = view.currentPlayer === me;
   // The turn card holds the previous Turn's values through the Playback (story 4, ADR-0004).
   const shownPlayer = view.players.find((p) => p.id === shownTurn?.currentPlayer) ?? current;
   const shownMyTurn = shownTurn?.currentPlayer === me;
   const shownTurnNumber = shownTurn?.turn ?? view.turn;
   const answeredAt = Math.max(push.seq, rejection?.seq ?? 0);
   const pending = sentAt !== null && answeredAt <= sentAt;
-  // Decision controls wait for the decision gate: the local Playback and the server's actsAfter (ADR-0004).
-  const canRoll = myTurn && gateOpen && view.phase.kind === "awaitingRoll" && !pending;
-  const offer = myTurn && gateOpen && view.phase.kind === "offer" && !pending ? view.phase : null;
-  const quarantineChoice =
-    myTurn && gateOpen && !pending && view.phase.kind === "quarantineChoice" ? view.phase : null;
-  const sale = gateOpen ? saleFor(view, me) : null;
-  const singlePick = gateOpen ? singlePickFor(view, me) : null;
-  const othersSale = !myTurn && gateOpen && view.phase.kind === "selling";
-  const othersPick =
-    !myTurn &&
-    gateOpen &&
-    (view.phase.kind === "placingDoubler" || view.phase.kind === "choosingErasmus");
+  // One answer for the Turn card, the trays, the bottom slot and the Podium (spec #72).
+  const decision = openDecision(frame, me, pending);
+  const slot = bottomSlot(decision, frame, { selectedField, inspect });
 
   function send(intent: PlayerIntent) {
     setSentAt(answeredAt);
@@ -132,7 +122,7 @@ export function Game() {
       <TurnRing
         key={`${view.turn}:${view.turnDeadline}`}
         timer={view.turnTimer}
-        clockOffset={push.clockOffset}
+        clockOffset={clockOffset}
       />
     ),
   }));
@@ -147,7 +137,7 @@ export function Game() {
 
   const statusRow = (
     <>
-      <MinutePill endsAt={view.endsAt} clockOffset={push.clockOffset} />
+      <MinutePill endsAt={view.endsAt} clockOffset={clockOffset} />
       <EventToast
         key={rejected ? `r${rejection.seq}` : push.seq}
         tone={rejected ? "bad" : toast?.tone === "notice" ? "good" : "neutral"}
@@ -171,32 +161,32 @@ export function Game() {
           {m.game_turn({ turn: shownTurnNumber })}
         </span>
       </div>
-      {othersSale && (
+      {decision !== null && decision.owner !== "me" && decision.kind === "sale" && (
         <p className="m-0 text-sm font-bold text-ink/70" data-testid="sale-waiting">
           {m.sale_waiting({ name: current ? playerName(current.name) : "" })}
         </p>
       )}
-      {othersPick && (
+      {decision !== null && decision.owner !== "me" && decision.kind === "pick" && (
         <p className="m-0 text-sm font-bold text-ink/70" data-testid="pick-waiting">
           {m.pick_waiting({ name: current ? playerName(current.name) : "" })}
         </p>
       )}
-      {canRoll && (
+      {decision?.kind === "roll" && (
         <Button size="lg" onClick={() => send({ type: "Roll", turn: view.turn })}>
           {m.game_roll()}
         </Button>
       )}
-      {offer && (
+      {decision?.kind === "offer" && (
         <OfferPanel
           view={view}
-          offer={offer}
+          offer={decision.offer}
           onBuy={(level) => send({ type: "BuyLevel", turn: view.turn, level })}
           onBuyMuseum={() => send({ type: "BuyMuseum", turn: view.turn })}
           onBuyout={() => send({ type: "Buyout", turn: view.turn })}
           onDecline={() => send({ type: "DeclineOffer", turn: view.turn })}
         />
       )}
-      {quarantineChoice && (
+      {decision?.kind === "quarantine" && (
         <section className="flex flex-col gap-2" aria-label={m.field_quarantine()}>
           <p className="m-0 text-sm font-bold text-ink/70">
             {m.game_quarantine_rounds({ rounds: quarantineRoundsOf(view, view.currentPlayer) })}
@@ -205,16 +195,16 @@ export function Game() {
             {m.game_roll_for_twelve()}
           </Button>
           <div className="flex flex-wrap gap-2">
-            {quarantineChoice.canBuyPcrTest && (
+            {decision.choice.canBuyPcrTest && (
               <Button
                 variant="plain"
                 className="flex-1"
                 onClick={() => send({ type: "BuyPcrTest", turn: view.turn })}
               >
-                {m.game_buy_pcr_test({ price: formatMoney(quarantineChoice.pcrTestPrice) })}
+                {m.game_buy_pcr_test({ price: formatMoney(decision.choice.pcrTestPrice) })}
               </Button>
             )}
-            {quarantineChoice.canUsePcrTest && (
+            {decision.choice.canUsePcrTest && (
               <Button
                 variant="accent"
                 className="flex-1"
@@ -229,65 +219,76 @@ export function Game() {
     </Card>
   );
   const mySeat = view.players.find((p) => p.id === me)?.seat ?? 0;
-  // The result screen replaces both. Otherwise inspect mode during a pick opens
-  // the Field card in the tray's place, with ‹ › over pickable Fields only;
-  // closing it brings the tray back. Else the pick tray takes the bottom slot,
-  // then the Field card, then the Turn card.
-  const pick = sale ?? singlePick;
-  const card = gameOver ? null : pick && inspect && selectedField !== null ? (
-    <FieldCard id={selectedField} view={view} stepThrough={pick.pickable} />
-  ) : sale ? (
-    <SaleTray
-      view={view}
-      sale={sale}
-      picks={salePicksFor(salePicks, sale.key)}
-      seat={mySeat}
-      clockOffset={push.clockOffset}
-      busy={pending}
-      checklistOpen={checklistOpen}
-      inspect={inspect}
-      onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
-      onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
-      onToggle={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
-      onFocus={(field) => uiStore.getState().focusPick(field)}
-      onUnpick={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
-      onAutoSell={() => send({ type: "AutoSell", turn: view.turn })}
-      onSell={(fields) => send({ type: "SellFields", turn: view.turn, fields })}
-    />
-  ) : singlePick ? (
-    <PickTray
-      view={view}
-      pick={singlePick}
-      selection={singleSelection}
-      seat={mySeat}
-      clockOffset={push.clockOffset}
-      busy={pending}
-      checklistOpen={checklistOpen}
-      inspect={inspect}
-      onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
-      onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
-      onToggle={(field) => uiStore.getState().choosePick(singlePick.key, field)}
-      onFocus={(field) => uiStore.getState().focusPick(field)}
-      onPick={(field) => uiStore.getState().choosePick(singlePick.key, field)}
-      onCommit={(field) =>
-        send(
-          singlePick.kind === "doubler"
-            ? { type: "PlaceDoubler", turn: view.turn, field }
-            : { type: "TravelErasmus", turn: view.turn, field },
-        )
-      }
-    />
-  ) : selectedField === null ? (
-    turnCard
-  ) : (
-    <FieldCard id={selectedField} view={view} />
-  );
+  // The bottom slot in the Decision module's order (spec #72): the result
+  // screen, the Field card in inspect mode during my Sale or pick (‹ › over its
+  // pickable Fields only; closing it brings the tray back), the tray, the Field
+  // card, the Turn card.
+  function bottomCard() {
+    switch (slot.kind) {
+      case "none":
+      case "podium":
+        return null;
+      case "fieldCard":
+        return <FieldCard id={slot.field} view={view} stepThrough={slot.stepThrough} />;
+      case "sale":
+        return (
+          <SaleTray
+            view={view}
+            sale={slot.sale}
+            picks={salePicksFor(salePicks, slot.sale.key)}
+            seat={mySeat}
+            clockOffset={clockOffset}
+            busy={slot.busy}
+            checklistOpen={checklistOpen}
+            inspect={inspect}
+            onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
+            onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
+            onToggle={(field) => uiStore.getState().toggleSalePick(slot.sale.key, field)}
+            onFocus={(field) => uiStore.getState().focusPick(field)}
+            onUnpick={(field) => uiStore.getState().toggleSalePick(slot.sale.key, field)}
+            onAutoSell={() => send({ type: "AutoSell", turn: view.turn })}
+            onSell={(fields) => send({ type: "SellFields", turn: view.turn, fields })}
+          />
+        );
+      case "pick":
+        return (
+          <PickTray
+            view={view}
+            pick={slot.pick}
+            selection={singleSelection}
+            seat={mySeat}
+            clockOffset={clockOffset}
+            busy={slot.busy}
+            checklistOpen={checklistOpen}
+            inspect={inspect}
+            onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
+            onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
+            onToggle={(field) => uiStore.getState().choosePick(slot.pick.key, field)}
+            onFocus={(field) => uiStore.getState().focusPick(field)}
+            onPick={(field) => uiStore.getState().choosePick(slot.pick.key, field)}
+            onCommit={(field) =>
+              send(
+                slot.pick.kind === "doubler"
+                  ? { type: "PlaceDoubler", turn: view.turn, field }
+                  : { type: "TravelErasmus", turn: view.turn, field },
+              )
+            }
+          />
+        );
+      case "turnCard":
+        return turnCard;
+    }
+    return null;
+  }
+  const card = bottomCard();
+  const podium =
+    slot.kind === "podium" && gameOver !== null ? <Podium view={view} phase={gameOver} /> : null;
 
   if (wide) {
     return (
       <main className="board-backdrop fixed inset-0 overflow-hidden">
         <ReconnectOverlay />
-        {gameOver && gateOpen && <Podium view={view} phase={gameOver} />}
+        {podium}
         {/* The Board's box: clear of the corner cards, the status row and the card; the
             fit area also keeps clear of the camera buttons on its right. */}
         <div className="absolute inset-x-[110px] top-[110px] bottom-[200px] [--board-inset-left:3.75rem] [--board-inset-right:3.75rem]">
@@ -316,7 +317,7 @@ export function Game() {
   return (
     <main className="board-backdrop fixed inset-0 flex flex-col overflow-hidden pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
       <ReconnectOverlay />
-      {gameOver && gateOpen && <Podium view={view} phase={gameOver} />}
+      {podium}
       <ul className="m-0 flex list-none justify-center gap-1.5 px-2" aria-label={m.game_players()}>
         {players.map((player) => (
           <PlayerChip key={player.seat} player={player} className="w-0 max-w-28 flex-1" />

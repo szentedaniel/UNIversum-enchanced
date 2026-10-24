@@ -29,8 +29,8 @@ export type BottomSlot =
   | { kind: "none" }
   | { kind: "podium" }
   | { kind: "fieldCard"; field: FieldId; stepThrough?: readonly FieldId[] }
-  | { kind: "sale" }
-  | { kind: "pick" }
+  | { kind: "sale"; sale: SalePick; busy: boolean }
+  | { kind: "pick"; pick: SinglePick; busy: boolean }
   | { kind: "turnCard" };
 
 /** What a tap on the Board does. */
@@ -106,13 +106,13 @@ export function bottomSlot(
       if (ui.inspect && ui.selectedField !== null) {
         return { kind: "fieldCard", field: ui.selectedField, stepThrough: decision.sale.pickable };
       }
-      return { kind: "sale" };
+      return { kind: "sale", sale: decision.sale, busy: decision.busy };
     }
     if ("pick" in decision) {
       if (ui.inspect && ui.selectedField !== null) {
         return { kind: "fieldCard", field: ui.selectedField, stepThrough: decision.pick.pickable };
       }
-      return { kind: "pick" };
+      return { kind: "pick", pick: decision.pick, busy: decision.busy };
     }
   }
   if (ui.selectedField !== null) return { kind: "fieldCard", field: ui.selectedField };

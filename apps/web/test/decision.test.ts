@@ -326,23 +326,32 @@ describe("bottomSlot", () => {
     expect(bottomSlot(null, null, uiOf({ selectedField: SEATTLE }))).toEqual({ kind: "none" });
   });
 
-  it("shows my Sale tray", () => {
+  it("shows my Sale tray with the Decision's Sale and busy state", () => {
     const view = publicView(sellingState());
 
-    expect(bottomSlot(myDecision(view), frameOf(view), uiOf())).toEqual({ kind: "sale" });
+    expect(bottomSlot(myDecision(view), frameOf(view), uiOf())).toMatchObject({
+      kind: "sale",
+      busy: false,
+      sale: { key: `${view.turn}:${view.turnDeadline}`, shortfall: 824_000 },
+    });
   });
 
-  it("shows my pick tray", () => {
+  it("shows my pick tray with the Decision's pick and busy state", () => {
     const view = publicView(doublerState());
 
-    expect(bottomSlot(myDecision(view), frameOf(view), uiOf())).toEqual({ kind: "pick" });
+    expect(bottomSlot(myDecision(view), frameOf(view), uiOf())).toMatchObject({
+      kind: "pick",
+      busy: false,
+      pick: { kind: "doubler", pickable: [VESZPREM, BUDAPEST, MUSEUM_1] },
+    });
   });
 
   it("keeps the tray when inspect mode has no Field open", () => {
     const view = publicView(sellingState());
 
-    expect(bottomSlot(myDecision(view), frameOf(view), uiOf({ inspect: true }))).toEqual({
+    expect(bottomSlot(myDecision(view), frameOf(view), uiOf({ inspect: true }))).toMatchObject({
       kind: "sale",
+      busy: false,
     });
   });
 
@@ -365,9 +374,9 @@ describe("bottomSlot", () => {
   it("shows the tray ahead of a selected Field outside inspect mode", () => {
     const view = publicView(sellingState());
 
-    expect(bottomSlot(myDecision(view), frameOf(view), uiOf({ selectedField: SEATTLE }))).toEqual({
-      kind: "sale",
-    });
+    expect(
+      bottomSlot(myDecision(view), frameOf(view), uiOf({ selectedField: SEATTLE })),
+    ).toMatchObject({ kind: "sale", busy: false });
   });
 
   it("shows a selected Field's card, else the Turn card", () => {
