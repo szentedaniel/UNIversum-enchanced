@@ -34,9 +34,10 @@ the Board and the Decision module were not touched: they still read
 
 - `GameMessage` gained `reveals: Reveal[]`, parallel to `events`; there is no
   Zod schema (server → client only). A push with no events carries `[]`.
-- `GameRoom.commit(state, events, reveals, intent = "Start")` — **the `reveals`
-  argument sits before the optional intent name**; `play` and `timeOut` pass
-  `result.reveals`, `startGame` passes `[]`. `save(seats, game, events)` was
+- `GameRoom.commit(applied, intent = "Start")` takes the engine's result as one
+  argument (`Pick<Applied, "state" | "events" | "reveals">`): `play` and
+  `timeOut` pass `result`, `startGame` passes
+  `{ state: game, events: [], reveals: [] }`. `save(seats, game, events)` was
   left exactly as it was, so the stored event log cannot grow reveals; the
   reconnect push (`sendCurrent`) sends `events: [], reveals: []`.
 - `restore`/`reconnect` need no change: a restored Room's first push is
@@ -53,10 +54,11 @@ the Board and the Decision module were not touched: they still read
   (or `push.view` itself once `elapsedMs >= playbackOf(events)`, and for every
   step without a reveal). `board.ts` re-syncs on view identity, so never build
   a view inside `frameAt`.
-- **The current step is `startedStepIndex`**, the toast cue's rule: the last
-  step with `startMs <= elapsedMs`, zero-length steps included, the last of
-  several at the same millisecond. Do not swap in `timeline.ts`'s `stepAt`,
-  which skips zero-length steps and reports `null` between them.
+- **The current step is `lastStarted(items, elapsedMs)`** — one helper over
+  `{ startMs }`, shared with `cueAt`: the last item with
+  `startMs <= elapsedMs`, zero-length steps included, the last of several at
+  the same millisecond. Do not swap in `timeline.ts`'s `stepAt`, which skips
+  zero-length steps and reports `null` between them.
 - Everything tied to the next Decision (`phase`, `turn`, `currentPlayer`,
   `turnTimer`, `actsAfter`, `autoSell`, `pickOptions`, `standings`, `endsAt`)
   and every `position` come from the final view; only `players` (cash, Wealth,
@@ -67,9 +69,14 @@ the Board and the Decision module were not touched: they still read
 
 ## E2E
 
-- `apps/e2e/tests/reveals.spec.ts` fakes a Rent push with `showView` (a random
-  game can't be steered onto an owned Field) and pins that the payer's and
-  owner's `[aria-label="Cash"]` change at the Rent step, not at the push.
+- `apps/e2e/tests/reveals.spec.ts` (`ADR-0005: …`) fakes a Rent push with
+  `showView` (a random game can't be steered onto an owned Field) and pins that
+  the payer's and owner's `[aria-label="Cash"]` change at the Rent step, not at
+  the push. Its "before" assertions first wait for the made-up push's dice
+  toast: the toast and the cards come from the same frame, so the read is the
+  reveal-driven render, never a stale one.
+- The Player cards or chips are one locator per Seat: `playerCards(page)` in
+  `apps/e2e/tests/helpers.ts` (also used by `sale-tray.spec.ts`).
 - The made-up push bases its "before" cash on the view it clones
   (`START_CASH`, 2,500,000) and its "after" on `± the Rent`. Format expected
   money in the same locale the browser uses: Node's ICU writes
@@ -78,6 +85,15 @@ the Board and the Decision module were not touched: they still read
   `"en-US"`.
 - The Rent step is the dice plus the walk: budget the wait with
   `playbackOf([DiceRolled, Moved])` (ADR-0004), not a bare number.
+
+## Web test fixtures
+
+`apps/web/test/playback-fixtures.ts` exports `revealWithCash(cash, patch)` — a
+two-Player reveal with the given cash and the pawns one Field behind the final
+view — because `revealOf` is the engine's function and the two must not be
+confused. `playersWithCash`/`fieldOf` build the final view's players and a
+Field. `PlaybackPush`/`Push` in tests need `reveals: []` when a push carries
+none.
 
 ## Verified on this branch
 
