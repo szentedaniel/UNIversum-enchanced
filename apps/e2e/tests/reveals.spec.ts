@@ -33,11 +33,14 @@ const WALK_MS = playbackOf([
 ]);
 
 /**
- * The slack on the toast poll beyond the walk's own length: the store wakes a
- * tick past the boundary, and Playwright's poll ladder can leave whole seconds
- * between checks while two pages push their made-up view.
+ * The toast wait's slack beyond the walk's own length. The Rent step starts at
+ * a boundary the test computes to the millisecond, so this covers the store's
+ * wake-up plus a slow CI render of two pages pushing their made-up view. It is
+ * deliberately 5 s, not the 1 s gate poll of `background-tab.spec.ts`
+ * (`POLL_SLACK_MS`), because that one polls a flag while this one waits for a
+ * re-rendered toast line and two Player cards.
  */
-const POLL_SLACK_MS = 5_000;
+const TOAST_SLACK_MS = 5_000;
 
 /** Shows the same made-up Rent push on `page`, as if the server had sent it. */
 function showRent(page: Page, ids: { payer: string; owner: string }) {
@@ -102,7 +105,7 @@ test("ADR-0005: a Rent leaves the payer's card at the Rent step, not when the pu
     await expect(payerCard.getByLabel("Cash")).toContainText(BEFORE_TEXT);
     await expect(ownerCard.getByLabel("Cash")).toContainText(BEFORE_TEXT);
     await expect(page.getByTestId("toast")).toContainText("Rent", {
-      timeout: WALK_MS + POLL_SLACK_MS,
+      timeout: WALK_MS + TOAST_SLACK_MS,
     });
 
     // The Rent step: the payer's cash drops and the owner's rises, with the toast.
