@@ -1,6 +1,14 @@
 import { expect, type Page } from "@playwright/test";
 import { PLAYBACK_MS } from "@universum/rules";
-import { closeAfterDump, fieldCenter, scale, showChance, startGame, test } from "./helpers.ts";
+import {
+  closeAfterDump,
+  fieldCenter,
+  playerCards,
+  scale,
+  showChance,
+  startGame,
+  test,
+} from "./helpers.ts";
 
 // The Sale tray (#29), on each project's device. A random game can't be steered
 // into a Sale, so the test shows a made-up selling view through the test-only
@@ -132,7 +140,7 @@ test("in the last 5 s of an uncovered Sale, Auto-sell's Fields are ringed; a Ban
     await expect(
       page.getByTestId("sale-tray").getByRole("button", { name: /Auto-sell/ }),
     ).toBeEnabled();
-    const panels = page.locator("[data-testid=player-card], [data-testid=player-chip]");
+    const panels = playerCards(page);
     await expect(panels.filter({ hasText: "Bankrupt" })).toHaveCount(1);
 
     // Covered: no more warning.

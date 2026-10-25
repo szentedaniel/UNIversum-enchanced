@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import { playbackOf, START_CASH, type Reveal } from "@universum/rules";
-import { closeAfterDump, startGame, test } from "./helpers.ts";
+import { closeAfterDump, playerCards, startGame, test } from "./helpers.ts";
 
 // ADR-0005: each event's effect shows at its own Playback step. A random game
 // can't be steered onto an owned Field, so the test shows a made-up Rent push
@@ -50,20 +50,20 @@ function showRent(page: Page, ids: { payer: string; owner: string }) {
         { type: "RentPaid", player: payer, owner, field: 8, amount: rent },
         { type: "TurnPassed", player: owner, turn: 2 },
       ] as const;
-      // A reveal never moves a pawn: the positions stay the final view's.
-      const reveals: Reveal[] = [structuredClone(view.players), structuredClone(view.players)].map(
-        (players) => ({ players, fields: view.fields, doubler: view.doubler }),
-      );
-      for (const players of [paid, paid]) {
-        reveals.push({ players, fields: view.fields, doubler: view.doubler });
-      }
+      // One reveal per event, each owning its Players; a reveal never moves a
+      // pawn, so the positions stay the final view's.
+      const reveals: Reveal[] = [view.players, view.players, paid, paid].map((players) => ({
+        players: structuredClone(players),
+        fields: view.fields,
+        doubler: view.doubler,
+      }));
       hooks.showView({ ...view, players: paid }, events, reveals);
     },
     { ...ids, rent: RENT },
   );
 }
 
-test("a Rent leaves the payer's card at the Rent step, not when the push arrives", async ({
+test("ADR-0005: a Rent leaves the payer's card at the Rent step, not when the push arrives", async ({
   page,
   browser,
 }) => {
@@ -82,12 +82,15 @@ test("a Rent leaves the payer's card at the Rent step, not when the push arrives
         owner: players.find((player) => player.id === owner)!.seat,
       };
     }, ids);
-    const cards = page.locator('[data-testid="player-card"], [data-testid="player-chip"]');
-    const payerCard = cards.nth(seats.payer);
-    const ownerCard = cards.nth(seats.owner);
+    const payerCard = playerCards(page).nth(seats.payer);
+    const ownerCard = playerCards(page).nth(seats.owner);
 
     await Promise.all([showRent(page, ids), showRent(guest, ids)]);
 
+    // The made-up push's first step is the only one with this dice toast, so it
+    // is the one on screen: its render also carries the cards' cash (a stale
+    // render of the previous push has no toast and the starting cash).
+    await expect(page.getByTestId("toast")).toContainText("rolled 3 and 4");
     // The push's final view already has the Rent paid; the cards still show the
     // cash from before it while the dice and the walk play.
     await expect(payerCard.getByLabel("Cash")).toContainText(BEFORE_TEXT);

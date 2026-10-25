@@ -166,6 +166,11 @@ export async function press(actor: Interactor, target: Locator): Promise<void> {
   else await target.click();
 }
 
+/** The Player cards or chips around the Board, one per Seat: the wide and the phone layout. */
+export function playerCards(page: Page): Locator {
+  return page.locator('[data-testid="player-card"], [data-testid="player-chip"]');
+}
+
 /** The Player's Fields, cheapest Bank sale value first (Auto-sell's order). */
 export function ownFields(view: PublicView, player: string): number[] {
   return view.fields
