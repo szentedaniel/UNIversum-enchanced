@@ -12,10 +12,10 @@ How an implementer agent (omp, Claude Code, or a human) builds one ticket of a s
 
 ## 2. Workspace
 
-- You run inside your own git worktree on branch `ticket/<N>-<slug>`, based on the integration branch `v2-modernization`. Check with `git merge-base --is-ancestor v2-modernization HEAD`; if it fails, `git reset --hard v2-modernization` (only on a fresh branch with no commits of yours).
+- You run inside your own git worktree on branch `ticket/<N>-<slug>`, based on the integration branch `<base>` your prompt names (`v2-modernization` for spec #22). Check with `git merge-base --is-ancestor <base> HEAD`; if it fails, `git reset --hard <base>` (only on a fresh branch with no commits of yours).
 - Use paths inside your worktree only. Never edit the main checkout or another worktree.
 - Run `pnpm install`, then `pnpm --filter @universum/web run paraglide` (generated message code is gitignored; regenerate after any merge or message-file change).
-- Other tickets are built in parallel and merged into `v2-modernization` as they finish. Keep edits to shared files (rules `apply.ts` HANDLERS, unions, `landing.ts`, protocol schemas, message files, `Game.tsx`) small and additive.
+- Other tickets are built in parallel and merged into `<base>` as they finish. Keep edits to shared files (rules `apply.ts` HANDLERS, unions, `landing.ts`, protocol schemas, message files, `Game.tsx`) small and additive.
 - If you change the shape of the rules `GameState`, bump `STATE_VERSION`, add a migration step in `packages/rules/src/migrate.ts` and commit a new snapshot `packages/rules/test/fixtures/state-v<N>.json`, as `packages/rules/test/migrate.test.ts` describes. Never edit an existing snapshot: running games are stored at that version.
 
 ## 3. Build test-first
@@ -53,7 +53,7 @@ Always pass the e2e ports you were given: other implementers run Playwright at t
 
 ## 6. Finish
 
-1. Merge the current integration tip: `git merge v2-modernization`, resolve conflicts keeping both sides' behaviour, regenerate Paraglide, re-run every check.
+1. Merge the current integration tip: `git merge <base>`, resolve conflicts keeping both sides' behaviour, regenerate Paraglide, re-run every check.
 2. Write `docs/agents/handoff/ticket-<N>.md`: extension points and gotchas later tickets need. Append one line for it at the end of `docs/agents/handoff/INDEX.md` (``- `ticket-<N>.md`: what it covers. Read for: #…``). Commit.
 3. Write the report file named in your prompt (see below), then stop and wait.
 
