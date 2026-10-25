@@ -174,6 +174,7 @@ function frameOf(view: PublicView, gate: "open" | "shut" = "open"): Frame {
   const playback = playbackOfPush({
     view,
     events: [],
+    reveals: [],
     seq: 1,
     clockOffset: 0,
     receivedAt: RECEIVED_AT,
@@ -580,6 +581,7 @@ describe("decisionKey", () => {
     const playback = playbackOfPush({
       view,
       events,
+      reveals: [],
       seq: 2,
       clockOffset: 0,
       receivedAt: RECEIVED_AT,

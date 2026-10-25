@@ -3,7 +3,7 @@
  * (`#connection.ts`) writes it; screens and the Board read and subscribe.
  */
 import type { LobbyMessage, RejectionCode } from "@universum/protocol/messages";
-import type { GameEvent, PlayerId, PublicView } from "@universum/rules";
+import type { GameEvent, PlayerId, PublicView, Reveal } from "@universum/rules";
 import { subscribeWithSelector } from "zustand/middleware";
 import { createStore } from "zustand/vanilla";
 
@@ -14,6 +14,8 @@ export type Push = {
   view: PublicView;
   /** To animate in order; empty for the first view of a game. */
   events: readonly GameEvent[];
+  /** One board snapshot per event, in the same order (ADR-0005); empty without events. */
+  reveals: readonly Reveal[];
   /** Grows with every push, so a push with no events still differs from the last. */
   seq: number;
   /** The server's clock minus this client's, when the push arrived (for the Turn timer). */

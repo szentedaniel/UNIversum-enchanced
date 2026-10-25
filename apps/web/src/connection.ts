@@ -140,14 +140,14 @@ function listen(joined: Room): void {
   joined.onMessage(MESSAGE.lobby, (lobby: LobbyMessage) => {
     if (mine()) roomStore.setState({ lobby, lobbyClockOffset: lobby.now - Date.now() });
   });
-  joined.onMessage(MESSAGE.game, ({ view, events, now }: GameMessage) => {
+  joined.onMessage(MESSAGE.game, ({ view, events, reveals, now }: GameMessage) => {
     if (!mine()) return;
     // Never back to an older state after a reconnect (spec: Client → State).
     const last = roomStore.getState().push;
     if (last && view.version < last.view.version) return;
     const receivedAt = Date.now();
     roomStore.setState({
-      push: { view, events, seq: ++seq, clockOffset: now - receivedAt, receivedAt },
+      push: { view, events, reveals, seq: ++seq, clockOffset: now - receivedAt, receivedAt },
     });
   });
   joined.onMessage(MESSAGE.rejected, ({ code }: RejectionMessage) => {

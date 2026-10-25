@@ -4,7 +4,17 @@ import { describe, expect, it } from "vitest";
 import type { Frame, PlaybackPush, TurnLabel } from "#playback/playback.ts";
 import { playbackOfPush } from "#playback/playback.ts";
 import { stepAt, timelineOf, type PlaybackStep } from "#playback/timeline.ts";
-import { CHANCE, CHANCE_CHARGE, PAST_START, ROLL, TIMEOUT, viewOf } from "./playback-fixtures.ts";
+import {
+  CHANCE,
+  CHANCE_CHARGE,
+  fieldOf,
+  PAST_START,
+  playersWithCash,
+  revealOf,
+  ROLL,
+  TIMEOUT,
+  viewOf,
+} from "./playback-fixtures.ts";
 
 // The Playback core (ADR-0004, spec #63): one push's events become one clock,
 // on this client's time. The timeline gives each event its start and duration;
@@ -184,6 +194,7 @@ const pushOf = (events: GameEvent[], patch: Partial<PlaybackPush> = {}): Playbac
   seq: 1,
   view: viewOf(),
   events,
+  reveals: [],
   receivedAt: 1_000,
   clockOffset: 0,
   ...patch,
@@ -454,5 +465,127 @@ describe("the Playback core's pawns", () => {
     expect(pawnAt(frame, "p1")).toEqual({ field: 3, toward: null, progress: 0 });
     expect(pawnAt(frame, "p2")).toEqual({ field: 20, toward: null, progress: 0 });
     expect(frame.walking).toBeNull();
+  });
+});
+
+// ------------------------------------------------------------ the reveals
+
+const cashOf = (frame: Frame, id: string): number => {
+  const found = frame.view.players.find((player) => player.id === id);
+  if (!found) throw new Error(`no Player ${id} in the frame`);
+  return found.cash;
+};
+
+describe("the Playback core's reveals", () => {
+  it("ADR-0005: each step shows its own reveal, the push's view coming back once the Playback ends", () => {
+    const view = viewOf(undefined, { players: playersWithCash({ p1: 50_000, p2: 150_000 }) });
+    const playback = playbackOfPush(
+      pushOf(ROLL(), {
+        view,
+        reveals: [
+          revealOf({ p1: 100_000, p2: 100_000 }),
+          revealOf({ p1: 100_000, p2: 100_000 }),
+          revealOf({ p1: 50_000, p2: 150_000 }),
+          revealOf({ p1: 50_000, p2: 150_000 }),
+        ],
+      }),
+    );
+    const walkEnd = 1_000 + PLAYBACK_MS.DiceRolled + 7 * PLAYBACK_MS.Moved;
+
+    // The dice and the walk: the Rent has not been paid yet.
+    expect(cashOf(playback.frameAt(1_000), "p1")).toBe(100_000);
+    expect(cashOf(playback.frameAt(walkEnd - 1), "p1")).toBe(100_000);
+    // The Rent step: the payer's cash drops and the owner's rises.
+    expect(cashOf(playback.frameAt(walkEnd), "p1")).toBe(50_000);
+    expect(cashOf(playback.frameAt(walkEnd), "p2")).toBe(150_000);
+    // The zero-length Turn passing keeps the last step's reveal up.
+    expect(cashOf(playback.frameAt(1_000 + playbackOf(ROLL()) - 1), "p1")).toBe(50_000);
+    // Once the Playback has run out the frame is the push's own view.
+    expect(playback.frameAt(1_000 + playbackOf(ROLL())).view).toBe(view);
+    expect(cashOf(playback.frameAt(600_000), "p1")).toBe(50_000);
+  });
+
+  it("ADR-0005: zero-length steps count, and the last step at a shared start wins", () => {
+    const playback = playbackOfPush(
+      pushOf(
+        [
+          { type: "OfferDeclined", player: "p1", field: 3 },
+          { type: "DiceRolled", player: "p2", dice: [1, 2] },
+        ],
+        {
+          reveals: [revealOf({ p1: 1_000, p2: 100_000 }), revealOf({ p1: 2_000, p2: 100_000 })],
+        },
+      ),
+    );
+
+    // Both steps start at 0: the dice' reveal is the one the screen shows.
+    expect(cashOf(playback.frameAt(1_000), "p1")).toBe(2_000);
+    expect(cashOf(playback.frameAt(1_000 + PLAYBACK_MS.DiceRolled - 1), "p1")).toBe(2_000);
+  });
+
+  it("ADR-0005: the view is the same object within a step and a new one when the step changes", () => {
+    const playback = playbackOfPush(
+      pushOf(ROLL(), {
+        reveals: [
+          revealOf({ p1: 100_000, p2: 100_000 }),
+          revealOf({ p1: 100_000, p2: 100_000 }),
+          revealOf({ p1: 50_000, p2: 150_000 }),
+          revealOf({ p1: 50_000, p2: 150_000 }),
+        ],
+      }),
+    );
+    const walkStart = 1_000 + PLAYBACK_MS.DiceRolled;
+    const walkEnd = walkStart + 7 * PLAYBACK_MS.Moved;
+
+    const first = playback.frameAt(walkStart).view;
+    expect(playback.frameAt(walkStart + 1).view).toBe(first);
+    expect(playback.frameAt(walkEnd - 1).view).toBe(first);
+    expect(playback.frameAt(walkEnd).view).not.toBe(first);
+    // The step's merged view is built once, not per frame.
+    expect(playback.frameAt(walkEnd).view).toBe(playback.frameAt(walkEnd + 1).view);
+  });
+
+  it("ADR-0005: pawns and everything behind the Decision gate stay the final view's", () => {
+    const view = viewOf(undefined, {
+      turn: 4,
+      currentPlayer: "p2",
+      actsAfter: 9_000,
+      endsAt: 42_000,
+      phase: { kind: "selling", shortfall: 10_000, resume: { kind: "tax", amount: 20_000 } },
+      autoSell: [3],
+      standings: null,
+    });
+    const reveal = revealOf(
+      { p1: 100_000, p2: 100_000 },
+      { doubler: { field: 3, count: 2 }, fields: [fieldOf({ owner: "p2", level: 1 })] },
+    );
+    const frame = playbackOfPush(pushOf(ROLL(), { view, reveals: [reveal] })).frameAt(1_000);
+
+    // The reveal's pawns are one Field behind; the frame keeps the final positions.
+    expect(frame.view.players.map((player) => player.position)).toEqual([8, 17]);
+    expect(frame.view.turn).toBe(4);
+    expect(frame.view.currentPlayer).toBe("p2");
+    expect(frame.view.phase).toEqual(view.phase);
+    expect(frame.view.actsAfter).toBe(9_000);
+    expect(frame.view.endsAt).toBe(42_000);
+    expect(frame.view.autoSell).toEqual([3]);
+    expect(frame.view.standings).toBeNull();
+    // The Doubler and the Fields are the reveal's.
+    expect(frame.view.doubler).toEqual({ field: 3, count: 2 });
+    expect(frame.view.fields).toBe(reveal.fields);
+  });
+
+  it("ADR-0005: a push with no reveals, or a step without one, shows the final view", () => {
+    const view = viewOf();
+
+    expect(playbackOfPush(pushOf(ROLL(), { view, reveals: [] })).frameAt(1_000).view).toBe(view);
+    expect(playbackOfPush(pushOf([], { view })).frameAt(1_000).view).toBe(view);
+
+    const partial = playbackOfPush(
+      pushOf(ROLL(), { view, reveals: [revealOf({ p1: 1_000, p2: 100_000 })] }),
+    );
+    expect(cashOf(partial.frameAt(1_000), "p1")).toBe(1_000);
+    // The walk has no reveal: the final view shows instead of the last one.
+    expect(partial.frameAt(1_000 + PLAYBACK_MS.DiceRolled).view).toBe(view);
   });
 });
