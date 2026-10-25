@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { publicView, START_CASH, type Reveal } from "#index.ts";
-import { accept, newGame, player, rollOnto, T0, withField, withPlayer } from "./helpers.ts";
+import {
+  accept,
+  newGame,
+  player,
+  playerOf,
+  rollOnto,
+  T0,
+  withField,
+  withPlayer,
+} from "./helpers.ts";
 
 // ADR-0005: the engine snapshots the Players, the Fields and the Doubler at
 // every `emit`, so a Playback can show each event's effect at its own step.
@@ -13,12 +22,6 @@ const VIENNA = 13;
 const BERLIN = 15;
 const VESZPREM = 1;
 const SEATTLE = 17;
-
-const playerOf = (reveal: Reveal, playerId: string): Reveal["players"][number] => {
-  const found = reveal.players.find((p) => p.id === playerId);
-  if (!found) throw new Error(`no Player ${playerId} in the reveal`);
-  return found;
-};
 
 const cashOf = (reveal: Reveal, playerId: string): number => playerOf(reveal, playerId).cash;
 
@@ -86,11 +89,11 @@ describe("the engine's reveals", () => {
     expect(at.doubler).toEqual(view.doubler);
   });
 
-  it("R70, R71: the bankruptcy is two beats: the Charge shows the Fields still owned, then they leave", () => {
+  it("R70, R71, ADR-0005: the bankruptcy is two beats: the Charge shows the Fields still owned, then they leave", () => {
     // p2 holds 100,000 and Veszprém (sale 180,000); Seattle's Level-4 Rent is
     // 924,000, so the Rent takes the 280,000 they can raise and they go Bankrupt
     // (F12). The Doubler sits on Veszprém and leaves with it (R62, R71).
-    let state = withField(newGame(), VESZPREM, { owner: "p2", level: 1 });
+    let state = withField(newGame({ players: 2 }), VESZPREM, { owner: "p2", level: 1 });
     state = withField(state, SEATTLE, { owner: "p1", level: 4 });
     state = withPlayer({ ...state, doubler: { field: VESZPREM, count: 1 } }, "p2", {
       cash: 100_000,

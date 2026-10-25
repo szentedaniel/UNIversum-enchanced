@@ -23,11 +23,11 @@ the Board and the Decision module were not touched: they still read
   `name`), the Fields and the `doubler` object; rule code keeps mutating
   `tx.state` after `emit` (`beginTurn` does, on every Turn passing). A reveal
   therefore shows the board at that event's emit, never a later one.
-- **Ordering is not fixed here** (it is #82's job): rule code that emits before
-  applying still shows its change with the _next_ event. `charge.ts`'s
-  `goBankrupt` is the known offender — it returns the Fields to the Bank and
-  sets `bankrupt` before emitting the Charge event, so that event's reveal
-  already shows the bankrupt board. #82's two beats fix exactly that.
+- **Ordering** was left to #82: rule code that emits before applying shows its
+  change with the _next_ event. #82 reordered the one offender — `charge.ts`'s
+  `goBankrupt` returned the Fields to the Bank and set `bankrupt` before
+  emitting the Charge event — into two beats and audited every other `emit` in
+  `rules/`; see `ticket-82.md`.
 - `STATE_VERSION` is unchanged and no reveal reaches `GameState` or the store.
 
 ## Protocol and Room server

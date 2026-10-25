@@ -8,7 +8,7 @@ import {
   type GameState,
   type Seed,
 } from "#index.ts";
-import { newGame, player, rollOnto, withField, withPlayer } from "./helpers.ts";
+import { newGame, player, playerOf, rollOnto, withField, withPlayer } from "./helpers.ts";
 
 const CHANCE = 14;
 
@@ -134,12 +134,13 @@ describe("the PCR card", () => {
     const drawn = applied.events.findIndex((event) => event.type === "CardDrawn");
     const at = applied.reveals[drawn];
     const next = applied.reveals[drawn + 1];
+    if (!at || !next) throw new Error("the draw or the event after it is missing");
 
     // The card has no event of its own: it shows with the next event (the Turn passing)…
-    expect(at?.players.find((p) => p.id === "p1")?.hasPcrTest).toBe(false);
-    expect(next?.players.find((p) => p.id === "p1")?.hasPcrTest).toBe(true);
+    expect(playerOf(at, "p1").hasPcrTest).toBe(false);
+    expect(playerOf(next, "p1").hasPcrTest).toBe(true);
     // …and the final view carries it.
-    expect(publicView(applied.state).players.find((p) => p.id === "p1")?.hasPcrTest).toBe(true);
+    expect(playerOf(publicView(applied.state), "p1").hasPcrTest).toBe(true);
   });
 });
 
