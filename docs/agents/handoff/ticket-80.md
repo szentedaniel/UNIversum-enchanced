@@ -24,7 +24,7 @@ the Board and the Decision module were not touched: they still read
   `tx.state` after `emit` (`beginTurn` does, on every Turn passing). A reveal
   therefore shows the board at that event's emit, never a later one.
 - **Ordering is not fixed here** (it is #82's job): rule code that emits before
-  applying still shows its change with the *next* event. `charge.ts`'s
+  applying still shows its change with the _next_ event. `charge.ts`'s
   `goBankrupt` is the known offender — it returns the Fields to the Bank and
   sets `bankrupt` before emitting the Charge event, so that event's reveal
   already shows the bankrupt board. #82's two beats fix exactly that.
