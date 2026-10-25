@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { publicView, type Reveal } from "#index.ts";
-import { accept, newGame, player, rollOnto, T0, withField, withPlayer } from "./helpers.ts";
+import { publicView, START_CASH, type Reveal } from "#index.ts";
+import {
+  accept,
+  newGame,
+  player,
+  playerOf,
+  rollOnto,
+  T0,
+  withField,
+  withPlayer,
+} from "./helpers.ts";
 
 // ADR-0005: the engine snapshots the Players, the Fields and the Doubler at
 // every `emit`, so a Playback can show each event's effect at its own step.
@@ -11,12 +20,8 @@ const TAX = 30;
 const CHICAGO = 9;
 const VIENNA = 13;
 const BERLIN = 15;
-
-const playerOf = (reveal: Reveal, playerId: string): Reveal["players"][number] => {
-  const found = reveal.players.find((p) => p.id === playerId);
-  if (!found) throw new Error(`no Player ${playerId} in the reveal`);
-  return found;
-};
+const VESZPREM = 1;
+const SEATTLE = 17;
 
 const cashOf = (reveal: Reveal, playerId: string): number => playerOf(reveal, playerId).cash;
 
@@ -82,6 +87,47 @@ describe("the engine's reveals", () => {
     expect(at.fields[VIENNA]?.sale).toBe(view.fields[VIENNA]?.sale);
     expect(at.players.map((p) => p.wealth)).toEqual(view.players.map((p) => p.wealth));
     expect(at.doubler).toEqual(view.doubler);
+  });
+
+  it("R70, R71, ADR-0005: the bankruptcy is two beats: the Charge shows the Fields still owned, then they leave", () => {
+    // p2 holds 100,000 and Veszprém (sale 180,000); Seattle's Level-4 Rent is
+    // 924,000, so the Rent takes the 280,000 they can raise and they go Bankrupt
+    // (F12). The Doubler sits on Veszprém and leaves with it (R62, R71).
+    let state = withField(newGame({ players: 2 }), VESZPREM, { owner: "p2", level: 1 });
+    state = withField(state, SEATTLE, { owner: "p1", level: 4 });
+    state = withPlayer({ ...state, doubler: { field: VESZPREM, count: 1 } }, "p2", {
+      cash: 100_000,
+    });
+    const applied = rollOnto({ ...state, currentPlayer: "p2" }, SEATTLE);
+
+    const chargedIndex = applied.events.findIndex((event) => event.type === "RentPaid");
+    const outIndex = applied.events.findIndex((event) => event.type === "WentBankrupt");
+    const charged = applied.events[chargedIndex];
+    const before = applied.reveals[chargedIndex - 1];
+    const paid = applied.reveals[chargedIndex];
+    const out = applied.reveals[outIndex];
+
+    if (charged?.type !== "RentPaid" || !before || !paid || !out) {
+      throw new Error("the Charge or the bankruptcy is missing");
+    }
+    expect(outIndex).toBe(chargedIndex + 1);
+    // Before the Charge nothing has moved.
+    expect(charged.amount).toBe(280_000);
+    expect(cashOf(before, "p2")).toBe(100_000);
+    expect(cashOf(before, "p1")).toBe(START_CASH);
+    // The Charge beat: the payer at 0, the payee credited what was raised, the Fields still owned.
+    expect(cashOf(paid, "p2")).toBe(0);
+    expect(cashOf(paid, "p1")).toBe(START_CASH + charged.amount);
+    expect(playerOf(paid, "p2").bankrupt).toBe(false);
+    expect(paid.fields[VESZPREM]).toMatchObject({ owner: "p2", level: 1 });
+    expect(paid.doubler).toEqual({ field: VESZPREM, count: 1 });
+    // The bankruptcy beat: Fields back at the Bank, no Doubler on them, the Player out.
+    expect(playerOf(out, "p2")).toMatchObject({ cash: 0, bankrupt: true });
+    expect(out.fields[VESZPREM]).toEqual({ owner: null, level: 0, value: 0, rent: 0, sale: 0 });
+    expect(out.doubler).toBeNull();
+    // The amounts and the final state are the ones the settlement shows (R72, F12).
+    expect(player(applied.state, "p1").cash).toBe(START_CASH + charged.amount);
+    expect(player(applied.state, "p2")).toMatchObject({ cash: 0, bankrupt: true });
   });
 
   it("ADR-0005: a reveal is a snapshot: rule code after the emit does not reach it", () => {
