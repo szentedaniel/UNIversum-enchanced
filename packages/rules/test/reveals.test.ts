@@ -12,17 +12,13 @@ const CHICAGO = 9;
 const VIENNA = 13;
 const BERLIN = 15;
 
-const cashOf = (reveal: Reveal, playerId: string): number => {
-  const found = reveal.players.find((p) => p.id === playerId);
-  if (!found) throw new Error(`no Player ${playerId} in the reveal`);
-  return found.cash;
-};
-
 const playerOf = (reveal: Reveal, playerId: string): Reveal["players"][number] => {
   const found = reveal.players.find((p) => p.id === playerId);
   if (!found) throw new Error(`no Player ${playerId} in the reveal`);
   return found;
 };
+
+const cashOf = (reveal: Reveal, playerId: string): number => playerOf(reveal, playerId).cash;
 
 describe("the engine's reveals", () => {
   it("ADR-0005: every Applied carries one reveal per event, in the same order", () => {

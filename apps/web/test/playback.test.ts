@@ -10,7 +10,7 @@ import {
   fieldOf,
   PAST_START,
   playersWithCash,
-  revealOf,
+  revealWithCash,
   ROLL,
   TIMEOUT,
   viewOf,
@@ -483,10 +483,10 @@ describe("the Playback core's reveals", () => {
       pushOf(ROLL(), {
         view,
         reveals: [
-          revealOf({ p1: 100_000, p2: 100_000 }),
-          revealOf({ p1: 100_000, p2: 100_000 }),
-          revealOf({ p1: 50_000, p2: 150_000 }),
-          revealOf({ p1: 50_000, p2: 150_000 }),
+          revealWithCash({ p1: 100_000, p2: 100_000 }),
+          revealWithCash({ p1: 100_000, p2: 100_000 }),
+          revealWithCash({ p1: 50_000, p2: 150_000 }),
+          revealWithCash({ p1: 50_000, p2: 150_000 }),
         ],
       }),
     );
@@ -513,7 +513,10 @@ describe("the Playback core's reveals", () => {
           { type: "DiceRolled", player: "p2", dice: [1, 2] },
         ],
         {
-          reveals: [revealOf({ p1: 1_000, p2: 100_000 }), revealOf({ p1: 2_000, p2: 100_000 })],
+          reveals: [
+            revealWithCash({ p1: 1_000, p2: 100_000 }),
+            revealWithCash({ p1: 2_000, p2: 100_000 }),
+          ],
         },
       ),
     );
@@ -527,10 +530,10 @@ describe("the Playback core's reveals", () => {
     const playback = playbackOfPush(
       pushOf(ROLL(), {
         reveals: [
-          revealOf({ p1: 100_000, p2: 100_000 }),
-          revealOf({ p1: 100_000, p2: 100_000 }),
-          revealOf({ p1: 50_000, p2: 150_000 }),
-          revealOf({ p1: 50_000, p2: 150_000 }),
+          revealWithCash({ p1: 100_000, p2: 100_000 }),
+          revealWithCash({ p1: 100_000, p2: 100_000 }),
+          revealWithCash({ p1: 50_000, p2: 150_000 }),
+          revealWithCash({ p1: 50_000, p2: 150_000 }),
         ],
       }),
     );
@@ -555,7 +558,7 @@ describe("the Playback core's reveals", () => {
       autoSell: [3],
       standings: null,
     });
-    const reveal = revealOf(
+    const reveal = revealWithCash(
       { p1: 100_000, p2: 100_000 },
       { doubler: { field: 3, count: 2 }, fields: [fieldOf({ owner: "p2", level: 1 })] },
     );
@@ -582,7 +585,7 @@ describe("the Playback core's reveals", () => {
     expect(playbackOfPush(pushOf([], { view })).frameAt(1_000).view).toBe(view);
 
     const partial = playbackOfPush(
-      pushOf(ROLL(), { view, reveals: [revealOf({ p1: 1_000, p2: 100_000 })] }),
+      pushOf(ROLL(), { view, reveals: [revealWithCash({ p1: 1_000, p2: 100_000 })] }),
     );
     expect(cashOf(partial.frameAt(1_000), "p1")).toBe(1_000);
     // The walk has no reveal: the final view shows instead of the last one.

@@ -105,7 +105,7 @@ export const fieldOf = (patch: Partial<FieldView> = {}): FieldView => ({
  * A reveal of the two Players' cash, with the board left empty and the pawns
  * one Field behind the final view (a reveal never moves a pawn).
  */
-export const revealOf = (
+export const revealWithCash = (
   cash: { p1: number; p2: number },
   patch: Partial<Reveal> = {},
 ): Reveal => ({
