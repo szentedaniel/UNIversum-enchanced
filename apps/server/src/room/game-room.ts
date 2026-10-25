@@ -40,6 +40,7 @@ import {
   type PlayerId,
   type PlayerIntent,
   type Rejection,
+  type Reveal,
   type Seed,
 } from "@universum/rules";
 import { FloodMeter } from "#abuse/flood.ts";
@@ -502,6 +503,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       const message: GameMessage = {
         view: publicView(this.game, this.timing),
         events: [],
+        reveals: [],
         now: this.now(),
       };
       client.send(MESSAGE.game, message);
@@ -614,7 +616,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       turnLimitMs: this.timing.turnLimitMs,
       minuteMs: this.timing.minuteMs,
     });
-    const refused = this.commit(game, []);
+    const refused = this.commit(game, [], []);
     if (refused) return refused;
     this.log.info("Room started");
     // The game outlives its connections: Seats are held until it ends.
@@ -745,7 +747,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     const result = this.run(this.game, intent, seat.playerId);
     if (result === null) return "INTERNAL";
     if (isRejection(result)) return result.code;
-    return this.commit(result.state, result.events, intent.type);
+    return this.commit(result.state, result.events, result.reveals, intent.type);
   }
 
   /**
@@ -787,10 +789,16 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
 
   /**
    * Accepts a new game state, in this order: store it with its events, push
-   * the view and events to everyone, and wake up at its Turn deadline. A
-   * failed write changes nothing and tells no one (the sender gets INTERNAL).
+   * the view, events and their reveals to everyone, and wake up at its Turn
+   * deadline. The store keeps the events only, never the reveals (ADR-0003).
+   * A failed write changes nothing and tells no one (the sender gets INTERNAL).
    */
-  private commit(state: GameState, events: GameEvent[], intent = "Start"): RejectionCode | void {
+  private commit(
+    state: GameState,
+    events: GameEvent[],
+    reveals: Reveal[],
+    intent = "Start",
+  ): RejectionCode | void {
     try {
       this.save(this.seats, state, events);
     } catch (error) {
@@ -799,7 +807,12 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       return "INTERNAL";
     }
     this.game = state;
-    const message: GameMessage = { view: publicView(state, this.timing), events, now: this.now() };
+    const message: GameMessage = {
+      view: publicView(state, this.timing),
+      events,
+      reveals,
+      now: this.now(),
+    };
     this.broadcast(MESSAGE.game, message);
     if (state.phase.kind === "gameOver") this.endGame();
     else this.scheduleDeadline(state);
@@ -857,7 +870,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       this.rearmEarly(turn);
       return;
     }
-    if (result !== null && this.commit(result.state, result.events, "TurnTimedOut") === undefined) {
+    if (
+      result !== null &&
+      this.commit(result.state, result.events, result.reveals, "TurnTimedOut") === undefined
+    ) {
       return;
     }
     const delay = Math.min(DEADLINE_RETRY_MS * 2 ** this.#deadlineRetries, DEADLINE_RETRY_MAX_MS);
