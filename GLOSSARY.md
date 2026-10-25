@@ -66,7 +66,7 @@ _Avoid_: Animation, replay
 
 **Reveal**:
 One event's snapshot of the Players, the Fields and the Doubler, with the numbers the screen shows, so the Board and the Player cards show the effect of the current Playback step; the engine records one beside every event and the client shows the latest step's.
-_Avoid_: Delta, patch, frame
+_Avoid_: Delta, patch
 
 **Decision gate**:
 The moment the next decision opens, once the Playback before it has ended; the decision's controls and its Turn timer start there.
