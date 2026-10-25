@@ -2,7 +2,7 @@
 // see them inside `page.evaluate`. One declaration for every spec. The pushed
 // view and every phase are the rules engine's types (type-only: `evaluate`
 // callbacks are serialized), so a spec cannot drift from the server.
-import type { GameEvent, PublicView } from "@universum/rules";
+import type { GameEvent, PublicView, Reveal } from "@universum/rules";
 
 export type Camera = { scale: number; x: number; y: number };
 /** One animation frame's sample of the Playback hold (ADR-0004), as two-guests.spec.ts records it. */
@@ -93,8 +93,11 @@ export type TestHooks = {
    * clears it, like the server's answer.
    */
   holdIntent(): void;
-  /** Shows a made-up view (a full PublicView) as if the server had pushed it, with optional events. */
-  showView(view: PublicView, events?: readonly GameEvent[]): void;
+  /**
+   * Shows a made-up view (a full PublicView) as if the server had pushed it,
+   * with optional events and one reveal per event.
+   */
+  showView(view: PublicView, events?: readonly GameEvent[], reveals?: readonly Reveal[]): void;
   /** The room store (only the fields the specs read). */
   room(): {
     me: string | null;
@@ -105,6 +108,8 @@ export type TestHooks = {
       view: PublicView;
       /** The events of the push, in order. */
       events: { type: string }[];
+      /** One board snapshot per event, in the same order (ADR-0005). */
+      reveals: Reveal[];
       seq: number;
       clockOffset: number;
     } | null;

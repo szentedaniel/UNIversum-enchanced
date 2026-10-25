@@ -3,7 +3,8 @@
  * push into the moments the screen must re-read (`boundaries` and `opensAt`)
  * and answers what the screen shows at any client time (`frameAt`): the dice
  * or the Chance card, the toast's latest line, the Decision gate, the held
- * Turn label and each pawn's Field position.
+ * Turn label, each pawn's Field position and the board the current step
+ * reveals (ADR-0005).
  *
  * Every Playback arithmetic lives here. The timeline gives each event its
  * start and duration from the rules' `PLAYBACK_MS`; the presentation table
@@ -11,7 +12,7 @@
  */
 import type { FieldId } from "@universum/rules/board";
 import { FIELD_COUNT } from "@universum/rules/board";
-import type { EventOf, GameEvent, PlayerId, PublicView } from "@universum/rules";
+import type { EventOf, GameEvent, PlayerId, PublicView, Reveal } from "@universum/rules";
 import { playbackOf } from "@universum/rules/playback";
 import { eventText, toneOf, type Tone } from "#playback/presentation.ts";
 import { stepAt, timelineOf, type PlaybackStep } from "#playback/timeline.ts";
@@ -20,6 +21,8 @@ import { stepAt, timelineOf, type PlaybackStep } from "#playback/timeline.ts";
 export type PlaybackPush = {
   view: PublicView;
   events: readonly GameEvent[];
+  /** One board snapshot per event, in the same order (ADR-0005); empty on a reconnect. */
+  reveals: readonly Reveal[];
   /** The push's identity (`Push.seq`); a frame never mixes two pushes. */
   seq: number;
   /** The server's clock minus this client's, from the push. */
@@ -52,7 +55,11 @@ export type PlaybackOverlay = Extract<PlaybackStep, { kind: "dice" | "card" }>;
 /** Everything the screen shows at one instant of a push. */
 export type Frame = {
   seq: number;
-  /** The view this push carries; a later per-event reveal changes only this field. */
+  /**
+   * What the Board and the Player cards show: the push's view with the current
+   * step's Players, Fields and Doubler, and the push's own view once the
+   * Playback ends (ADR-0005).
+   */
   view: PublicView;
   overlay: PlaybackOverlay | null;
   toast: PlaybackToast | null;
@@ -91,14 +98,45 @@ function cuesOf(steps: readonly PlaybackStep[], view: PublicView): Cue[] {
   return cues;
 }
 
-/** The last cue that has started by `elapsedMs`; `null` before the first. */
-function cueAt(cues: readonly Cue[], elapsedMs: number): Cue | null {
-  let shown: Cue | null = null;
-  for (const cue of cues) {
-    if (cue.startMs > elapsedMs) break;
-    shown = cue;
+/**
+ * The index of the last item that has started by `elapsedMs`, zero-length
+ * steps included: several items at the same ms resolve to the last of them,
+ * and `-1` before the first. The toast and the revealed board both follow it
+ * — not `stepAt`, which skips zero-length steps.
+ */
+function lastStarted(items: readonly { startMs: number }[], elapsedMs: number): number {
+  let shown = -1;
+  for (let index = 0; index < items.length; index += 1) {
+    if ((items[index]?.startMs ?? 0) > elapsedMs) break;
+    shown = index;
   }
   return shown;
+}
+
+/** The last cue that has started by `elapsedMs`; `null` before the first. */
+function cueAt(cues: readonly Cue[], elapsedMs: number): Cue | null {
+  return cues[lastStarted(cues, elapsedMs)] ?? null;
+}
+
+/**
+ * The push's view as one step shows it: the Players, the Fields and the
+ * Doubler come from the step's reveal, while each Player's position stays the
+ * final view's, because the pawn walk already plays positions (ADR-0005).
+ * Built once per step, never in `frameAt`: the Board re-syncs on a changed
+ * view object and skips an unchanged one.
+ */
+function viewOfStep(view: PublicView, reveal: Reveal | undefined): PublicView {
+  if (!reveal) return view;
+  const positions = new Map(view.players.map((player) => [player.id, player.position]));
+  return {
+    ...view,
+    players: reveal.players.map((player) => ({
+      ...player,
+      position: positions.get(player.id) ?? player.position,
+    })),
+    fields: reveal.fields,
+    doubler: reveal.doubler,
+  };
 }
 
 /** A step whose event moved a pawn; its `from`, `to` and `steps` drive the walk. */
@@ -170,6 +208,7 @@ export function playbackOfPush(
 ): Playback {
   const steps = timelineOf(push.events);
   const playbackEndMs = playbackOf(push.events);
+  const views = steps.map((_, index) => viewOfStep(push.view, push.reveals[index]));
   const cues = cuesOf(steps, push.view);
   const moves = movesByPlayer(steps);
 
@@ -190,13 +229,15 @@ export function playbackOfPush(
     boundaries,
     frameAt(clientNow) {
       const elapsedMs = clientNow - push.receivedAt;
+      // The current step's board until the Playback ends; the push's own view after.
+      const stepIndex = elapsedMs >= playbackEndMs ? -1 : lastStarted(steps, elapsedMs);
       const gateOpen = clientNow >= opensAt;
       const shown = stepAt(steps, elapsedMs);
       const cue = cueAt(cues, elapsedMs);
       const pawns = pawnsAt(push.view, moves, elapsedMs, playbackEndMs);
       return {
         seq: push.seq,
-        view: push.view,
+        view: stepIndex === -1 ? push.view : (views[stepIndex] ?? push.view),
         overlay: shown?.kind === "dice" || shown?.kind === "card" ? shown : null,
         toast: cue ? { event: cue.event, text: cue.text, tone: cue.tone } : null,
         gateOpen,

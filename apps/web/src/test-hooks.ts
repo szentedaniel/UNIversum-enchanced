@@ -7,7 +7,7 @@
  * compiled out.
  */
 import { serverNow } from "@universum/protocol/messages";
-import type { GameEvent, PlayerId, PublicView } from "@universum/rules";
+import type { GameEvent, PlayerId, PublicView, Reveal } from "@universum/rules";
 import type { FieldId } from "@universum/rules/board";
 import type { Board } from "#board/board.ts";
 import { gateOpenOf, playbackStore, type PlaybackGate } from "#playback/playback-store.ts";
@@ -37,8 +37,11 @@ export type TestHooks = {
    * A `showView` push clears it, like the server's answer.
    */
   holdIntent(): void;
-  /** Shows a made-up view, optionally with the events of the push that led to it. */
-  showView(view: PublicView, events?: readonly GameEvent[]): void;
+  /**
+   * Shows a made-up view, optionally with the events of the push that led to
+   * it and one reveal per event; without them the view is shown at once.
+   */
+  showView(view: PublicView, events?: readonly GameEvent[], reveals?: readonly Reveal[]): void;
 };
 
 declare global {
@@ -73,12 +76,13 @@ export function exposeBoard(board: Board | null): void {
         holdIntent() {
           roomStore.setState(inFlightPatch(roomStore.getState()));
         },
-        showView(view, events = []) {
+        showView(view, events = [], reveals = []) {
           const { push } = roomStore.getState();
           roomStore.setState({
             push: {
               view,
               events,
+              reveals,
               seq: (push?.seq ?? 0) + 1,
               clockOffset: push?.clockOffset ?? 0,
               receivedAt: Date.now(),

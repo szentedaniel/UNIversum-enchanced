@@ -11,7 +11,7 @@ const ROLL = { type: "Roll", turn: 1 } as const;
 
 const pushAt = (seq: number): void => {
   roomStore.setState({
-    push: { view: viewOf(), events: [], seq, clockOffset: 0, receivedAt: 0 },
+    push: { view: viewOf(), events: [], reveals: [], seq, clockOffset: 0, receivedAt: 0 },
   });
 };
 

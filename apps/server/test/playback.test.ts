@@ -1,4 +1,4 @@
-import { playbackOf } from "@universum/rules";
+import { playbackOf, START_CASH } from "@universum/rules";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startTestServer, withDeadline, type TestServer } from "./helpers.ts";
 
@@ -23,7 +23,7 @@ async function startedGame() {
   alice.send({ type: "Start" });
   const [first] = await Promise.all([alice.next("game"), bob.next("game")]);
   const ids = await Promise.all([alice, bob].map(async (c) => (await c.next("welcome")).playerId));
-  return { alice, bob, code: alice.code, ids, view: withDeadline(first) };
+  return { alice, bob, code: alice.code, ids, first, view: withDeadline(first) };
 }
 
 describe("the server holds the next decision until the Playback ends", () => {
@@ -86,5 +86,51 @@ describe("the server holds the next decision until the Playback ends", () => {
     server.scheduler.advanceTo(timed.turnDeadline);
     const next = await bob.next("game");
     expect(next.events[0]).toEqual({ type: "TimedOut", player: ids[1] });
+  });
+});
+
+describe("the reveals a push carries", () => {
+  it("ADR-0005: a game push carries one reveal per event; the first push carries none", async () => {
+    const { alice, bob, first, ids } = await startedGame();
+
+    expect(first.events).toEqual([]);
+    expect(first.reveals).toEqual([]);
+
+    alice.send({ type: "Roll", turn: 1 });
+    const rolled = await bob.next("game");
+    await alice.next("game");
+
+    expect(rolled.reveals).toHaveLength(rolled.events.length);
+    // The dice' own reveal is the board before the move: everyone at Start, nothing owned.
+    const [dice] = rolled.reveals;
+    expect(dice?.players.map((p) => p.position)).toEqual([0, 0]);
+    expect(dice?.players[0]).toMatchObject({ id: ids[0], cash: START_CASH, wealth: START_CASH });
+    expect(dice?.fields).toHaveLength(rolled.view.fields.length);
+    expect(dice?.fields.every((field) => field.owner === null)).toBe(true);
+    // The move's reveal carries the mover where the final view has them.
+    const moved = rolled.reveals[rolled.events.findIndex((event) => event.type === "Moved")];
+    expect(moved?.players.map((p) => p.position)).toEqual(
+      rolled.view.players.map((p) => p.position),
+    );
+  });
+
+  it("ADR-0005: a reconnect push carries no events and no reveals", async () => {
+    const { bob } = await startedGame();
+    await bob.drop();
+    const back = await server.reconnect(bob);
+    const current = await back.next("game");
+
+    expect(current.events).toEqual([]);
+    expect(current.reveals).toEqual([]);
+  });
+
+  it("ADR-0005: the stored log keeps the events only, never the reveals", async () => {
+    const { alice } = await startedGame();
+    alice.send({ type: "Roll", turn: 1 });
+    const rolled = await alice.next("game");
+    const stored = server.store.events(alice.code);
+
+    expect(stored.flatMap((row) => row.events)).toEqual(rolled.events);
+    expect(JSON.stringify(stored)).not.toContain("reveals");
   });
 });

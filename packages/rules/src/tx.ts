@@ -7,11 +7,17 @@
 import type { GameEvent } from "#events.ts";
 import type { Ctx } from "#intents.ts";
 import type { GameState, Phase, PlayerId, PlayerState } from "#state.ts";
+import { revealOf, type Reveal } from "#reveal.ts";
 
 export type Tx = {
   state: GameState;
   /** Events in the order they happened. */
   events: GameEvent[];
+  /**
+   * One snapshot of the board per event, in the same order: what the Player
+   * cards and the Board show at that event's Playback step (ADR-0005).
+   */
+  reveals: Reveal[];
   ctx: Ctx;
   /** Set by `decide`: the intent stops at a Player decision instead of passing the Turn. */
   decided: boolean;
@@ -24,8 +30,14 @@ export type Tx = {
   finalPhase: boolean;
 };
 
+/**
+ * Records an event and the board it leaves behind. Rule code applies its
+ * effect before emitting, so the reveal shows what that event did; the next
+ * event's reveal shows the next change (ADR-0005).
+ */
 export function emit(tx: Tx, event: GameEvent): void {
   tx.events.push(event);
+  tx.reveals.push(revealOf(tx.state));
 }
 
 /**
