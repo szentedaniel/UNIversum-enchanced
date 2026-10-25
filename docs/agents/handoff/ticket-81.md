@@ -26,8 +26,8 @@ the README's load-test paragraph. Reports only: no threshold, no verdict row, no
 - Samples cross `worker_threads` as plain numbers: drained on a knee `snapshot`
   (`stats.pushBytes = []`) and copied in `cloneStats`.
 - `ClientSummary` gains `pushSamples`, `pushP50Bytes`, `pushP95Bytes`, `maxPushBytes`; each is `null`
-  (and `pushSamples` `0`) without samples, which the report prints as `no data`. `maxPushBytes` is
-  `percentile(samples, 100)`, which the stats test pins.
+  (and `pushSamples` `0`) without samples, which the report prints as `no data`. `maxPushBytes` and
+  `maxRttMs` both come from `maxOf` in `stats.ts`.
 - Report rows sit with the round trips in `## Client generator`; `bytes` prints `B` under 1 KB and
   `KB` above.
 

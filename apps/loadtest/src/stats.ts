@@ -110,6 +110,14 @@ export function percentile(samples: number[], p: number): number | null {
   return sorted[Math.min(sorted.length - 1, Math.max(0, rank - 1))] ?? null;
 }
 
+/** The largest sample; `null` without samples. */
+export function maxOf(samples: number[]): number | null {
+  return samples.reduce<number | null>(
+    (max, value) => (max === null || value > max ? value : max),
+    null,
+  );
+}
+
 const CPU_SAMPLE_MS = 5_000;
 
 /**
@@ -154,14 +162,11 @@ export function mergeWorkerStats(
     rttSamples: rtt.length,
     rttP95Ms: percentile(rtt, 95),
     rttP99Ms: percentile(rtt, 99),
-    maxRttMs: rtt.reduce<number | null>(
-      (max, value) => (max === null || value > max ? value : max),
-      null,
-    ),
+    maxRttMs: maxOf(rtt),
     pushSamples: push.length,
     pushP50Bytes: percentile(push, 50),
     pushP95Bytes: percentile(push, 95),
-    maxPushBytes: percentile(push, 100),
+    maxPushBytes: maxOf(push),
     intentsSent: sum(workers, (worker) => worker.intentsSent),
     intentsAccepted: sum(workers, (worker) => worker.intentsAccepted),
     rejections,
