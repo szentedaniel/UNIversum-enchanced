@@ -32,6 +32,16 @@ const WALK_MS = playbackOf([
   { type: "Moved", player: "p1", from: 1, to: 8, steps: 7 },
 ]);
 
+/**
+ * The toast wait's slack beyond the walk's own length. The Rent step starts at
+ * a boundary the test computes to the millisecond, so this covers the store's
+ * wake-up plus a slow CI render of two pages pushing their made-up view. It is
+ * deliberately 5 s, not the 1 s gate poll of `background-tab.spec.ts`
+ * (`POLL_SLACK_MS`), because that one polls a flag while this one waits for a
+ * re-rendered toast line and two Player cards.
+ */
+const TOAST_SLACK_MS = 5_000;
+
 /** Shows the same made-up Rent push on `page`, as if the server had sent it. */
 function showRent(page: Page, ids: { payer: string; owner: string }) {
   return page.evaluate(
@@ -69,23 +79,22 @@ test("ADR-0005: a Rent leaves the payer's card at the Rent step, not when the pu
 }) => {
   const { context, guest } = await startGame(page, browser);
   try {
-    const ids = await page.evaluate(() => {
+    const { payer, owner, seats } = await page.evaluate(() => {
       const { me, push } = window.universumTest!.room();
       const other = push!.view.players.find((player) => player.id !== me);
       if (!me || !other) throw new Error("the game needs two Players");
-      return { payer: me, owner: other.id };
-    });
-    const seats = await page.evaluate(({ payer, owner }) => {
-      const { players } = window.universumTest!.room().push!.view;
+      const seatOf = (id: string): number =>
+        push!.view.players.find((player) => player.id === id)!.seat;
       return {
-        payer: players.find((player) => player.id === payer)!.seat,
-        owner: players.find((player) => player.id === owner)!.seat,
+        payer: me,
+        owner: other.id,
+        seats: { payer: seatOf(me), owner: seatOf(other.id) },
       };
-    }, ids);
+    });
     const payerCard = playerCards(page).nth(seats.payer);
     const ownerCard = playerCards(page).nth(seats.owner);
 
-    await Promise.all([showRent(page, ids), showRent(guest, ids)]);
+    await Promise.all([showRent(page, { payer, owner }), showRent(guest, { payer, owner })]);
 
     // The made-up push's first step is the only one with this dice toast, so it
     // is the one on screen: its render also carries the cards' cash (a stale
@@ -95,7 +104,9 @@ test("ADR-0005: a Rent leaves the payer's card at the Rent step, not when the pu
     // cash from before it while the dice and the walk play.
     await expect(payerCard.getByLabel("Cash")).toContainText(BEFORE_TEXT);
     await expect(ownerCard.getByLabel("Cash")).toContainText(BEFORE_TEXT);
-    await expect(page.getByTestId("toast")).toContainText("Rent", { timeout: WALK_MS + 5_000 });
+    await expect(page.getByTestId("toast")).toContainText("Rent", {
+      timeout: WALK_MS + TOAST_SLACK_MS,
+    });
 
     // The Rent step: the payer's cash drops and the owner's rises, with the toast.
     await expect(payerCard.getByLabel("Cash")).toContainText(PAYER_AFTER_TEXT);

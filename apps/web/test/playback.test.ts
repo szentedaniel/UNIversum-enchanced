@@ -1,4 +1,5 @@
-import type { GameEvent } from "@universum/rules";
+import type { GameEvent, Seed } from "@universum/rules";
+import { apply, publicView, setupGame } from "@universum/rules";
 import { PLAYBACK_MS, playbackOf } from "@universum/rules/playback";
 import { describe, expect, it } from "vitest";
 import type { Frame, PlaybackPush, TurnLabel } from "#playback/playback.ts";
@@ -24,6 +25,10 @@ import {
 
 const total = (steps: readonly PlaybackStep[]): number =>
   steps.reduce((sum, step) => sum + step.durationMs, 0);
+
+/** A game started at a fixed time with fixed dice, as the rules tests do. */
+const T0 = Date.UTC(2026, 9, 19, 12, 0, 0);
+const SEED: Seed = [0x1234_5678, -0x2345_6789, 0x0bad_f00d, 0x7777_1111];
 
 describe("the Playback timeline", () => {
   it("ADR-0004: a Roll is the dice, the walk hop by hop, the Rent and the Turn passing", () => {
@@ -505,25 +510,40 @@ describe("the Playback core's reveals", () => {
     expect(cashOf(playback.frameAt(600_000), "p1")).toBe(50_000);
   });
 
-  it("ADR-0005: zero-length steps count, and the last step at a shared start wins", () => {
+  it("ADR-0005: a zero-length step takes the next step's start, and the Playback's end is the push's view", () => {
+    const view = viewOf(undefined, { players: playersWithCash({ p1: 50_000, p2: 150_000 }) });
     const playback = playbackOfPush(
       pushOf(
         [
           { type: "OfferDeclined", player: "p1", field: 3 },
           { type: "DiceRolled", player: "p2", dice: [1, 2] },
+          { type: "TurnPassed", player: "p1", turn: 2 },
         ],
         {
+          view,
           reveals: [
             revealWithCash({ p1: 1_000, p2: 100_000 }),
             revealWithCash({ p1: 2_000, p2: 100_000 }),
+            revealWithCash({ p1: 3_000, p2: 100_000 }),
           ],
         },
       ),
     );
+    const playbackEnd =
+      1_000 +
+      playbackOf([
+        { type: "OfferDeclined", player: "p1", field: 3 },
+        { type: "DiceRolled", player: "p2", dice: [1, 2] },
+        { type: "TurnPassed", player: "p1", turn: 2 },
+      ]);
 
-    // Both steps start at 0: the dice' reveal is the one the screen shows.
+    // The declined offer starts where the dice do: the latest started step's reveal shows.
     expect(cashOf(playback.frameAt(1_000), "p1")).toBe(2_000);
-    expect(cashOf(playback.frameAt(1_000 + PLAYBACK_MS.DiceRolled - 1), "p1")).toBe(2_000);
+    expect(playback.frameAt(playbackEnd - 1).view).toBe(playback.frameAt(1_000).view);
+    // The trailing Turn passing starts where the Playback ends, so its reveal never
+    // shows: the push's own view takes over. Its toast stays, as the cue rule has it.
+    expect(playback.frameAt(playbackEnd).view).toBe(view);
+    expect(playback.frameAt(playbackEnd).toast?.event.type).toBe("DiceRolled");
   });
 
   it("ADR-0005: the view is the same object within a step and a new one when the step changes", () => {
@@ -546,6 +566,76 @@ describe("the Playback core's reveals", () => {
     expect(playback.frameAt(walkEnd).view).not.toBe(first);
     // The step's merged view is built once, not per frame.
     expect(playback.frameAt(walkEnd).view).toBe(playback.frameAt(walkEnd + 1).view);
+  });
+
+  it("ADR-0005: equal reveals keep the previous step's view object, a changed one gets a new one", () => {
+    const playback = playbackOfPush(
+      pushOf(ROLL(), {
+        reveals: [
+          revealWithCash({ p1: 100_000, p2: 100_000 }),
+          revealWithCash({ p1: 100_000, p2: 100_000 }),
+          revealWithCash({ p1: 50_000, p2: 150_000 }),
+          revealWithCash({ p1: 50_000, p2: 150_000 }),
+        ],
+      }),
+    );
+    const walkStart = 1_000 + PLAYBACK_MS.DiceRolled;
+    const walkEnd = walkStart + 7 * PLAYBACK_MS.Moved;
+
+    // The dice and the walk reveal the same board: one object, so the Board skips the redraw.
+    const dice = playback.frameAt(1_000).view;
+    expect(playback.frameAt(walkStart).view).toBe(dice);
+    // The Rent changes the board: a new object, kept through the zero-length Turn passing.
+    const rent = playback.frameAt(walkEnd).view;
+    expect(rent).not.toBe(dice);
+    expect(playback.frameAt(walkEnd + PLAYBACK_MS.RentPaid - 1).view).toBe(rent);
+  });
+
+  it("ADR-0005: a reveal that only moved a pawn keeps the previous step's view object", () => {
+    // A real Roll: the DiceRolled reveal is the board before the move, the Moved
+    // one the board after it, so they differ in a Player's position and nowhere
+    // else. The merged views are identical, so the walk must not redraw the Board.
+    const state = setupGame({
+      seats: [
+        { playerId: "p1", name: { adjective: "adj0", noun: "noun0" } },
+        { playerId: "p2", name: { adjective: "adj1", noun: "noun1" } },
+      ],
+      settings: { maxPlayers: 2, minuteLimit: 50 },
+      seed: SEED,
+      now: T0,
+    });
+    const rolled = apply(
+      state,
+      { type: "Roll", turn: state.turn },
+      { actor: state.currentPlayer, now: Math.max(T0, state.actsAfter) },
+    );
+    if ("code" in rolled) throw new Error(`the Roll was refused: ${rolled.code}`);
+
+    const diceIndex = rolled.events.findIndex((event) => event.type === "DiceRolled");
+    const movedIndex = rolled.events.findIndex((event) => event.type === "Moved");
+    const before = rolled.reveals[diceIndex];
+    const moved = rolled.reveals[movedIndex];
+
+    if (!before || !moved) throw new Error("the Roll lost a reveal");
+    expect(movedIndex).toBe(diceIndex + 1);
+    expect(
+      moved.players.map((player) => [player.id, player.cash, player.wealth, player.bankrupt]),
+    ).toEqual(
+      before.players.map((player) => [player.id, player.cash, player.wealth, player.bankrupt]),
+    );
+    expect(moved.players.map((player) => player.position)).not.toEqual(
+      before.players.map((player) => player.position),
+    );
+
+    const view = publicView(rolled.state);
+    const playback = playbackOfPush(pushOf(rolled.events, { view, reveals: rolled.reveals }));
+    const walkStart = 1_000 + PLAYBACK_MS.DiceRolled;
+
+    expect(playback.frameAt(walkStart).view).toBe(playback.frameAt(1_000).view);
+    // The merged view still shows the pawns where the final view has them.
+    expect(playback.frameAt(walkStart).view.players.map((player) => player.position)).toEqual(
+      view.players.map((player) => player.position),
+    );
   });
 
   it("ADR-0005: pawns and everything behind the Decision gate stay the final view's", () => {

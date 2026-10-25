@@ -51,4 +51,4 @@ export {
   type TurnTimer,
   type ViewTiming,
 } from "#view.ts";
-export { revealOf, type FieldView, type PlayerView, type Reveal } from "#reveal.ts";
+export type { FieldView, PlayerView, Reveal } from "#reveal.ts";
