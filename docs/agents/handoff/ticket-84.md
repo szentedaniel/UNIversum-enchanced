@@ -7,16 +7,26 @@ changed.
 ## Story 25: the Board redraws only on a change
 
 - `apps/web/src/playback/playback.ts` builds each step's merged view in
-  `viewsOfSteps`, once per push, and compares a step's reveal with the previous
-  step's by `JSON.stringify`. A structurally equal reveal hands out the
-  previous step's **merged view object** again, so `board.ts`'s
-  `at.view !== shown` check skips the whole Field/pawn re-sync. A step whose
-  reveal differs — or the first step with a reveal — gets a new object.
+  `viewsOfSteps`, once per push, and compares what two steps _show_:
+  `sameBoard(previous, reveal)` over the Players (every `PlayerView` field
+  except `position`, which the pawn walk plays and `viewOfStep` takes from the
+  final view), the Fields (owner, Level, Value, Rent, Sale) and the Doubler. An
+  unchanged board hands out the previous step's **merged view object** again,
+  so `board.ts`'s `at.view !== shown` check skips the whole Field/pawn re-sync.
+  A changed board — or the first step with a reveal — gets a new object.
+- **Do not compare the raw reveals.** The first cut keyed on
+  `JSON.stringify(reveal)`, which is wrong on a real push: the `DiceRolled`
+  reveal is the board _before_ the move and the `Moved` reveal the one after,
+  so their `position`s differ and the walk would still have redrawn, although
+  both merged views are identical. `playback.test.ts`'s `ADR-0005: a reveal
+  that only moved a pawn keeps the previous step's view object` builds a real
+  Roll from `setupGame`/`apply` and fails under the JSON key.
 - A step **without** a reveal shows `push.view` and clears the comparison, so
   a later reveal is never compared with an older one across the gap.
 - The comparison is in `playbackOfPush`, never in `frameAt`: `frameAt` only
-  indexes the array it was handed. Cost is one `JSON.stringify` per event per
-  push at push time (a reveal is ~3 KB).
+  indexes the array it was handed. `viewsOfSteps` takes the steps array (its
+  length is the step count) and `viewOfStep` takes a `Reveal`, never
+  `undefined`.
 - The Playback's end still switches to `push.view` itself, unchanged.
 
 ## The cue rule vs `stepAt` (the zero-length gotcha)
@@ -59,6 +69,8 @@ field of the type. `startGame` still passes `{ state, events: [], reveals: [] }`
 
 ## E2E
 
-`apps/e2e/tests/reveals.spec.ts` names its toast-wait slack `POLL_SLACK_MS`
-(5 s, beyond `WALK_MS`) and reads the payer/owner ids and their Seats in one
+`apps/e2e/tests/reveals.spec.ts` names its toast-wait slack `TOAST_SLACK_MS`
+(5 s beyond `WALK_MS`, deliberately not `background-tab.spec.ts`'s 1 s
+`POLL_SLACK_MS`: that one polls a flag, this one waits for a re-rendered toast
+and two Player cards) and reads the payer/owner ids and their Seats in one
 `page.evaluate` instead of two.

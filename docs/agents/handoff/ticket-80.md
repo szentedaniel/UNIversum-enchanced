@@ -14,7 +14,8 @@ the Board and the Decision module were not touched: they still read
   apart because `tx.ts` records a reveal at every `emit`, and `view.ts` imports
   `autoSellPicks`/`standingsOf`, which reach back to `tx.ts`: keeping `revealOf`
   in `view.ts` closes an import cycle (`oxlint`'s `import/no-cycle` fails).
-  `index.ts` exports all four names.
+  `index.ts` exports the three types (`Reveal`, `PlayerView`, `FieldView`);
+  `revealOf` stays inside the package (it is no longer exported, since #84).
 - **`Tx.reveals`** is filled by `emit(tx, event)`, one reveal per event, in
   order; `Applied.reveals` is the same array. `Applied` is
   `{ state, events, reveals }` — a new consumer of `apply` must type it, but
@@ -34,9 +35,10 @@ the Board and the Decision module were not touched: they still read
 
 - `GameMessage` gained `reveals: Reveal[]`, parallel to `events`; there is no
   Zod schema (server → client only). A push with no events carries `[]`.
-- `GameRoom.commit(applied, intent = "Start")` takes the engine's result as one
-  argument (`Pick<Applied, "state" | "events" | "reveals">`): `play` and
-  `timeOut` pass `result`, `startGame` passes
+- `GameRoom.commit(applied: Applied, intent = "Start")` takes the engine's
+  result as one argument (since #84; #80's `Pick<Applied, …>` listed every field
+  of that type): `play` and `timeOut` pass
+  `result`, `startGame` passes
   `{ state: game, events: [], reveals: [] }`. `save(seats, game, events)` was
   left exactly as it was, so the stored event log cannot grow reveals; the
   reconnect push (`sendCurrent`) sends `events: [], reveals: []`.
