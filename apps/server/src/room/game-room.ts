@@ -40,7 +40,6 @@ import {
   type PlayerId,
   type PlayerIntent,
   type Rejection,
-  type Reveal,
   type Seed,
 } from "@universum/rules";
 import { FloodMeter } from "#abuse/flood.ts";
@@ -616,7 +615,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       turnLimitMs: this.timing.turnLimitMs,
       minuteMs: this.timing.minuteMs,
     });
-    const refused = this.commit(game, [], []);
+    const refused = this.commit({ state: game, events: [], reveals: [] });
     if (refused) return refused;
     this.log.info("Room started");
     // The game outlives its connections: Seats are held until it ends.
@@ -747,7 +746,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     const result = this.run(this.game, intent, seat.playerId);
     if (result === null) return "INTERNAL";
     if (isRejection(result)) return result.code;
-    return this.commit(result.state, result.events, result.reveals, intent.type);
+    return this.commit(result, intent.type);
   }
 
   /**
@@ -794,9 +793,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    * A failed write changes nothing and tells no one (the sender gets INTERNAL).
    */
   private commit(
-    state: GameState,
-    events: GameEvent[],
-    reveals: Reveal[],
+    { state, events, reveals }: Pick<Applied, "state" | "events" | "reveals">,
     intent = "Start",
   ): RejectionCode | void {
     try {
@@ -870,10 +867,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       this.rearmEarly(turn);
       return;
     }
-    if (
-      result !== null &&
-      this.commit(result.state, result.events, result.reveals, "TurnTimedOut") === undefined
-    ) {
+    if (result !== null && this.commit(result, "TurnTimedOut") === undefined) {
       return;
     }
     const delay = Math.min(DEADLINE_RETRY_MS * 2 ** this.#deadlineRetries, DEADLINE_RETRY_MAX_MS);
