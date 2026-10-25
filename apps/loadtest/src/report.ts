@@ -84,6 +84,8 @@ const seconds = (value: number) => `${value.toFixed(1)} s`;
 const gib = (value: number) => `${(value / 1024 ** 3).toFixed(2)} GB`;
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
 const number = (value: number) => String(Math.round(value));
+const bytes = (value: number) =>
+  value < 1024 ? `${number(value)} B` : `${(value / 1024).toFixed(1)} KB`;
 
 const cell = (value: string) => value.replaceAll("|", "\\|");
 
@@ -192,6 +194,10 @@ export function renderReport(report: RunReport): string {
     `| Room round trip p95 | ${orNoData(report.client.rttP95Ms, ms)} |`,
     `| Room round trip p99 | ${orNoData(report.client.rttP99Ms, ms)} |`,
     `| Room round trip max | ${orNoData(report.client.maxRttMs, ms)} |`,
+    `| Game push size | ${report.client.pushSamples} samples |`,
+    `| Game push size p50 | ${orNoData(report.client.pushP50Bytes, bytes)} |`,
+    `| Game push size p95 | ${orNoData(report.client.pushP95Bytes, bytes)} |`,
+    `| Game push size max | ${orNoData(report.client.maxPushBytes, bytes)} |`,
     `| Intents sent / accepted | ${number(report.client.intentsSent)} / ${number(
       report.client.intentsAccepted,
     )} |`,
@@ -212,6 +218,8 @@ export function renderReport(report: RunReport): string {
     `| Rooms started | ${number(report.client.roomsStarted)} |`,
     `| Games finished | ${number(report.client.gamesFinished)} |`,
     `| Generator CPU peak | ${percent(report.client.generatorCpuPeakFraction)} |`,
+    "",
+    "Game push size is the UTF-8 byte length of each `game` push the bot received, re-encoded from the decoded message as JSON (the wire itself is msgpack). Reported only; no verdict threshold.",
     "",
   );
 

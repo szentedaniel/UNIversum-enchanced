@@ -25,6 +25,10 @@ const client: ClientSummary = {
   rttP95Ms: 80,
   rttP99Ms: 200,
   maxRttMs: 410,
+  pushSamples: 812_345,
+  pushP50Bytes: 5_940,
+  pushP95Bytes: 6_275,
+  maxPushBytes: 35_000,
   intentsSent: 1000,
   intentsAccepted: 1000,
   rejections: {},
@@ -186,6 +190,33 @@ describe("the Markdown report", () => {
     ]) {
       expect(text).toContain(fragment);
     }
+  });
+
+  it("reports the game push size from the measured samples", () => {
+    const text = renderReport(report());
+    expect(text).toContain("| Game push size | 812345 samples |");
+    expect(text).toContain("| Game push size p50 | 5.8 KB |");
+    expect(text).toContain("| Game push size p95 | 6.1 KB |");
+    expect(text).toContain("| Game push size max | 34.2 KB |");
+    expect(text).toContain("UTF-8 byte length");
+  });
+
+  it("says when it has no push samples", () => {
+    const text = renderReport(
+      report({
+        client: {
+          ...client,
+          pushSamples: 0,
+          pushP50Bytes: null,
+          pushP95Bytes: null,
+          maxPushBytes: null,
+        },
+      }),
+    );
+    expect(text).toContain("| Game push size | 0 samples |");
+    expect(text).toContain("| Game push size p50 | no data |");
+    expect(text).toContain("| Game push size p95 | no data |");
+    expect(text).toContain("| Game push size max | no data |");
   });
 
   it("lists client rejections", () => {
