@@ -1,4 +1,5 @@
-import type { GameEvent } from "@universum/rules";
+import type { GameEvent, Seed } from "@universum/rules";
+import { apply, publicView, setupGame } from "@universum/rules";
 import { PLAYBACK_MS, playbackOf } from "@universum/rules/playback";
 import { describe, expect, it } from "vitest";
 import type { Frame, PlaybackPush, TurnLabel } from "#playback/playback.ts";
@@ -24,6 +25,10 @@ import {
 
 const total = (steps: readonly PlaybackStep[]): number =>
   steps.reduce((sum, step) => sum + step.durationMs, 0);
+
+/** A game started at a fixed time with fixed dice, as the rules tests do. */
+const T0 = Date.UTC(2026, 9, 19, 12, 0, 0);
+const SEED: Seed = [0x1234_5678, -0x2345_6789, 0x0bad_f00d, 0x7777_1111];
 
 describe("the Playback timeline", () => {
   it("ADR-0004: a Roll is the dice, the walk hop by hop, the Rent and the Turn passing", () => {
@@ -584,6 +589,53 @@ describe("the Playback core's reveals", () => {
     const rent = playback.frameAt(walkEnd).view;
     expect(rent).not.toBe(dice);
     expect(playback.frameAt(walkEnd + PLAYBACK_MS.RentPaid - 1).view).toBe(rent);
+  });
+
+  it("ADR-0005: a reveal that only moved a pawn keeps the previous step's view object", () => {
+    // A real Roll: the DiceRolled reveal is the board before the move, the Moved
+    // one the board after it, so they differ in a Player's position and nowhere
+    // else. The merged views are identical, so the walk must not redraw the Board.
+    const state = setupGame({
+      seats: [
+        { playerId: "p1", name: { adjective: "adj0", noun: "noun0" } },
+        { playerId: "p2", name: { adjective: "adj1", noun: "noun1" } },
+      ],
+      settings: { maxPlayers: 2, minuteLimit: 50 },
+      seed: SEED,
+      now: T0,
+    });
+    const rolled = apply(
+      state,
+      { type: "Roll", turn: state.turn },
+      { actor: state.currentPlayer, now: Math.max(T0, state.actsAfter) },
+    );
+    if ("code" in rolled) throw new Error(`the Roll was refused: ${rolled.code}`);
+
+    const diceIndex = rolled.events.findIndex((event) => event.type === "DiceRolled");
+    const movedIndex = rolled.events.findIndex((event) => event.type === "Moved");
+    const before = rolled.reveals[diceIndex];
+    const moved = rolled.reveals[movedIndex];
+
+    if (!before || !moved) throw new Error("the Roll lost a reveal");
+    expect(movedIndex).toBe(diceIndex + 1);
+    expect(
+      moved.players.map((player) => [player.id, player.cash, player.wealth, player.bankrupt]),
+    ).toEqual(
+      before.players.map((player) => [player.id, player.cash, player.wealth, player.bankrupt]),
+    );
+    expect(moved.players.map((player) => player.position)).not.toEqual(
+      before.players.map((player) => player.position),
+    );
+
+    const view = publicView(rolled.state);
+    const playback = playbackOfPush(pushOf(rolled.events, { view, reveals: rolled.reveals }));
+    const walkStart = 1_000 + PLAYBACK_MS.DiceRolled;
+
+    expect(playback.frameAt(walkStart).view).toBe(playback.frameAt(1_000).view);
+    // The merged view still shows the pawns where the final view has them.
+    expect(playback.frameAt(walkStart).view.players.map((player) => player.position)).toEqual(
+      view.players.map((player) => player.position),
+    );
   });
 
   it("ADR-0005: pawns and everything behind the Decision gate stay the final view's", () => {

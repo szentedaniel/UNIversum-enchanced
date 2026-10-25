@@ -12,7 +12,15 @@
  */
 import type { FieldId } from "@universum/rules/board";
 import { FIELD_COUNT } from "@universum/rules/board";
-import type { EventOf, GameEvent, PlayerId, PublicView, Reveal } from "@universum/rules";
+import type {
+  EventOf,
+  FieldView,
+  GameEvent,
+  PlayerId,
+  PlayerView,
+  PublicView,
+  Reveal,
+} from "@universum/rules";
 import { playbackOf } from "@universum/rules/playback";
 import { eventText, toneOf, type Tone } from "#playback/presentation.ts";
 import { stepAt, timelineOf, type PlaybackStep } from "#playback/timeline.ts";
@@ -125,8 +133,7 @@ function cueAt(cues: readonly Cue[], elapsedMs: number): Cue | null {
  * Built once per step, never in `frameAt`: the Board re-syncs on a changed
  * view object and skips an unchanged one.
  */
-function viewOfStep(view: PublicView, reveal: Reveal | undefined): PublicView {
-  if (!reveal) return view;
+function viewOfStep(view: PublicView, reveal: Reveal): PublicView {
   const positions = new Map(view.players.map((player) => [player.id, player.position]));
   return {
     ...view,
@@ -139,18 +146,71 @@ function viewOfStep(view: PublicView, reveal: Reveal | undefined): PublicView {
   };
 }
 
+/** A Player as the Board and the Player cards show them, `position` aside. */
+function samePlayer(a: PlayerView, b: PlayerView): boolean {
+  return (
+    a.id === b.id &&
+    a.name.adjective === b.name.adjective &&
+    a.name.noun === b.name.noun &&
+    a.seat === b.seat &&
+    a.cash === b.cash &&
+    a.wealth === b.wealth &&
+    a.bankrupt === b.bankrupt &&
+    a.quarantineRounds === b.quarantineRounds &&
+    a.hasPcrTest === b.hasPcrTest
+  );
+}
+
+/** A Field as the Board shows it: owner ring, Level, Value, Rent and Sale. */
+function sameField(a: FieldView, b: FieldView): boolean {
+  return (
+    a.owner === b.owner &&
+    a.level === b.level &&
+    a.value === b.value &&
+    a.rent === b.rent &&
+    a.sale === b.sale
+  );
+}
+
 /**
- * One merged view per step, built once per push. A step whose reveal is
- * structurally equal to the previous step's hands out that view object again,
- * so the Board — which re-syncs on a changed `view` object — redraws only when
- * the revealed board changes (story 25). A step without a reveal shows the
- * push's own view, and starts a new comparison.
+ * True when two steps reveal the same Board and Player cards: every Player
+ * field the cards show, the Fields and the Doubler. A Player's `position` is
+ * left out on purpose — the pawn walk plays it and `viewOfStep` keeps the
+ * final view's — so a `Moved` step, whose reveal differs from the
+ * `DiceRolled` one only there, costs no redraw (story 25).
  */
-function viewsOfSteps(view: PublicView, reveals: readonly Reveal[], count: number): PublicView[] {
+function sameBoard(a: Reveal, b: Reveal): boolean {
+  if (a.players.length !== b.players.length || a.fields.length !== b.fields.length) return false;
+  for (let index = 0; index < a.players.length; index += 1) {
+    const left = a.players[index];
+    const right = b.players[index];
+    if (!left || !right || !samePlayer(left, right)) return false;
+  }
+  for (let index = 0; index < a.fields.length; index += 1) {
+    const left = a.fields[index];
+    const right = b.fields[index];
+    if (!left || !right || !sameField(left, right)) return false;
+  }
+  if (a.doubler === null || b.doubler === null) return a.doubler === b.doubler;
+  return a.doubler.field === b.doubler.field && a.doubler.count === b.doubler.count;
+}
+
+/**
+ * One merged view per step, built once per push. A step whose reveal shows the
+ * same Board as the previous step's hands out that view object again, so the
+ * Board — which re-syncs on a changed `view` object — redraws only when what
+ * it shows changes (story 25). A step without a reveal shows the push's own
+ * view, and starts a new comparison.
+ */
+function viewsOfSteps(
+  view: PublicView,
+  steps: readonly PlaybackStep[],
+  reveals: readonly Reveal[],
+): PublicView[] {
   const views: PublicView[] = [];
-  let previousReveal: string | null = null;
+  let previousReveal: Reveal | null = null;
   let previousView: PublicView | null = null;
-  for (let index = 0; index < count; index += 1) {
+  for (let index = 0; index < steps.length; index += 1) {
     const reveal = reveals[index];
     if (!reveal) {
       previousReveal = null;
@@ -158,11 +218,10 @@ function viewsOfSteps(view: PublicView, reveals: readonly Reveal[], count: numbe
       views.push(view);
       continue;
     }
-    const key = JSON.stringify(reveal);
-    if (previousView === null || key !== previousReveal) {
+    if (previousView === null || previousReveal === null || !sameBoard(previousReveal, reveal)) {
       previousView = viewOfStep(view, reveal);
     }
-    previousReveal = key;
+    previousReveal = reveal;
     views.push(previousView);
   }
   return views;
@@ -237,7 +296,7 @@ export function playbackOfPush(
 ): Playback {
   const steps = timelineOf(push.events);
   const playbackEndMs = playbackOf(push.events);
-  const views = viewsOfSteps(push.view, push.reveals, steps.length);
+  const views = viewsOfSteps(push.view, steps, push.reveals);
   const cues = cuesOf(steps, push.view);
   const moves = movesByPlayer(steps);
 
