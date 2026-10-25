@@ -85,8 +85,8 @@ Room in one, join it with the Room code in the other, start, and play a few Turn
 `maxPayload` and the Lobby cap at production values) and the `monitoring` profile, runs 1,000
 scripted Rooms of 4 over a 10-minute ramp and a 30-minute hold, SIGKILLs the server 20 minutes into
 the hold, and prints PASS/FAIL per criterion from Prometheus plus the generator's own round-trip
-and Seat/version checks. It writes a Markdown report to `loadtest-reports/` (gitignored) and exits
-non-zero on any FAIL.
+and Seat/version checks. It writes a Markdown report to `loadtest-reports/` (gitignored), which
+also shows the game push size (p50, p95, max; no verdict), and exits non-zero on any FAIL.
 
 The generator runs on the host, outside the container caps; a run where the generator itself uses
 more than 70% of the machine is marked invalid. A passing 40-minute run on a Linux host is the

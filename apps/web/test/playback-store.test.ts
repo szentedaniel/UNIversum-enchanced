@@ -21,7 +21,14 @@ const setPush = (
   clockOffset = 0,
 ): void => {
   roomStore.setState({
-    push: { view: viewOf(undefined, { actsAfter }), events, seq, receivedAt, clockOffset },
+    push: {
+      view: viewOf(undefined, { actsAfter }),
+      events,
+      reveals: [],
+      seq,
+      receivedAt,
+      clockOffset,
+    },
   });
 };
 

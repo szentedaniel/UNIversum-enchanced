@@ -132,15 +132,19 @@ export function payFromCash(tx: Tx, payer: PlayerId, pending: PendingCharge): vo
  * the sale value of every Field) goes to the payee, so on Rent the owner gets
  * that and no more (F12); the Fields return to the Bank and the Player ends
  * at 0, skipped in turn order from now on (R14).
+ *
+ * Two beats (ADR-0005): the Charge is paid first, with the Fields still
+ * owned, then they return to the Bank with `WentBankrupt`. The amounts are
+ * what the Player could raise, computed before anything moves.
  */
 export function goBankrupt(tx: Tx, payer: PlayerId, pending: PendingCharge): void {
   const player = playerById(tx, payer);
   const fields = fieldsOf(tx.state, payer);
   const raised = player.cash + saleValueOfAll(tx.state, fields);
-  returnToBank(tx, fields);
   player.cash = 0;
-  player.bankrupt = true;
   payTo(tx, payer, pending, raised);
+  returnToBank(tx, fields);
+  player.bankrupt = true;
   emit(tx, { type: "WentBankrupt", player: payer, fields });
 }
 

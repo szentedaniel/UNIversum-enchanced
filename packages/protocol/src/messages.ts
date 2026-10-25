@@ -12,6 +12,7 @@ import type {
   PlayerIntent,
   PlayerName,
   PublicView,
+  Reveal,
   RulesRejectionCode,
 } from "@universum/rules";
 
@@ -92,6 +93,12 @@ export type GameMessage = {
   view: PublicView;
   /** What this push's intent did, in order, for the Board to animate. */
   events: GameEvent[];
+  /**
+   * One snapshot of the board per event, in the same order: the Players, the
+   * Fields and the Doubler at each event's Playback step (ADR-0005). Empty
+   * when the push has no events (the first push of a game, a reconnect).
+   */
+  reveals: Reveal[];
   /**
    * The server's clock when it sent this push (epoch ms), so clients can show
    * the Turn timer without trusting their own clock.

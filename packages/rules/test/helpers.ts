@@ -15,6 +15,7 @@ import {
   type Intent,
   type PlayerId,
   type PlayerState,
+  type PlayerView,
   type Rejection,
   type Seat,
   type Seed,
@@ -120,6 +121,13 @@ export function withPlayer(
 export function player(state: GameState, playerId: PlayerId): PlayerState {
   const found = state.players.find((p) => p.id === playerId);
   if (!found) throw new Error(`no Player ${playerId}`);
+  return found;
+}
+
+/** One Player's entry in a reveal, or in any view's `players`, by id. */
+export function playerOf(view: { players: readonly PlayerView[] }, playerId: PlayerId): PlayerView {
+  const found = view.players.find((p) => p.id === playerId);
+  if (!found) throw new Error(`no Player ${playerId} in the view`);
   return found;
 }
 

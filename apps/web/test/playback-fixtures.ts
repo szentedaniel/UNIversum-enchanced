@@ -1,4 +1,4 @@
-import type { GameEvent, PublicView } from "@universum/rules";
+import type { FieldView, GameEvent, PlayerView, PublicView, Reveal } from "@universum/rules";
 
 /** A Roll, the walk, the Rent it stopped at and the Turn passing. */
 export const ROLL = (): GameEvent[] => [
@@ -43,17 +43,23 @@ export const TIMEOUT = (): GameEvent[] => [
   { type: "TurnPassed", player: "p2", turn: 3 },
 ];
 
-const player = (id: string, seat: number, position: number) => ({
+const player = (id: string, seat: number, position: number, cash = 100_000) => ({
   id,
   name: { adjective: "happy", noun: "tiger" },
   seat,
-  cash: 100_000,
+  cash,
   position,
   bankrupt: false,
   quarantineRounds: null,
   hasPcrTest: false,
-  wealth: 100_000,
+  wealth: cash,
 });
+
+/** Two Players with the given cash (and so Wealth), as a push's final view shows them. */
+export const playersWithCash = (
+  cash: { p1: number; p2: number },
+  positions: { p1: number; p2: number } = { p1: 8, p2: 17 },
+): PlayerView[] => [player("p1", 0, positions.p1, cash.p1), player("p2", 1, positions.p2, cash.p2)];
 
 const BASE_VIEW: PublicView = {
   stateVersion: 2,
@@ -82,5 +88,29 @@ export const viewOf = (
 ): PublicView => ({
   ...BASE_VIEW,
   players: [player("p1", 0, positions.p1), player("p2", 1, positions.p2)],
+  ...patch,
+});
+
+/** A Field as a reveal carries it: the state plus the numbers the UI shows. */
+export const fieldOf = (patch: Partial<FieldView> = {}): FieldView => ({
+  owner: null,
+  level: 0,
+  value: 0,
+  rent: 0,
+  sale: 0,
+  ...patch,
+});
+
+/**
+ * A reveal of the two Players' cash, with the board left empty and the pawns
+ * one Field behind the final view (a reveal never moves a pawn).
+ */
+export const revealWithCash = (
+  cash: { p1: number; p2: number },
+  patch: Partial<Reveal> = {},
+): Reveal => ({
+  players: playersWithCash(cash, { p1: 1, p2: 16 }),
+  fields: [],
+  doubler: null,
   ...patch,
 });

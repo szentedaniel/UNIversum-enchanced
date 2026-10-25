@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { mergeWorkerStats, peakCpuFraction, percentile, type WorkerStats } from "#stats.ts";
+import {
+  jsonBytes,
+  mergeWorkerStats,
+  peakCpuFraction,
+  percentile,
+  type WorkerStats,
+} from "#stats.ts";
 
 const zeroStats = (): WorkerStats => ({
   rttMs: [],
+  pushBytes: [],
   intentsSent: 0,
   intentsAccepted: 0,
   rejections: {},
@@ -73,6 +80,24 @@ describe("merging worker stats", () => {
     expect(summary.failedRejoins).toBe(2);
   });
 
+  it("percentiles the game push sizes across workers", () => {
+    const a = { ...zeroStats(), pushBytes: [4_000, 5_000] };
+    const b = { ...zeroStats(), pushBytes: [6_000, 7_000] };
+    const summary = mergeWorkerStats([a, b], { cpuCount: 8 });
+    expect(summary.pushSamples).toBe(4);
+    expect(summary.pushP50Bytes).toBe(5_000);
+    expect(summary.pushP95Bytes).toBe(7_000);
+    expect(summary.maxPushBytes).toBe(7_000);
+  });
+
+  it("has no push size without samples", () => {
+    const summary = mergeWorkerStats([zeroStats()], { cpuCount: 8 });
+    expect(summary.pushSamples).toBe(0);
+    expect(summary.pushP50Bytes).toBeNull();
+    expect(summary.pushP95Bytes).toBeNull();
+    expect(summary.maxPushBytes).toBeNull();
+  });
+
   it("keeps unique errors and caps them", () => {
     const a = { ...zeroStats(), errors: ["boom", "boom", ...Array(30).fill("x")] };
     const summary = mergeWorkerStats([a], { cpuCount: 1 });
@@ -104,5 +129,12 @@ describe("generator CPU", () => {
 
   it("is zero without samples", () => {
     expect(peakCpuFraction([], 8)).toBe(0);
+  });
+});
+
+describe("game push size", () => {
+  it("counts the message's UTF-8 bytes, not its characters", () => {
+    // `{"name":"Á"}` is 12 characters, but `Á` takes 2 bytes in UTF-8.
+    expect(jsonBytes({ name: "Á" })).toBe(13);
   });
 });

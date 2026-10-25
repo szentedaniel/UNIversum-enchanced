@@ -14,6 +14,7 @@ import { turnIntents } from "#rules/turn.ts";
 import { universityIntents } from "#rules/universities.ts";
 import type { GameState } from "#state.ts";
 import type { Tx } from "#tx.ts";
+import type { Reveal } from "#reveal.ts";
 
 /**
  * Every intent's handler. A rule area adds its handlers by spreading its
@@ -31,7 +32,7 @@ const HANDLERS: IntentHandlers = {
   ...saleIntents,
 };
 
-export type Applied = { state: GameState; events: GameEvent[] };
+export type Applied = { state: GameState; events: GameEvent[]; reveals: Reveal[] };
 
 /**
  * The rules engine (ADR-0003): applies one intent and plays out every
@@ -59,6 +60,7 @@ export function apply(state: GameState, intent: Intent, ctx: Ctx): Applied | Rej
   const tx: Tx = {
     state: copy,
     events: [],
+    reveals: [],
     ctx,
     decided: false,
     phaseSet: false,
@@ -74,7 +76,7 @@ export function apply(state: GameState, intent: Intent, ctx: Ctx): Applied | Rej
   if (tx.phaseSet) {
     tx.state.turnDeadline = tx.finalPhase ? null : turnDeadlineFrom(actsAfter, ctx.turnLimitMs);
   }
-  return { state: tx.state, events: tx.events };
+  return { state: tx.state, events: tx.events, reveals: tx.reveals };
 }
 
 export function isRejection(result: Applied | Rejection): result is Rejection {
