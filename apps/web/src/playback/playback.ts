@@ -98,29 +98,24 @@ function cuesOf(steps: readonly PlaybackStep[], view: PublicView): Cue[] {
   return cues;
 }
 
-/** The last cue that has started by `elapsedMs`; `null` before the first. */
-function cueAt(cues: readonly Cue[], elapsedMs: number): Cue | null {
-  let shown: Cue | null = null;
-  for (const cue of cues) {
-    if (cue.startMs > elapsedMs) break;
-    shown = cue;
+/**
+ * The index of the last item that has started by `elapsedMs`, zero-length
+ * steps included: several items at the same ms resolve to the last of them,
+ * and `-1` before the first. The toast and the revealed board both follow it
+ * — not `stepAt`, which skips zero-length steps.
+ */
+function lastStarted(items: readonly { startMs: number }[], elapsedMs: number): number {
+  let shown = -1;
+  for (let index = 0; index < items.length; index += 1) {
+    if ((items[index]?.startMs ?? 0) > elapsedMs) break;
+    shown = index;
   }
   return shown;
 }
 
-/**
- * The last step that has started by `elapsedMs`, zero-length steps included:
- * several steps at the same ms resolve to the last of them, and `-1` before
- * the first. A reveal shows from its step's start, the toast cue's rule — not
- * `stepAt`, which skips zero-length steps.
- */
-function startedStepIndex(steps: readonly PlaybackStep[], elapsedMs: number): number {
-  let shown = -1;
-  for (let index = 0; index < steps.length; index += 1) {
-    if ((steps[index]?.startMs ?? 0) > elapsedMs) break;
-    shown = index;
-  }
-  return shown;
+/** The last cue that has started by `elapsedMs`; `null` before the first. */
+function cueAt(cues: readonly Cue[], elapsedMs: number): Cue | null {
+  return cues[lastStarted(cues, elapsedMs)] ?? null;
 }
 
 /**
@@ -235,7 +230,7 @@ export function playbackOfPush(
     frameAt(clientNow) {
       const elapsedMs = clientNow - push.receivedAt;
       // The current step's board until the Playback ends; the push's own view after.
-      const stepIndex = elapsedMs >= playbackEndMs ? -1 : startedStepIndex(steps, elapsedMs);
+      const stepIndex = elapsedMs >= playbackEndMs ? -1 : lastStarted(steps, elapsedMs);
       const gateOpen = clientNow >= opensAt;
       const shown = stepAt(steps, elapsedMs);
       const cue = cueAt(cues, elapsedMs);
