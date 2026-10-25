@@ -22,6 +22,7 @@ const VIENNA = 13;
 const BERLIN = 15;
 const VESZPREM = 1;
 const SEATTLE = 17;
+const DOUBLER = 16;
 
 const cashOf = (reveal: Reveal, playerId: string): number => playerOf(reveal, playerId).cash;
 
@@ -87,6 +88,35 @@ describe("the engine's reveals", () => {
     expect(at.fields[VIENNA]?.sale).toBe(view.fields[VIENNA]?.sale);
     expect(at.players.map((p) => p.wealth)).toEqual(view.players.map((p) => p.wealth));
     expect(at.doubler).toEqual(view.doubler);
+  });
+
+  it("R61, ADR-0005: placing the Doubler lifts a Field's Rent, and the reveal before it shows the old one", () => {
+    // Vienna alone is no Monopoly: its Rent is the plain base, so the Doubler doubles it.
+    const state = withField(newGame({ players: 2 }), VIENNA, { owner: "p1", level: 1 });
+    const landed = rollOnto(state, DOUBLER, T0);
+    const placed = accept(
+      landed.state,
+      { type: "PlaceDoubler", turn: landed.state.turn, field: VIENNA },
+      "p1",
+    );
+    const before = landed.reveals.at(-1);
+    const index = placed.events.findIndex((event) => event.type === "DoublerPlaced");
+    const at = placed.reveals[index];
+    const view = publicView(placed.state);
+
+    if (!before || !at) throw new Error("the Doubler's reveal is missing");
+    const oldRent = before.fields[VIENNA]?.rent ?? 0;
+    // The board the placement starts from has the old Rent, and no Doubler.
+    expect(oldRent).toBeGreaterThan(0);
+    expect(oldRent).toBe(publicView(landed.state).fields[VIENNA]?.rent);
+    expect(before.doubler).toBeNull();
+    // The placement's own reveal is the one the public view shows, Rent and Wealth included.
+    expect(at.doubler).toEqual({ field: VIENNA, count: 1 });
+    expect(at.doubler).toEqual(view.doubler);
+    expect(at.fields[VIENNA]?.rent).toBe(oldRent * 2);
+    expect(at.fields[VIENNA]?.rent).toBe(view.fields[VIENNA]?.rent);
+    expect(at.fields[VIENNA]?.value).toBe(view.fields[VIENNA]?.value);
+    expect(at.players.map((p) => p.wealth)).toEqual(view.players.map((p) => p.wealth));
   });
 
   it("R70, R71, ADR-0005: the bankruptcy is two beats: the Charge shows the Fields still owned, then they leave", () => {
