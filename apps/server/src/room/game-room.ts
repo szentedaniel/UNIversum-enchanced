@@ -792,10 +792,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    * deadline. The store keeps the events only, never the reveals (ADR-0003).
    * A failed write changes nothing and tells no one (the sender gets INTERNAL).
    */
-  private commit(
-    { state, events, reveals }: Pick<Applied, "state" | "events" | "reveals">,
-    intent = "Start",
-  ): RejectionCode | void {
+  private commit(applied: Applied, intent = "Start"): RejectionCode | void {
+    const { state, events, reveals } = applied;
     try {
       this.save(this.seats, state, events);
     } catch (error) {
