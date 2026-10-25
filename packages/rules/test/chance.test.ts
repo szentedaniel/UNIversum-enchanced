@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CHANCE_CARDS,
+  publicView,
   START_CASH,
   type Applied,
   type ChanceCardId,
@@ -126,6 +127,19 @@ describe("the PCR card", () => {
 
     expect(player(state, "p1").hasPcrTest).toBe(true);
     expect(JSON.stringify(state)).toBe(JSON.stringify(draw(seed).state));
+  });
+
+  it("R35, ADR-0005: the PCR test isn't in the CardDrawn reveal and is in the final view", () => {
+    const applied = draw(seedDrawing("pcrTest"));
+    const drawn = applied.events.findIndex((event) => event.type === "CardDrawn");
+    const at = applied.reveals[drawn];
+    const next = applied.reveals[drawn + 1];
+
+    // The card has no event of its own: it shows with the next event (the Turn passing)…
+    expect(at?.players.find((p) => p.id === "p1")?.hasPcrTest).toBe(false);
+    expect(next?.players.find((p) => p.id === "p1")?.hasPcrTest).toBe(true);
+    // …and the final view carries it.
+    expect(publicView(applied.state).players.find((p) => p.id === "p1")?.hasPcrTest).toBe(true);
   });
 });
 
