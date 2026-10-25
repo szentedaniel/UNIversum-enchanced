@@ -61,7 +61,7 @@ The Decision on landing on a Field the Player may buy or build on: buy a Level, 
 _Avoid_: Purchase prompt
 
 **Playback**:
-The showing, in order and on every screen, of everything one Player's action set off; the next decision, and its Turn timer, starts only once the Playback ends.
+The showing, in order and on every screen, of everything one Player's action set off, each effect appearing on the Board and the Player cards at its own moment; the next decision, and its Turn timer, starts only once the Playback ends.
 _Avoid_: Animation, replay
 
 **Decision gate**:
