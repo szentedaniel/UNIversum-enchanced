@@ -4,7 +4,7 @@ import { ROUND_BONUS, TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
 import { autoSellPicks } from "#rules/charge.ts";
 import { standingsOf, type Standing } from "#rules/game-end.ts";
 import { baseRentOf, rentOf, saleValueOf, valueOf, wealthOf } from "#rules/pricing.ts";
-import type { FieldState, GameState, PlayerState } from "#state.ts";
+import type { DoublerState, FieldState, GameState, PlayerState } from "#state.ts";
 
 /**
  * The Turn timer the ring shows: it runs for `limitMs` and empties at
@@ -45,6 +45,41 @@ export type PickOption =
    * bonus it pays then (R65); `bonus` is `null` when Start is not passed.
    */
   | { kind: "erasmus"; field: FieldId; steps: number; passesStart: boolean; bonus: number | null };
+
+/**
+ * What the Board and the Player cards show of a game: the Players with their
+ * Wealth, the Fields with their Value, Rent and Sale, and the Doubler. The
+ * public view and every reveal are built from this one derivation, so a
+ * half-revealed board and the final view can never disagree on a price
+ * (ADR-0005).
+ *
+ * The snapshot owns every object in it: rule code keeps mutating `tx.state`
+ * after `emit`, so a reveal must not share one with the working state.
+ */
+export type Reveal = {
+  players: PlayerView[];
+  fields: FieldView[];
+  doubler: DoublerState | null;
+};
+
+/** Snapshots the Players, the Fields and the Doubler as the UI shows them (ADR-0005). */
+export function revealOf(state: GameState): Reveal {
+  return {
+    players: state.players.map((player) => ({
+      ...player,
+      name: { ...player.name },
+      wealth: wealthOf(state, player.id),
+    })),
+    fields: state.fields.map((field, id: FieldId) => ({
+      owner: field.owner,
+      level: field.level,
+      value: valueOf(state, id),
+      rent: rentOf(state, id),
+      sale: saleValueOf(state, id),
+    })),
+    doubler: state.doubler && { ...state.doubler },
+  };
+}
 
 /**
  * The one view every client in the Room sees. It never contains the PRNG
@@ -99,6 +134,7 @@ function pickOptions(state: GameState): PickOption[] | null {
 
 export function publicView(state: GameState, timing: ViewTiming = {}): PublicView {
   return {
+    ...revealOf(state),
     stateVersion: state.stateVersion,
     version: state.version,
     turn: state.turn,
@@ -115,18 +151,6 @@ export function publicView(state: GameState, timing: ViewTiming = {}): PublicVie
           },
     settings: state.settings,
     endsAt: state.endsAt,
-    players: state.players.map((player) => ({
-      ...player,
-      wealth: wealthOf(state, player.id),
-    })),
-    fields: state.fields.map((field, id: FieldId) => ({
-      owner: field.owner,
-      level: field.level,
-      value: valueOf(state, id),
-      rent: rentOf(state, id),
-      sale: saleValueOf(state, id),
-    })),
-    doubler: state.doubler,
     lastChanceCard: state.lastChanceCard,
     autoSell:
       state.phase.kind === "selling"
