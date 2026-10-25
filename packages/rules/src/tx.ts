@@ -7,7 +7,7 @@
 import type { GameEvent } from "#events.ts";
 import type { Ctx } from "#intents.ts";
 import type { GameState, Phase, PlayerId, PlayerState } from "#state.ts";
-import { revealOf, type Reveal } from "#view.ts";
+import { revealOf, type Reveal } from "#reveal.ts";
 
 export type Tx = {
   state: GameState;

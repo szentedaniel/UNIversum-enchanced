@@ -3,8 +3,9 @@ import { FIELD_COUNT } from "#board.ts";
 import { ROUND_BONUS, TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
 import { autoSellPicks } from "#rules/charge.ts";
 import { standingsOf, type Standing } from "#rules/game-end.ts";
-import { baseRentOf, rentOf, saleValueOf, valueOf, wealthOf } from "#rules/pricing.ts";
-import type { DoublerState, FieldState, GameState, PlayerState } from "#state.ts";
+import { baseRentOf, rentOf } from "#rules/pricing.ts";
+import { revealOf, type FieldView, type PlayerView } from "#reveal.ts";
+import type { GameState } from "#state.ts";
 
 /**
  * The Turn timer the ring shows: it runs for `limitMs` and empties at
@@ -16,22 +17,6 @@ export type TurnTimer = { endsAt: number; limitMs: number };
 
 /** The server's clock overrides for the view (e2e runs); production leaves both out. */
 export type ViewTiming = { turnLimitMs?: number };
-
-/** A Player as clients see them: their state plus the numbers the UI shows. */
-export type PlayerView = PlayerState & {
-  /** Cash plus the Value of their Fields; the podium ranks by it (R77). */
-  wealth: number;
-};
-
-/** A Field as clients see it: its state plus the numbers the UI shows. */
-export type FieldView = FieldState & {
-  /** What the Field is worth at its current Level (0 when unbuilt). */
-  value: number;
-  /** What another Player pays on landing here now (0 when unowned). */
-  rent: number;
-  /** What the Bank pays for it in a Sale: 90% of Value (360,000 for a Museum). */
-  sale: number;
-};
 
 /**
  * The effect of one offered Field in a Doubler or Erasmus pick: the numbers
@@ -45,41 +30,6 @@ export type PickOption =
    * bonus it pays then (R65); `bonus` is `null` when Start is not passed.
    */
   | { kind: "erasmus"; field: FieldId; steps: number; passesStart: boolean; bonus: number | null };
-
-/**
- * What the Board and the Player cards show of a game: the Players with their
- * Wealth, the Fields with their Value, Rent and Sale, and the Doubler. The
- * public view and every reveal are built from this one derivation, so a
- * half-revealed board and the final view can never disagree on a price
- * (ADR-0005).
- *
- * The snapshot owns every object in it: rule code keeps mutating `tx.state`
- * after `emit`, so a reveal must not share one with the working state.
- */
-export type Reveal = {
-  players: PlayerView[];
-  fields: FieldView[];
-  doubler: DoublerState | null;
-};
-
-/** Snapshots the Players, the Fields and the Doubler as the UI shows them (ADR-0005). */
-export function revealOf(state: GameState): Reveal {
-  return {
-    players: state.players.map((player) => ({
-      ...player,
-      name: { ...player.name },
-      wealth: wealthOf(state, player.id),
-    })),
-    fields: state.fields.map((field, id: FieldId) => ({
-      owner: field.owner,
-      level: field.level,
-      value: valueOf(state, id),
-      rent: rentOf(state, id),
-      sale: saleValueOf(state, id),
-    })),
-    doubler: state.doubler && { ...state.doubler },
-  };
-}
 
 /**
  * The one view every client in the Room sees. It never contains the PRNG

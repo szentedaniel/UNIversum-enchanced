@@ -14,7 +14,7 @@ import { turnIntents } from "#rules/turn.ts";
 import { universityIntents } from "#rules/universities.ts";
 import type { GameState } from "#state.ts";
 import type { Tx } from "#tx.ts";
-import type { Reveal } from "#view.ts";
+import type { Reveal } from "#reveal.ts";
 
 /**
  * Every intent's handler. A rule area adds its handlers by spreading its
