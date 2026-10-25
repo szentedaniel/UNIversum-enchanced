@@ -9,6 +9,8 @@ export type RejectionCounts = Record<string, number>;
 export type WorkerStats = {
   /** Exact client round trips (intent sent → the answering view), in ms. */
   rttMs: number[];
+  /** The UTF-8 byte length of each `game` push received, re-encoded as JSON. */
+  pushBytes: number[];
   intentsSent: number;
   intentsAccepted: number;
   rejections: RejectionCounts;
@@ -46,11 +48,16 @@ export type WorkerStats = {
 export type CpuSample = { at: number; seconds: number };
 
 /** The merged client-side numbers the verdict reads. */
-export type ClientSummary = Omit<WorkerStats, "rttMs" | "cpuSamples"> & {
+export type ClientSummary = Omit<WorkerStats, "rttMs" | "pushBytes" | "cpuSamples"> & {
   rttSamples: number;
   rttP95Ms: number | null;
   rttP99Ms: number | null;
   maxRttMs: number | null;
+  /** Game pushes measured (`game` pushes received). */
+  pushSamples: number;
+  pushP50Bytes: number | null;
+  pushP95Bytes: number | null;
+  maxPushBytes: number | null;
   /** The generator's own CPU, as a share of the whole machine. */
   generatorCpuPeakFraction: number;
 };
@@ -58,6 +65,7 @@ export type ClientSummary = Omit<WorkerStats, "rttMs" | "cpuSamples"> & {
 export function emptyWorkerStats(): WorkerStats {
   return {
     rttMs: [],
+    pushBytes: [],
     intentsSent: 0,
     intentsAccepted: 0,
     rejections: {},
@@ -83,12 +91,31 @@ export function emptyWorkerStats(): WorkerStats {
   };
 }
 
+/**
+ * The size of a message the SDK handed the worker, as the UTF-8 byte length of
+ * its JSON encoding. The wire itself is msgpack, and the SDK decodes it before
+ * `onMessage`, so this is a comparable size of the same payload, not the raw
+ * frame: it names no field, so a push that grows (e.g. one reveal per event)
+ * needs no change here.
+ */
+export function jsonBytes(message: object): number {
+  return Buffer.byteLength(JSON.stringify(message));
+}
+
 /** The nearest-rank percentile: the smallest sample at or above `p`% of the rest. */
 export function percentile(samples: number[], p: number): number | null {
   if (samples.length === 0) return null;
   const sorted = samples.toSorted((a, b) => a - b);
   const rank = Math.ceil((p / 100) * sorted.length);
   return sorted[Math.min(sorted.length - 1, Math.max(0, rank - 1))] ?? null;
+}
+
+/** The largest sample; `null` without samples. */
+export function maxOf(samples: number[]): number | null {
+  return samples.reduce<number | null>(
+    (max, value) => (max === null || value > max ? value : max),
+    null,
+  );
 }
 
 const CPU_SAMPLE_MS = 5_000;
@@ -117,6 +144,7 @@ export function mergeWorkerStats(
   options: { cpuCount: number },
 ): ClientSummary {
   const rtt = workers.flatMap((worker) => worker.rttMs);
+  const push = workers.flatMap((worker) => worker.pushBytes);
   const rejections: RejectionCounts = {};
   let maxRejoinAfterReadyMs: number | null = null;
   for (const worker of workers) {
@@ -134,10 +162,11 @@ export function mergeWorkerStats(
     rttSamples: rtt.length,
     rttP95Ms: percentile(rtt, 95),
     rttP99Ms: percentile(rtt, 99),
-    maxRttMs: rtt.reduce<number | null>(
-      (max, value) => (max === null || value > max ? value : max),
-      null,
-    ),
+    maxRttMs: maxOf(rtt),
+    pushSamples: push.length,
+    pushP50Bytes: percentile(push, 50),
+    pushP95Bytes: percentile(push, 95),
+    maxPushBytes: maxOf(push),
     intentsSent: sum(workers, (worker) => worker.intentsSent),
     intentsAccepted: sum(workers, (worker) => worker.intentsAccepted),
     rejections,

@@ -28,7 +28,7 @@ import {
 import { chooseIntent, isGameOver, offeredIntents } from "#bot.ts";
 import { THRESHOLDS } from "#config.ts";
 import { dropPlanForGame, gameSeed, seededRandom, type DropPlan, type RoomPlan } from "#profile.ts";
-import { emptyWorkerStats, type WorkerStats } from "#stats.ts";
+import { emptyWorkerStats, jsonBytes, type WorkerStats } from "#stats.ts";
 import { sleep, withTimeout } from "#wait.ts";
 import type { MainToWorker, WorkerConfig, WorkerToMain } from "#worker-protocol.ts";
 
@@ -307,6 +307,8 @@ class RoomClient {
   }
 
   onGame(message: GameMessage): void {
+    // Every push counts, including one that turns out stale: it still crossed the wire.
+    stats.pushBytes.push(jsonBytes(message));
     const view = message.view;
     if (view.version < this.lastVersion) {
       stats.versionRegressions += 1;
@@ -639,6 +641,7 @@ port.on("message", (message: MainToWorker) => {
       };
       post(snapshotMessage);
       stats.rttMs = [];
+      stats.pushBytes = [];
       break;
     }
     case "stop":
@@ -647,7 +650,12 @@ port.on("message", (message: MainToWorker) => {
   }
 });
 
-/** A copy for `postMessage`, without the large RTT array (drained after a snapshot). */
+/** A copy for `postMessage`, with its own sample arrays (drained after a snapshot). */
 function cloneStats(): WorkerStats {
-  return { ...stats, rttMs: [...stats.rttMs], rejections: { ...stats.rejections } };
+  return {
+    ...stats,
+    rttMs: [...stats.rttMs],
+    pushBytes: [...stats.pushBytes],
+    rejections: { ...stats.rejections },
+  };
 }
