@@ -139,6 +139,35 @@ function viewOfStep(view: PublicView, reveal: Reveal | undefined): PublicView {
   };
 }
 
+/**
+ * One merged view per step, built once per push. A step whose reveal is
+ * structurally equal to the previous step's hands out that view object again,
+ * so the Board — which re-syncs on a changed `view` object — redraws only when
+ * the revealed board changes (story 25). A step without a reveal shows the
+ * push's own view, and starts a new comparison.
+ */
+function viewsOfSteps(view: PublicView, reveals: readonly Reveal[], count: number): PublicView[] {
+  const views: PublicView[] = [];
+  let previousReveal: string | null = null;
+  let previousView: PublicView | null = null;
+  for (let index = 0; index < count; index += 1) {
+    const reveal = reveals[index];
+    if (!reveal) {
+      previousReveal = null;
+      previousView = null;
+      views.push(view);
+      continue;
+    }
+    const key = JSON.stringify(reveal);
+    if (previousView === null || key !== previousReveal) {
+      previousView = viewOfStep(view, reveal);
+    }
+    previousReveal = key;
+    views.push(previousView);
+  }
+  return views;
+}
+
 /** A step whose event moved a pawn; its `from`, `to` and `steps` drive the walk. */
 type MovedStep = PlaybackStep & { event: EventOf<"Moved"> };
 
@@ -208,7 +237,7 @@ export function playbackOfPush(
 ): Playback {
   const steps = timelineOf(push.events);
   const playbackEndMs = playbackOf(push.events);
-  const views = steps.map((_, index) => viewOfStep(push.view, push.reveals[index]));
+  const views = viewsOfSteps(push.view, push.reveals, steps.length);
   const cues = cuesOf(steps, push.view);
   const moves = movesByPlayer(steps);
 

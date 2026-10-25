@@ -505,25 +505,40 @@ describe("the Playback core's reveals", () => {
     expect(cashOf(playback.frameAt(600_000), "p1")).toBe(50_000);
   });
 
-  it("ADR-0005: zero-length steps count, and the last step at a shared start wins", () => {
+  it("ADR-0005: a zero-length step takes the next step's start, and the Playback's end is the push's view", () => {
+    const view = viewOf(undefined, { players: playersWithCash({ p1: 50_000, p2: 150_000 }) });
     const playback = playbackOfPush(
       pushOf(
         [
           { type: "OfferDeclined", player: "p1", field: 3 },
           { type: "DiceRolled", player: "p2", dice: [1, 2] },
+          { type: "TurnPassed", player: "p1", turn: 2 },
         ],
         {
+          view,
           reveals: [
             revealWithCash({ p1: 1_000, p2: 100_000 }),
             revealWithCash({ p1: 2_000, p2: 100_000 }),
+            revealWithCash({ p1: 3_000, p2: 100_000 }),
           ],
         },
       ),
     );
+    const playbackEnd =
+      1_000 +
+      playbackOf([
+        { type: "OfferDeclined", player: "p1", field: 3 },
+        { type: "DiceRolled", player: "p2", dice: [1, 2] },
+        { type: "TurnPassed", player: "p1", turn: 2 },
+      ]);
 
-    // Both steps start at 0: the dice' reveal is the one the screen shows.
+    // The declined offer starts where the dice do: the latest started step's reveal shows.
     expect(cashOf(playback.frameAt(1_000), "p1")).toBe(2_000);
-    expect(cashOf(playback.frameAt(1_000 + PLAYBACK_MS.DiceRolled - 1), "p1")).toBe(2_000);
+    expect(playback.frameAt(playbackEnd - 1).view).toBe(playback.frameAt(1_000).view);
+    // The trailing Turn passing starts where the Playback ends, so its reveal never
+    // shows: the push's own view takes over. Its toast stays, as the cue rule has it.
+    expect(playback.frameAt(playbackEnd).view).toBe(view);
+    expect(playback.frameAt(playbackEnd).toast?.event.type).toBe("DiceRolled");
   });
 
   it("ADR-0005: the view is the same object within a step and a new one when the step changes", () => {
@@ -546,6 +561,29 @@ describe("the Playback core's reveals", () => {
     expect(playback.frameAt(walkEnd).view).not.toBe(first);
     // The step's merged view is built once, not per frame.
     expect(playback.frameAt(walkEnd).view).toBe(playback.frameAt(walkEnd + 1).view);
+  });
+
+  it("ADR-0005: equal reveals keep the previous step's view object, a changed one gets a new one", () => {
+    const playback = playbackOfPush(
+      pushOf(ROLL(), {
+        reveals: [
+          revealWithCash({ p1: 100_000, p2: 100_000 }),
+          revealWithCash({ p1: 100_000, p2: 100_000 }),
+          revealWithCash({ p1: 50_000, p2: 150_000 }),
+          revealWithCash({ p1: 50_000, p2: 150_000 }),
+        ],
+      }),
+    );
+    const walkStart = 1_000 + PLAYBACK_MS.DiceRolled;
+    const walkEnd = walkStart + 7 * PLAYBACK_MS.Moved;
+
+    // The dice and the walk reveal the same board: one object, so the Board skips the redraw.
+    const dice = playback.frameAt(1_000).view;
+    expect(playback.frameAt(walkStart).view).toBe(dice);
+    // The Rent changes the board: a new object, kept through the zero-length Turn passing.
+    const rent = playback.frameAt(walkEnd).view;
+    expect(rent).not.toBe(dice);
+    expect(playback.frameAt(walkEnd + PLAYBACK_MS.RentPaid - 1).view).toBe(rent);
   });
 
   it("ADR-0005: pawns and everything behind the Decision gate stay the final view's", () => {
