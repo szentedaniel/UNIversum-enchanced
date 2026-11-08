@@ -51,13 +51,14 @@ GitHub-hosted runner, opens a pull request. Nothing of the game changed.
   worktree, no merge step.
 - `promptArgs` are `ISSUE_NUMBER`, `ISSUE_TITLE`, `BRANCH` and `ISSUE_CONTEXT`
   (the issue with its comments from `gh issue view --comments`).
-- A run with **no commits** (`git rev-list --count main..HEAD`) or **no
+- A run with **no commits** (`git rev-list --count origin/main..HEAD`) or **no
   report** fails: `fail()` writes `${OUTPUT_DIR}/failure_reason.txt`, which the
   workflow turns into the issue's failure comment.
 - The report is `result.stdout` from its last line starting with `STATUS: `
   (`reportFrom` in `report.ts`), written to `${OUTPUT_DIR}/report.md` for the
-  pull request's body. Narration before the report and anything after it is
-  dropped, which is why the prompt tells the agent to end with it as plain text.
+  pull request's body. Narration before the report is dropped, so is a trailing
+  `<promise>COMPLETE</promise>`, which is why the prompt tells the agent to end
+  with the report as plain text.
 
 ## The workflow (`.github/workflows/factory-implement.yml`)
 

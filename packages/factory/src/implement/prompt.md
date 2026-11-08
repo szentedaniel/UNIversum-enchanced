@@ -59,4 +59,4 @@ HEAD: <short sha of the last commit>
 - the decision you need, with the options you see
 ```
 
-The workflow reads the report from the last line that starts with `STATUS: ` and puts it in the pull request's body, so anything before that is narration and anything after it is lost.
+The workflow takes everything from the last line that starts with `STATUS: ` to the end of your message and puts it in the pull request's body: whatever you write before it is dropped, so finish your turn with the report.
