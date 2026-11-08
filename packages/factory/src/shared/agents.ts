@@ -34,8 +34,15 @@ export const ompAgent = (): AgentProvider => {
   };
 };
 
-/** Claude Code on the owner's Pro subscription, for the judgement work. */
+/**
+ * Claude Code on the owner's Pro subscription, for the judgement work. The
+ * factory runs with `noSandbox()`, whose tag Sandcastle reads as "no sandbox"
+ * and so passes no permission flag at all; `claude -p` would then deny every
+ * edit and Bash call. The runner is an ephemeral VM, so the bypass is the
+ * intended mode, as it is for Sandcastle's sandboxed runs.
+ */
 export const claudeAgent = (model: string): AgentProvider =>
   sandcastle.claudeCode(model, {
+    permissionMode: "bypassPermissions",
     env: { CLAUDE_CODE_OAUTH_TOKEN: required("CLAUDE_CODE_OAUTH_TOKEN") },
   });
