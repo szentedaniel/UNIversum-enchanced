@@ -16,7 +16,7 @@ export const summaryComment = (review: Review): string => {
     REVIEW_MARKER,
     `## Factory review: ${review.verdict === "pass" ? "pass" : "changes requested"}`,
     "",
-    "The reviewer committed the fixes it was sure of. These are the findings it could not fix:",
+    "The reviewer committed the fixes it was sure of. These are the findings it left:",
     "",
     ...findings,
     "",
