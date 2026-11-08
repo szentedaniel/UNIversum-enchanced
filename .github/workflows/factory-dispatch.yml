@@ -1,0 +1,63 @@
+# The factory's dispatcher: picks the frontier — open `ready-for-agent` issues
+# with no open blocker, no open pull request and no run of their own — and
+# dispatches `factory-implement` for the oldest ones, within the month's
+# minutes budget. `packages/factory/src/dispatch/` holds the rules; this file
+# only starts the script.
+#
+# A 2-hourly cron would bill ~360 minutes a month for nothing, so the work
+# comes from events: a finished implementation run frees a slot, a push to
+# `main` unblocks dependants, and a 6-hourly run is the backstop.
+name: Factory Dispatch
+
+on:
+  workflow_run:
+    workflows:
+      - Factory Implement
+    types:
+      - completed
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print the plan without dispatching
+        type: boolean
+        default: false
+  schedule:
+    - cron: "0 */6 * * *"
+
+# Two triggers close together must never dispatch the same issue: a queued
+# dispatch waits for the running one, which has already seen the new run.
+concurrency:
+  group: factory-dispatch
+  cancel-in-progress: false
+
+# The job's own token stays read-only; every write goes through AGENT_PAT.
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+      # Repository variables override the script's defaults (1400 minutes, 2).
+      FACTORY_MONTHLY_MINUTES: ${{ vars.FACTORY_MONTHLY_MINUTES }}
+      FACTORY_MAX_PARALLEL: ${{ vars.FACTORY_MAX_PARALLEL }}
+
+    steps:
+      # The dispatcher is plain GitHub API work: no install, no Bun, no agent.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - name: Dispatch
+        run: node packages/factory/src/dispatch/dispatch.ts
