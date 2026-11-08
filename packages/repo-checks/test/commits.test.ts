@@ -27,6 +27,17 @@ describe("the commit rules", () => {
     expect(commitProblems(commit(subject, 1))).toHaveLength(1);
   });
 
+  it("refuse a subject ending with a period, `...` included, while `?` and `)` are fine", () => {
+    expect(commitProblems(commit("fix(server): write logs synchronously."))).toEqual([
+      "subject ends with a period",
+    ]);
+    expect(commitProblems(commit("docs: cover the trailing dots..."))).toEqual([
+      "subject ends with a period",
+    ]);
+    expect(commitProblems(commit("fix: is the parser done?"))).toEqual([]);
+    expect(commitProblems(commit("fix(web): keep the old parser (v2)"))).toEqual([]);
+  });
+
   it("refuse an AI attribution line anywhere in the message", () => {
     const coAuthored = "fix: a\n\nBody.\n\nCo-Authored-By: Claude <noreply@anthropic.com>";
     const generated = "docs: b\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)";
