@@ -46,9 +46,9 @@ ready-for-agent ──dispatch──▸ agent:in-progress ──PR opened──�
 agent:blocked ──re-dispatch──▸ agent:in-progress
 ```
 
-`agent:review` is set by the implement run once its pull request exists; the review step (#86) takes
-it from there, the merge gate and fix loop (#87) follow it. The `risk:*` verdict, `factory:report` and
-the dispatcher that picks the frontier (#88) are later tickets in the same spec.
+`agent:review` is set by the implement run once its pull request exists; the review step (#86) swaps
+it for `risk:low` or `risk:high`. The merge gate and fix loop (#87) and the dispatcher (#88) are later
+tickets in the same spec.
 
 ## Dispatching a run by hand
 
@@ -82,6 +82,38 @@ the branch is force-pushed and the issue leaves `agent:blocked` and `ready-for-h
 `AGENT_PAT` is the reason a pushed branch runs CI at all: a push or a label made with the default
 `GITHUB_TOKEN` triggers no workflow. It also has **no workflows permission**, so no agent can change
 `.github/workflows/`: a factory change is proposed as a `ready-for-human` issue with the patch inline.
+
+## Reviewing a pull request
+
+`factory-review.yml` runs when a pull request gets `agent:review`, when the owner dispatches it by
+hand (`gh workflow run factory-review.yml -f pr=95`), and every night at 01:30 UTC.
+
+1. **Queues** instead of reviewing when the Budapest clock is outside 01:00–07:00 and
+   `FACTORY_DAY_REVIEWS` (a repository variable, default 2) daytime reviews already ran today. The
+   run exits 0 and leaves `agent:review` in place; the 01:30 UTC cron dispatches one review per pull
+   request still carrying the label, so a queued review happens at night. The count comes from the
+   summary comments themselves — they open with `<!-- factory-review -->` — per Budapest calendar
+   day, and night reviews do not spend the daytime quota.
+2. Checks out the pull request's branch, installs Claude Code 2.1.311 and the
+   `mattpocock-skills@claude-plugins-official` plugin, and **fails the step unless the plugin is
+   1.3.1**: that version is the pin for the `code-review` skill, so a renamed skill fails loudly
+   instead of reviewing with nothing.
+3. Runs `node packages/factory/src/review/review.ts`: one Claude Code session on `claude-sonnet-5-5`
+   invokes `/mattpocock-skills:code-review` against `origin/main`, with the pull request's linked
+   issue and its parent spec as the Spec axis. The skill reports the Standards and Spec axes side by
+   side; the same session then commits the fixes it is sure of (conventional commits, fast checks
+   green) and emits `<review>` structured output — `verdict`, the `findings` it did **not** fix, and
+   `mergeDanger`.
+4. Pushes the reviewer's commits with `AGENT_PAT` (a plain push, never forced), posts one summary
+   comment, and swaps `agent:review` for `risk:low` (only a two-way door with a local blast radius)
+   or `risk:high`. A `changes-requested` verdict also adds `ready-for-human` until the fix loop (#87)
+   exists; a later passing review clears it again.
+5. On failure, comments the reason on the pull request, removes `agent:review` and adds
+   `ready-for-human`: the night cron must not retry a broken review forever.
+
+Claude runs with `--permission-mode bypassPermissions` (`claudeAgent` in `src/shared/agents.ts`):
+Sandcastle's `noSandbox()` provider reports no sandbox, so it passes no permission flag, and
+`claude -p` would deny every edit and Bash call. The runner is an ephemeral VM.
 
 ## Secrets
 

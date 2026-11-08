@@ -69,4 +69,11 @@ describe("claudeAgent", () => {
     expect(agent.env).toEqual({ CLAUDE_CODE_OAUTH_TOKEN: "test-oauth-token" });
     expect(printCommand(agent).command).toMatch(/^claude .*--model '?claude-opus-4-8'?/u);
   });
+
+  it("bypasses permissions: a noSandbox run has no other flag to allow edits and Bash", () => {
+    const { command } = printCommand(claudeAgent("claude-opus-4-8"));
+
+    expect(command).toContain("--permission-mode bypassPermissions");
+    expect(command).not.toContain("--dangerously-skip-permissions");
+  });
 });
