@@ -10,7 +10,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as sandcastle from "@ai-hero/sandcastle";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
-import { reportFrom } from "#implement/report.ts";
+import { reportFrom, reportStatus } from "#implement/report.ts";
 import { ompAgent } from "#shared/agents.ts";
 import { fail, outputDir, required, safeSh, sh } from "#shared/common.ts";
 
@@ -52,9 +52,14 @@ try {
   const reportPath = join(outputDir(), "report.md");
   writeFileSync(reportPath, `${report}\n`);
 
+  // The workflow reads this to pick the exit: a blocked run keeps its branch
+  // and asks on the issue; a done run opens the pull request.
+  const status = reportStatus(report);
+  writeFileSync(join(outputDir(), "status.txt"), `${status}\n`);
+
   console.log(`Implementation produced ${String(commitsAhead)} commit(s).`);
   console.log(`Commits this run: ${String(result.commits.length)}.`);
-  console.log(`Report: ${reportPath}`);
+  console.log(`Report: ${reportPath} (${status})`);
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
 }

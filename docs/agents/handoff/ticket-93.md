@@ -57,8 +57,12 @@ GitHub-hosted runner, opens a pull request. Nothing of the game changed.
 - The report is `result.stdout` from its last line starting with `STATUS: `
   (`reportFrom` in `report.ts`), written to `${OUTPUT_DIR}/report.md` for the
   pull request's body. Narration before the report is dropped, so is a trailing
-  `<promise>COMPLETE</promise>`, which is why the prompt tells the agent to end
-  with the report as plain text.
+  `<promise>COMPLETE</promise>`: the prompt asks for the signal on the last line,
+  because without it `run()` repeats the prompt until `maxIterations` (5).
+- `reportStatus(report)` reads the report's first line into `DONE` or `BLOCKED`
+  and `implement.ts` writes it to `${OUTPUT_DIR}/status.txt`; the workflow picks
+  its exit from that file. Anything but `STATUS: BLOCKED` reads as `DONE`, so a
+  malformed report still reaches review.
 
 ## The workflow (`.github/workflows/factory-implement.yml`)
 
@@ -79,8 +83,11 @@ GitHub-hosted runner, opens a pull request. Nothing of the game changed.
   @oh-my-pi/pi-coding-agent@18.18.1`.
 - Git identity `universum-factory[bot]` + its noreply address. Push is
   `--force` (a retry restarts from `main`); the branch lives only if the run
-  made it. The PR is not a draft: title `Implement #<n>: <title>`, body
-  `Closes #<n>` + the report, label `agent:review`.
+  made it, and a `BLOCKED` report pushes it too. `DONE` opens the PR (title
+  `Implement #<n>: <title>`, body `Closes #<n>` + the report, label
+  `agent:review`, not a draft); `BLOCKED` opens none — it comments the report on
+  the issue and adds `agent:blocked` + `ready-for-human`. A dispatch clears both
+  of those labels.
 - **Every** `gh` write sets `GH_TOKEN: secrets.AGENT_PAT` (job env). The job's
   own token is `contents: read`. A push or label with the default
   `GITHUB_TOKEN` starts no workflow, so CI would never run on the PR. The PAT

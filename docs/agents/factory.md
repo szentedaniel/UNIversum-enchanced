@@ -70,11 +70,14 @@ What the run does:
    the issue and its comments as context, up to five iterations.
 4. Fails, and marks the issue `agent:blocked` with the reason and the run's link, when the agent made
    **no commit** or wrote no report.
-5. Otherwise pushes the branch with `AGENT_PAT`, opens the pull request (`Closes #<n>`, the agent's
-   report as its body) and labels it `agent:review`. CI then runs on it like on any other PR.
+5. Pushes the branch with `AGENT_PAT`. What follows is the report's own `STATUS:`:
+   - `DONE` opens the pull request (`Closes #<n>`, the report as its body) and labels it
+     `agent:review`; CI then runs on it like on any other PR.
+   - `BLOCKED` opens no pull request: the report (its `## Question`) is commented on the issue, which
+     gets `agent:blocked` and `ready-for-human`, and the branch keeps the work in progress.
 
 A run is 45 minutes at most and one runs per issue at a time (`concurrency`). Re-dispatch to retry:
-the branch is force-pushed and the issue leaves `agent:blocked`.
+the branch is force-pushed and the issue leaves `agent:blocked` and `ready-for-human`.
 
 `AGENT_PAT` is the reason a pushed branch runs CI at all: a push or a label made with the default
 `GITHUB_TOKEN` triggers no workflow. It also has **no workflows permission**, so no agent can change

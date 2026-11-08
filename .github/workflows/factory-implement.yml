@@ -85,6 +85,7 @@ jobs:
         run: |
           set -euo pipefail
           gh issue edit "$ISSUE_NUMBER" --remove-label "agent:blocked" || true
+          gh issue edit "$ISSUE_NUMBER" --remove-label "ready-for-human" || true
           gh issue edit "$ISSUE_NUMBER" --add-label "agent:in-progress"
 
       - uses: actions/checkout@v7
@@ -144,12 +145,22 @@ jobs:
           OUTPUT_DIR: ${{ runner.temp }}
         run: node packages/factory/src/implement/implement.ts
 
+      # The report's own verdict: DONE opens the pull request, BLOCKED asks the
+      # question on the issue and keeps the work-in-progress branch.
+      - name: Read the report's status
+        id: report
+        if: steps.preflight.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          status=$(cat "${RUNNER_TEMP}/status.txt")
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
       - name: Push the branch
         if: steps.preflight.outputs.proceed == 'true' && success()
         run: git push --force origin "$BRANCH"
 
       - name: Open the pull request
-        if: steps.preflight.outputs.proceed == 'true' && success()
+        if: steps.preflight.outputs.proceed == 'true' && success() && steps.report.outputs.status == 'DONE'
         id: open_pr
         env:
           TITLE: ${{ steps.preflight.outputs.title }}
@@ -168,10 +179,20 @@ jobs:
 
       # The label starts the review workflow; it must be the PAT's write.
       - name: Request the review
-        if: steps.preflight.outputs.proceed == 'true' && success()
+        if: steps.preflight.outputs.proceed == 'true' && success() && steps.report.outputs.status == 'DONE'
         env:
           PR_NUMBER: ${{ steps.open_pr.outputs.number }}
         run: gh pr edit "$PR_NUMBER" --add-label "agent:review"
+
+      # A blocked report is a question, not a pull request: the branch keeps
+      # the work in progress and the issue carries the report for a human.
+      - name: Ask on a blocked report
+        if: steps.preflight.outputs.proceed == 'true' && success() && steps.report.outputs.status == 'BLOCKED'
+        run: |
+          set -euo pipefail
+          gh issue comment "$ISSUE_NUMBER" --body-file "${RUNNER_TEMP}/report.md"
+          gh issue edit "$ISSUE_NUMBER" --add-label "agent:blocked" || true
+          gh issue edit "$ISSUE_NUMBER" --add-label "ready-for-human" || true
 
       - name: Mark blocked on failure
         if: steps.preflight.outputs.proceed == 'true' && failure()

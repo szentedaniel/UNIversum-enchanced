@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reportFrom } from "#implement/report.ts";
+import { reportFrom, reportStatus } from "#implement/report.ts";
 
 describe("reportFrom", () => {
   it("takes the protocol report from the agent's last message, dropping the narration", () => {
@@ -78,5 +78,18 @@ describe("reportFrom", () => {
         "- which shape?",
       ].join("\n"),
     );
+  });
+});
+
+describe("reportStatus", () => {
+  it("reads the report's first line", () => {
+    expect(reportStatus("STATUS: DONE\nBRANCH: agent/issue-93-x\n")).toBe("DONE");
+    expect(reportStatus("STATUS: BLOCKED\n## Question\n- which shape?")).toBe("BLOCKED");
+  });
+
+  it("calls anything else done, so a malformed report still gets reviewed", () => {
+    expect(reportStatus("Implemented it, no report.")).toBe("DONE");
+    expect(reportStatus("STATUS: BLOCKED\nlater\nSTATUS: BLOCKED")).toBe("BLOCKED");
+    expect(reportStatus("## Question\nSTATUS: BLOCKED")).toBe("DONE");
   });
 });
