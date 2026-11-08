@@ -72,7 +72,7 @@ jobs:
           echo "proceed=true" >> "$GITHUB_OUTPUT"
 
       - name: Refuse the run
-        if: steps.preflight.outputs.proceed != 'true'
+        if: steps.preflight.outputs.proceed == 'false'
         env:
           REFUSAL: ${{ steps.preflight.outputs.refusal }}
         run: |
