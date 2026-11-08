@@ -6,7 +6,7 @@
  * something in its PR body.
  */
 export const reportFrom = (stdout: string): string => {
- const lines = stdout.split("\n");
- const start = lines.findLastIndex((line) => line.startsWith("STATUS: "));
- return (start === -1 ? stdout : lines.slice(start).join("\n")).trim();
+  const lines = stdout.split("\n");
+  const start = lines.findLastIndex((line) => line.startsWith("STATUS: "));
+  return (start === -1 ? stdout : lines.slice(start).join("\n")).trim();
 };

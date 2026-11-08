@@ -13,3 +13,7 @@ Default vocabulary: needs-triage, needs-info, ready-for-agent, ready-for-human, 
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Software factory
+
+Tickets are implemented on GitHub Actions by omp and Claude Code, dispatched by label. See `docs/agents/factory.md`.

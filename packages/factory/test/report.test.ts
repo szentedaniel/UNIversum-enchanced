@@ -37,14 +37,10 @@ describe("reportFrom", () => {
       "- the fix",
     ].join("\n");
 
-    expect(reportFrom(stdout)).toBe(
-      ["STATUS: DONE", "## What landed", "- the fix"].join("\n"),
-    );
+    expect(reportFrom(stdout)).toBe(["STATUS: DONE", "## What landed", "- the fix"].join("\n"));
   });
 
   it("falls back to the whole output when the agent wrote no report", () => {
-    expect(reportFrom("  Implemented it, no report.  ")).toBe(
-      "Implemented it, no report.",
-    );
+    expect(reportFrom("  Implemented it, no report.  ")).toBe("Implemented it, no report.");
   });
 });

@@ -16,26 +16,26 @@ const OMP_BINARY = "omp";
  * changes; every flag (`-p --mode json --model`, `--session <id>`) is pi's.
  */
 export const ompAgent = (): AgentProvider => {
- const base = sandcastle.pi(OMP_MODEL, {
-  captureSessions: false,
-  env: { OPENCODE_API_KEY: required("OPENCODE_API_KEY") },
- });
- return {
-  ...base,
-  name: OMP_BINARY,
-  buildPrintCommand(options) {
-   const print = base.buildPrintCommand(options);
-   return { ...print, command: print.command.replace(/^pi\b/u, OMP_BINARY) };
-  },
-  buildInteractiveArgs(options) {
-   const args = base.buildInteractiveArgs?.(options) ?? [];
-   return [OMP_BINARY, ...args.slice(1)];
-  },
- };
+  const base = sandcastle.pi(OMP_MODEL, {
+    captureSessions: false,
+    env: { OPENCODE_API_KEY: required("OPENCODE_API_KEY") },
+  });
+  return {
+    ...base,
+    name: OMP_BINARY,
+    buildPrintCommand(options) {
+      const print = base.buildPrintCommand(options);
+      return { ...print, command: print.command.replace(/^pi\b/u, OMP_BINARY) };
+    },
+    buildInteractiveArgs(options) {
+      const args = base.buildInteractiveArgs?.(options) ?? [];
+      return [OMP_BINARY, ...args.slice(1)];
+    },
+  };
 };
 
 /** Claude Code on the owner's Pro subscription, for the judgement work. */
 export const claudeAgent = (model: string): AgentProvider =>
- sandcastle.claudeCode(model, {
-  env: { CLAUDE_CODE_OAUTH_TOKEN: required("CLAUDE_CODE_OAUTH_TOKEN") },
- });
+  sandcastle.claudeCode(model, {
+    env: { CLAUDE_CODE_OAUTH_TOKEN: required("CLAUDE_CODE_OAUTH_TOKEN") },
+  });

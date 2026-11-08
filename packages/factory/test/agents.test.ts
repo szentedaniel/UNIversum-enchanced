@@ -25,9 +25,7 @@ describe("ompAgent", () => {
   it("prints pi's JSON stream with omp as the binary and the deepseek model", () => {
     const { command, stdin } = printCommand(ompAgent());
 
-    expect(command).toBe(
-      "omp -p --mode json --model 'opencode-go/deepseek-v4.1-flash:max'",
-    );
+    expect(command).toBe("omp -p --mode json --model 'opencode-go/deepseek-v4.1-flash:max'");
     expect(stdin).toBe("implement ticket 93");
   });
 
