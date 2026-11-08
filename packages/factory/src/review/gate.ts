@@ -6,7 +6,6 @@
  *
  * Env: GH_REPO, FACTORY_DAY_REVIEWS (optional, default 2).
  */
-import { z } from "zod";
 import {
   DEFAULT_DAY_REVIEWS,
   daytimeReviewsToday,
@@ -24,14 +23,17 @@ const parseQuota = (raw: string): number => {
   return quota;
 };
 
-const commentSchema = z.object({ body: z.string(), createdAt: z.string() });
+const isComment = (value: unknown): value is IssueComment =>
+  typeof value === "object" &&
+  value !== null &&
+  "body" in value &&
+  typeof value.body === "string" &&
+  "createdAt" in value &&
+  typeof value.createdAt === "string";
 
 const parseComment = (line: string): IssueComment => {
-  try {
-    return commentSchema.parse(JSON.parse(line));
-  } catch {
-    return fail(`gh returned a comment that is not JSON: ${line}`);
-  }
+  const parsed: unknown = JSON.parse(line);
+  return isComment(parsed) ? parsed : fail(`gh returned a comment that is not JSON: ${line}`);
 };
 
 try {
