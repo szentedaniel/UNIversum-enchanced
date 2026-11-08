@@ -39,11 +39,6 @@ try {
     maxIterations: 5,
   });
 
-  const commitsAhead = Number(sh("git rev-list --count origin/main..HEAD").trim());
-  if (!Number.isFinite(commitsAhead) || commitsAhead === 0) {
-    fail("Agent finished but no commits were made on the branch.");
-  }
-
   const report = reportFrom(result.stdout);
   if (report === "") {
     fail("Agent finished but wrote no report.");
@@ -56,6 +51,13 @@ try {
   // and asks on the issue; a done run opens the pull request.
   const status = reportStatus(report);
   writeFileSync(join(outputDir(), "status.txt"), `${status}\n`);
+
+  // A blocked run may stop before its first commit (the ticket contradicts the
+  // code); its question still has to reach the issue.
+  const commitsAhead = Number(sh("git rev-list --count origin/main..HEAD").trim());
+  if (status === "DONE" && (!Number.isFinite(commitsAhead) || commitsAhead === 0)) {
+    fail("Agent finished but no commits were made on the branch.");
+  }
 
   console.log(`Implementation produced ${String(commitsAhead)} commit(s).`);
   console.log(`Report: ${reportPath} (${status})`);
