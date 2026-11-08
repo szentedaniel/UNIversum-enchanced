@@ -43,4 +43,16 @@ describe("reportFrom", () => {
   it("falls back to the whole output when the agent wrote no report", () => {
     expect(reportFrom("  Implemented it, no report.  ")).toBe("Implemented it, no report.");
   });
+
+  it("drops Sandcastle's completion signal from the end of the report", () => {
+    const stdout = [
+      "STATUS: DONE",
+      "## What landed",
+      "- the fix",
+      "<promise>COMPLETE</promise>",
+      "",
+    ].join("\n");
+
+    expect(reportFrom(stdout)).toBe(["STATUS: DONE", "## What landed", "- the fix"].join("\n"));
+  });
 });
