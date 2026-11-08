@@ -10,4 +10,4 @@ export type RiskLabel = "risk:low" | "risk:high";
  * `risk:high`, whatever else the reviewer said.
  */
 export const riskLabel = (danger: MergeDanger): RiskLabel =>
- danger.door === "two-way" && danger.blastRadius === "local" ? "risk:low" : "risk:high";
+  danger.door === "two-way" && danger.blastRadius === "local" ? "risk:low" : "risk:high";

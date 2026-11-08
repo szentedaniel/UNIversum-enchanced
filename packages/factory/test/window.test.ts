@@ -78,7 +78,10 @@ describe("daytimeReviewsToday", () => {
 
   it("counts today's marker comments as spent daytime slots", () => {
     const comments = [
-      { body: `<!-- factory-review -->\n## Factory review: pass`, createdAt: "2026-01-15T12:00:00Z" },
+      {
+        body: `<!-- factory-review -->\n## Factory review: pass`,
+        createdAt: "2026-01-15T12:00:00Z",
+      },
     ];
 
     expect(daytimeReviewsToday(comments, at("2026-01-15T13:00:00Z"))).toBe(1);

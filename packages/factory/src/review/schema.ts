@@ -11,14 +11,14 @@ import { z } from "zod";
  * a wide blast radius reaches beyond the one place the diff changed.
  */
 export const reviewSchema = z.object({
- verdict: z.enum(["pass", "changes-requested"]),
- // What the reviewer could not fix. The fixes themselves are the commits.
- findings: z.array(z.string().min(1)),
- mergeDanger: z.object({
-  door: z.enum(["one-way", "two-way"]),
-  blastRadius: z.enum(["local", "wide"]),
-  reason: z.string().min(1),
- }),
+  verdict: z.enum(["pass", "changes-requested"]),
+  // What the reviewer could not fix. The fixes themselves are the commits.
+  findings: z.array(z.string().min(1)),
+  mergeDanger: z.object({
+    door: z.enum(["one-way", "two-way"]),
+    blastRadius: z.enum(["local", "wide"]),
+    reason: z.string().min(1),
+  }),
 });
 
 export type Review = z.infer<typeof reviewSchema>;

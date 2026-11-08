@@ -43,6 +43,8 @@ describe("summaryComment", () => {
       mergeDanger: { door: "one-way", blastRadius: "wide", reason: "touches the protocol" },
     });
 
-    expect(comment).toContain("**Merge danger:** one-way door, wide blast radius. touches the protocol");
+    expect(comment).toContain(
+      "**Merge danger:** one-way door, wide blast radius. touches the protocol",
+    );
   });
 });
