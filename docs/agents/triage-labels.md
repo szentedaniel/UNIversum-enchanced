@@ -10,6 +10,6 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 | `ready-for-human`          | `ready-for-human`    | Requires human implementation            |
 | `wontfix`                  | `wontfix`            | Will not be actioned                     |
 
-When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
+When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table. The factory's own labels (`agent:in-progress`, `agent:review`, `agent:blocked`, `spec:proposed`, `spec:approved`, `risk:low`, `risk:high`, `factory`, `factory:report`) are listed in [`factory.md`](factory.md).
 
 Edit the "Label in our tracker" column to match whatever vocabulary you actually use.
