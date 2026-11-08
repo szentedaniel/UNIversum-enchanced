@@ -1,0 +1,193 @@
+# One implementation run of the factory: omp implements one issue on a fresh
+# branch and opens a pull request for its review. The owner dispatches it by
+# hand for now (the scheduler that picks the frontier comes later).
+#
+# Labels: `agent:in-progress` while the run works, `agent:review` on the pull
+# request, `agent:blocked` on the issue when the run fails.
+name: Factory Implement
+
+run-name: Factory implement #${{ inputs.issue }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: The issue number to implement
+        required: true
+        type: string
+
+# One run per issue: a second dispatch would fight for the same branch.
+concurrency:
+  group: factory-implement-${{ inputs.issue }}
+  cancel-in-progress: false
+
+# The job's own token stays read-only; every write goes through AGENT_PAT,
+# which is what makes CI run on the agent's push and label chains fire (a push
+# or a label made with the default GITHUB_TOKEN triggers no workflow).
+permissions:
+  contents: read
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+      ISSUE_NUMBER: ${{ inputs.issue }}
+
+    steps:
+      - name: Check the issue number
+        run: |
+          set -euo pipefail
+          if ! [[ "$ISSUE_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::The issue input must be a number, got '$ISSUE_NUMBER'."
+            exit 1
+          fi
+
+      # A spec or PRD has sub-issues; a ticket does not. Being a sub-issue of
+      # the spec is what every ticket looks like, so only the children count.
+      - name: Preflight
+        id: preflight
+        run: |
+          set -euo pipefail
+          title=$(gh issue view "$ISSUE_NUMBER" --json title --jq .title)
+          echo "title=$title" >> "$GITHUB_OUTPUT"
+
+          sub_count=$(gh api "repos/${GH_REPO}/issues/${ISSUE_NUMBER}/sub_issues" --jq 'length' 2>/dev/null || echo 0)
+          if [ "$sub_count" != "0" ]; then
+            echo "refusal=Issue #${ISSUE_NUMBER} has ${sub_count} sub-issue(s): it is a spec, not a ticket. Dispatch one of its sub-issues instead." >> "$GITHUB_OUTPUT"
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          existing=$(gh pr list --state open --limit 100 --json url,body \
+            | jq -r --arg n "$ISSUE_NUMBER" 'map(select(.body | test("(?i)(closes|fixes|resolves)[ \t]+#" + $n + "([^0-9]|$)"))) | .[0].url // empty')
+          if [ -n "$existing" ]; then
+            echo "refusal=${existing} is already open for #${ISSUE_NUMBER}. Merge or close it first, then dispatch again." >> "$GITHUB_OUTPUT"
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse the run
+        if: steps.preflight.outputs.proceed != 'true'
+        env:
+          REFUSAL: ${{ steps.preflight.outputs.refusal }}
+        run: |
+          set -euo pipefail
+          gh issue comment "$ISSUE_NUMBER" --body "$REFUSAL"
+          echo "::notice::$REFUSAL"
+
+      - name: Transition labels
+        if: steps.preflight.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          gh issue edit "$ISSUE_NUMBER" --remove-label "agent:blocked" || true
+          gh issue edit "$ISSUE_NUMBER" --add-label "agent:in-progress"
+
+      - uses: actions/checkout@v7
+        if: steps.preflight.outputs.proceed == 'true'
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.AGENT_PAT }}
+
+      - name: Create the branch
+        if: steps.preflight.outputs.proceed == 'true'
+        env:
+          TITLE: ${{ steps.preflight.outputs.title }}
+        run: |
+          set -euo pipefail
+          slug=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g' | cut -c1-50 | sed -E 's/-+$//')
+          echo "BRANCH=agent/issue-${ISSUE_NUMBER}-${slug}" >> "$GITHUB_ENV"
+          git config user.name "universum-factory[bot]"
+          git config user.email "universum-factory[bot]@users.noreply.github.com"
+          git checkout -b "agent/issue-${ISSUE_NUMBER}-${slug}"
+
+      # The same setup as ci.yml: the implementer runs the repo's own checks.
+      - uses: pnpm/action-setup@v6
+        if: steps.preflight.outputs.proceed == 'true'
+        with:
+          cache: true
+
+      - uses: actions/setup-node@v7
+        if: steps.preflight.outputs.proceed == 'true'
+        with:
+          node-version-file: .node-version
+
+      - name: Install
+        if: steps.preflight.outputs.proceed == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate messages
+        if: steps.preflight.outputs.proceed == 'true'
+        run: pnpm --filter @universum/web run paraglide
+
+      # omp needs Bun >= 1.4.4; the CLI is pi's fork, so the model and the
+      # stream come from the same flags.
+      - uses: oven-sh/setup-bun@v2
+        if: steps.preflight.outputs.proceed == 'true'
+        with:
+          bun-version: 1.4.4
+
+      - name: Install omp
+        if: steps.preflight.outputs.proceed == 'true'
+        run: bun i -g @oh-my-pi/pi-coding-agent@18.18.1
+
+      - name: Implement
+        if: steps.preflight.outputs.proceed == 'true'
+        env:
+          ISSUE_TITLE: ${{ steps.preflight.outputs.title }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OUTPUT_DIR: ${{ runner.temp }}
+        run: node packages/factory/src/implement/implement.ts
+
+      - name: Push the branch
+        if: steps.preflight.outputs.proceed == 'true' && success()
+        run: git push --force origin "$BRANCH"
+
+      - name: Open the pull request
+        if: steps.preflight.outputs.proceed == 'true' && success()
+        id: open_pr
+        env:
+          TITLE: ${{ steps.preflight.outputs.title }}
+        run: |
+          set -euo pipefail
+          pr_title="Implement #${ISSUE_NUMBER}: ${TITLE}"
+          body_file="${RUNNER_TEMP}/pr-body.md"
+          {
+            echo "Closes #${ISSUE_NUMBER}"
+            echo
+            cat "${RUNNER_TEMP}/report.md"
+          } > "$body_file"
+          pr_url=$(gh pr create --base main --head "$BRANCH" \
+            --title "${pr_title:0:256}" --body-file "$body_file" | tail -n 1)
+          echo "number=$(basename "$pr_url")" >> "$GITHUB_OUTPUT"
+
+      # The label starts the review workflow; it must be the PAT's write.
+      - name: Request the review
+        if: steps.preflight.outputs.proceed == 'true' && success()
+        env:
+          PR_NUMBER: ${{ steps.open_pr.outputs.number }}
+        run: gh pr edit "$PR_NUMBER" --add-label "agent:review"
+
+      - name: Mark blocked on failure
+        if: steps.preflight.outputs.proceed == 'true' && failure()
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          reason="(no reason file written; check the workflow log)"
+          if [ -f "${RUNNER_TEMP}/failure_reason.txt" ]; then
+            reason=$(cat "${RUNNER_TEMP}/failure_reason.txt")
+          fi
+          body_file="${RUNNER_TEMP}/failure-comment.md"
+          printf 'The factory could not implement this issue.\n\n**Reason:** %s\n\n**Run:** %s\n\nRe-dispatch the workflow to retry.\n' "$reason" "$RUN_URL" > "$body_file"
+          gh issue edit "$ISSUE_NUMBER" --add-label "agent:blocked" || true
+          gh issue comment "$ISSUE_NUMBER" --body-file "$body_file"
+
+      - name: Always remove in-progress
+        if: always() && steps.preflight.outputs.proceed == 'true'
+        run: gh issue edit "$ISSUE_NUMBER" --remove-label "agent:in-progress" || true
