@@ -58,7 +58,6 @@ try {
   writeFileSync(join(outputDir(), "status.txt"), `${status}\n`);
 
   console.log(`Implementation produced ${String(commitsAhead)} commit(s).`);
-  console.log(`Commits this run: ${String(result.commits.length)}.`);
   console.log(`Report: ${reportPath} (${status})`);
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
