@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isFactoryWorkflow, jobMinutes, minutesUsed, monthStart } from "#dispatch/budget.ts";
+import {
+  budgetNotice,
+  isFactoryWorkflow,
+  jobMinutes,
+  minutesUsed,
+  monthStart,
+} from "#dispatch/budget.ts";
 
 const now = new Date("2026-11-08T12:00:00Z");
 
@@ -41,6 +47,22 @@ describe("monthStart", () => {
 
   it("reads the month in UTC, not in the runner's timezone", () => {
     expect(monthStart(new Date("2026-11-01T00:30:00+01:00"))).toBe("2026-10-01T00:00:00.000Z");
+  });
+});
+
+describe("budgetNotice", () => {
+  it("names the spent minutes, the month and the reset date", () => {
+    const notice = budgetNotice(1402, 1400, "2026-11-01T00:00:00.000Z");
+
+    expect(notice.marker).toBe("<!-- factory:budget:2026-11 -->");
+    expect(notice.title).toBe("Factory report — 2026-11");
+    expect(notice.body).toContain("**1402 of 1400 minutes** used in 2026-11");
+    expect(notice.body).toContain("until 2026-12-01");
+    expect(notice.body.endsWith(notice.marker)).toBe(true);
+  });
+
+  it("rolls the reset date over the year", () => {
+    expect(budgetNotice(1400, 1400, "2026-12-01T00:00:00.000Z").body).toContain("until 2027-01-01");
   });
 });
 

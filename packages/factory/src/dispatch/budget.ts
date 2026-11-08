@@ -35,3 +35,34 @@ export const monthStart = (now: Date): string =>
 /** `factory-*.yml`: the factory's workflows, not CI and not a stray file. */
 export const isFactoryWorkflow = (path: string): boolean =>
   /^\.github\/workflows\/factory-[^/]+\.ya?ml$/u.test(path);
+
+/** The first of next month, UTC: when the budget resets. */
+const monthAfter = (month: string): string => {
+  const start = new Date(month);
+  return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1))
+    .toISOString()
+    .slice(0, 10);
+};
+
+export interface BudgetNotice {
+  /** The hidden marker that keeps the notice to one per month. */
+  marker: string;
+  /** The title of the report issue, when there is none to comment on yet. */
+  title: string;
+  body: string;
+}
+
+/** What the dispatcher posts once the month's minutes are spent. */
+export const budgetNotice = (used: number, limit: number, month: string): BudgetNotice => {
+  const period = month.slice(0, 7);
+  const marker = `<!-- factory:budget:${period} -->`;
+  const body = [
+    `The factory's monthly Actions budget is spent: **${String(used)} of ${String(limit)} minutes** used in ${period}.`,
+    "",
+    `No implementer is dispatched until ${monthAfter(month)}. Raise the repository variable`,
+    "`FACTORY_MONTHLY_MINUTES` if this month needs more minutes than that.",
+    "",
+    marker,
+  ].join("\n");
+  return { marker, title: `Factory report — ${period}`, body };
+};

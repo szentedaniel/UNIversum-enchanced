@@ -94,7 +94,7 @@ export const frontierOf = (
     else skipped.push({ issue, reason });
   }
   return {
-    eligible: eligible.sort(byPriorityThenAge),
-    skipped: skipped.sort((a, b) => byPriorityThenAge(a.issue, b.issue)),
+    eligible: eligible.toSorted(byPriorityThenAge),
+    skipped: skipped.toSorted((a, b) => byPriorityThenAge(a.issue, b.issue)),
   };
 };
