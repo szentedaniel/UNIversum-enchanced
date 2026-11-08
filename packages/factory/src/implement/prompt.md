@@ -16,7 +16,7 @@ You are on branch `{{BRANCH}}`, created from `main` and already checked out in t
 
 - **No worktree (§2):** you are already on `{{BRANCH}}`; commit directly.
 - **No e2e, no `docker compose build` (§5):** the PR's CI runs them. Running Playwright here wastes the factory's monthly minutes.
-- **The fast checks you must leave green, in CI order:** `pnpm run check:commits`, `pnpm exec oxfmt --check`, `pnpm run lint`, `pnpm -r run typecheck`, `pnpm exec vitest run`. Run `pnpm install` first, and `pnpm --filter @universum/web run paraglide` after any message-file change. If you add or remove a dependency, regenerate the lockfile with `pnpm install --no-frozen-lockfile` (pnpm freezes it when `CI` is set) and commit it: CI installs with `--frozen-lockfile`.
+- **The checks (§5):** run every check of `docs/agents/implementer.md` §5 except the e2e run and `docker compose build`, in that order. Run `pnpm install` first, and `pnpm --filter @universum/web run paraglide` after any message-file change. If you add or remove a dependency, regenerate the lockfile with `pnpm install --no-frozen-lockfile` (pnpm freezes it when `CI` is set) and commit it: CI installs with `--frozen-lockfile`.
 - **No handoff-index conflicts (§6):** other agents are not running, so write `docs/agents/handoff/ticket-<N>.md` and its `INDEX.md` line whenever the ticket asks for them.
 - **No report file:** do not write a report to `~/.cache/`. Your final message is the report (see below).
 
@@ -48,7 +48,7 @@ HEAD: <short sha of the last commit>
 
 ## Checks
 
-- each fast check: pass/fail (+ vitest counts)
+- each check you ran: pass/fail (+ vitest counts)
 
 ## Deviations from the ticket
 
