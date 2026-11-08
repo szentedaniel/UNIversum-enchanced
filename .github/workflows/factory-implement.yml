@@ -1,12 +1,15 @@
 # One implementation run of the factory: omp implements one issue on a fresh
-# branch and opens a pull request for its review. The owner dispatches it by
-# hand for now (the scheduler that picks the frontier comes later).
+# branch and opens a pull request for its review. The dispatcher
+# (`factory-dispatch.yml`) starts these; the owner can also dispatch one by
+# hand, which is the override.
 #
 # Labels: `agent:in-progress` while the run works, `agent:review` on the pull
 # request, `agent:blocked` on the issue when the run fails.
 name: Factory Implement
 
-run-name: Factory implement #${{ inputs.issue }}
+# Quoted: an unquoted `#` after a space starts a YAML comment, which silently
+# dropped the issue number from the run's name. The dispatcher reads it back.
+run-name: "Factory implement #${{ inputs.issue }}"
 
 on:
   workflow_dispatch:

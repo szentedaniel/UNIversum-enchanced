@@ -15,6 +15,15 @@ export const required = (name: string): string => {
   return value;
 };
 
+/**
+ * A limit from the environment, else the default: an unset variable, a `0` or
+ * a typo must not silently switch a limit off.
+ */
+export const positiveInt = (value: string | undefined, fallback: number): number => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+};
+
 /** Where the workflow reads the failure comment's reason from. */
 export const outputDir = (): string => process.env["OUTPUT_DIR"] ?? "/tmp";
 

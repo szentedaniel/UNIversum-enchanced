@@ -15,7 +15,8 @@ lint, typecheck, vitest. Playwright and `docker compose build` run once, in CI, 
 
 - `packages/factory/` (`@universum/factory`) — one folder per step: `src/<step>/<step>.ts` plus the
   `prompt.md` it hands the agent. The prompts are the contract with the agent; the TypeScript around
-  them only starts the run, checks its result and leaves the report for the workflow.
+  them only starts the run, checks its result and leaves the report for the workflow. The dispatch
+  step runs no agent: `src/dispatch/` decides which issues to start.
 - Scripts run with plain `node` (Node 26 strips the types, as `pnpm run check:commits` does). There is
   no build step and no `tsx`.
 - `.github/workflows/factory-*.yml` are thin shells: labels, branch, push, PR. Anything with a branch
@@ -47,12 +48,45 @@ agent:blocked ──re-dispatch──▸ agent:in-progress
 ```
 
 `agent:review` is set by the implement run once its pull request exists; the review step (#86) swaps
-it for `risk:low` or `risk:high`. The merge gate and fix loop (#87) and the dispatcher (#88) are later
-tickets in the same spec.
+it for `risk:low` or `risk:high`, and the merge gate and fix loop (#87) follow it. The weekly
+`factory:report` issue is a later ticket in the same spec.
+
+## Dispatch
+
+`factory-dispatch.yml` picks the frontier: open `ready-for-agent` issues that no run holds
+(`agent:in-progress`), no human owns (`agent:blocked`, `ready-for-human`), no open blocker holds back
+(GitHub's native dependencies), that are not a spec (sub-issues), and that no open pull request
+already closes. Oldest first — there is no priority label yet (`PRIORITY_LABELS` in
+`packages/factory/src/dispatch/frontier.ts` is the seam) — and at most `FACTORY_MAX_PARALLEL`
+implementers (default 2) run at once. An issue whose run is already queued counts as running, even
+before its `agent:in-progress` label lands.
+
+It runs when an implementation run finishes (a slot frees), on every push to `main` (a merge unblocks
+dependants) and every 6 hours as a backstop; `concurrency: factory-dispatch` makes two triggers take
+turns. Each dispatch is `gh workflow run factory-implement.yml -f issue=<n>` with `AGENT_PAT`.
+
+Minutes come from the jobs API: every job of every `factory-*.yml` run created this calendar month
+(UTC), rounded up per job the way GitHub bills. `FACTORY_MONTHLY_MINUTES` (default 1400) caps them.
+When they are spent the dispatcher posts one comment — deduped by a hidden marker — on the newest open
+`factory:report` issue, opening one when there is none, and dispatches nothing until the month rolls
+over. Both limits are repository variables of the same names; unset or misspelt values keep the
+defaults.
+
+A dry run prints the frontier with each skipped issue's reason, the running count, the budget and
+what it would dispatch, and writes nothing:
+
+```bash
+gh workflow run factory-dispatch.yml -f dry_run=true
+gh run watch "$(gh run list --workflow factory-dispatch.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+```
+
+The same plan against the live repo, from a checkout (needs `gh` logged in): `DRY_RUN=1
+GH_REPO=<owner>/<repo> node packages/factory/src/dispatch/dispatch.ts`.
 
 ## Dispatching a run by hand
 
-Until the dispatcher exists, the owner dispatches:
+The dispatcher starts runs on its own; dispatch one by hand to retry an issue it passes over, or to
+start one before its next event:
 
 ```bash
 gh workflow run factory-implement.yml -f issue=93
