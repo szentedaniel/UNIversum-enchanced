@@ -35,7 +35,7 @@ Red → green → refactor, one behaviour at a time: the failing test first, the
 
 # REPORT
 
-End your final message with the protocol's report, in its exact format and as plain text — no code fence, no text after it:
+End your final message with the protocol's report, in its exact format and as plain text — no code fence:
 
 ```text
 STATUS: DONE | BLOCKED
@@ -59,4 +59,6 @@ HEAD: <short sha of the last commit>
 - the decision you need, with the options you see
 ```
 
-The workflow takes everything from the last line that starts with `STATUS: ` to the end of your message and puts it in the pull request's body: whatever you write before it is dropped, so finish your turn with the report.
+**Then put `<promise>COMPLETE</promise>` alone on the very last line.** It is Sandcastle's completion signal: without it the run assumes you are not finished and repeats this whole prompt, again, up to five times. The workflow strips the signal before it uses the report, so the pull request's body is the report alone.
+
+The workflow takes everything from the last line that starts with `STATUS: ` to the end of your message and puts it in the pull request's body: whatever you write before it is dropped.

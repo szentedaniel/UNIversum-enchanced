@@ -55,4 +55,28 @@ describe("reportFrom", () => {
 
     expect(reportFrom(stdout)).toBe(["STATUS: DONE", "## What landed", "- the fix"].join("\n"));
   });
+
+  it("keeps the report when narration and the completion signal surround it", () => {
+    const stdout = [
+      "I'll read the protocol first.",
+      "STATUS: BLOCKED",
+      "## What landed",
+      "- half the ticket",
+      "",
+      "## Question",
+      "- which shape?",
+      "<promise>COMPLETE</promise>",
+    ].join("\n");
+
+    expect(reportFrom(stdout)).toBe(
+      [
+        "STATUS: BLOCKED",
+        "## What landed",
+        "- half the ticket",
+        "",
+        "## Question",
+        "- which shape?",
+      ].join("\n"),
+    );
+  });
 });
