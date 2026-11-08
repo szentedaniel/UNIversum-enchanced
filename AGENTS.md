@@ -16,4 +16,4 @@ Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agen
 
 ### Software factory
 
-Tickets are implemented on GitHub Actions by omp and Claude Code, dispatched by label. See `docs/agents/factory.md`.
+Tickets are implemented on GitHub Actions, dispatched by hand (`workflow_dispatch`) until the dispatcher (#88) lands; omp implements, Claude Code reviews. See `docs/agents/factory.md`.
