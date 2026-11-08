@@ -12,6 +12,7 @@ export default defineConfig({
       "apps/web",
       "apps/loadtest",
       "packages/repo-checks",
+      "packages/factory",
     ],
     passWithNoTests: true,
   },
