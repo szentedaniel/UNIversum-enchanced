@@ -2,6 +2,8 @@
 
 How an implementer agent (omp, Claude Code, or a human) builds one ticket of a spec (spec #22, v2 modernization, or a later one such as #49, Playback; the ticket's _Parent_ names it). The orchestrator (Claude Code) plans, dispatches one ticket per implementer, verifies the result and merges it. The implementer builds; it never merges, pushes or closes issues.
 
+A factory run on GitHub Actions follows this protocol too, with the deviations listed in `packages/factory/src/implement/prompt.md` (see `docs/agents/factory.md`).
+
 ## 1. Read before writing code
 
 1. The ticket: `gh issue view <N> --comments`. The **Implementation context** comment lists what the ticket builds on, the files involved, the hazards, and which handoff docs to read.
