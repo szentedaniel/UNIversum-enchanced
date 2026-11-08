@@ -33,6 +33,7 @@ export function commitProblems(commit: Commit): string[] {
       `subject is not \`type(scope): description\` with a type of ${COMMIT_TYPES.join(", ")}`,
     );
   }
+  if (subject.endsWith(".")) problems.push("subject ends with a period");
   const attribution = ATTRIBUTION.exec(commit.message);
   if (attribution) problems.push(`carries an attribution line: "${attribution[0].trim()}"`);
   return problems;
