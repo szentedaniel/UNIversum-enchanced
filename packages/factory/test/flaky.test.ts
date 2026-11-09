@@ -9,7 +9,7 @@ import {
 } from "#maintain/flaky.ts";
 
 /** One real-shape `gh run view --log` excerpt: two flaky tests, one failure. */
-const log = readFileSync(new URL("fixtures/playwright-flaky.log", import.meta.url), "utf8");
+const log = readFileSync(new URL("fixtures/playwright-flaky.txt", import.meta.url), "utf8");
 
 const turnHold = {
   project: "desktop-chromium",
