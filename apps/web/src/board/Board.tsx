@@ -6,29 +6,23 @@ import { useStore } from "zustand";
 import { createBoard, type Board as BoardRenderer } from "#board/board.ts";
 import { fieldFacts } from "#board/field-facts.ts";
 import { Button } from "#components/ui/button.tsx";
-import {
-  decisionKey,
-  fieldTap,
-  mySaleOrPick,
-  openDecision,
-  type OpenDecision,
-} from "#decision/decision.ts";
-import { selectedPick, singleMarks } from "#pick/pick.ts";
-import { AUTO_SELL_WARNING_MS, saleMarks } from "#pick/sale.ts";
+import { fieldTap, openDecision, pickSyncOf, type OpenDecision } from "#decision/decision.ts";
 import { currentPlayback, gateOpenOf, playbackStore } from "#playback/playback-store.ts";
 import { inFlightOf, roomStore } from "#stores/room-store.ts";
-import { salePicksFor, uiStore } from "#stores/ui-store.ts";
+import { uiStore } from "#stores/ui-store.ts";
 import { exposeBoard } from "#test-hooks.ts";
 import { fieldName, formatCompactMoney, m } from "#text.ts";
 
 /** Elements over the Board (the Field card, the pick tray) that a revealed Field must clear. */
 const OBSTACLES = "[data-board-obstacle]";
 const ZOOM_STEP = 1.5;
+/** A few ms past Auto-sell's warning, so its wake-up never lands before the marks change. */
+const WAKE_SLACK_MS = 50;
 
 /**
  * This client's Decision: the latest frame, this client and the in-flight lock
  * (spec #72). The one place the Board asks what it may do; `fieldTap` and
- * `decisionKey` read that answer.
+ * `pickSyncOf` read that answer.
  */
 function currentDecision(): OpenDecision | null {
   const room = roomStore.getState();
@@ -129,35 +123,21 @@ export function Board() {
       const syncPick = () => {
         clearTimeout(warningTimer);
         const { frame } = playbackStore.getState();
-        const decision = currentDecision();
-        // `currentDecision` is the gate check: it is null while the gate is shut,
-        // so the key becomes null at the Playback's start and the open card
-        // resets at once. It ignores `busy`, so a send never resets the picks.
-        const key = decisionKey(decision);
-        if (key !== pickKey) {
-          pickKey = key;
+        const { push } = roomStore.getState();
+        // The Sale's marks count down on the server's clock: only the push's offset applies.
+        const serverNowMs = push === null ? Date.now() : serverNow(push.clockOffset);
+        const sync = pickSyncOf(currentDecision(), frame, serverNowMs, uiStore.getState());
+        // `key` is null while the gate is shut, so the open card and inspect mode
+        // reset at the Playback's start; it ignores `busy`, so a send never resets the picks.
+        if (sync.key !== pickKey) {
+          pickKey = sync.key;
           uiStore.getState().focusPick(null);
           uiStore.getState().setInspect(false);
           if (uiStore.getState().selectedField !== null) uiStore.getState().selectField(null);
         }
-        // Only this client's Sale or pick carries the value; another Player's is
-        // a waiting line, which the helper reads as neither.
-        const mine = mySaleOrPick(decision);
-        if (mine?.kind === "pick") {
-          const field = selectedPick(mine.pick, uiStore.getState().singlePick);
-          return renderer.setPick(singleMarks(mine.pick, field));
-        }
-        if (mine?.kind !== "sale") return renderer.setPick(null);
-        // A Sale comes from the open gate's view, so that view exists too.
-        if (frame === null || frame.view.turnTimer === null) return renderer.setPick(null);
-        // The marks count down on the server's clock: only the push's offset applies.
-        const { push } = roomStore.getState();
-        if (push === null) return renderer.setPick(null);
-        const msLeft = frame.view.turnTimer.endsAt - serverNow(push.clockOffset);
-        const picks = salePicksFor(uiStore.getState().salePicks, mine.sale.key);
-        renderer.setPick(saleMarks(mine.sale, frame.view, picks, msLeft));
-        if (msLeft > AUTO_SELL_WARNING_MS) {
-          warningTimer = window.setTimeout(syncPick, msLeft - AUTO_SELL_WARNING_MS + 50);
+        renderer.setPick(sync.marks);
+        if (sync.wakeInMs !== null) {
+          warningTimer = window.setTimeout(syncPick, sync.wakeInMs + WAKE_SLACK_MS);
         }
       };
       syncPick();

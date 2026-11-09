@@ -11,7 +11,7 @@
 import { join } from "node:path";
 import * as sandcastle from "@ai-hero/sandcastle";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
-import { gh, optionalIssueNumber } from "#intake/gh.ts";
+import { optionalIssueNumber } from "#intake/gh.ts";
 import { openIssues } from "#intake/issues.ts";
 import { triageAction } from "#intake/render.ts";
 import { triageSchema } from "#intake/schema.ts";
@@ -25,6 +25,7 @@ import { changeSince, treeState } from "#intake/tree.ts";
 import { commentOn, labelIssue, queueReady } from "#intake/writes.ts";
 import { claudeAgent } from "#shared/agents.ts";
 import { fail, positiveInt, required } from "#shared/common.ts";
+import { gh } from "#shared/github.ts";
 
 const MODEL = "claude-sonnet-5-5";
 

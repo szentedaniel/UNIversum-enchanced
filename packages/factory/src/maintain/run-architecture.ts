@@ -14,11 +14,10 @@ import { join } from "node:path";
 import * as sandcastle from "@ai-hero/sandcastle";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import {
-  DEFAULT_MAX_PROPOSALS,
+  architectureRun,
   newProposals,
   proposalIssueBody,
   proposalLabel,
-  proposalsSchemaOf,
   type Proposal,
 } from "#maintain/proposals.ts";
 import { claudeAgent } from "#shared/agents.ts";
@@ -39,23 +38,13 @@ const writeTemp = (proposal: Proposal): string => {
 const describe = (proposal: Proposal): string =>
   `${proposal.title} (${proposal.twoWayDoor ? "two-way" : "one-way"} door)`;
 
-const parseMax = (raw: string): number => {
-  if (raw.trim() === "") return DEFAULT_MAX_PROPOSALS;
-  const max = Number(raw);
-  if (!Number.isInteger(max) || max < 1 || max > 20) {
-    return fail(`MAX_PROPOSALS must be an integer from 1 to 20, got '${raw}'.`);
-  }
-  return max;
-};
-
 const main = async (): Promise<void> => {
   const repo = required("GH_REPO");
   const dryRun = process.env["DRY_RUN"] === "1";
-  const max = parseMax(process.env["MAX_PROPOSALS"] ?? "");
-  const focus = (process.env["FOCUS"] ?? "")
-    .trim()
-    .split(/\s+/)
-    .filter((path) => path !== "");
+  const { focus, schema, promptArgs } = architectureRun(
+    { MAX_PROPOSALS: process.env["MAX_PROPOSALS"], FOCUS: process.env["FOCUS"] },
+    new Date(),
+  );
 
   const result = await sandcastle.run({
     name: "architecture",
@@ -64,16 +53,7 @@ const main = async (): Promise<void> => {
     logging: { type: "stdout" },
     promptFile: join(import.meta.dirname, "prompt.md"),
     promptArgs: {
-      DATE: new Date().toISOString().slice(0, 10),
-      MAX_PROPOSALS: String(max),
-      // The weekly pass is picky; a sweep the owner lifted the cap for wants
-      // every opportunity that pays for a ticket.
-      CAP_RULE:
-        max > DEFAULT_MAX_PROPOSALS
-          ? "This run is a sweep the owner asked for: propose every opportunity in scope that would pay for a ticket, strongest first, up to the cap. Leave out only the ones you would not defend."
-          : "It is not a target: propose one strong opportunity rather than two weak ones, and none when nothing this week would pay for a ticket.",
-      FOCUS:
-        focus.length === 0 ? "the whole repository" : focus.map((path) => `\`${path}\``).join(", "),
+      ...promptArgs,
       // The pass looks where the code keeps changing; the log is the pointer.
       RECENT_COMMITS:
         safeSh(`git log --oneline -80 -- ${focus.map(shellArg).join(" ")}`) ||
@@ -82,7 +62,7 @@ const main = async (): Promise<void> => {
     // Sandcastle 0.14 allows structured output only at one iteration, as the
     // review step does.
     maxIterations: 1,
-    output: sandcastle.Output.object({ tag: "proposals", schema: proposalsSchemaOf(max) }),
+    output: sandcastle.Output.object({ tag: "proposals", schema }),
   });
 
   const proposals = result.output.proposals;

@@ -352,6 +352,9 @@ export const mergeStep = (facts: MergeFacts): MergeStep => {
   if (review === "stale") return { kind: "requeue-review" };
   if (review !== "pass") return wait(reviewReason(review));
 
+  // Still UNKNOWN after the read's wait: never merge on an unanswered conflict check.
+  if (facts.mergeState === "unknown") return wait("GitHub has not computed mergeability yet");
+
   const gate = canAutoMerge(facts);
   return gate.merge ? { kind: "merge" } : { kind: "escalate", reasons: gate.reasons };
 };
