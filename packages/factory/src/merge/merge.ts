@@ -39,7 +39,8 @@ interface PullView {
 /** What `repos/…/compare/<head>...main` says about the base branch. */
 interface CompareView {
   mergeBase: string;
-  behindBy: number;
+  /** `ahead_by` for `<head>...main`: how far main is ahead of the pull request. */
+  mainAheadBy: number;
   files: string[];
 }
 
@@ -71,7 +72,7 @@ const ciRuns = (repo: string, branch: string): CiRun[] =>
 const compareOf = (repo: string, headSha: string): CompareView =>
   parseJson<CompareView>(
     sh(
-      `gh api "repos/${repo}/compare/${headSha}...main" --jq '{mergeBase: .merge_base_commit.sha, behindBy: .behind_by, files: [.files[].filename]}'`,
+      `gh api "repos/${repo}/compare/${headSha}...main" --jq '{mergeBase: .merge_base_commit.sha, mainAheadBy: .ahead_by, files: [.files[].filename]}'`,
     ),
   );
 
@@ -146,7 +147,7 @@ const main = (): void => {
     files,
     dependencyChanges: dependencyChanges(repo, files, base.mergeBase, pull.headRefOid),
     mergeState: pull.mergeStateStatus.toLowerCase(),
-    behindBy: base.behindBy,
+    mainAheadBy: base.mainAheadBy,
     mainFiles: base.files,
   };
 

@@ -29,7 +29,7 @@ most twice, then the owner does. Nothing of the game changed.
 - **`merge.ts`** is the thin script (`DRY_RUN=1`): `gh pr view` for the facts (its jq also lowercases
   nothing; `mergeState` is lowercased in code), the files API, `actions/workflows/ci.yml/runs?branch=…`
   filtered by `headSha`, the issue comments (through `#shared/github.ts`), and
-  `compare/<head>...main` for `behind_by`, the merge base and main's files. Dependency maps come from
+  `compare/<head>...main` for `ahead_by` (main moved), the merge base and main's files. Dependency maps come from
   the contents API at the merge base and the head. Actions: merge (`gh pr merge --merge`, then an
   issue comment naming the merge commit and a close), re-queue `agent:review`, dispatch
   `factory-fix.yml -f reason=main-moved`, or comment the reasons and add `ready-for-human`.

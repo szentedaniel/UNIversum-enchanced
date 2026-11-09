@@ -166,7 +166,7 @@ const facts = (overrides: Partial<MergeFacts> = {}): MergeFacts => ({
   files: ["apps/web/src/foo.ts"],
   dependencyChanges: [],
   mergeState: "clean",
-  behindBy: 0,
+  mainAheadBy: 0,
   mainFiles: [],
   ...overrides,
 });
@@ -331,7 +331,7 @@ describe("mergeStep", () => {
   });
 
   it("sends the fix loop after main when the branch fell behind", () => {
-    expect(mergeStep(facts({ behindBy: 2 }))).toEqual({ kind: "fix", reason: "main-moved" });
+    expect(mergeStep(facts({ mainAheadBy: 2 }))).toEqual({ kind: "fix", reason: "main-moved" });
     expect(mergeStep(facts({ mergeState: "dirty" }))).toEqual({
       kind: "fix",
       reason: "main-moved",
@@ -340,7 +340,7 @@ describe("mergeStep", () => {
 
   it("refuses to merge main in when the new commits change workflows", () => {
     const step = mergeStep(
-      facts({ behindBy: 1, mainFiles: [".github/workflows/ci.yml", "apps/web/src/Game.tsx"] }),
+      facts({ mainAheadBy: 1, mainFiles: [".github/workflows/ci.yml", "apps/web/src/Game.tsx"] }),
     );
 
     expect(step).toEqual({

@@ -200,8 +200,8 @@ export interface MergeFacts {
   readonly dependencyChanges: readonly DependencyChange[];
   /** `mergeStateStatus`, lowercased; `dirty` means main conflicts. */
   readonly mergeState: string;
-  /** Commits on main the head does not have (`compare`'s `behind_by`). */
-  readonly behindBy: number;
+  /** Commits on main the head does not have (`compare/<head>...main`'s `ahead_by`). */
+  readonly mainAheadBy: number;
   /** The files main changed since the merge base: a workflow change cannot be pushed. */
   readonly mainFiles: readonly string[];
 }
@@ -276,7 +276,7 @@ export const mergeStep = (facts: MergeFacts): MergeStep => {
 
   // Merging main in restarts CI anyway, so it comes before the CI gate; a
   // new head also means the review has to look again.
-  if (facts.behindBy > 0 || facts.mergeState === "dirty") {
+  if (facts.mainAheadBy > 0 || facts.mergeState === "dirty") {
     if (mainMovesWorkflows(facts.mainFiles)) {
       return {
         kind: "escalate",
