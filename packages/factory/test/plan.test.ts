@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { IssueFacts } from "#dispatch/frontier.ts";
-import { planOf } from "#dispatch/plan.ts";
+import { noDispatchReason, planOf } from "#dispatch/plan.ts";
 
 const issue = (number: number): IssueFacts => ({
   number,
@@ -30,5 +30,21 @@ describe("planOf", () => {
   it("never reads a negative headroom, however many runs are running", () => {
     expect(planOf([issue(101)], 3, 2).dispatch).toEqual([]);
     expect(planOf([issue(101)], 1, 2).dispatch.map((entry) => entry.number)).toEqual([101]);
+  });
+});
+
+describe("noDispatchReason", () => {
+  it("says the frontier is empty when no issue is eligible, even with free slots", () => {
+    expect(noDispatchReason([], 0, 2)).toBe("Dispatch: none — the frontier is empty.");
+    expect(noDispatchReason([], 1, 2)).toBe("Dispatch: none — the frontier is empty.");
+  });
+
+  it("names how many implementers hold the slots when the frontier waits", () => {
+    expect(noDispatchReason([issue(101)], 2, 2)).toBe(
+      "Dispatch: none — no free slot (2 of 2 running).",
+    );
+    expect(noDispatchReason([issue(101)], 3, 2)).toBe(
+      "Dispatch: none — no free slot (3 of 2 running).",
+    );
   });
 });

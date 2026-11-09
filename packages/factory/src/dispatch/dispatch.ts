@@ -19,7 +19,7 @@ import {
   type JobTiming,
 } from "#dispatch/budget.ts";
 import { frontierOf, type IssueFacts } from "#dispatch/frontier.ts";
-import { DEFAULT_MAX_PARALLEL, planOf } from "#dispatch/plan.ts";
+import { DEFAULT_MAX_PARALLEL, noDispatchReason, planOf } from "#dispatch/plan.ts";
 import type { PullFacts } from "#shared/closing-pr.ts";
 import { fail, positiveInt, required, sh } from "#shared/common.ts";
 
@@ -196,7 +196,7 @@ const main = (): void => {
     return;
   }
   if (plan.dispatch.length === 0) {
-    console.log("Dispatch: none — no free slot.");
+    console.log(noDispatchReason(frontier.eligible, running.length, maxParallel));
     return;
   }
 
