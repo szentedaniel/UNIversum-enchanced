@@ -84,6 +84,9 @@ export interface ReportMetrics {
 /** The labels that make an issue or pull request the owner's queue. */
 export const NEEDS_YOU_LABELS: readonly string[] = ["ready-for-human", "spec:proposed"];
 
+/** #87's marker on the closing issue when the merge gate merged the pull request. */
+export const AUTO_MERGE_MARKER = "<!-- factory-merge -->";
+
 /** The share of `FACTORY_MONTHLY_MINUTES` at which the report warns. */
 export const BUDGET_WARN_PERCENT = 80;
 
@@ -134,12 +137,12 @@ export const needsYouOf = (items: readonly NeedsYouItem[]): NeedsYouItem[] => {
       seen.add(item.number);
       return [{ ...item, labels }];
     })
-    .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.number - b.number);
+    .toSorted((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.number - b.number);
 };
 
 const median = (values: readonly number[]): number | null => {
   if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted = [...values].toSorted((a, b) => a - b);
   if (sorted.length % 2 === 1) return sorted[(sorted.length - 1) / 2] ?? null;
   const low = sorted[sorted.length / 2 - 1] ?? 0;
   const high = sorted[sorted.length / 2] ?? 0;

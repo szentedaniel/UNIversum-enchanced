@@ -13,15 +13,15 @@ import { join } from "node:path";
 import {
   budgetNotice,
   DEFAULT_MONTHLY_MINUTES,
-  isFactoryWorkflow,
   minutesUsed,
   monthStart,
-  type JobTiming,
 } from "#dispatch/budget.ts";
 import { frontierOf, type IssueFacts } from "#dispatch/frontier.ts";
 import { DEFAULT_MAX_PARALLEL, planOf } from "#dispatch/plan.ts";
+import { api } from "#shared/api.ts";
 import type { PullFacts } from "#shared/closing-pr.ts";
 import { fail, positiveInt, required, sh } from "#shared/common.ts";
+import { factoryRuns } from "#shared/runs.ts";
 
 /** The fields of the REST responses the dispatcher reads. */
 interface ApiIssue {
@@ -46,33 +46,7 @@ interface RunsPage {
   workflow_runs: ApiRun[];
 }
 
-interface JobsPage {
-  jobs: { started_at: string | null; completed_at: string | null }[];
-}
-
 const RUNNING_STATUSES: Record<string, true> = { queued: true, in_progress: true };
-
-/** A paginated `gh api` response, one flat list. */
-const api = <T>(path: string): T[] => {
-  const pages: unknown[] = JSON.parse(sh(`gh api --paginate --slurp "${path}"`));
-  // The REST shapes the dispatcher reads are the interfaces above; a schema
-  // would only restate GitHub's docs.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- untrusted JSON, typed by the interfaces above
-  return pages.flat() as T[];
-};
-
-/** Every job of every `factory-*.yml` run created this month. */
-const factoryJobs = (repo: string, month: string): JobTiming[] =>
-  api<RunsPage>(
-    `repos/${repo}/actions/runs?created=${encodeURIComponent(`>=${month}`)}&per_page=100`,
-  )
-    .flatMap((page) => page.workflow_runs)
-    .filter((run) => isFactoryWorkflow(run.path))
-    .flatMap((run) =>
-      api<JobsPage>(`repos/${repo}/actions/runs/${String(run.id)}/jobs?per_page=100`)
-        .flatMap((page) => page.jobs)
-        .map((job) => ({ startedAt: job.started_at, completedAt: job.completed_at })),
-    );
 
 const runningImplementers = (repo: string): ApiRun[] =>
   api<RunsPage>(`repos/${repo}/actions/workflows/factory-implement.yml/runs?per_page=100`)
@@ -170,7 +144,10 @@ const main = (): void => {
   const maxParallel = positiveInt(process.env["FACTORY_MAX_PARALLEL"], DEFAULT_MAX_PARALLEL);
 
   const month = monthStart(now);
-  const used = minutesUsed(factoryJobs(repo, month), now);
+  const used = minutesUsed(
+    factoryRuns(repo, month).flatMap((run) => run.jobs),
+    now,
+  );
   const running = runningImplementers(repo);
   const frontier = frontierOf(candidates(repo), openPulls(repo), issuesOfRuns(running));
   const plan = planOf(frontier.eligible, running.length, maxParallel);
