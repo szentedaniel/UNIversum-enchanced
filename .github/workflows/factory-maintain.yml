@@ -31,15 +31,14 @@ on:
 permissions:
   contents: read
 
-env:
-  GH_TOKEN: ${{ secrets.AGENT_PAT }}
-  GH_REPO: ${{ github.repository }}
-  DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
-
 jobs:
   architecture:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
     steps:
       # Full history: the pass weights the code that keeps changing, and
       # `git log --oneline` is how it finds it.
@@ -90,6 +89,10 @@ jobs:
   flaky-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
     steps:
       # The logs are the input: the pass installs nothing.
       - uses: actions/checkout@v7
@@ -106,6 +109,10 @@ jobs:
   handoff-hygiene:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
     steps:
       # The notes and git's own tree are the whole input.
       - uses: actions/checkout@v7
