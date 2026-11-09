@@ -12,13 +12,16 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { excerptOf } from "#fix/excerpt.ts";
 import { FIX_REASONS, fixReasonOf, type FixReason } from "#fix/reasons.ts";
-import { fixDecision, fixReasonText, fixRounds, MAX_FIX_ROUNDS } from "#fix/rounds.ts";
+import {
+  ESCALATED_MARKER,
+  fixDecision,
+  fixReasonText,
+  fixRounds,
+  MAX_FIX_ROUNDS,
+} from "#fix/rounds.ts";
 import { newestMarkerComment, type ReviewComment } from "#review/summary.ts";
 import { fail, outputDir, required, sh, shellArg } from "#shared/common.ts";
 import { issueComments, parseJson } from "#shared/github.ts";
-
-/** The hidden marker of the one escalation comment the loop posts. */
-const ESCALATED_MARKER = "<!-- factory-fix:escalated -->";
 
 /** How much of the failure the escalation comment carries; the prompt gets more. */
 const ESCALATION_CHARS = 4000;

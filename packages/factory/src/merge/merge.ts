@@ -19,6 +19,7 @@ import {
   type DependencyChange,
   type MergeFacts,
 } from "#merge/gates.ts";
+import { escalationComment } from "#merge/comment.ts";
 import { closingIssue } from "#shared/closing-pr.ts";
 import { fail, required, sh, shellArg } from "#shared/common.ts";
 import { issueComments, parseJson } from "#shared/github.ts";
@@ -174,15 +175,7 @@ const main = (): void => {
   if (step.kind === "escalate") {
     console.log(`Handing to a human:\n${step.reasons.map((reason) => `- ${reason}`).join("\n")}`);
     if (dryRun) return;
-    const body = [
-      "<!-- factory-merge -->",
-      "## Factory merge: waiting for a human",
-      "",
-      "The merge gate will not auto-merge this pull request:",
-      "",
-      ...step.reasons.map((reason) => `- ${reason}`),
-      "",
-    ].join("\n");
+    const body = escalationComment(step.reasons);
     sh(`gh pr comment ${pr} --repo "${repo}" --body-file "${writeTemp("merge-comment.md", body)}"`);
     sh(`gh pr edit ${pr} --repo "${repo}" --add-label "ready-for-human"`);
     return;

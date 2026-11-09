@@ -1,0 +1,114 @@
+# The nightly retro: reads the last day of the factory's own trail — reviews and the fixes the
+# reviewer committed, fix rounds, escalations, red CI runs, the owner's comments — asks Claude for
+# the recurring problems and their cheapest durable fix, then performs what it decided: a
+# `ready-for-agent` ticket, a standards pull request, a workflow issue, or nothing. The day lands in
+# `docs/agents/factory-log.md`, which the weekly report reads.
+#
+# A day without factory activity stops before the install and the Claude call. The agent decides;
+# the script (`packages/factory/src/retro/`) writes. Every write uses AGENT_PAT, so a standards
+# branch runs CI and the log's push lands on main.
+name: Factory Retro
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print the retro's answer and the writes it would make, without writing
+        type: boolean
+        default: false
+  schedule:
+    # 03:30 UTC is 04:30 CET or 05:30 CEST: after the 01:30 review cron, inside the night window.
+    - cron: "30 3 * * *"
+
+# The job's own token stays read-only; every write goes through AGENT_PAT.
+permissions:
+  contents: read
+
+# One retro at a time: a second run would append a second entry for the same day.
+concurrency:
+  group: factory-retro
+  cancel-in-progress: false
+
+jobs:
+  retro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+      FACTORY_RETRO_MAX: ${{ vars.FACTORY_RETRO_MAX }}
+    steps:
+      # The push of the log and of a standards branch needs the PAT; main, because the log and the
+      # patches are written against it.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.AGENT_PAT }}
+
+      # collect.ts imports nothing but the repo, so a quiet day costs one node call, no install.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - name: Collect the day's facts
+        id: collect
+        run: |
+          set -euo pipefail
+          # `runner` is not available in job-level env, so the scripts' output
+          # directory is exported here for every later step.
+          export OUTPUT_DIR="$RUNNER_TEMP"
+          echo "OUTPUT_DIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+          activity=$(node packages/factory/src/retro/collect.ts)
+          echo "activity=$activity" >> "$GITHUB_OUTPUT"
+
+      - name: Note the quiet day
+        if: steps.collect.outputs.activity != 'true'
+        run: echo "::notice::No factory activity in the last 24 hours; the retro is skipped."
+
+      - uses: pnpm/action-setup@v6
+        if: steps.collect.outputs.activity == 'true'
+        with:
+          cache: true
+
+      - name: Install
+        if: steps.collect.outputs.activity == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Claude Code
+        if: steps.collect.outputs.activity == 'true'
+        run: npm install -g @anthropic-ai/claude-code@2.1.311
+
+      # The factory's Claude setup is one recipe: the review step's pinned skill, so a factory
+      # change that breaks the pin fails here too instead of at the reviewer's first night.
+      - name: Install the review skill
+        if: steps.collect.outputs.activity == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if ! claude plugin marketplace list | grep -q "claude-plugins-official"; then
+            claude plugin marketplace add anthropics/claude-plugins-official
+          fi
+          claude plugin install "mattpocock-skills@claude-plugins-official"
+          actual=$(claude plugin list --json \
+            | jq -r '.[] | select(.id == "mattpocock-skills@claude-plugins-official") | .version')
+          if [ "$actual" != "1.3.1" ]; then
+            echo "::error::The factory's Claude setup must stay at mattpocock-skills 1.3.1; got '$actual'."
+            exit 1
+          fi
+          echo "Factory skills: mattpocock-skills@claude-plugins-official $actual"
+
+      - name: Configure git
+        if: steps.collect.outputs.activity == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "universum-factory[bot]"
+          git config user.email "universum-factory[bot]@users.noreply.github.com"
+
+      - name: Retro
+        if: steps.collect.outputs.activity == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: node packages/factory/src/retro/retro.ts
