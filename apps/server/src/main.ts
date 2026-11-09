@@ -1,14 +1,6 @@
-import { mkdirSync } from "node:fs";
 import { loadConfig, timingIgnored } from "#config.ts";
-import { startInternalServer } from "#internal-server.ts";
-import { installCrashHandlers } from "#observability/crash-handlers.ts";
-import { parseDsn } from "#observability/dsn.ts";
-import { noReporter, type ErrorReporter } from "#observability/error-reporting.ts";
 import { createLogger } from "#observability/logger.ts";
-import { GameMetrics } from "#observability/metrics.ts";
-import { createSentryReporter } from "#observability/sentry-reporter.ts";
-import { createGameServer, restoreRooms } from "#server.ts";
-import { openSqliteRoomStore } from "#store/sqlite-room-store.ts";
+import { startServer } from "#server.ts";
 
 const config = loadConfig();
 // pino-pretty is a dev dependency: production images log plain NDJSON.
@@ -19,47 +11,5 @@ const log = createLogger({
 if (timingIgnored()) {
   log.warn("GAME_TURN_LIMIT_MS, GAME_MINUTE_MS and GAME_SEED are ignored in production");
 }
-const metrics = new GameMetrics({ release: config.release });
 
-// Sentry stays off unless SENTRY_DSN is set: no reporter means nothing is sent.
-const dsn = config.sentryDsn === null ? null : parseDsn(config.sentryDsn);
-const reporter: ErrorReporter =
-  dsn === null ? noReporter : createSentryReporter({ dsn, release: config.release });
-installCrashHandlers({ source: process, log, reporter, exit: (code) => process.exit(code) });
-
-mkdirSync(config.dataDir, { recursive: true });
-const store = openSqliteRoomStore(config.databasePath);
-const internal = await startInternalServer({
-  port: config.internalPort,
-  host: config.host,
-  metrics,
-});
-
-const server = createGameServer({
-  store,
-  limits: config.limits,
-  metrics,
-  log,
-  reporter,
-  errorReporting: dsn,
-  timing: config.timing,
-});
-server.onBeforeShutdown(() => log.info("Server shutting down"));
-// Every Room has stopped (on SIGTERM/SIGINT) before the store closes.
-server.onShutdown(async () => {
-  store.close();
-  await internal.close();
-  log.info("Server stopped");
-});
-
-await server.listen(config.port, config.host);
-// The actual port (PORT=0 binds any free one), so a spawned server can be reached.
-const address = server.transport.server?.address();
-const port = address && typeof address !== "string" ? address.port : config.port;
-log.info({ port, internalPort: internal.port, release: config.release }, "Server listening");
-
-const started = performance.now();
-const restored = await restoreRooms({ store, metrics, log });
-log.info({ restored, durationMs: Math.round(performance.now() - started) }, "Rooms restored");
-internal.ready();
-log.info("Server ready");
+await startServer(config, { log });
