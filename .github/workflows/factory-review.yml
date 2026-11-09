@@ -62,7 +62,9 @@ jobs:
           done
 
   review:
-    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || github.event.label.name == 'agent:review')
+    # Dependabot's own label event runs without secrets; the night cron
+    # dispatches its review instead.
+    if: github.event_name != 'schedule' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.label.name == 'agent:review')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:

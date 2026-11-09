@@ -1,0 +1,14 @@
+check	Playwright (desktop Chromium + iPhone WebKit)	2026-11-02T01:12:03.1234567Z [90mRunning 71 tests using 1 worker[39m
+check	Playwright (desktop Chromium + iPhone WebKit)	2026-11-02T01:17:44.1234567Z [32m✓[39m  1 [desktop-chromium] › tests/tabletop.spec.ts:9:1 › the tabletop layout ([90m1.2s[39m)
+check	Playwright (desktop Chromium + iPhone WebKit)	2026-11-02T01:17:45.1234567Z [31m✘[39m  2 [desktop-chromium] › tests/turn-hold.spec.ts:12:1 › turn card holds the turn card ([90m5.1s[39m)
+check	Playwright (desktop Chromium + iPhone WebKit)	2026-11-02T01:17:48.1234567Z [32m✓[39m  3 [desktop-chromium] › tests/turn-hold.spec.ts:12:1 › turn card holds the turn card [33m(retry #[39m1[33m)[39m ([90m3.2s[39m)
+check	Playwright (desktop Chromium + iPhone WebKit)	2026-11-02T01:17:50.1234567Z [31m✘[39m  4 [iphone-webkit] › tests/chance-card.spec.ts:40:3 › chance card › a card shows once ([90m6.4s[39m)
+check	Playwright (desktop Chromium + iPhone WebKit)	2026-11-02T01:17:53.1234567Z [32m✓[39m  5 [iphone-webkit] › tests/chance-card.spec.ts:40:3 › chance card › a card shows once [33m(retry #[39m1[33m)[39m ([90m5.0s[39m)
+check	Playwright (desktop Chromium + iPhone WebKit)	2026-11-02T01:17:59.1234567Z [31m✘[39m  6 [desktop-chromium] › tests/reconnect.spec.ts:20:1 › a Guest reconnects ([90m8.0s[39m)
+check	Playwright (desktop Chromium + iPhone WebKit)	2026-11-02T01:18:00.1234567Z [33m  2 flaky[39m
+check	Playwright (desktop Chromium + iPhone WebKit)	2026-11-02T01:18:00.1234567Z [33m    [desktop-chromium] › tests/turn-hold.spec.ts:12:1 › turn card holds the turn card ────────────────────[39m
+check	Playwright (desktop Chromium + iPhone WebKit)	2026-11-02T01:18:00.1234567Z [33m    [iphone-webkit] › tests/chance-card.spec.ts:40:3 › chance card › a card shows once ────────────────────[39m
+check	Playwright (desktop Chromium + iPhone WebKit)	2026-11-02T01:18:00.1234567Z [31m  1 failed[39m
+check	Playwright (desktop Chromium + iPhone WebKit)	2026-11-02T01:18:00.1234567Z [31m    [desktop-chromium] › tests/reconnect.spec.ts:20:1 › a Guest reconnects ────────────────────[39m
+check	Playwright (desktop Chromium + iPhone WebKit)	2026-11-02T01:18:00.1234567Z [32m  68 passed[39m [90m(5.9m)[39m
+check	Playwright (desktop Chromium + iPhone WebKit)	2026-11-02T01:18:01.1234567Z [31mError: failOnFlakyTests is set, and 2 test(s) needed a retry[39m

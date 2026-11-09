@@ -236,7 +236,9 @@ It merges with a merge commit only when every gate holds ([spec #85, Decision
    writes a handoff note and its `INDEX` line, so blocking those would block every ticket.
 5. No `package.json` moves a dependency to another major (the first non-zero number for `0.x`).
 
-The merge is `gh pr merge --merge --subject "chore(merge): #<issue> <title>"`. The issue gets a
+The merge is `gh pr merge --merge --subject "chore(merge): #<issue> <the ticket's title>"` (the
+ticket's title, not the pull request's `Implement #N: …`; a Dependabot pull request closes no ticket,
+so it names its own number and title). The issue gets a
 comment naming the merge commit and is closed (`Closes #…` in the body already closed it). The push
 to `main` starts `factory-dispatch.yml` by itself, so the next ticket is dispatched without a chain.
 
@@ -350,6 +352,87 @@ it writes one issue and triggers nothing. To read the current week's numbers wit
 ```bash
 DRY_RUN=1 GH_REPO=<owner>/<repo> node packages/factory/src/report/report.ts
 ```
+
+## Maintenance
+
+The factory keeps the codebase healthy without being asked. The rules live in
+`packages/factory/src/maintain/` (pure modules with vitests, plus the scripts the workflows run); the
+prompt is `src/maintain/prompt.md`.
+
+### Dependencies (Dependabot)
+
+`.github/dependabot.yml` opens a weekly pull request for the pnpm workspace: minor and patch bumps
+in **one grouped pull request**, a major on its own, and `github-actions` bumps weekly.
+Dependabot labels its own pull requests `agent:review` (`labels:` in the config), and they then
+take the same path as any factory pull request: review, CI, merge gate, and the fix loop when CI is
+red. A
+dependency major is `ready-for-human` by the merge gate's own rule; every `github-actions` bump
+changes `.github/workflows/`, a protected path, so the owner merges those.
+
+Three things keep it working:
+
+- **A workflow whose actor is `dependabot[bot]` gets no Actions secrets**, not even
+  `pull_request_target`. So `factory-review.yml` skips Dependabot's own label event, and the review's
+  night cron dispatches the queued review as the owner, with the Claude token. A Dependabot pull
+  request is therefore reviewed the night after it opens. CI needs no secret (keep it that way:
+  check `ci.yml` before adding one).
+- **The commit check runs on the bump.** Dependabot's own subject ("Bump x from a to b") has no type
+  and would be red on `check:commits`, so the config prefixes it with `build(deps)`.
+
+A Dependabot pull request closes no issue, so the merge gate names it `chore(merge): #<pr> <title>`
+(`mergeSubjectOf` in `src/merge/gates.ts`); every other factory pull request still has to close its
+ticket.
+
+### Weekly (`factory-maintain.yml`)
+
+Sunday 02:00 UTC (03:00 or 04:00 in Budapest, inside the night window), or by hand with `dry_run`.
+Three independent jobs:
+
+- **Architecture**: Claude Code reads the hot spots (`git log`), `GLOSSARY.md`, `docs/adr/` and
+  `CODING_STANDARDS.md`, consults the pinned plugin's `codebase-design` skill, and returns **at most
+  two** proposals as JSON. The script opens one issue each, deduped against the open issue titles:
+  `ready-for-agent` only for a two-way door, else `ready-for-human` (the merge gate would escalate a
+  one-way door anyway). The plugin also ships `improve-codebase-architecture`, but that command is
+  interactive (an HTML report and a question), so the pass owns its own output contract and takes
+  only the vocabulary from `codebase-design`.
+- **Flaky tests**: the last seven days of `CI` runs' logs, the `check` job's Playwright `N flaky`
+  summary (`failOnFlakyTests` turns a retry into a red run). One `bug` + `ready-for-agent` issue per
+  test name, deduped on the title (`src/maintain/flaky.ts`; the fixture is a real-shape
+  `gh run view --log` excerpt in `test/fixtures/playwright-flaky.txt`).
+- **Handoff hygiene**: every backticked repo path in `docs/agents/handoff/ticket-*.md` that git's
+  tree no longer holds, as one `ready-for-human` issue (`src/maintain/handoff.ts`; marker
+  `<!-- factory:handoff-hygiene -->`, refreshed by a comment when it is already open). Relative names
+  (`src/view.ts`), routes (`/rooms`), globs, placeholders and generated output are not scanned.
+
+A dry run prints what each step would open and writes nothing:
+
+```bash
+gh workflow run factory-maintain.yml -f dry_run=true
+DRY_RUN=1 GH_REPO=<owner>/<repo> node packages/factory/src/maintain/run-handoff-hygiene.ts
+DRY_RUN=1 GH_REPO=<owner>/<repo> node packages/factory/src/maintain/run-flaky-tests.ts
+```
+
+The architecture step needs `CLAUDE_CODE_OAUTH_TOKEN`; it prints the proposals and the label it would
+give each under `DRY_RUN=1`.
+
+### Red main (`factory-main-watch.yml`)
+
+When `CI` fails on a push to `main`, the watch opens one `bug` + `ready-for-agent` + `priority:top`
+issue carrying the failed jobs' log tail (`src/maintain/red-main.ts`, reusing `src/fix/excerpt.ts`)
+and starts `factory-dispatch.yml`: the dispatch the failing push started saw neither the issue nor its
+label. While an issue carrying `<!-- factory:red-main -->` is open, a second red run comments on it
+instead. `PRIORITY_LABELS` in `src/dispatch/frontier.ts` sorts `priority:top` above age, so the next
+free slot starts with it.
+
+```bash
+gh workflow run factory-main-watch.yml -f run_id=<failed CI run> -f dry_run=true
+```
+
+### Pausing it
+
+Every workflow is manually dispatchable with `dry_run`, so a week can be skipped without touching the
+cron. Dependabot itself is paused from the repository's **Insights → Dependency graph → Dependabot**
+page, not from a workflow.
 
 ## Secrets
 

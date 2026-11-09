@@ -248,9 +248,54 @@ const WORKFLOWS_DIR = ".github/workflows/";
 export const mainMovesWorkflows = (files: readonly string[]): boolean =>
   files.some((file) => file.startsWith(WORKFLOWS_DIR));
 
-/** Only a factory branch or a factory-labelled pull request is the gate's business. */
-export const isFactoryPull = (headRefName: string, labels: readonly string[]): boolean =>
-  headRefName.startsWith("agent/") || labels.includes("factory");
+/** Dependabot's login, as the REST author of its pull requests. */
+export const DEPENDABOT_AUTHOR = "dependabot[bot]";
+
+const DEPENDABOT_BRANCH = "dependabot/";
+
+/**
+ * A dependency bump's pull request: its branch prefix and its author together.
+ * The branch alone is not enough — anyone can name a branch `dependabot/…`.
+ */
+export const isDependabotPull = (headRefName: string, author: string): boolean =>
+  headRefName.startsWith(DEPENDABOT_BRANCH) && author === DEPENDABOT_AUTHOR;
+
+/** Only a factory branch, a factory-labelled pull or a Dependabot bump is the gate's business. */
+export const isFactoryPull = (
+  headRefName: string,
+  labels: readonly string[],
+  author = "",
+): boolean =>
+  headRefName.startsWith("agent/") ||
+  labels.includes("factory") ||
+  isDependabotPull(headRefName, author);
+
+/** What the merge commit's subject is made from. */
+export interface MergeSubjectFacts {
+  /** The pull request's number and title: what a pull with no ticket names itself by. */
+  readonly number: number;
+  readonly title: string;
+  /** The ticket the pull closes: the merge names the ticket, not the pull request. */
+  readonly ticket: { readonly number: number; readonly title: string } | undefined;
+  readonly headRefName: string;
+  readonly author: string;
+}
+
+/**
+ * The merge commit's subject, `chore(merge): #<ticket> <its title>`, or
+ * `undefined` for a factory pull that closes no issue: a factory pull always
+ * has a ticket. A dependency bump has none — its pull request is the unit of
+ * work, so it names its own number and title instead.
+ */
+export const mergeSubjectOf = (facts: MergeSubjectFacts): string | undefined => {
+  if (facts.ticket !== undefined) {
+    return `chore(merge): #${String(facts.ticket.number)} ${facts.ticket.title}`;
+  }
+  if (isDependabotPull(facts.headRefName, facts.author)) {
+    return `chore(merge): #${String(facts.number)} ${facts.title}`;
+  }
+  return undefined;
+};
 
 export type MergeStep =
   | { readonly kind: "merge" }
@@ -261,11 +306,6 @@ export type MergeStep =
 
 const wait = (reason: string): MergeStep => ({ kind: "wait", reason });
 
-/**
- * What the merge workflow should do with this pull request now: merge it,
- * wait for the run that is still coming, queue the re-review a push needs,
- * send it to the fix loop, or hand it to the owner with every reason.
- */
 /**
  * Whether main must be merged into the branch before the gate decides: it
  * conflicts, or main changed a file the pull request changes too. The handoff
@@ -278,6 +318,11 @@ export const needsMain = (facts: MergeFacts): boolean => {
   return facts.files.some((file) => !file.startsWith(HANDOFF_DIR) && mainFiles.has(file));
 };
 
+/**
+ * What the merge workflow should do with this pull request now: merge it,
+ * wait for the run that is still coming, queue the re-review a push needs,
+ * send it to the fix loop, or hand it to the owner with every reason.
+ */
 export const mergeStep = (facts: MergeFacts): MergeStep => {
   if (facts.labels.includes("agent:review")) return wait("a review is queued (agent:review)");
   if (facts.labels.includes("ready-for-human")) {

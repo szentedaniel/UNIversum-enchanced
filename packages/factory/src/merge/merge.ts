@@ -14,6 +14,7 @@ import {
   dependencyMap,
   isFactoryPull,
   mergeStep,
+  mergeSubjectOf,
   type CiRun,
   type DependencyChange,
   type MergeFacts,
@@ -35,6 +36,8 @@ interface PullView {
   labels: string[];
   closing: number[];
   headCommittedAt: string;
+  /** The REST login: `dependabot[bot]` for a dependency bump. */
+  author: string;
 }
 
 /** What `repos/…/compare/<head>...main` says about the base branch. */
@@ -46,11 +49,11 @@ interface CompareView {
 }
 
 const PULL_FIELDS =
-  "number,state,title,body,headRefName,headRefOid,mergeStateStatus,labels,closingIssuesReferences,commits";
+  "number,state,title,body,headRefName,headRefOid,mergeStateStatus,labels,closingIssuesReferences,commits,author";
 
 const pullOf = (repo: string, pr: string): PullView => {
   const raw = sh(
-    `gh pr view ${pr} --repo "${repo}" --json ${PULL_FIELDS} --jq '{number, state, title, body, headRefName, headRefOid, mergeStateStatus: (.mergeStateStatus // "unknown"), labels: [.labels[].name], closing: [.closingIssuesReferences[].number], headCommittedAt: (.commits | last | .committedDate // "")}'`,
+    `gh pr view ${pr} --repo "${repo}" --json ${PULL_FIELDS} --jq '{number, state, title, body, headRefName, headRefOid, mergeStateStatus: (.mergeStateStatus // "unknown"), labels: [.labels[].name], closing: [.closingIssuesReferences[].number], headCommittedAt: (.commits | last | .committedDate // ""), author: (.author.login // "")}'`,
   );
   return parseJson<PullView>(raw);
 };
@@ -132,7 +135,7 @@ const main = (): void => {
     console.log(`Pull request #${pr} is ${pull.state}; nothing to merge.`);
     return;
   }
-  if (!isFactoryPull(pull.headRefName, pull.labels)) {
+  if (!isFactoryPull(pull.headRefName, pull.labels, pull.author)) {
     console.log(`Pull request #${pr} is not a factory branch or label; leaving it alone.`);
     return;
   }
@@ -179,17 +182,26 @@ const main = (): void => {
   }
 
   const issue = pull.closing[0] ?? closingIssue(pull.body);
-  if (issue === undefined) {
-    // A factory pull request always closes its ticket; without one the merge
-    // subject cannot name it.
-    fail(`Pull request #${pr} closes no issue; cannot name the merge commit.`);
-  }
   // The ticket's title, not the pull request's (`Implement #N: …`), as the
-  // hand merges have always named it.
-  const issueTitle = sh(
-    `gh issue view ${String(issue)} --repo "${repo}" --json title --jq .title`,
-  ).trim();
-  const subject = `chore(merge): #${String(issue)} ${issueTitle === "" ? pull.title : issueTitle}`;
+  // hand merges have always named it. A dependency bump closes no ticket and
+  // names its own pull request instead.
+  const ticket =
+    issue === undefined
+      ? undefined
+      : {
+          number: issue,
+          title:
+            sh(`gh issue view ${String(issue)} --repo "${repo}" --json title --jq .title`).trim() ||
+            pull.title,
+        };
+  const subject =
+    mergeSubjectOf({
+      number: pull.number,
+      title: pull.title,
+      ticket,
+      headRefName: pull.headRefName,
+      author: pull.author,
+    }) ?? fail(`Pull request #${pr} closes no issue; cannot name the merge commit.`);
   console.log(`Merging #${pr} as "${subject}".`);
   if (dryRun) return;
   sh(`gh pr merge ${pr} --repo "${repo}" --merge --subject ${shellArg(subject)}`);
