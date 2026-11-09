@@ -6,19 +6,24 @@
  * commit button, "Sell N for X", which unlocks once the picks cover the
  * Shortfall. Picks are made by tapping the Board (see `Board.tsx`), or from the
  * checklist, which opens the way the Player last left it. Inspect mode opens
- * the Field card instead of picking.
+ * the Field card instead of picking. The tray owns its `uiStore` wiring (the
+ * picks, the checklist preference and inspect mode live there) and sends
+ * Auto-sell and Sell itself (#125).
  */
 import type { PendingCharge, PublicView } from "@universum/rules";
 import { FIELDS, type FieldId } from "@universum/rules/board";
-import { Info, ListChecks, X, Zap } from "lucide-react";
+import { X, Zap } from "lucide-react";
 import { useMemo } from "react";
-import { TimerRing } from "#components/TimerRing.tsx";
+import { useStore } from "zustand";
 import { Button } from "#components/ui/button.tsx";
+import { sendIntent } from "#connection.ts";
+import type { BottomSlot } from "#decision/decision.ts";
 import { cn } from "#lib/utils.ts";
 import { saleChecklist } from "#pick/checklist.ts";
-import { salePickedValue, type SalePick } from "#pick/sale.ts";
+import { salePickedValue } from "#pick/sale.ts";
 import { PickChecklist } from "#screens/PickChecklist.tsx";
-import { TurnRing } from "#screens/TurnRing.tsx";
+import { TrayHeader } from "#screens/TrayHeader.tsx";
+import { salePicksFor, uiStore } from "#stores/ui-store.ts";
 import { fieldName, formatCompactMoney, formatMoney, m } from "#text.ts";
 
 const CHARGE_LABELS: Record<PendingCharge["kind"], (amount: string) => string> = {
@@ -30,47 +35,20 @@ const CHARGE_LABELS: Record<PendingCharge["kind"], (amount: string) => string> =
 
 type Props = {
   view: PublicView;
-  sale: SalePick;
-  picks: readonly FieldId[];
+  /** The bottom slot's Sale: the value and whether an intent is in flight. */
+  slot: Extract<BottomSlot, { kind: "sale" }>;
   /** Seat of this client's Player (the timer shows their figure). */
   seat: number;
   clockOffset: number;
-  /** An intent is on its way: the buttons wait for the answer. */
-  busy: boolean;
-  /** The checklist is expanded (the Player's habit, persisted in `uiStore`). */
-  checklistOpen: boolean;
-  /** Inspect mode: Board taps open the Field card instead of picking. */
-  inspect: boolean;
-  onToggleChecklist: () => void;
-  onToggleInspect: () => void;
-  /** A checklist row: the Board's toggle for this Sale. */
-  onToggle: (field: FieldId) => void;
-  /** A checklist row: ring the Field and pan to it if hidden. */
-  onFocus: (field: FieldId) => void;
-  onUnpick: (field: FieldId) => void;
-  onAutoSell: () => void;
-  onSell: (fields: FieldId[]) => void;
 };
 
 const fieldLabel = (id: FieldId) => fieldName(FIELDS[id]?.key ?? "");
 
-export function SaleTray({
-  view,
-  sale,
-  picks,
-  seat,
-  clockOffset,
-  busy,
-  checklistOpen,
-  inspect,
-  onToggleChecklist,
-  onToggleInspect,
-  onToggle,
-  onFocus,
-  onUnpick,
-  onAutoSell,
-  onSell,
-}: Props) {
+export function SaleTray({ view, slot, seat, clockOffset }: Props) {
+  const { sale, busy } = slot;
+  const salePicks = useStore(uiStore, (state) => state.salePicks);
+  const checklistOpen = useStore(uiStore, (state) => state.checklistOpen);
+  const picks = salePicksFor(salePicks, sale.key);
   const picked = useMemo(
     () => picks.filter((id) => sale.pickable.includes(id)),
     [picks, sale.pickable],
@@ -86,59 +64,22 @@ export function SaleTray({
       data-board-obstacle
       className="sticker flex flex-col gap-2 rounded-ui bg-card p-3 text-card-foreground"
     >
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="m-0 truncate text-xs font-extrabold text-danger uppercase">
-            {CHARGE_LABELS[sale.charge.kind](formatMoney(sale.charge.amount))} ·{" "}
-            {m.sale_cash({ amount: formatMoney(sale.cash) })}
-          </p>
-          <h2 className="m-0 text-lg leading-tight font-black" data-testid="sale-shortfall">
-            {m.sale_shortfall({ amount: formatMoney(sale.shortfall) })}
-          </h2>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Button
-            variant={checklistOpen ? "default" : "plain"}
-            size="icon-sm"
-            aria-label={m.pick_checklist()}
-            aria-pressed={checklistOpen}
-            data-testid="pick-checklist-toggle"
-            onClick={onToggleChecklist}
-          >
-            <ListChecks size={18} strokeWidth={3} />
-          </Button>
-          <Button
-            variant={inspect ? "default" : "plain"}
-            size="icon-sm"
-            aria-label={m.pick_inspect()}
-            aria-pressed={inspect}
-            data-testid="pick-inspect-toggle"
-            onClick={onToggleInspect}
-          >
-            <Info size={18} strokeWidth={3} />
-          </Button>
-          <TimerRing
-            seat={seat}
-            size={44}
-            ring={
-              view.turnTimer === null ? null : (
-                <TurnRing
-                  key={`${view.turn}:${view.turnDeadline}`}
-                  timer={view.turnTimer}
-                  clockOffset={clockOffset}
-                />
-              )
-            }
-          />
-        </div>
-      </div>
-      {inspect && (
-        <p className="m-0 text-xs font-bold text-primary" data-testid="pick-inspect-hint">
-          {m.pick_inspect_hint()}
+      <TrayHeader view={view} seat={seat} clockOffset={clockOffset}>
+        <p className="m-0 truncate text-xs font-extrabold text-danger uppercase">
+          {CHARGE_LABELS[sale.charge.kind](formatMoney(sale.charge.amount))} ·{" "}
+          {m.sale_cash({ amount: formatMoney(sale.cash) })}
         </p>
-      )}
+        <h2 className="m-0 text-lg leading-tight font-black" data-testid="sale-shortfall">
+          {m.sale_shortfall({ amount: formatMoney(sale.shortfall) })}
+        </h2>
+      </TrayHeader>
       {checklistOpen ? (
-        <PickChecklist rows={rows} picked={picked} onToggle={onToggle} onFocus={onFocus} />
+        <PickChecklist
+          rows={rows}
+          picked={picked}
+          onToggle={(field) => uiStore.getState().toggleSalePick(sale.key, field)}
+          onFocus={(field) => uiStore.getState().focusPick(field)}
+        />
       ) : (
         <ul className="m-0 flex min-h-8 list-none flex-wrap gap-1.5 p-0">
           {picked.length === 0 && (
@@ -149,7 +90,7 @@ export function SaleTray({
               <button
                 type="button"
                 aria-label={m.sale_remove({ field: fieldLabel(id) })}
-                onClick={() => onUnpick(id)}
+                onClick={() => uiStore.getState().toggleSalePick(sale.key, id)}
                 className="sticker-sm press inline-flex items-center gap-1 rounded-full bg-success px-2.5 py-1 text-sm font-extrabold text-ink"
               >
                 {fieldLabel(id)}{" "}
@@ -183,11 +124,19 @@ export function SaleTray({
         </span>
       </div>
       <div className="grid grid-cols-[auto_1fr] gap-2">
-        <Button variant="plain" disabled={busy} onClick={onAutoSell}>
+        <Button
+          variant="plain"
+          disabled={busy}
+          onClick={() => sendIntent({ type: "AutoSell", turn: view.turn })}
+        >
           <Zap size={18} strokeWidth={3} aria-hidden="true" />
           {m.sale_auto_sell()}
         </Button>
-        <Button className="tnum" disabled={busy || !covered} onClick={() => onSell(picked)}>
+        <Button
+          className="tnum"
+          disabled={busy || !covered}
+          onClick={() => sendIntent({ type: "SellFields", turn: view.turn, fields: picked })}
+        >
           {m.sale_sell({ count: picked.length, amount: formatCompactMoney(value) })}
         </Button>
       </div>
