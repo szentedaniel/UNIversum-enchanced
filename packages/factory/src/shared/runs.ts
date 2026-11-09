@@ -3,6 +3,7 @@
  * them for the monthly budget, the weekly report also splits them by week and
  * by agent.
  */
+import { execSync } from "node:child_process";
 import { isFactoryWorkflow, type JobTiming } from "#dispatch/budget.ts";
 import { api } from "#shared/github.ts";
 
@@ -49,3 +50,31 @@ export const factoryRuns = (repo: string, since: string): FactoryRun[] =>
         .flatMap((page) => page.jobs)
         .map((job) => ({ startedAt: job.started_at, completedAt: job.completed_at })),
     }));
+
+/**
+ * A whole run's log can run to hundreds of megabytes: execSync's 1 MB default
+ * overflowed once already (`ENOBUFS`), so the cap is explicit.
+ */
+const LOG_MAX_BUFFER = 128 * 1024 * 1024;
+
+/** `gh` printing into a string, with room for the log; the seam a test replaces. */
+const execLog = (command: string): string =>
+  execSync(command, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: LOG_MAX_BUFFER,
+  });
+
+/**
+ * A run's log: `--log-failed` keeps a red main's issue to the failed steps,
+ * while the flaky pass needs every step's output.
+ */
+export const runLog = (
+  repo: string,
+  runId: string | number,
+  { failedOnly }: { readonly failedOnly: boolean },
+  exec: (command: string) => string = execLog,
+): string => {
+  const flag = failedOnly ? "--log-failed" : "--log";
+  return exec(`gh run view ${String(runId)} --repo "${repo}" ${flag}`);
+};
