@@ -282,12 +282,26 @@ export interface MergeSubjectFacts {
  */
 export const mergeSubjectOf = (facts: MergeSubjectFacts): string | undefined => {
   if (facts.ticket !== undefined) {
-    return `chore(merge): #${String(facts.ticket.number)} ${facts.ticket.title}`;
+    return fitSubject(`chore(merge): #${String(facts.ticket.number)} ${facts.ticket.title}`);
   }
   if (isDependabotPull(facts.headRefName, facts.author)) {
-    return `chore(merge): #${String(facts.number)} ${facts.title}`;
+    return fitSubject(`chore(merge): #${String(facts.number)} ${facts.title}`);
   }
   return undefined;
+};
+
+/** CI's commit check refuses a subject longer than this (`packages/repo-checks`). */
+export const MERGE_SUBJECT_LIMIT = 100;
+
+/**
+ * A long ticket title would turn main red at the commit check, so the subject
+ * is cut at the last whole word that fits and ends in an ellipsis.
+ */
+const fitSubject = (subject: string): string => {
+  if (subject.length <= MERGE_SUBJECT_LIMIT) return subject;
+  const room = subject.slice(0, MERGE_SUBJECT_LIMIT - 1);
+  const cut = room.lastIndexOf(" ");
+  return `${(cut > 0 ? room.slice(0, cut) : room).trimEnd()}…`;
 };
 
 export type MergeStep =

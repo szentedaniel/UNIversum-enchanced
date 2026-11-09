@@ -8,9 +8,9 @@ the web app, the e2e specs and the load test share it.
 
 - **`serverNow(clockOffset, clientNow = Date.now())`** is in
   `packages/protocol/src/messages.ts` (its own `clocks` section), tested by
-  `packages/protocol/test/server-clock.test.ts`. `apps/web/src/lib/server-clock.ts`
-  is **deleted**: import `serverNow` from `@universum/protocol/messages`, never
-  write `Date.now() + clockOffset` again.
+  `packages/protocol/test/server-clock.test.ts`. The web app's old
+  `lib/server-clock.ts` is **deleted**: import `serverNow` from
+  `@universum/protocol/messages`, never write `Date.now() + clockOffset` again.
 - Web callers: the Turn ring (`screens/TurnRing.tsx`), the Minute pill
   (`components/GameHud.tsx`), the Board's Sale marks (`board/Board.tsx`) and the
   Lobby's held-Seat countdown (`screens/Lobby.tsx`). `SaleTray`/`PickTray` only
@@ -42,16 +42,17 @@ the web app, the e2e specs and the load test share it.
 
 ## Fence
 
-- `apps/web/test/playback-fence.test.ts` rule 2 now reads "the server clock is
-  estimated only by serverNow in @universum/protocol/messages". **No web file
-  is exempt** any more (there is no `lib/server-clock.ts`), so the predicate
-  that used to allow it is gone; `decisionOpensAt`'s
+- The old `playback-fence.test.ts` rule 2 now reads "the server clock is
+  estimated only by serverNow in @universum/protocol/messages" (#68 moved it to
+  `apps/web/test/server-clock-fence.test.ts`). **No web file is exempt** any
+  more (there is no `lib/server-clock.ts`), so the predicate that used to allow
+  it is gone; `playbackOfPush`'s
   `const actsAfter = push.view.actsAfter - push.clockOffset` in
-  `playback/playback-store.ts` is still the one named exception (a server
-  timestamp to a client one).
-- The fence still scans only `apps/web/src`. Widening the same rule to
-  `apps/e2e/tests` and `apps/loadtest/src` is **#68's** job; until then a
-  hand-written estimate in those two trees is a review responsibility.
+  `playback/playback.ts` is still the one named exception (a server timestamp
+  to a client one).
+- #68 widened the same check to `apps/e2e/tests` and `apps/loadtest/src`; a
+  hand-written estimate in those trees is caught by
+  `apps/web/test/server-clock-fence.test.ts` now.
 - `Date.now() + <client-local value>` that is not a clock offset is fine and
   unmatched: `join.tsx`'s `retryAfter` countdown, the load test's timers, the
   editor's own `Date.now()`.

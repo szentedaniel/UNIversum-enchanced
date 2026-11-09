@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { commitProblems } from "#commits.ts";
+import { commitProblems, messageFromFile, parseLog, rangeArgs } from "#commits.ts";
 
 const commit = (message: string, parents = 1) => ({ sha: "abc1234", parents, message });
 
@@ -122,6 +122,55 @@ describe("the commit rules", () => {
 
 const script = fileURLToPath(new URL("../src/check-commits.ts", import.meta.url));
 
+describe("parseLog", () => {
+  it("parses each commit's sha, parent count and trimmed message", () => {
+    const raw = [
+      "abc1234\0p1 p2\0feat: a merge\x1e",
+      "\ndef5678\0p1\0fix: a body\n\nwith a blank line\x1e",
+      "\n",
+    ].join("");
+
+    expect(parseLog(raw)).toEqual([
+      { sha: "abc1234", parents: 2, message: "feat: a merge" },
+      { sha: "def5678", parents: 1, message: "fix: a body\n\nwith a blank line" },
+    ]);
+  });
+
+  it("returns no commits for an empty log", () => {
+    expect(parseLog("")).toEqual([]);
+  });
+});
+
+describe("rangeArgs", () => {
+  it("passes an ordinary range through", () => {
+    expect(rangeArgs("origin/main..HEAD")).toEqual(["origin/main..HEAD"]);
+  });
+
+  it("checks the tip alone when the range starts at the all-zero sha (a first push)", () => {
+    expect(rangeArgs(`${"0".repeat(40)}..HEAD`)).toEqual(["-1", "HEAD"]);
+  });
+});
+
+describe("messageFromFile", () => {
+  it("drops git's comment lines and everything below the scissors line", () => {
+    const raw = [
+      "# Please enter the commit message for your changes.",
+      "fix(web): a good subject",
+      "",
+      "# ------------------------ >8 ------------------------",
+      "Co-Authored-By: only in the diff below the scissors",
+    ].join("\n");
+
+    expect(messageFromFile(raw)).toBe("fix(web): a good subject");
+  });
+
+  it("keeps blank lines and trims the edges", () => {
+    expect(messageFromFile("\n\nfix: a subject\n\nwith a body\n\n")).toBe(
+      "fix: a subject\n\nwith a body",
+    );
+  });
+});
+
 /** A throwaway repo with one commit per message, oldest first; returns the first sha. */
 function repoWith(messages: string[]): { dir: string; first: string } {
   const dir = mkdtempSync(join(tmpdir(), "universum-commits-"));
@@ -186,21 +235,6 @@ describe("the commit-msg hook", () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("subject is not");
-  });
-
-  it("skips what git strips: comment lines and everything below the scissors", () => {
-    const { dir } = repoWith(["chore: root"]);
-    const text = [
-      "# Please enter the commit message for your changes.",
-      "fix(web): a good subject",
-      "",
-      "# ------------------------ >8 ------------------------",
-      "Co-Authored-By: only in the diff below the scissors",
-    ].join("\n");
-
-    const result = checkMessage(dir, text);
-
-    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: "" });
   });
 
   it("lets git's merge subject through while a merge is in progress", () => {

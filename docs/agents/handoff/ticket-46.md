@@ -72,8 +72,8 @@ Rooms; `restore_duration_seconds` is Prometheus's own boot gauge.
   values = only the planned restart).
 - Report: `renderReport` is pure; `writeReport` writes `loadtest-reports/loadtest-YYYYMMDD-HHmmss.md`
   (UTC). It holds the full git SHA, host CPU model, generator CPU peak, both measured windows, every
-  criterion and every raw number. The signed-off report is later committed under `docs/loadtest/`
-  (owner's job, #47).
+  criterion and every raw number. The report stays in the gitignored `loadtest-reports/`; #47
+  waived the Linux-host sign-off, so no report is committed.
 - `--find-knee` starts 100 Rooms in the first minute and adds 100/min (cap `--max-rooms`, default
   2,000). Each minute it takes a worker snapshot and a one-minute Prometheus window, runs the same
   verdict without restart criteria, and stops at the first failing criterion; the report says the

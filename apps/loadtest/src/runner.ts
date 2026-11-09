@@ -16,7 +16,7 @@ import { PrometheusClient } from "#prometheus.ts";
 import { writeReport, type KneeResult, type RunReport } from "#report.ts";
 import { emptyWorkerStats, mergeWorkerStats, type WorkerStats } from "#stats.ts";
 import { verdict, type RestartMeasurements, type Verdict } from "#verdict.ts";
-import { sleep, withTimeout } from "#wait.ts";
+import { pollUntil, waitUntil, withTimeout } from "#wait.ts";
 import type { MainToWorker, WorkerConfig, WorkerToMain } from "#worker-protocol.ts";
 
 type WorkerHandle = {
@@ -437,26 +437,11 @@ function gitSha(): string {
 }
 
 async function waitForPrometheus(baseUrl: string, timeoutMs: number): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- readiness is polled, one probe at a time
-      const response = await fetch(`${baseUrl}/-/ready`);
-      if (response.ok) return;
-    } catch {
-      // still starting
-    }
-    // oxlint-disable-next-line no-await-in-loop -- the probe interval
-    await sleep(250);
-  }
-  throw new Error(`Prometheus did not become ready within ${timeoutMs / 1_000} s`);
-}
-
-async function waitUntil(atMs: number): Promise<void> {
-  while (Date.now() < atMs) {
-    // oxlint-disable-next-line no-await-in-loop -- sleeping until a scheduled wall-clock moment
-    await sleep(Math.min(1_000, atMs - Date.now()));
-  }
+  const { ok } = await pollUntil(async () => (await fetch(`${baseUrl}/-/ready`)).ok, {
+    timeoutMs,
+    intervalMs: 250,
+  });
+  if (!ok) throw new Error(`Prometheus did not become ready within ${timeoutMs / 1_000} s`);
 }
 
 function log(line: string): void {
