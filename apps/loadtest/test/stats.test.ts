@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   jsonBytes,
+  maxOf,
   mergeWorkerStats,
   peakCpuFraction,
   percentile,
@@ -45,6 +46,18 @@ describe("percentiles", () => {
     expect(percentile(samples, 95)).toBe(95);
     expect(percentile(samples, 99)).toBe(99);
     expect(percentile([4, 1, 3, 2], 100)).toBe(4);
+  });
+});
+
+describe("the largest value", () => {
+  it("is the largest of the values, or null when there are none", () => {
+    expect(maxOf([4, 1, 3, 2])).toBe(4);
+    expect(maxOf([])).toBeNull();
+  });
+
+  it("skips the windows that returned nothing", () => {
+    expect(maxOf([null, 7, null])).toBe(7);
+    expect(maxOf([null, null])).toBeNull();
   });
 });
 
