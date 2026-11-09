@@ -1,5 +1,5 @@
 import {
-  apply,
+  type apply,
   isRejection,
   SYSTEM,
   type Actor,

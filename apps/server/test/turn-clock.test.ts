@@ -1,21 +1,44 @@
 import {
-  apply,
+  type apply,
+  setupGame,
   type Actor,
   type Applied,
   type GameState,
   type Intent,
-  type Rejection,
 } from "@universum/rules";
 import { describe, expect, it } from "vitest";
 import { captureLogs, ManualScheduler } from "./helpers.ts";
 import { createLogger, silentLogger } from "#observability/logger.ts";
 import { TurnClock, type TurnClockOptions } from "#room/turn-clock.ts";
 
-/** Only `turn` and `turnDeadline` matter to a clock; the engine in these tests ignores the rest. */
-const stateAt = (turn: number, turnDeadline: number | null): GameState =>
-  ({ turn, turnDeadline }) as GameState;
+/** A real started game; the clock only reads `turn` and `turnDeadline` from it. */
+const started = setupGame({
+  seats: [
+    { playerId: "p1", name: { adjective: "test", noun: "one" } },
+    { playerId: "p2", name: { adjective: "test", noun: "two" } },
+  ],
+  settings: { maxPlayers: 2, minuteLimit: 50 },
+  seed: [1, 2, 3, 4],
+  now: 0,
+});
 
-const applied = (state: GameState) => ({ state, events: [], reveals: [] });
+const stateAt = (turn: number, turnDeadline: number | null): GameState => ({
+  ...started,
+  turn,
+  turnDeadline,
+});
+
+const applied = (state: GameState): Applied => ({ state, events: [], reveals: [] });
+
+/** An engine that refuses a deadline that fired before it was due. */
+const earlyEngine: typeof apply = (state, _intent, ctx) =>
+  ctx.now < (state.turnDeadline ?? 0) ? { code: "NOT_OFFERED" } : applied(state);
+
+/** An engine that refuses a timeout for a Turn that already passed. */
+const staleEngine: typeof apply = (state, intent) =>
+  intent.type === "TurnTimedOut" && intent.turn !== state.turn
+    ? { code: "STALE_TURN" }
+    : applied(state);
 
 type EngineCall = { state: GameState; intent: Intent; actor: Actor; now: number };
 
@@ -78,11 +101,7 @@ describe("TurnClock", () => {
   });
 
   it("re-arms a wake-up that fired before turnDeadline instead of timing out twice", () => {
-    const engine: typeof apply = (state, _intent, ctx) =>
-      ctx.now < (state.turnDeadline ?? 0)
-        ? ({ code: "NOT_OFFERED" } satisfies Rejection)
-        : applied(state);
-    const { clock, scheduler, commits } = startClock({ engine });
+    const { clock, scheduler, commits } = startClock({ engine: earlyEngine });
     clock.arm(stateAt(1, 1_000));
 
     scheduler.advanceTo(999);
@@ -96,11 +115,7 @@ describe("TurnClock", () => {
   });
 
   it("ignores a stale wake-up once a later Turn is armed", () => {
-    const engine: typeof apply = (state, intent) =>
-      intent.type === "TurnTimedOut" && intent.turn !== state.turn
-        ? { code: "STALE_TURN" }
-        : applied(state);
-    const { clock, scheduler, commits } = startClock({ engine });
+    const { clock, scheduler, commits } = startClock({ engine: staleEngine });
     clock.arm(stateAt(1, 1_000));
     const stale = scheduler.lastTaskAt(1_000);
 
