@@ -103,7 +103,8 @@ export function rentOf(state: GameState, field: FieldId): number {
  */
 export function rentWithCount(state: GameState, field: FieldId, count: number): number {
   const info = FIELDS[field];
-  if (!state.fields[field]?.owner) return 0;
+  const fieldState = state.fields[field];
+  if (!fieldState?.owner) return 0;
   const base = baseRentOf(state, field);
   if (info?.kind === "museum" || count > 0) return base * (count + 1);
   if (!info?.group) return 0;
