@@ -1,9 +1,9 @@
 import type { FieldId } from "#board.ts";
-import { FIELD_COUNT } from "#board.ts";
-import { ROUND_BONUS, TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
+import { TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
 import { autoSellPicks } from "#rules/charge.ts";
+import { doublerPlacement } from "#rules/doubler.ts";
+import { erasmusRoute } from "#rules/erasmus.ts";
 import { standingsOf, type Standing } from "#rules/game-end.ts";
-import { baseRentOf, rentOf } from "#rules/pricing.ts";
 import { revealOf, type FieldView, type PlayerView } from "#reveal.ts";
 import type { GameState } from "#state.ts";
 
@@ -55,28 +55,14 @@ function pickOptions(state: GameState): PickOption[] | null {
   const { phase } = state;
   if (phase.kind === "placingDoubler") {
     return phase.fields.map((field) => {
-      // Placed again on the Field that already carries it, the count stacks.
-      const countAfter = state.doubler?.field === field ? state.doubler.count + 1 : 1;
-      return {
-        kind: "doubler",
-        field,
-        rent: rentOf(state, field),
-        rentAfter: baseRentOf(state, field) * (countAfter + 1),
-      };
+      const { rent, rentAfter } = doublerPlacement(state, field);
+      return { kind: "doubler", field, rent, rentAfter };
     });
   }
   if (phase.kind === "choosingErasmus") {
-    const from = state.players.find((player) => player.id === state.currentPlayer)?.position ?? 0;
     return phase.fields.map((field) => {
-      const steps = (field - from + FIELD_COUNT) % FIELD_COUNT;
-      const passesStart = from + steps >= FIELD_COUNT;
-      return {
-        kind: "erasmus",
-        field,
-        steps,
-        passesStart,
-        bonus: passesStart ? ROUND_BONUS : null,
-      };
+      const { steps, passesStart, bonus } = erasmusRoute(state, field);
+      return { kind: "erasmus", field, steps, passesStart, bonus };
     });
   }
   return null;

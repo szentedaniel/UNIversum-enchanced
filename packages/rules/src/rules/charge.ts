@@ -1,16 +1,16 @@
 /**
- * Charges and the one solvency rule (spec: Rules; R34, R37, R38, R57, R62,
- * R66–R72, F6–F9, F12, F20). Every amount a Player owes at once (Rent, Tax,
- * a Chance card, the Timeout penalty) goes through here.
+ * Charges and the one solvency rule (spec: Rules; R19, R34, R37, R38, R57,
+ * R62, R66–R72, F6–F9, F12, F20). Every amount a Player owes at once (Rent,
+ * Tax, a Chance card, the Timeout penalty) goes through here, and so does the
+ * sequencing that settles it: cash pays, a Sale opens for the Shortfall, the
+ * Timeout penalty Auto-sells first, and a Player whose cash and Fields fall
+ * short is Bankrupt. Money never goes negative, and no money is created.
  *
  * The Charge is computed once, when it arises, and kept as plain data (a
- * `PendingCharge`) so a Sale can pay it later without recomputing it. Cash
- * that covers it pays it. Otherwise, if cash plus the Bank sale value of all
- * the Player's Fields covers it, the Player goes into a Sale for the
- * Shortfall. Otherwise the Player is Bankrupt at once. Money never goes
- * negative, and no money is created.
+ * `PendingCharge`) so a Sale can pay it later without recomputing it.
  */
 import { FIELDS, type FieldId } from "#board.ts";
+import { LOW_CASH_TIMEOUT_PENALTY, TIMEOUT_PENALTY_THRESHOLD } from "#constants.ts";
 import { saleValueOf } from "#rules/pricing.ts";
 import type { GameState, PlayerId } from "#state.ts";
 import { decide, emit, playerById, type Tx } from "#tx.ts";
@@ -50,7 +50,7 @@ declare module "#events.ts" {
 }
 
 /** The Fields the Player owns, in Field order. */
-export function fieldsOf(state: GameState, playerId: PlayerId): FieldId[] {
+function fieldsOf(state: GameState, playerId: PlayerId): FieldId[] {
   return FIELDS.filter((f) => state.fields[f.id]?.owner === playerId).map((f) => f.id);
 }
 
@@ -76,6 +76,19 @@ export function autoSellPicks(state: GameState, playerId: PlayerId, target: numb
     proceeds += saleValueOf(state, field);
   }
   return picks;
+}
+
+/**
+ * The Timeout penalty as a Charge (R19, F7), its amount computed here: above
+ * `TIMEOUT_PENALTY_THRESHOLD` cash, 10% of cash rounded; at or below it the
+ * flat `LOW_CASH_TIMEOUT_PENALTY`, which Auto-sell raises.
+ */
+export function timeoutPenaltyOf(tx: Tx, playerId: PlayerId): PendingCharge {
+  const { cash } = playerById(tx, playerId);
+  return {
+    kind: "timeoutPenalty",
+    amount: cash > TIMEOUT_PENALTY_THRESHOLD ? Math.round(cash * 0.1) : LOW_CASH_TIMEOUT_PENALTY,
+  };
 }
 
 /** Hands a paid Charge to its payee and tells everyone. */
@@ -111,7 +124,7 @@ function returnToBank(tx: Tx, fields: readonly FieldId[]): void {
 }
 
 /** Sells `fields` to the Bank; the Player keeps the full sale value (R67). */
-export function sellFields(tx: Tx, playerId: PlayerId, fields: FieldId[], auto: boolean): void {
+function sellFields(tx: Tx, playerId: PlayerId, fields: FieldId[], auto: boolean): void {
   if (fields.length === 0) return;
   const amount = saleValueOfAll(tx.state, fields);
   returnToBank(tx, fields);
@@ -120,7 +133,7 @@ export function sellFields(tx: Tx, playerId: PlayerId, fields: FieldId[], auto: 
 }
 
 /** Takes the Charge from cash, which must cover it, and pays the payee. */
-export function payFromCash(tx: Tx, payer: PlayerId, pending: PendingCharge): void {
+function payFromCash(tx: Tx, payer: PlayerId, pending: PendingCharge): void {
   const player = playerById(tx, payer);
   if (player.cash < pending.amount) throw new Error("cash does not cover the Charge");
   player.cash -= pending.amount;
@@ -137,7 +150,7 @@ export function payFromCash(tx: Tx, payer: PlayerId, pending: PendingCharge): vo
  * owned, then they return to the Bank with `WentBankrupt`. The amounts are
  * what the Player could raise, computed before anything moves.
  */
-export function goBankrupt(tx: Tx, payer: PlayerId, pending: PendingCharge): void {
+function goBankrupt(tx: Tx, payer: PlayerId, pending: PendingCharge): void {
   const player = playerById(tx, payer);
   const fields = fieldsOf(tx.state, payer);
   const raised = player.cash + saleValueOfAll(tx.state, fields);
@@ -149,12 +162,55 @@ export function goBankrupt(tx: Tx, payer: PlayerId, pending: PendingCharge): voi
 }
 
 /**
- * The one solvency rule. Pays `pending` from cash, or opens a Sale for the
- * Shortfall (`tx.decided` is then set: the caller stops there), or makes the
- * Player Bankrupt.
+ * Auto-sell's settlement (R19, R68, F9): the cheapest Fields until the
+ * proceeds reach the whole Charge, then cash pays it; Bankrupt when cash plus
+ * every Field falls short. The caller has seen that cash alone would leave
+ * the Player with nothing.
  */
-export function charge(tx: Tx, payer: PlayerId, pending: PendingCharge): void {
+function settleByAutoSell(tx: Tx, payer: PlayerId, pending: PendingCharge): void {
   const { cash } = playerById(tx, payer);
+  const sale = saleValueOfAll(tx.state, fieldsOf(tx.state, payer));
+  if (cash + sale < pending.amount) return goBankrupt(tx, payer, pending);
+  sellFields(tx, payer, autoSellPicks(tx.state, payer, pending.amount), true);
+  payFromCash(tx, payer, pending);
+}
+
+/**
+ * The Sale's outcome (R66–R68): sells `picks` — the Player's choice, or
+ * Auto-sell's cheapest Fields for the Shortfall when omitted — to the Bank,
+ * then pays the Charge from cash. The Sale opened only because the proceeds
+ * cover the Shortfall, so cash covers the Charge by now.
+ */
+export function settleAfterSale(
+  tx: Tx,
+  payer: PlayerId,
+  pending: PendingCharge,
+  picks?: readonly FieldId[],
+): void {
+  const { cash } = playerById(tx, payer);
+  const fields = picks ? [...picks] : autoSellPicks(tx.state, payer, pending.amount - cash);
+  sellFields(tx, payer, fields, picks === undefined);
+  payFromCash(tx, payer, pending);
+}
+
+/**
+ * The one solvency rule. Cash that covers `pending` pays it. Otherwise
+ * `how.sell` decides: `"ask"` (the default) opens a Sale for the Shortfall and
+ * sets `tx.decided`, so the caller stops there; `"auto"` (the Timeout
+ * penalty) Auto-sells first whenever cash alone would leave the Player with
+ * nothing, then pays from cash. Either way, a Player whose cash plus every
+ * Field falls short is Bankrupt at once.
+ */
+export function charge(
+  tx: Tx,
+  payer: PlayerId,
+  pending: PendingCharge,
+  how: { sell: "ask" | "auto" } = { sell: "ask" },
+): void {
+  const { cash } = playerById(tx, payer);
+  if (how.sell === "auto" && cash <= pending.amount) {
+    return settleByAutoSell(tx, payer, pending);
+  }
   if (cash >= pending.amount) return payFromCash(tx, payer, pending);
   const sale = saleValueOfAll(tx.state, fieldsOf(tx.state, payer));
   if (cash + sale >= pending.amount) {
