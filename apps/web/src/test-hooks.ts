@@ -79,7 +79,8 @@ export function exposeBoard(board: Board | null): void {
         showView(view, events = [], reveals = []) {
           const receivedAt = Date.now();
           const { push } = roomStore.getState();
-          // As if the server sent it now: the clock estimate stays this push's.
+          // As if the server sent it now: the clock estimate stays this push's,
+          // and a view older than the current one is ignored, as for a real push.
           receivePush(
             { view, events, reveals, now: serverNow(push?.clockOffset ?? 0, receivedAt) },
             receivedAt,
