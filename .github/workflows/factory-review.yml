@@ -4,8 +4,9 @@
 # the night cron drains whatever stayed queued.
 #
 # Labels: `agent:review` is the queue (a queued run leaves it in place); a run
-# swaps it for `risk:low` or `risk:high`, and a changes-requested review adds
-# `ready-for-human` until the fix loop (#87) exists.
+# swaps it for `risk:low` or `risk:high`. A changes-requested review dispatches
+# the fix loop (`factory-fix.yml`); a pass leaves the merge gate
+# (`factory-merge.yml`) to decide.
 name: Factory Review
 
 run-name: Factory review ${{ format('#{0}', inputs.pr || github.event.pull_request.number || 'night queue') }}
@@ -232,10 +233,10 @@ jobs:
           gh pr edit "$PR_NUMBER" --remove-label "risk:low" || true
           gh pr edit "$PR_NUMBER" --remove-label "risk:high" || true
           gh pr edit "$PR_NUMBER" --add-label "$(cat "${RUNNER_TEMP}/risk-label.txt")"
-          # Until the fix loop (#87) exists, a changes-requested review is the
-          # owner's queue; a later pass clears it again.
+          # A changes-requested verdict goes back to omp, which gets two
+          # rounds before the owner sees it; a pass clears a stale handoff.
           if [ "$verdict" = "changes-requested" ]; then
-            gh pr edit "$PR_NUMBER" --add-label "ready-for-human"
+            gh workflow run factory-fix.yml -f "pr=$PR_NUMBER" -f reason=review
           else
             gh pr edit "$PR_NUMBER" --remove-label "ready-for-human" || true
           fi
