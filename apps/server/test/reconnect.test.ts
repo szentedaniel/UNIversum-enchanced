@@ -136,6 +136,70 @@ async function startedGame(server: TestServer) {
   return { alice, bob, tokens, ids, code: alice.code, view: withDeadline(first) };
 }
 
+/** The Seat reservation a matchmake answered with, for opening its WebSocket by hand. */
+type SeatReservation = { sessionId: string; roomId: string; processId: string };
+
+function reservationOf(answer: unknown): SeatReservation {
+  if (
+    typeof answer === "object" &&
+    answer !== null &&
+    "sessionId" in answer &&
+    typeof answer.sessionId === "string" &&
+    "roomId" in answer &&
+    typeof answer.roomId === "string" &&
+    "processId" in answer &&
+    typeof answer.processId === "string"
+  ) {
+    return { sessionId: answer.sessionId, roomId: answer.roomId, processId: answer.processId };
+  }
+  throw new Error("the matchmake answered no Seat reservation");
+}
+
+/**
+ * A reserved Seat whose WebSocket never answers the JOINED handshake: Colyseus
+ * has the client in the Room, but it never counts as joined. A tab closed or a
+ * reload interrupted a moment after connecting leaves exactly this behind.
+ */
+async function halfJoined(
+  server: TestServer,
+  code: string,
+  guestToken: string,
+): Promise<WebSocket> {
+  const response = await fetch(`http://127.0.0.1:${server.port}/matchmake/joinById/${code}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code, guestToken }),
+  });
+  if (!response.ok) throw new Error(`the matchmake was refused: ${String(response.status)}`);
+  const seat = reservationOf(await response.json());
+  const socket = new WebSocket(
+    `ws://127.0.0.1:${server.port}/${seat.processId}/${seat.roomId}?sessionId=${seat.sessionId}`,
+  );
+  const { promise, resolve, reject } = Promise.withResolvers<void>();
+  socket.addEventListener("open", () => resolve(), { once: true });
+  socket.addEventListener("error", () => reject(new Error("the socket did not open")), {
+    once: true,
+  });
+  await promise;
+  return socket;
+}
+
+/** A started 2-Player game whose second Seat dropped before its JOINED handshake. */
+async function halfJoinedDrop(server: TestServer) {
+  const bobToken = newGuestToken();
+  const alice = await server.create({ maxPlayers: 2 });
+  const socket = await halfJoined(server, alice.code, bobToken);
+  const lobby = await alice.until("lobby", (l) => l.seats.length === 2);
+  const bobId = lobby.seats[1]?.playerId;
+  if (bobId === undefined) throw new Error("the half-joined Seat has no Player id");
+  alice.send({ type: "Start" });
+  await alice.next("game");
+  socket.close();
+  // The drop is a race: wait until the Room holds the Seat before releasing it.
+  await eventually(() => expect(server.room(alice.code)?.gauges().held).toBe(1));
+  return { bobToken, bobId, code: alice.code };
+}
+
 describe("a Seat in a running game while its Player is away", () => {
   it("is held, its Turns time out with the normal penalty, and the reconnection token brings the Player back to the current state", async () => {
     const server = await start();
@@ -204,6 +268,27 @@ describe("a Seat in a running game while its Player is away", () => {
     server.room(code)?.endGame();
 
     await expect(server.reconnect(alice)).rejects.toThrow(EXPIRED);
+  });
+
+  it("is held when its client drops before its JOINED handshake, and the Guest token takes it back", async () => {
+    const server = await start();
+    const { bobToken, bobId, code } = await halfJoinedDrop(server);
+
+    const again = await server.join(code, { guestToken: bobToken });
+
+    expect(await again.next("welcome")).toEqual({ playerId: bobId });
+    expect((await again.next("game")).view.version).toBe(0);
+  });
+
+  it("doesn't break the game's end when its client dropped before its JOINED handshake", async () => {
+    const server = await start();
+    const { bobToken, bobId, code } = await halfJoinedDrop(server);
+
+    server.room(code)?.endGame();
+
+    expect(server.room(code)?.endedAt).toBeTypeOf("number");
+    const again = await server.join(code, { guestToken: bobToken });
+    expect(await again.next("welcome")).toEqual({ playerId: bobId });
   });
 
   it("is taken back by Guest token after a server restart", async () => {
