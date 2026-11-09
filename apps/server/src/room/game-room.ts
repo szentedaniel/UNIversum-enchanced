@@ -526,7 +526,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   /**
    * Holds the Seat for its absent Player: a Lobby frees it 60 s from now, a
    * running game keeps it until the game ends. `release` gives up the dropped
-   * client's reconnection; `null` for a Seat restored without a connection.
+   * client's reconnection; `null` for a Seat restored without a connection, or
+   * whose client dropped before it finished joining.
    */
   private hold(seat: SeatRecord, release: (() => void) | null): void {
     this.unhold(seat.playerId);
