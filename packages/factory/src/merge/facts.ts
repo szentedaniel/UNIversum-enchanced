@@ -86,7 +86,7 @@ export const readMergeFacts = (
 ): MergeFacts => {
   const files = reader.changedFiles(repo, pr);
   const base = reader.compareOf(repo, pull.headRefOid);
-  const facts: MergeFacts = {
+  return {
     headSha: pull.headRefOid,
     headCommittedAt: pull.headCommittedAt,
     labels: pull.labels,
@@ -98,5 +98,4 @@ export const readMergeFacts = (
     mainAheadBy: base.mainAheadBy,
     mainFiles: base.files,
   };
-  return facts;
 };
