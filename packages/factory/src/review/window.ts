@@ -55,6 +55,9 @@ export const isNightWindow = (at: Date): boolean => {
 /** The Budapest calendar day, `YYYY-MM-DD`, for grouping the quota. */
 export const budapestDay = (at: Date): string => budapest(at).day;
 
+/** The Budapest clock hour, 0–23, for the weekly report's 06:00 slot. */
+export const budapestHour = (at: Date): number => budapest(at).hour;
+
 /**
  * How many daytime review slots today's summary comments already spent. A
  * night review posts the same comment but does not eat the daytime quota.
