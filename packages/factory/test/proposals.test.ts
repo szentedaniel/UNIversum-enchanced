@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   ARCHITECTURE_MARKER,
+  architectureRun,
+  DEFAULT_MAX_PROPOSALS,
   newProposals,
   proposalIssueBody,
   proposalLabel,
@@ -60,5 +62,67 @@ describe("newProposals", () => {
       twoWayDoor,
       oneWayDoor,
     ]);
+  });
+});
+
+describe("architectureRun", () => {
+  const now = new Date("2026-11-09T12:00:00Z");
+  const proposal = {
+    title: "Deepen the dispatcher's frontier",
+    problem: "The dispatcher reads six REST shapes around one pure rule.",
+    proposal: "One `frontierOf` seam behind an adapter that fetches the facts.",
+    files: ["packages/factory/src/dispatch/frontier.ts"],
+    twoWayDoor: true,
+    doorReason: "A revert restores the old fetch code; no state or wire format changes.",
+  };
+
+  it("defaults to the picky weekly cap over the whole repository", () => {
+    const config = architectureRun({}, now);
+
+    expect(config.max).toBe(DEFAULT_MAX_PROPOSALS);
+    expect(config.focus).toEqual([]);
+    expect(config.promptArgs).toEqual({
+      DATE: "2026-11-09",
+      MAX_PROPOSALS: String(DEFAULT_MAX_PROPOSALS),
+      CAP_RULE: expect.stringContaining("not a target"),
+      FOCUS: "the whole repository",
+    });
+  });
+
+  it("switches to the sweep rule when the owner lifts the cap", () => {
+    const config = architectureRun(
+      { MAX_PROPOSALS: "5", FOCUS: " packages/factory  apps/web " },
+      now,
+    );
+
+    expect(config.max).toBe(5);
+    expect(config.focus).toEqual(["packages/factory", "apps/web"]);
+    expect(config.promptArgs.MAX_PROPOSALS).toBe("5");
+    expect(config.promptArgs.CAP_RULE).toContain("sweep the owner asked for");
+    expect(config.promptArgs.FOCUS).toBe("`packages/factory`, `apps/web`");
+  });
+
+  it("rejects a cap outside 1..20, naming the offending value", () => {
+    for (const MAX_PROPOSALS of ["0", "21", "2.5", "many"]) {
+      expect(() => architectureRun({ MAX_PROPOSALS }, now)).toThrow(
+        `MAX_PROPOSALS must be an integer from 1 to 20, got '${MAX_PROPOSALS}'.`,
+      );
+    }
+  });
+
+  it("reads an unset or blank cap as the default", () => {
+    expect(architectureRun({ MAX_PROPOSALS: "" }, now).max).toBe(DEFAULT_MAX_PROPOSALS);
+    expect(architectureRun({ MAX_PROPOSALS: "  " }, now).max).toBe(DEFAULT_MAX_PROPOSALS);
+  });
+
+  it("bounds the schema by the run's cap", () => {
+    const { schema } = architectureRun({ MAX_PROPOSALS: "4" }, now);
+
+    expect(schema.safeParse({ proposals: Array.from({ length: 4 }, () => proposal) }).success).toBe(
+      true,
+    );
+    expect(schema.safeParse({ proposals: Array.from({ length: 5 }, () => proposal) }).success).toBe(
+      false,
+    );
   });
 });

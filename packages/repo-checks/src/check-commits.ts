@@ -5,22 +5,14 @@
  * (a branch's first push) checks the tip alone.
  */
 import { execFileSync } from "node:child_process";
-import { commitProblems, type Commit } from "#commits.ts";
+import { commitProblems, parseLog, rangeArgs } from "#commits.ts";
 
 const range = process.env["COMMIT_RANGE"] || "origin/main..HEAD";
-const args = /^0+\.\./.test(range) ? ["-1", range.replace(/^0+\.\./, "")] : [range];
 
-const log = execFileSync("git", ["log", "--format=%H%x00%P%x00%B%x1e", ...args], {
+const log = execFileSync("git", ["log", "--format=%H%x00%P%x00%B%x1e", ...rangeArgs(range)], {
   encoding: "utf8",
 });
-const commits: Commit[] = log
-  .split("\x1e")
-  .map((entry) => entry.replace(/^\n/, ""))
-  .filter((entry) => entry !== "")
-  .map((entry) => {
-    const [sha = "", parents = "", message = ""] = entry.split("\0");
-    return { sha, parents: parents.split(" ").filter(Boolean).length, message: message.trim() };
-  });
+const commits = parseLog(log);
 
 const broken = commits.flatMap((commit) =>
   commitProblems(commit).map((problem) => `${commit.sha.slice(0, 7)} ${problem}`),

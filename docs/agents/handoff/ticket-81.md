@@ -28,8 +28,8 @@ the README's load-test paragraph. Reports only: no threshold, no verdict row, no
 - `ClientSummary` gains `pushSamples`, `pushP50Bytes`, `pushP95Bytes`, `maxPushBytes`; each is `null`
   (and `pushSamples` `0`) without samples, which the report prints as `no data`. `maxPushBytes` and
   `maxRttMs` both come from `maxOf` in `stats.ts`.
-- Report rows sit with the round trips in `## Client generator`; `bytes` prints `B` under 1 KB and
-  `KB` above.
+- Report rows sit with the round trips in `## Client generator`; the push size prints `B` under 1 KB
+  and `KB` above (`bytes` here, `bytesShort` in `verdict.ts` since #123).
 
 ## Gotchas
 

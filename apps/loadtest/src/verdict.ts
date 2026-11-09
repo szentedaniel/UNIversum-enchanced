@@ -55,12 +55,19 @@ export type Verdict = {
   invalidReason: string | null;
 };
 
-const ms = (value: number) => `${value.toFixed(1)} ms`;
-const seconds = (value: number) => `${value.toFixed(1)} s`;
-const bytes = (value: number) => `${(value / 1024 ** 3).toFixed(2)} GB`;
-const ratio = (value: number) => `${(value * 100).toFixed(1)}%`;
-const cores = (value: number) => `${value.toFixed(2)} cores`;
-const count = (value: number) => String(Math.round(value));
+/**
+ * The run's display units, exported so the report prints a number with the
+ * same formatter as the criterion it mirrors: a unit is defined once.
+ */
+export const ms = (value: number) => `${value.toFixed(1)} ms`;
+export const seconds = (value: number) => `${value.toFixed(1)} s`;
+export const gib = (value: number) => `${(value / 1024 ** 3).toFixed(2)} GB`;
+export const ratio = (value: number) => `${(value * 100).toFixed(1)}%`;
+export const cores = (value: number) => `${value.toFixed(2)} cores`;
+export const count = (value: number) => String(Math.round(value));
+/** A push size: whole B under 1 KB, one decimal of KB above. */
+export const bytesShort = (value: number) =>
+  value < 1024 ? `${count(value)} B` : `${(value / 1024).toFixed(1)} KB`;
 
 type CriterionSpec = {
   id: string;
@@ -139,7 +146,7 @@ export function verdict(input: VerdictInput): Verdict {
       label: "server RSS (peak)",
       measured: server.serverRssBytes,
       limit: thresholds.serverRssBytes,
-      format: bytes,
+      format: gib,
     }),
     criterion({
       id: "heap-growth",

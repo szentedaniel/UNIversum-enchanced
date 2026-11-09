@@ -11,7 +11,7 @@ import type { GameEvent, PlayerId, PublicView, Reveal } from "@universum/rules";
 import type { FieldId } from "@universum/rules/board";
 import type { Board } from "#board/board.ts";
 import { gateOpenOf, playbackStore, type PlaybackGate } from "#playback/playback-store.ts";
-import { inFlightPatch, roomStore, type RoomState } from "#stores/room-store.ts";
+import { markIntentSent, receivePush, roomStore, type RoomState } from "#stores/room-store.ts";
 
 declare const TEST_HOOKS_ENABLED: boolean;
 
@@ -38,8 +38,10 @@ export type TestHooks = {
    */
   holdIntent(): void;
   /**
-   * Shows a made-up view, optionally with the events of the push that led to
-   * it and one reveal per event; without them the view is shown at once.
+   * Shows a made-up view as the server's push would, optionally with the
+   * events of the push that led to it and one reveal per event; without them
+   * the view is shown at once. It takes the next `seq`, so it clears the
+   * in-flight lock.
    */
   showView(view: PublicView, events?: readonly GameEvent[], reveals?: readonly Reveal[]): void;
 };
@@ -73,21 +75,16 @@ export function exposeBoard(board: Board | null): void {
           return serverNow(push?.clockOffset ?? lobbyClockOffset);
         },
         pick: () => board.pick,
-        holdIntent() {
-          roomStore.setState(inFlightPatch(roomStore.getState()));
-        },
+        holdIntent: markIntentSent,
         showView(view, events = [], reveals = []) {
+          const receivedAt = Date.now();
           const { push } = roomStore.getState();
-          roomStore.setState({
-            push: {
-              view,
-              events,
-              reveals,
-              seq: (push?.seq ?? 0) + 1,
-              clockOffset: push?.clockOffset ?? 0,
-              receivedAt: Date.now(),
-            },
-          });
+          // As if the server sent it now: the clock estimate stays this push's,
+          // and a view older than the current one is ignored, as for a real push.
+          receivePush(
+            { view, events, reveals, now: serverNow(push?.clockOffset ?? 0, receivedAt) },
+            receivedAt,
+          );
         },
       }
     : undefined;

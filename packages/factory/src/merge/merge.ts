@@ -51,7 +51,20 @@ interface CompareView {
 const PULL_FIELDS =
   "number,state,title,body,headRefName,headRefOid,mergeStateStatus,labels,closingIssuesReferences,commits,author";
 
+/**
+ * GitHub computes mergeability lazily: the first read after main moves says
+ * UNKNOWN. Deciding on that once merged a conflicting pull request, so the
+ * read waits for an answer, about half a minute at most.
+ */
 const pullOf = (repo: string, pr: string): PullView => {
+  for (let attempt = 1; ; attempt++) {
+    const pull = readPull(repo, pr);
+    if (pull.mergeStateStatus.toLowerCase() !== "unknown" || attempt === 6) return pull;
+    sh("sleep 5");
+  }
+};
+
+const readPull = (repo: string, pr: string): PullView => {
   const raw = sh(
     `gh pr view ${pr} --repo "${repo}" --json ${PULL_FIELDS} --jq '{number, state, title, body, headRefName, headRefOid, mergeStateStatus: (.mergeStateStatus // "unknown"), labels: [.labels[].name], closing: [.closingIssuesReferences[].number], headCommittedAt: (.commits | last | .committedDate // ""), author: (.author.login // "")}'`,
   );
