@@ -6,6 +6,7 @@ import {
   updateLobby,
   type AuthContext,
   type Client,
+  type Deferred,
 } from "@colyseus/core";
 import {
   CLOSE_CODE,
@@ -63,10 +64,21 @@ export const LOBBY_SEAT_HOLD_MS = 60_000;
 /**
  * A Seat held for its absent Player. `release` gives up the Colyseus
  * reconnection of a dropped client (Colyseus then calls `onLeave`); a Seat
- * restored without a connection has none. `until`: when a Lobby frees it;
- * `null` in a running game, which holds it until the game ends.
+ * restored without a connection, or whose client dropped before it finished
+ * joining, has none. `until`: when a Lobby frees it; `null` in a running game,
+ * which holds it until the game ends.
  */
 type Hold = { release: (() => void) | null; until: number | null; cancel: () => void };
+
+/**
+ * What `allowReconnection` hands back: a `Deferred`, whose `reject` gives the
+ * hold up — except for a client that never finished its join handshake (or a
+ * Room already disposing), where Colyseus answers with a plain rejected
+ * promise and there is no reconnection to give up.
+ */
+type PendingReconnection = Omit<Deferred<Client>, "reject"> & {
+  reject?: Deferred<Client>["reject"];
+};
 
 /**
  * `client.auth` of a Guest `onAuth` admitted: the IP bucket and Seat
@@ -411,10 +423,13 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (this.#shuttingDown || this.endedAt !== null) return;
     const seat = this.seatOf(client);
     if (!seat) return; // its Seat was already taken back from another connection
-    const reconnection = this.allowReconnection(client, "manual");
+    const reconnection: PendingReconnection = this.allowReconnection(client, "manual");
     // Rejected when the hold is released: that is how it ends, not an error.
     reconnection.catch(() => {});
-    this.hold(seat, () => reconnection.reject());
+    // Without a rejection the client never finished joining: its Seat is held
+    // for the Guest token alone, and there is no reconnection to give up.
+    const reject = reconnection.reject;
+    this.hold(seat, reject ? () => reject() : null);
     this.metrics.seatDropped();
     this.log.info({ playerId: seat.playerId }, "Seat dropped");
     if (!this.game) this.broadcastLobby();
@@ -511,7 +526,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   /**
    * Holds the Seat for its absent Player: a Lobby frees it 60 s from now, a
    * running game keeps it until the game ends. `release` gives up the dropped
-   * client's reconnection; `null` for a Seat restored without a connection.
+   * client's reconnection; `null` for a Seat restored without a connection, or
+   * whose client dropped before it finished joining.
    */
   private hold(seat: SeatRecord, release: (() => void) | null): void {
     this.unhold(seat.playerId);
