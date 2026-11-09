@@ -82,6 +82,13 @@ describe("the commit rules", () => {
     );
   });
 
+  it("name the length of a long subject in the length rule's message", () => {
+    const subject = `fix: ${"b".repeat(145)}`;
+    expect(commitProblems(commit(subject))).toEqual([
+      "subject is 150 characters, over the 99-character limit",
+    ]);
+  });
+
   it("refuse an AI attribution line anywhere in the message", () => {
     const coAuthored = "fix: a\n\nBody.\n\nCo-Authored-By: Claude <noreply@anthropic.com>";
     const generated = "docs: b\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)";
