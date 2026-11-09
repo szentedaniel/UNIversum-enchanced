@@ -58,7 +58,7 @@ export const factoryRuns = (repo: string, since: string): FactoryRun[] =>
  */
 const LOG_MAX_BUFFER = 128 * 1024 * 1024;
 
-/** `gh` printing into a string, with room for the log; the seam a test replaces. */
+/** `gh` printing into a string, with room for the log; `runLog`'s default `exec`. */
 const execLog = (command: string): string =>
   execSync(command, {
     encoding: "utf8",
