@@ -249,4 +249,21 @@ describe("the Doubler pick in the view", () => {
       { kind: "doubler", field: BUDAPEST, rent: 242_000, rentAfter: 363_000 },
     ]);
   });
+
+  it("R61: the option's rentAfter is the Rent the Field charges once it is placed there", () => {
+    const owned = owning(newGame({ players: 2 }), "p1", [BUDAPEST, MUSEUM_1]);
+    const landed = landingOnDoubler(owned);
+    const option = publicView(landed.state).pickOptions?.find(
+      (pick) => pick.kind === "doubler" && pick.field === BUDAPEST,
+    );
+    if (option?.kind !== "doubler") throw new Error("no Doubler option for Budapest");
+
+    const placed = accept(
+      landed.state,
+      { type: "PlaceDoubler", turn: landed.state.turn, field: BUDAPEST },
+      "p1",
+    );
+
+    expect(publicView(placed.state).fields[BUDAPEST]?.rent).toBe(option.rentAfter);
+  });
 });
