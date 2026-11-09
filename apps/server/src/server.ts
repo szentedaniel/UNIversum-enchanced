@@ -72,6 +72,7 @@ export type StartedServer = {
  * open the store, start the internal port, define every Room, listen, restore
  * the stored Rooms, and only then report ready. Production and every
  * in-process test take this one path, so the order is exercised by tests.
+ * The store it opens, or is handed, is closed after every Room has stopped.
  */
 export async function startServer(
   config: ServerConfig,
