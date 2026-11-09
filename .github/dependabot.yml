@@ -19,10 +19,10 @@ updates:
           - minor
           - patch
     # CI's commit check wants `type(scope): description`; Dependabot's own
-    # subject ("Bump x from a to b") has no type.
+    # subject ("Bump x from a to b") has no type. The prefix covers development
+    # dependencies too (a colon follows the closing bracket).
     commit-message:
       prefix: "build(deps)"
-      prefix-development: "build(deps)"
 
   - package-ecosystem: github-actions
     directory: "/"
@@ -30,4 +30,3 @@ updates:
       interval: weekly
     commit-message:
       prefix: "build(deps)"
-      prefix-development: "build(deps)"

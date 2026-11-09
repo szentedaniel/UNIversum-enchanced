@@ -53,6 +53,9 @@ const repoPathsOf = (body: string, facts: PathFacts): string[] => {
   for (const match of body.matchAll(BACKTICKED)) {
     const span = (match[1] ?? "").replace(/\/+$/u, "");
     if (!REPO_PATH.test(span)) continue;
+    // An HTTP route (`/rooms`) or a container path (`/srv`) is not a repo
+    // path; every span this scan checks is relative to the checkout.
+    if (span.startsWith("/")) continue;
     // A note also writes package-relative names (`src/view.ts`) and the
     // owner's sibling checkout (`v1/…`). Only a span whose first segment git
     // holds is a path of this repo; the rest is context, not a claim.

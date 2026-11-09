@@ -1,0 +1,60 @@
+# Red main: when CI fails on `main`, the factory fixes it before anything else.
+# This workflow opens (or comments on) the one `priority:top` bug — the
+# dispatcher's frontier sorts it first — and starts the dispatcher, because the
+# push that failed CI already started one that saw neither the issue nor its
+# label.
+#
+# It runs main's code, never the failed run's, and installs nothing: plain
+# `node` and `gh`.
+name: Factory Main Watch
+
+run-name: "Factory main watch ${{ inputs.run_id || github.event.workflow_run.id }}"
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: The failed CI run to report
+        required: true
+        type: string
+      dry_run:
+        description: Print the issue without opening it or dispatching
+        type: boolean
+        default: false
+
+# The job's own token stays read-only; every write goes through AGENT_PAT.
+permissions:
+  contents: read
+
+jobs:
+  red-main:
+    # A failed CI run on `main`, pushed to: a pull request's red run is the fix
+    # loop's, and main's own push run is the one that means the branch is red.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.conclusion == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+      CI_RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - name: Report the red main
+        run: node packages/factory/src/maintain/run-red-main.ts

@@ -47,6 +47,8 @@ describe("deadPaths", () => {
     const body = [
       "`src/view.ts`",
       "`board/board.ts`",
+      "`/rooms`",
+      "`/readyz`",
       "`apps/web/src/**/*.ts`",
       "`apps/web/messages/{hu,en,de}.json`",
       "`agent/issue-<n>-<slug>`",

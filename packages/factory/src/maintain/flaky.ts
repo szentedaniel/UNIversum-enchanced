@@ -20,6 +20,7 @@ export interface FlakyTest {
 const LOG_PREFIX = /^\S+\t[^\t\n]*\t\d{4}-\d{2}-\d{2}T[\d:.]+Z /u;
 
 /** The colours Playwright writes when the terminal reports support. */
+// oxlint-disable-next-line no-control-regex -- the escape character is the pattern
 const ANSI = /\u001b\[[0-9;]*[A-Za-z]/gu;
 
 const FLAKY_COUNT = /^\s*\d+ flaky$/u;
