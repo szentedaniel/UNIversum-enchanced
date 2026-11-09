@@ -629,6 +629,22 @@ describe("pickSyncOf", () => {
     });
   });
 
+  it("still marks my pick while the room clock is unknown", () => {
+    const view = publicView(doublerState());
+    const key = `${view.turn}:${view.turnDeadline}`;
+
+    expect(
+      pickSyncOf(myDecision(view), frameOf(view), null, {
+        ...NO_PICKS,
+        singlePick: { key, field: BUDAPEST },
+      }),
+    ).toEqual({
+      key,
+      marks: { pickable: [VESZPREM, BUDAPEST, MUSEUM_1], picked: [BUDAPEST], ringed: [] },
+      wakeInMs: null,
+    });
+  });
+
   it("marks nothing while the Sale's Turn timer is absent", () => {
     const view = { ...publicView(sellingState()), turnTimer: null };
 
