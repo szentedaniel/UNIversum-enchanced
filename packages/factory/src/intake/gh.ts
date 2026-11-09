@@ -1,25 +1,8 @@
 /**
- * The intake steps' `gh` boundary. Reads run with an argument array, so no
- * fail: an issue number or title is never handed to a shell.
+ * The dispatch's optional `ISSUE_NUMBER` input. The `gh` boundary itself lives
+ * in `#shared/github.ts`; this is env parsing, not gh.
  */
-import { execFileSync } from "node:child_process";
 import { fail } from "#shared/common.ts";
-import { parseJson } from "#shared/github.ts";
-
-/** `gh` with an argument array; stdout as text, a non-zero exit throws. */
-export const gh = (args: readonly string[]): string =>
-  execFileSync("gh", [...args], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    maxBuffer: 256 * 1024 * 1024,
-  });
-
-/** A paginated `gh api` response, one flat list. */
-export const api = <T>(path: string): T[] => {
-  const pages = parseJson<unknown[]>(gh(["api", "--paginate", "--slurp", path]));
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the flattened pages are the caller's REST shape
-  return pages.flat() as T[];
-};
 
 /** An optional issue number from the environment (the dispatch's `issue` input). */
 export const optionalIssueNumber = (name: string): number | undefined => {
