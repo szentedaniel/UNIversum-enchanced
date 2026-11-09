@@ -50,7 +50,8 @@ export type GameServerOptions = {
 export type StartServerDeps = Partial<GameServerOptions> & {
   /**
    * Install the process crash handlers (the default, as the real server
-   * does). In-process test servers turn them off with `gracefullyShutdown`.
+   * does). In-process test servers pass `false`, and `gracefullyShutdown: false`
+   * for the signal hooks.
    */
   crashHandlers?: boolean;
 };
