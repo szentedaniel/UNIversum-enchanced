@@ -1,13 +1,17 @@
 /**
- * The weekly architecture pass's contract with Claude: at most two refactor
- * proposals a week (more on a manual run), each with the door that decides whether an agent may implement it
- * or the owner must. "Claude decides, the script writes": this module turns a
- * proposal into the issue the script opens, and keeps the dedupe pure.
+ * The weekly architecture pass's contract with Claude: what one run may do
+ * (its cap, focus and the prompt arguments they produce) and the door that
+ * decides whether an agent may implement a proposal or the owner must.
+ * "Claude decides, the script writes": this module turns a proposal into the
+ * issue the script opens, and keeps the dedupe pure.
  */
 import { z } from "zod";
 
 /** The weekly cap: a weekly issue stream nobody reads is worse than none. */
 export const DEFAULT_MAX_PROPOSALS = 2;
+
+/** The most a manual dispatch may lift the cap to. */
+const MAX_PROPOSALS_LIMIT = 20;
 
 /**
  * The owner may lift the cap for one run (`max_proposals` on a manual
@@ -31,6 +35,72 @@ export const proposalsSchemaOf = (max: number) =>
       )
       .max(max),
   });
+
+/** The model's whole answer schema: the proposals, capped by the run. */
+export type ProposalsSchema = ReturnType<typeof proposalsSchemaOf>;
+
+const parseMax = (raw: string | undefined): number => {
+  if (raw === undefined || raw.trim() === "") return DEFAULT_MAX_PROPOSALS;
+  const max = Number(raw);
+  if (!Number.isInteger(max) || max < 1 || max > MAX_PROPOSALS_LIMIT) {
+    throw new Error(
+      `MAX_PROPOSALS must be an integer from 1 to ${String(MAX_PROPOSALS_LIMIT)}, got '${raw}'.`,
+    );
+  }
+  return max;
+};
+
+const focusOf = (raw: string | undefined): string[] =>
+  (raw ?? "")
+    .trim()
+    .split(/\s+/u)
+    .filter((path) => path !== "");
+
+/** What one architecture run is allowed to do, and the prompt arguments it feeds. */
+export interface ArchitectureConfig {
+  /** The proposal cap; a lifted cap switches the prompt to the sweep rule. */
+  readonly max: number;
+  /** The paths the pass keeps to; empty means the whole repository. */
+  readonly focus: string[];
+  /** The model's output schema, bounded by this run's cap. */
+  readonly schema: ProposalsSchema;
+  readonly promptArgs: {
+    readonly DATE: string;
+    readonly MAX_PROPOSALS: string;
+    readonly CAP_RULE: string;
+    readonly FOCUS: string;
+  };
+}
+
+/**
+ * One run's configuration, read from the dispatch env: an invalid
+ * `MAX_PROPOSALS` throws rather than silently running at the default. Pure
+ * apart from the injected clock that dates the prompt.
+ */
+export const architectureRun = (
+  env: { MAX_PROPOSALS?: string; FOCUS?: string },
+  now: Date,
+): ArchitectureConfig => {
+  const max = parseMax(env.MAX_PROPOSALS);
+  const focus = focusOf(env.FOCUS);
+  return {
+    max,
+    focus,
+    schema: proposalsSchemaOf(max),
+    promptArgs: {
+      DATE: now.toISOString().slice(0, 10),
+      MAX_PROPOSALS: String(max),
+      // The weekly pass is picky; a sweep the owner lifted the cap for wants
+      // every opportunity that pays for a ticket.
+      CAP_RULE:
+        max > DEFAULT_MAX_PROPOSALS
+          ? "This run is a sweep the owner asked for: propose every opportunity in scope that would pay for a ticket, strongest first, up to the cap. Leave out only the ones you would not defend."
+          : "It is not a target: propose one strong opportunity rather than two weak ones, and none when nothing this week would pay for a ticket.",
+      FOCUS:
+        focus.length === 0 ? "the whole repository" : focus.map((path) => `\`${path}\``).join(", "),
+    },
+  };
+};
 
 export type Proposal = z.infer<ReturnType<typeof proposalsSchemaOf>>["proposals"][number];
 
