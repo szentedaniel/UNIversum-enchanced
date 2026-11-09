@@ -168,9 +168,9 @@ export type PickSelection = {
 export type PickSync = {
   /** My open Sale's or pick's key, else `null`; a change starts a new pick UI. */
   key: string | null;
-  /** The marks for my Sale or pick, else `null`. */
+  /** The marks for my Sale or pick, else `null` (none, or a Sale without the room clock). */
   marks: PickMarks | null;
-  /** The time until Auto-sell's warning starts, else `null` (no Sale, or the warning is due). */
+  /** The time until Auto-sell's warning starts, else `null` (no Sale, the warning is due, or no clock). */
   wakeInMs: number | null;
 };
 
