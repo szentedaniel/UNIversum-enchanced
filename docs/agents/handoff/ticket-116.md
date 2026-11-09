@@ -38,14 +38,21 @@ restructure: no stored state, protocol or wire change.
   `return null` for Oxlint's `consistent-return`.
 - The screen still reads `selectedField` and `inspect` for `bottomSlot`; it no
   longer reads `checklistOpen`, `salePicks` or `singlePick`.
+- The `turnCard` slot is `screens/TurnCard.tsx` from #125 (merged after this
+  branch): `TurnCard` takes `{ view, decision, shownTurn, waiting }` and sends
+  Roll, Offer, Decline and the Quarantine intents itself; `Game.tsx` only
+  decides that the slot shows it.
 
 ## For later tickets
 
-- **#125** (deep trays plus a `TurnCard`) proposes separate deep `SaleTray` and
-  `PickTray` modules. If it lands after this, `DecisionTray`'s shared chrome is
-  the seam to keep: a per-kind module should take `{ view, slot, seat,
-  clockOffset }` and leave the toolbar/checklist/chips here, or move them behind
-  an internal shared piece rather than copying them back.
+- **#125** landed on `main` after this branch: it split the trays into
+  `SaleTray` and `PickTray` behind a shared `TrayHeader`, and moved the Turn
+  card out to `screens/TurnCard.tsx`. The merge keeps this ticket's one tray:
+  `SaleTray.tsx`, `PickTray.tsx`, `TrayHeader.tsx` and `PickChecklist.tsx` are
+  gone, their chrome, checklist and chips live in `DecisionTray`, and
+  `TurnCard.tsx` stays as #125 wrote it. The per-kind bodies here are
+  `SaleHeading`/`Picks`/`SaleBody` and `PickHeading`/`PickBody`, not separate
+  modules.
 - A new tray control or in-flight rule belongs here once, not in `Game.tsx` and
   a kind file. `busy` is `slot.busy` (the Decision's in-flight answer); do not
   read `inFlightOf` again inside the tray.
