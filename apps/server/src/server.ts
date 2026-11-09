@@ -206,7 +206,7 @@ export function createGameServer(options: GameServerOptions): Server {
   return server;
 }
 
-export type RestoreOptions = {
+type RestoreOptions = {
   store: RoomStore;
   scheduler?: Scheduler;
   /** Gets `rooms_restored` and `restore_duration_seconds`. */
