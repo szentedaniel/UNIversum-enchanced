@@ -3,9 +3,9 @@
  * picks the recurring problems and their cheapest durable fixes, and answers
  * with JSON only. The script performs every write: a `ready-for-agent` issue,
  * a `retro/<date>-<slug>` pull request labelled `ready-for-human` (applied
- * with `git apply --check` first), a `ready-for-human` workflow issue carrying
- * the patch, or nothing. Then it appends the dated entry to the factory log
- * and commits that straight to `main` with `[skip ci]`.
+ * with `git apply --check` first) for a standards or workflow change, or
+ * nothing. Then it appends the dated entry to the factory log and commits that
+ * straight to `main` with `[skip ci]`.
  *
  * Env: GH_REPO, CLAUDE_CODE_OAUTH_TOKEN, OUTPUT_DIR (holds `facts.json`),
  * FACTORY_RETRO_MAX (optional, default 3), DRY_RUN.
@@ -51,14 +51,14 @@ const createIssue = (repo: string, title: string, body: string, label: string): 
   );
 
 /**
- * The standards pull request: a branch with the patch, pushed with the PAT so
- * CI runs on it, and a `ready-for-human` pull request (it touches a protected
+ * A retro pull request: a branch with the patch, pushed with the PAT so CI
+ * runs on it, and a `ready-for-human` pull request (it touches a protected
  * path; the owner merges). A patch that no longer applies is a skip, not a
  * failed night; a push or PR failure is real and stops the run.
  */
-const openStandardsPull = (
+const openPatchPull = (
   repo: string,
-  write: Extract<PlannedWrite, { kind: "standards-pr" }>,
+  write: Extract<PlannedWrite, { kind: "standards-pr" | "workflow-pr" }>,
   skipped: string[],
 ): string | undefined => {
   if (safeSh(`git ls-remote --heads origin ${shellArg(write.branch)}`).trim() !== "") {
@@ -153,11 +153,8 @@ const main = async (): Promise<void> => {
     if (write.kind === "issue") {
       const number = createIssue(repo, write.title, write.body, "ready-for-agent");
       opened.push(`Opened #${number}: ${write.title}`);
-    } else if (write.kind === "workflow-issue") {
-      const number = createIssue(repo, write.title, write.body, "ready-for-human");
-      opened.push(`Proposed workflow change in #${number}: ${write.title}`);
     } else {
-      const number = openStandardsPull(repo, write, skipped);
+      const number = openPatchPull(repo, write, skipped);
       if (number !== undefined) {
         opened.push(`Opened pull request #${number}: ${write.title} (${write.branch})`);
       }
