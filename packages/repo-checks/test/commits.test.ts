@@ -38,6 +38,24 @@ describe("the commit rules", () => {
     expect(commitProblems(commit("fix(web): keep the old parser (v2)"))).toEqual([]);
   });
 
+  it("refuse a subject over 100 characters, naming its length and the limit", () => {
+    const atLimit = `fix: ${"a".repeat(95)}`;
+    expect(atLimit).toHaveLength(100);
+    expect(commitProblems(commit(atLimit))).toEqual([]);
+    expect(commitProblems(commit(`${atLimit}a`))).toEqual([
+      "subject is 101 characters, over the 100-character limit",
+    ]);
+  });
+
+  it("exempt git's own merge subject from the length rule on a merge commit", () => {
+    const subject = `Merge branch '${"long-branch-".repeat(9)}' into main`;
+    expect(subject.length).toBeGreaterThan(100);
+    expect(commitProblems(commit(subject, 2))).toEqual([]);
+    expect(commitProblems(commit(subject, 1))).toContain(
+      `subject is ${subject.length} characters, over the 100-character limit`,
+    );
+  });
+
   it("refuse an AI attribution line anywhere in the message", () => {
     const coAuthored = "fix: a\n\nBody.\n\nCo-Authored-By: Claude <noreply@anthropic.com>";
     const generated = "docs: b\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)";
