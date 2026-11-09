@@ -40,9 +40,9 @@ refactor: no behaviour, no message and no rule changed. The proof is `tsc` on
   about `fields[].sale` and the phase options. Both hooks now report the real
   `PublicView`.
 - A new decision phase reaches the specs through the rules declaration merging
-  alone; the view type carries it. `helpers.ts`'s `resolveDecision` switch ends
-  in `return null`, so a new phase compiles there and resolves to nothing —
-  add its case when the phase needs acting on.
+  alone; the view type carries it. Since #122 `helpers.ts`'s `resolveDecision`
+  is exhaustive: its `default` assigns the phase to `never`, so a new phase
+  fails `tsc` there until it gets a case (see `ticket-122.md`).
 - Older notes' mentions of `FullView`/`FullPhase`/`ViewSummary` (ticket-27,
   -29, -31, -32) are historical: the names no longer exist.
 

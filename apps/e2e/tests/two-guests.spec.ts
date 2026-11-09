@@ -228,33 +228,33 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     };
 
     /**
-     * Resolves the decision a Roll stopped at through the controls the view
-     * offers. Every control appears only once its Playback ends (ADR-0004), so
+     * Resolves the decision a Roll stopped at, keeping this spec's waiter-side
+     * assertions and its bookkeeping. The control itself comes from the shared
+     * helper; every control appears only once its Playback ends (ADR-0004), so
      * Playwright's auto-wait is what waits it out.
      */
     const resolveDecision = async (roller: Page, view: PublicView) => {
       const [waiter] = roller === desktop ? [phone] : [desktop];
       const { phase } = view;
+      let choice: ReturnType<typeof takeOffer> | undefined;
       if (phase.kind === "offer") {
         await expect(roller.getByTestId("offer")).toBeVisible();
         await expect(waiter.getByTestId("offer")).toHaveCount(0);
-        const choice = takeOffer(phase);
+        choice = takeOffer(phase);
         if (choice === "decline" && phase.buyout !== undefined) {
           await expect(roller.getByRole("button", { name: /^Buy out · / })).toBeVisible();
         }
-        const result = await resolveSharedDecision(actor(roller), view, () => choice);
-        if (result?.kind === "buy") {
-          const taken = { field: result.field, owner: result.owner };
-          if (result.choice === "level") bought = taken;
-          else museum = taken;
-        }
-        return;
       }
-      if (phase.kind === "quarantineChoice") {
-        await press(roller, "Roll for 12");
-        return;
+      const result = await resolveSharedDecision(
+        actor(roller),
+        view,
+        (offer) => choice ?? takeOffer(offer),
+      );
+      if (result.kind === "buy") {
+        const taken = { field: result.field, owner: result.owner };
+        if (result.choice === "level") bought = taken;
+        else museum = taken;
       }
-      await resolveSharedDecision(actor(roller), view, takeOffer);
     };
 
     const playTurn = async (turn: number, checkHold = false) => {

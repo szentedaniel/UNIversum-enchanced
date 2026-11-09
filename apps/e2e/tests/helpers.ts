@@ -255,14 +255,15 @@ export type DecisionResult =
     }
   | { kind: "decline" }
   | { kind: "pick" }
-  | null;
+  | { kind: "roll" };
 
 /**
- * Resolves the decision the view is at through the controls it offers: an
- * offer (choosing through `chooseOffer`), a Doubler or Erasmus pick, or a Sale.
- * Returns once the controls were used; the caller waits for the server's
- * answer. Every control appears only once its Playback ends (ADR-0004), so
- * Playwright's auto-wait is what waits it out.
+ * Resolves the decision the view is at through the controls it offers: a Roll
+ * (or a Quarantine's Roll for 12), an offer (choosing through `chooseOffer`), a
+ * Doubler or Erasmus pick, or a Sale. A `gameOver` view has no decision left
+ * and throws. Returns once the controls were used; the caller waits for the
+ * server's answer. Every control appears only once its Playback ends
+ * (ADR-0004), so Playwright's auto-wait is what waits it out.
  */
 export async function resolveDecision(
   actor: Interactor,
@@ -331,11 +332,18 @@ export async function resolveDecision(
       return { kind: "pick" };
     }
     case "awaitingRoll":
+      await press(actor, actor.page.getByRole("button", { name: "Roll", exact: true }));
+      return { kind: "roll" };
     case "quarantineChoice":
+      await press(actor, actor.page.getByRole("button", { name: "Roll for 12", exact: true }));
+      return { kind: "roll" };
     case "gameOver":
-      return null;
+      throw new Error("the game is over");
+    default: {
+      const unhandled: never = phase;
+      throw new Error(`the view is at an unknown phase ${JSON.stringify(unhandled)}`);
+    }
   }
-  return null;
 }
 
 /**

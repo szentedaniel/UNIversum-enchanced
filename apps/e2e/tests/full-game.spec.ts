@@ -93,27 +93,14 @@ async function scanEvents(guests: readonly Guest[], seen: Set<string>): Promise<
 }
 
 /**
- * Plays the current decision through the controls it offers: Roll (or Roll for
- * 12), a buy or Decline, a Sale pick, or a Doubler/Erasmus pick. Returns once
- * the server has answered, with the step it covered (`null` for a plain Roll,
- * Decline or Quarantine roll).
+ * Plays the current decision through the controls it offers, then waits for
+ * the server's answer. Returns the step it covered (`null` for a Roll, a
+ * Quarantine roll or a Decline).
  */
 async function playDecision(guest: Guest, view: PublicView): Promise<"buy" | "pick" | null> {
-  const { phase } = view;
-  if (phase.kind === "gameOver") throw new Error("the game is over");
-  let covered: "buy" | "pick" | null = null;
-  if (phase.kind === "awaitingRoll") {
-    await press(guest, guest.page.getByRole("button", { name: "Roll", exact: true }));
-  } else if (phase.kind === "quarantineChoice") {
-    // Rolling for 12 either frees the Player (and may stop at an offer) or
-    // uses one Quarantine round; both end the decision.
-    await press(guest, guest.page.getByRole("button", { name: "Roll for 12", exact: true }));
-  } else {
-    const result = await resolveDecision(guest, view, takeOffer);
-    covered = result?.kind === "buy" ? "buy" : result?.kind === "pick" ? "pick" : null;
-  }
+  const result = await resolveDecision(guest, view, takeOffer);
   await past(guest, view.version);
-  return covered;
+  return result.kind === "buy" ? "buy" : result.kind === "pick" ? "pick" : null;
 }
 
 /** The offer this test takes: the first Level or Museum offered, otherwise Decline (never a Buyout). */
