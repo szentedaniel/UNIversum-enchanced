@@ -4,7 +4,10 @@ packages:
   - apps/*
   - packages/*
 
-engineStrict: true
+# Not engineStrict: Dependabot's updater runs an older Node than `engines`
+# asks for, and a strict check fails its every npm update. `.node-version`
+# and CI's setup-node pin Node 26; pnpm still warns on a mismatch.
+engineStrict: false
 
 catalog:
   "@ai-hero/sandcastle": 0.14.0
