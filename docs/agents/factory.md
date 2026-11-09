@@ -49,7 +49,7 @@ agent:blocked ──re-dispatch──▸ agent:in-progress
 
 `agent:review` is set by the implement run once its pull request exists; the review step (#86) swaps
 it for `risk:low` or `risk:high`, and the merge gate and fix loop (#87) follow it. The weekly
-`factory:report` issue is a later ticket in the same spec.
+`factory:report` issue is described under [The weekly report](#the-weekly-report).
 
 ## Dispatch
 
@@ -148,6 +148,46 @@ hand (`gh workflow run factory-review.yml -f pr=95`), and every night at 01:30 U
 Claude runs with `--permission-mode bypassPermissions` (`claudeAgent` in `src/shared/agents.ts`):
 Sandcastle's `noSandbox()` provider reports no sandbox, so it passes no permission flag, and
 `claude -p` would deny every edit and Bash call. The runner is an ephemeral VM.
+
+## The weekly report
+
+`factory-report.yml` opens the owner's weekly glance, a `factory:report` issue, every Monday at 06:00
+Europe/Budapest. GitHub's cron is UTC, so it schedules 04:00 and 05:00 UTC;
+`packages/factory/src/report/week.ts` lets through only the run whose Budapest hour is 6 (one slot per
+side of the DST switch). A manual dispatch always runs, and its `dry_run` input only prints the body.
+
+The issue is titled `Factory report: week of YYYY-MM-DD` (the Monday that started the reported week)
+and opens with `<!-- factory-report:YYYY-MM-DD -->`, so a re-run in the same week edits it instead of
+duplicating it. The script writes the new week's issue **before** closing the older weekly ones — the
+dispatcher comments its budget notice on the newest open report issue — and leaves a `Factory report —
+YYYY-MM` month issue open, because that is where the budget notice lives.
+
+The week is the Budapest Monday-to-Monday that just ended. Its rows:
+
+| Row                   | What it counts                                                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tickets merged        | Issues closed by a pull request merged in the week; a merged pull that closes no issue (Dependabot, maintenance) is not a ticket pull                                     |
+| Blocked               | Open `agent:blocked` issues, plus the issues whose timeline shows the label was added during the week                                                                     |
+| Fix rounds (mean)     | The highest `<!-- factory-fix:round N -->` on each merged ticket pull, averaged; `none yet` without a merged pull                                                         |
+| Merges                | Auto when the closing issue carries #87's `<!-- factory-merge -->` marker, human otherwise (the PAT is the owner's account, so the merging user cannot tell them apart)   |
+| Idea → merge (median) | Issue `created_at` to the closing pull's `merged_at`, in hours under two days and days above                                                                              |
+| Minutes               | Billed factory minutes (`src/dispatch/budget.ts`) for the month to date against `FACTORY_MONTHLY_MINUTES` (default 1400), and the week's; a warning appears at 80 percent |
+| Claude runs           | Runs of `factory-review.yml`, `factory-intake.yml` and `factory-retro.yml` started in the week, split by whether the start was in the night window                        |
+| omp runs              | Runs of `factory-implement.yml` and `factory-fix.yml` started in the week                                                                                                 |
+| Retro changes         | Lines added to `docs/agents/factory-log.md` in the week (#90); `none yet` while the file does not exist                                                                   |
+
+Runs are classified by their workflow **path**: the runs API's `name` is the workflow's `run-name`
+(`Factory review #97`), not its `name:`, so matching names would silently count nothing.
+
+`## Needs you` lists the open `ready-for-human` issues and pull requests and the `spec:proposed`
+issues, oldest first, as links — the owner's whole queue.
+
+The workflow uses the default `GITHUB_TOKEN` (issues write; actions, pull requests and contents read):
+it writes one issue and triggers nothing. To read the current week's numbers without writing:
+
+```bash
+DRY_RUN=1 GH_REPO=<owner>/<repo> node packages/factory/src/report/report.ts
+```
 
 ## Secrets
 
