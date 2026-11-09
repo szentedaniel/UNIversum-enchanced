@@ -4,11 +4,21 @@
  * (`.github/workflows/factory-implement.yml`, the jq `test(...)`): change the
  * two together, or the dispatcher and the run disagree about what is open.
  */
-const closingKeyword = (issue: number): RegExp =>
-  new RegExp(`(closes|fixes|resolves)[ \\t]+#${String(issue)}([^0-9]|$)`, "iu");
+const CLOSING = /(closes|fixes|resolves)[ \t]+#(\d+)/giu;
+
+/** Every issue number a body's closing keywords name, once each, in order. */
+export const closingIssues = (body: string | null | undefined): number[] => {
+  if (typeof body !== "string") return [];
+  const numbers = new Set<number>();
+  for (const match of body.matchAll(CLOSING)) {
+    const number = Number(match[2]);
+    if (Number.isInteger(number)) numbers.add(number);
+  }
+  return [...numbers];
+};
 
 export const closesIssue = (body: string | null | undefined, issue: number): boolean =>
-  typeof body === "string" && closingKeyword(issue).test(body);
+  closingIssues(body).includes(issue);
 
 /** The fields of a pull request the closing test reads. */
 export interface PullFacts {

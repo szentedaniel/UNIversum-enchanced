@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { closingPull, closesIssue } from "#shared/closing-pr.ts";
+import { closingIssues, closingPull, closesIssue } from "#shared/closing-pr.ts";
 
 describe("closesIssue", () => {
   it("matches the closing keywords GitHub itself honours", () => {
@@ -33,6 +33,19 @@ describe("closesIssue", () => {
   it("reads an empty body as no match", () => {
     expect(closesIssue("", 88)).toBe(false);
     expect(closesIssue(null, 88)).toBe(false);
+  });
+});
+
+describe("closingIssues", () => {
+  it("lists every issue a body closes, once each", () => {
+    expect(closingIssues("Closes #12\n\nFixes #13 and resolves #12.")).toEqual([12, 13]);
+    expect(closingIssues("closes #880")).toEqual([880]);
+  });
+
+  it("reads an empty or missing body as no issues", () => {
+    expect(closingIssues("")).toEqual([]);
+    expect(closingIssues(null)).toEqual([]);
+    expect(closingIssues(undefined)).toEqual([]);
   });
 });
 
