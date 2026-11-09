@@ -5,6 +5,7 @@ import {
   reviewVerdictOf,
   type ReviewComment,
 } from "#review/summary.ts";
+import { subjectOf } from "#shared/subject.ts";
 
 /**
  * The merge gate's rules: what the factory may merge without the owner. The
@@ -278,14 +279,15 @@ export interface MergeSubjectFacts {
  * The merge commit's subject, `chore(merge): #<ticket> <its title>`, or
  * `undefined` for a factory pull that closes no issue: a factory pull always
  * has a ticket. A dependency bump has none — its pull request is the unit of
- * work, so it names its own number and title instead.
+ * work, so it names its own number and title instead. A title with no room to
+ * spare is cut at the commit rules' limit, so the merge itself stays green.
  */
 export const mergeSubjectOf = (facts: MergeSubjectFacts): string | undefined => {
   if (facts.ticket !== undefined) {
-    return `chore(merge): #${String(facts.ticket.number)} ${facts.ticket.title}`;
+    return subjectOf(`chore(merge): #${String(facts.ticket.number)} `, facts.ticket.title);
   }
   if (isDependabotPull(facts.headRefName, facts.author)) {
-    return `chore(merge): #${String(facts.number)} ${facts.title}`;
+    return subjectOf(`chore(merge): #${String(facts.number)} `, facts.title);
   }
   return undefined;
 };

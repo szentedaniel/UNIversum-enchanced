@@ -445,6 +445,24 @@ describe("mergeSubjectOf", () => {
     ).toBe("chore(merge): #91 Factory: weekly maintenance");
   });
 
+  it("cuts a ticket title at a word to the commit rules' 100-character subject limit", () => {
+    const subject = mergeSubjectOf({
+      ...dependabot,
+      ticket: {
+        number: 115,
+        title:
+          "Turn deadline module: one place for the wake-up, its retry back-off and the engine-throw count",
+      },
+      headRefName: "agent/issue-115-turn-clock",
+      author: "universum-factory[bot]",
+    });
+
+    expect(subject?.length).toBeLessThanOrEqual(100);
+    expect(subject).toBe(
+      "chore(merge): #115 Turn deadline module: one place for the wake-up, its retry back-off and the",
+    );
+  });
+
   it("names a dependency bump by its pull request, which closes no ticket", () => {
     expect(mergeSubjectOf(dependabot)).toBe(
       "chore(merge): #97 build(deps): Bump vitest from 5.0.5 to 5.0.6",
