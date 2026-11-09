@@ -86,6 +86,7 @@ export class TurnClock {
   arm(state: GameState): void {
     this.cancel();
     this.#state = state;
+    this.#retries = 0;
     const { turn, turnDeadline } = state;
     if (turnDeadline === null) return;
     this.#cancelWakeUp = this.#scheduler.at(turnDeadline, () => this.#timeOut(turn));

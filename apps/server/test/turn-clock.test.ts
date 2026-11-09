@@ -30,7 +30,11 @@ function recordingEngine() {
 }
 
 /** A clock on its own scheduler, with the Room's commit and error seams stubbed. */
-function startClock(options: Partial<TurnClockOptions> = {}) {
+type TestClockOptions = Omit<Partial<TurnClockOptions>, "scheduler"> & {
+  scheduler?: ManualScheduler;
+};
+
+function startClock(options: TestClockOptions = {}) {
   const scheduler = options.scheduler ?? new ManualScheduler(0);
   const errors: { error: unknown; intent: string }[] = [];
   const commits: Applied[] = [];
@@ -75,7 +79,9 @@ describe("TurnClock", () => {
 
   it("re-arms a wake-up that fired before turnDeadline instead of timing out twice", () => {
     const engine: typeof apply = (state, _intent, ctx) =>
-      ctx.now < (state.turnDeadline ?? 0) ? ({ code: "NOT_OFFERED" } satisfies Rejection) : applied(state);
+      ctx.now < (state.turnDeadline ?? 0)
+        ? ({ code: "NOT_OFFERED" } satisfies Rejection)
+        : applied(state);
     const { clock, scheduler, commits } = startClock({ engine });
     clock.arm(stateAt(1, 1_000));
 
@@ -135,6 +141,25 @@ describe("TurnClock", () => {
     expect(commits).toHaveLength(1);
   });
 
+  it("starts the retry back-off afresh for each new deadline", () => {
+    let fails = true;
+    const engine: typeof apply = (state) => {
+      if (fails) throw new Error("engine bug");
+      return applied(state);
+    };
+    const { clock, scheduler, commits } = startClock({ engine });
+
+    clock.arm(stateAt(1, 1_000));
+    scheduler.advanceTo(1_000); // throws; the retry would be 5 s later
+    clock.arm(stateAt(2, 7_000));
+    scheduler.advanceTo(7_000); // throws again; a new deadline waits 5 s, not 10
+    fails = false;
+    scheduler.advanceTo(11_999);
+    expect(commits).toEqual([]);
+    scheduler.advanceTo(12_000);
+    expect(commits).toHaveLength(1);
+  });
+
   it("tries the deadline again when the Room cannot commit it, doubling the wait each time", () => {
     let refusals = 1;
     const { clock, scheduler, commits } = startClock({
@@ -162,7 +187,10 @@ describe("TurnClock", () => {
       if (throws) throw new Error("engine bug");
       return applied(state);
     };
-    const { clock } = startClock({ engine, log: createLogger({ level: "info", stream: logs.stream }) });
+    const { clock } = startClock({
+      engine,
+      log: createLogger({ level: "info", stream: logs.stream }),
+    });
     const state = stateAt(1, null);
     const roll: Intent = { type: "Roll", turn: 1 };
 

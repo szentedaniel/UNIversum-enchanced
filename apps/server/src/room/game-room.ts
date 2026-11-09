@@ -31,15 +31,11 @@ import {
   isRejection,
   publicView,
   setupGame,
-  SYSTEM,
-  type Actor,
   type Applied,
   type GameEvent,
   type GameState,
-  type Intent,
   type PlayerId,
   type PlayerIntent,
-  type Rejection,
   type Seed,
 } from "@universum/rules";
 import { FloodMeter } from "#abuse/flood.ts";
@@ -65,6 +61,7 @@ import {
 import { claimRoomCode, releaseRoomCode, reserveRoomCode } from "#room/room-code.ts";
 import { checkRoomName } from "#room/room-name.ts";
 import { systemScheduler, type Scheduler } from "#room/scheduler.ts";
+import { TurnClock } from "#room/turn-clock.ts";
 import { deleteAfterRetention } from "#store/retention.ts";
 import type { RoomStore, StoredRoom } from "#store/room-store.ts";
 
@@ -103,13 +100,6 @@ function bucketOf(client: Client): string {
     ? auth.bucket
     : "unknown";
 }
-
-/** This many engine throws in a row in one Room are logged at `fatal` (spec: Engine throws). */
-const ENGINE_THROWS_FATAL = 3;
-/** A Turn deadline the engine or the store failed on is tried again after this, doubling each time… */
-const DEADLINE_RETRY_MS = 5_000;
-/** …up to this. */
-const DEADLINE_RETRY_MAX_MS = 60_000;
 
 /** The HTTP status Colyseus answers a refused create or join with. */
 const STATUS: Partial<Record<RejectionCode, number>> = {
@@ -232,12 +222,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   engine: typeof apply = apply;
   /** Shorter Turns and minutes for e2e runs; empty in production. */
   timing: GameTiming = {};
-  /** Engine throws in a row in this Room; the third is logged at `fatal` (spec: Engine throws). */
-  #throwsInARow = 0;
-  /** Failed tries of the current Turn deadline, for the retry back-off. */
-  #deadlineRetries = 0;
-  /** Cancels the one pending wake-up (the Turn deadline, or deletion once the game ended). */
-  #cancelWakeUp: (() => void) | null = null;
+  /** The Turn deadline's one wake-up, retry back-off and engine-throw count; `onCreate` creates it. */
+  #clock: TurnClock | null = null;
+  /** Cancels the retention deletion once the game ended (its own wake-up, not the Turn's). */
+  #cancelDeletion: (() => void) | null = null;
   /** Set when the process shuts down: Seats and the stored Room must then stay as they are. */
   #shuttingDown = false;
   /** Seats held for absent Players, by public Player id (spec: Seat hold). */
@@ -325,12 +313,22 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (!this.game) this.guard.lobbyOpened(this.roomId);
     this.metadata = this.listing();
     this.log = this.log.child({ roomCode: this.roomId });
+    this.#clock = new TurnClock({
+      scheduler: this.scheduler,
+      engine: this.engine,
+      timing: this.timing,
+      log: this.log,
+      onError: (error, intent) => this.failed(error, "Engine threw", intent),
+      onTimeout: (result) => this.commit(result, "TurnTimedOut"),
+    });
     this.metrics.trackRoom(this);
     if (restored) {
       this.log.info({ playing: this.game !== null, seats: this.seats.length }, "Room restored");
       // A crash between the final save and `endGame` can leave a game-over
       // state stored as unfinished: finish it now, so retention applies.
       if (this.game?.phase.kind === "gameOver") this.endGame();
+      // A deadline that passed while the server was down fires at once.
+      else if (this.game) this.#clock.arm(this.game);
     } else {
       this.log.info({ ...this.settings, hasPassword: this.password !== null }, "Room created");
     }
@@ -362,9 +360,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.autoDispose = false;
     if (this.game) {
       // A running game lives on with nobody connected (its Turns time out),
-      // until it ends; a deadline that passed while the server was down fires at once.
+      // until it ends; `onCreate` arms its deadline once the clock exists.
       this.unlist();
-      this.scheduleDeadline(this.game);
     } else {
       // A Lobby holds each Seat for its 60 s, as if its Player had just dropped.
       for (const seat of this.seats) this.hold(seat, null);
@@ -589,7 +586,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.guard.lobbyClosed(this.roomId);
     this.metrics.untrackRoom(this);
     this.log.info("Room closed");
-    this.#cancelWakeUp?.();
+    this.#clock?.cancel();
+    this.#cancelDeletion?.();
     // Colyseus gives up the held reconnections itself; only the 60 s wake-ups are left.
     for (const hold of this.#holds.values()) hold.cancel();
     this.#holds.clear();
@@ -644,8 +642,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.log.info("Room ended");
     // Seats were held until the game ends (spec: Seat hold).
     this.releaseHolds();
-    this.#cancelWakeUp?.();
-    this.#cancelWakeUp = deleteAfterRetention(
+    this.#clock?.cancel();
+    this.#cancelDeletion = deleteAfterRetention(
       this.store,
       this.scheduler,
       this.roomId,
@@ -743,33 +741,16 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   /** Runs a Player intent through the rules engine. */
   private play(seat: SeatRecord, intent: PlayerIntent): RejectionCode | void {
     if (!this.game) return "NOT_OFFERED";
-    const result = this.run(this.game, intent, seat.playerId);
+    const result = this.turnClock.run(this.game, intent, seat.playerId);
     if (result === null) return "INTERNAL";
     if (isRejection(result)) return result.code;
     return this.commit(result, intent.type);
   }
 
-  /**
-   * Runs the rules engine. A throw (an engine bug) is logged and reported,
-   * and gives `null`: the Room keeps its last good state (spec: Engine throws).
-   */
-  private run(game: GameState, intent: Intent, actor: Actor): Applied | Rejection | null {
-    try {
-      const result = this.engine(game, intent, {
-        actor,
-        now: this.now(),
-        turnLimitMs: this.timing.turnLimitMs,
-      });
-      this.#throwsInARow = 0;
-      return result;
-    } catch (error) {
-      this.#throwsInARow += 1;
-      this.failed(error, "Engine threw", intent.type);
-      if (this.#throwsInARow === ENGINE_THROWS_FATAL) {
-        this.log.fatal({ throwsInARow: this.#throwsInARow }, "Engine keeps throwing");
-      }
-      return null;
-    }
+  /** The Turn deadline's one wake-up; `onCreate` creates it. */
+  private get turnClock(): TurnClock {
+    if (this.#clock === null) throw new Error("the Turn clock is created in onCreate");
+    return this.#clock;
   }
 
   /**
@@ -810,7 +791,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     };
     this.broadcast(MESSAGE.game, message);
     if (state.phase.kind === "gameOver") this.endGame();
-    else this.scheduleDeadline(state);
+    else this.turnClock.arm(state);
   }
 
   /** Writes the Room's snapshot (and an intent's events) to the store; throws if the write fails. */
@@ -840,52 +821,6 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       // The next successful save writes the current Seats.
       this.log.error({ err: error }, "Seats not saved");
     }
-  }
-
-  /** Keeps one wake-up per Room, for the current `turnDeadline` (none once the game is over). */
-  private scheduleDeadline(state: GameState): void {
-    this.#cancelWakeUp?.();
-    this.#cancelWakeUp = null;
-    this.#deadlineRetries = 0;
-    const { turn, turnDeadline } = state;
-    if (turnDeadline === null) return;
-    this.#cancelWakeUp = this.scheduler.at(turnDeadline, () => this.timeOut(turn));
-  }
-
-  /**
-   * The deadline of Turn `turn` has passed: the engine applies the Timeout
-   * outcome. A stale wake-up (the Turn moved on) is rejected and ignored. If
-   * the engine throws or the write fails, the Room keeps its state and tries
-   * again a little later, so Turn deadlines keep it moving (spec: Engine throws).
-   */
-  private timeOut(turn: number): void {
-    if (!this.game || this.endedAt !== null) return;
-    const result = this.run(this.game, { type: "TurnTimedOut", turn }, SYSTEM);
-    if (result !== null && isRejection(result)) {
-      this.rearmEarly(turn);
-      return;
-    }
-    if (result !== null && this.commit(result, "TurnTimedOut") === undefined) {
-      return;
-    }
-    const delay = Math.min(DEADLINE_RETRY_MS * 2 ** this.#deadlineRetries, DEADLINE_RETRY_MAX_MS);
-    this.#deadlineRetries += 1;
-    this.#cancelWakeUp?.();
-    this.#cancelWakeUp = this.scheduler.at(this.now() + delay, () => this.timeOut(turn));
-  }
-
-  /**
-   * A wake-up can fire up to about a millisecond before `turnDeadline` (Node
-   * timers don't wait), and the engine then refuses `TurnTimedOut` as
-   * `NOT_OFFERED`. The deadline is still ahead, so wake up at it again; a
-   * wake-up for a Turn already over is left to the deadline `commit` set.
-   */
-  private rearmEarly(turn: number): void {
-    const game = this.game;
-    if (!game || game.turn !== turn || game.turnDeadline === null) return;
-    if (game.turnDeadline <= this.now()) return;
-    this.#cancelWakeUp?.();
-    this.#cancelWakeUp = this.scheduler.at(game.turnDeadline, () => this.timeOut(turn));
   }
 
   /** The Lobby-list entry: what any Guest may see, so never the password or its hash. */
