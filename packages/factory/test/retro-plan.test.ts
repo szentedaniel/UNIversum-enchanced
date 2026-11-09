@@ -73,7 +73,7 @@ describe("retroSchema", () => {
           patch: standardsPatch,
         }),
         finding({
-          kind: "workflow-issue",
+          kind: "workflow-pr",
           title: "Add the check",
           body: "Why.",
           patch: workflowPatch,
@@ -86,7 +86,7 @@ describe("retroSchema", () => {
     expect(answer.findings.map((item) => item.fix.kind)).toEqual([
       "issue",
       "standards-pr",
-      "workflow-issue",
+      "workflow-pr",
       "none",
     ]);
   });
@@ -205,19 +205,22 @@ describe("planWrites", () => {
     expect(write?.body).toContain("protected path");
   });
 
-  it("proposes a workflow change as an issue with the patch inline", () => {
+  it("opens a workflow pull request on a dated branch with the patch", () => {
     const [write] = plan([
       finding({
-        kind: "workflow-issue",
+        kind: "workflow-pr",
         title: "Add the missing check",
         body: "Why.",
         patch: workflowPatch,
       }),
     ]).writes;
 
-    expect(write).toMatchObject({ kind: "workflow-issue" });
-    expect(write?.body).toContain("```diff");
-    expect(write?.body).toContain("name: CI");
+    expect(write).toMatchObject({
+      kind: "workflow-pr",
+      branch: branchOf("2026-11-09", "Add the missing check"),
+      patch: workflowPatch.trim(),
+    });
+    expect(write?.body).toContain("protected path");
   });
 
   it("writes nothing for a one-off", () => {
@@ -245,7 +248,7 @@ describe("planWrites", () => {
 
   it("skips a workflow patch that touches anything outside the workflows", () => {
     const answer = plan([
-      finding({ kind: "workflow-issue", title: "Change the code", body: "Why.", patch: codePatch }),
+      finding({ kind: "workflow-pr", title: "Change the code", body: "Why.", patch: codePatch }),
     ]);
 
     expect(answer.writes).toEqual([]);
