@@ -88,10 +88,11 @@ reporter's `N flaky` block padded with `─`.
   still fails the gate without a ticket. `facts.ticket` is `{number, title}` or `undefined`.
 - `.github/dependabot.yml` prefixes commits with `build(deps)`: `check:commits` runs on the bump and
   Dependabot's own subject has no type. A grouped PR keeps the prefix.
-- `factory-dependabot.yml` runs on `pull_request_target: opened` for `dependabot[bot]`, and **never
-  checks out**: that event holds the base repository's token. It labels with `AGENT_PAT`, whose
-  label event is the owner's — a workflow whose _actor_ is `dependabot[bot]` gets no secrets, so a
-  job-token label would queue a review that cannot reach Claude.
+- Dependabot labels its own PRs `agent:review` (`labels:` in `.github/dependabot.yml`). A run whose
+  _actor_ is `dependabot[bot]` gets no Actions secrets — `pull_request_target` included, which is why
+  the first design (a `factory-dependabot.yml` labelling with `AGENT_PAT`) was dropped at merge — so
+  `factory-review.yml`'s review job skips that actor and the night cron's `dispatch-queued` runs the
+  review as the owner.
 - CI on a Dependabot PR runs with no secrets and a read-only token: `ci.yml` must stay that way.
 - A Dependabot PR's review/merge path is unchanged; a red CI goes to `factory-fix` (now allowed) and
   a fix pushed with `AGENT_PAT` re-runs CI on the `dependabot/…` branch.

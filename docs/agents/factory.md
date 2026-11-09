@@ -328,20 +328,21 @@ prompt is `src/maintain/prompt.md`.
 
 `.github/dependabot.yml` opens a weekly pull request for the pnpm workspace: minor and patch bumps
 in **one grouped pull request**, a major on its own, and `github-actions` bumps weekly.
-`factory-dependabot.yml` labels a new Dependabot pull request `agent:review`, and it then takes the
-same path as any factory pull request: review, CI, merge gate, and the fix loop when CI is red. A
+Dependabot labels its own pull requests `agent:review` (`labels:` in the config), and they then
+take the same path as any factory pull request: review, CI, merge gate, and the fix loop when CI is
+red. A
 dependency major is `ready-for-human` by the merge gate's own rule; every `github-actions` bump
 changes `.github/workflows/`, a protected path, so the owner merges those.
 
 Three things keep it working:
 
-- **A workflow whose actor is `dependabot[bot]` gets no Actions secrets.** The label must come from
-  `AGENT_PAT`: its label event is the owner's, which is why the review run it starts has the Claude
-  token. CI needs no secret (keep it that way: check `ci.yml` before adding one).
+- **A workflow whose actor is `dependabot[bot]` gets no Actions secrets**, not even
+  `pull_request_target`. So `factory-review.yml` skips Dependabot's own label event, and the review's
+  night cron dispatches the queued review as the owner, with the Claude token. A Dependabot pull
+  request is therefore reviewed the night after it opens. CI needs no secret (keep it that way:
+  check `ci.yml` before adding one).
 - **The commit check runs on the bump.** Dependabot's own subject ("Bump x from a to b") has no type
   and would be red on `check:commits`, so the config prefixes it with `build(deps)`.
-- **`pull_request_target` runs with the base repository's token**: `factory-dependabot.yml` never
-  checks out or runs the pull request's code. It only labels.
 
 A Dependabot pull request closes no issue, so the merge gate names it `chore(merge): #<pr> <title>`
 (`mergeSubjectOf` in `src/merge/gates.ts`); every other factory pull request still has to close its
