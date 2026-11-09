@@ -175,7 +175,7 @@ Script style: `import { cli, type Options } from '@colyseus/loadtest'; cli(async
 - `pnpm-workspace.yaml`: `packages: [...]`, `catalog:` (default) / `catalogs: { name: {...} }`; reference with `"dep": "catalog:"` / `"catalog:name"` in deps/devDeps/peerDeps/optionalDeps and `overrides`. `catalogMode: strict|prefer|manual` (default manual); `catalogPrune` (11.22+).
 - **Only auth/registry settings are read from `.npmrc`**; everything else goes in `pnpm-workspace.yaml`.
 - Build scripts: `strictDepBuilds` default **true** → install **fails** on unreviewed dependency build scripts. Approve per package: `allowBuilds: { esbuild: true, some-pkg: false }` (names, ranges, `@scope/*`). `dangerouslyAllowAllBuilds: false`. (Likely candidates: none of the core stack needs postinstall; check after first install.)
-- Pin Node: `engines.node` + `engineStrict`, and/or `"packageManager": "pnpm@12.14.0"` + `.node-version`/`.nvmrc` 26.
+- Pin Node: `engines.node` (not `engineStrict`: it breaks Dependabot, whose Node is older), and/or `"packageManager": "pnpm@12.14.0"` + `.node-version`/`.nvmrc` 26.
 
 ## TypeScript 7.0 (Go native) — `typescript@7.0.2`, bin `tsc`
 
