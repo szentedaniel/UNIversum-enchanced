@@ -21,11 +21,10 @@ import { bottomSlot, openDecision, waitingLine } from "#decision/decision.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
 import { playbackStore } from "#playback/playback-store.ts";
-import { PickTray } from "#screens/PickTray.tsx";
-import { SaleTray } from "#screens/SaleTray.tsx";
+import { DecisionTray } from "#screens/DecisionTray.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { inFlightOf, roomStore } from "#stores/room-store.ts";
-import { salePicksFor, uiStore } from "#stores/ui-store.ts";
+import { uiStore } from "#stores/ui-store.ts";
 import { fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
 
 const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
@@ -38,9 +37,6 @@ export function Game() {
   const status = useStore(roomStore, (s) => s.status);
   const rejection = useStore(roomStore, (s) => s.rejection);
   const selectedField = useStore(uiStore, (s) => s.selectedField);
-  const salePicks = useStore(uiStore, (s) => s.salePicks);
-  const singleSelection = useStore(uiStore, (s) => s.singlePick);
-  const checklistOpen = useStore(uiStore, (s) => s.checklistOpen);
   const inspect = useStore(uiStore, (s) => s.inspect);
   // No optimistic UI: a tap locks the controls until the server answers.
   const inFlight = useStore(roomStore, inFlightOf);
@@ -222,50 +218,8 @@ export function Game() {
       case "fieldCard":
         return <FieldCard id={slot.field} view={view} stepThrough={slot.stepThrough} />;
       case "sale":
-        return (
-          <SaleTray
-            view={view}
-            sale={slot.sale}
-            picks={salePicksFor(salePicks, slot.sale.key)}
-            seat={mySeat}
-            clockOffset={clockOffset}
-            busy={slot.busy}
-            checklistOpen={checklistOpen}
-            inspect={inspect}
-            onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
-            onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
-            onToggle={(field) => uiStore.getState().toggleSalePick(slot.sale.key, field)}
-            onFocus={(field) => uiStore.getState().focusPick(field)}
-            onUnpick={(field) => uiStore.getState().toggleSalePick(slot.sale.key, field)}
-            onAutoSell={() => sendIntent({ type: "AutoSell", turn: view.turn })}
-            onSell={(fields) => sendIntent({ type: "SellFields", turn: view.turn, fields })}
-          />
-        );
       case "pick":
-        return (
-          <PickTray
-            view={view}
-            pick={slot.pick}
-            selection={singleSelection}
-            seat={mySeat}
-            clockOffset={clockOffset}
-            busy={slot.busy}
-            checklistOpen={checklistOpen}
-            inspect={inspect}
-            onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
-            onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
-            onToggle={(field) => uiStore.getState().choosePick(slot.pick.key, field)}
-            onFocus={(field) => uiStore.getState().focusPick(field)}
-            onPick={(field) => uiStore.getState().choosePick(slot.pick.key, field)}
-            onCommit={(field) =>
-              sendIntent(
-                slot.pick.kind === "doubler"
-                  ? { type: "PlaceDoubler", turn: view.turn, field }
-                  : { type: "TravelErasmus", turn: view.turn, field },
-              )
-            }
-          />
-        );
+        return <DecisionTray view={view} slot={slot} clockOffset={clockOffset} seat={mySeat} />;
       case "turnCard":
         return turnCard;
     }
