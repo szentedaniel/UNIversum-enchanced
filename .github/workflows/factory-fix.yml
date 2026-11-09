@@ -73,13 +73,15 @@ jobs:
             exit 0
           fi
 
-          info=$(gh pr view "$pr" --json state,headRefName,headRefOid,labels)
+          info=$(gh pr view "$pr" --json state,headRefName,headRefOid,labels,isCrossRepository)
           state=$(jq -r .state <<< "$info")
           branch=$(jq -r .headRefName <<< "$info")
           labels=$(jq -r '[.labels[].name] | join(" ")' <<< "$info")
           reason=""
           if [ "$state" != "OPEN" ]; then
             reason="pull request #$pr is $state"
+          elif [ "$(jq -r .isCrossRepository <<< "$info")" = "true" ]; then
+            reason="pull request #$pr comes from a fork"
           elif [[ "$branch" != agent/* ]] && [[ " $labels " != *" factory "* ]]; then
             reason="pull request #$pr is not a factory branch or label"
           elif [ -n "$RUN_HEAD" ] && [ "$(jq -r .headRefOid <<< "$info")" != "$RUN_HEAD" ]; then

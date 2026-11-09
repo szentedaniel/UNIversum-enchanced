@@ -198,6 +198,9 @@ const main = (): void => {
   const commit = sh(
     `gh pr view ${pr} --repo "${repo}" --json mergeCommit --jq '.mergeCommit.oid'`,
   ).trim();
+  if (commit === "" || commit === "null") {
+    fail(`Pull request #${pr} merged but reported no merge commit.`);
+  }
   sh(
     `gh issue comment ${String(issue)} --repo "${repo}" --body-file "${writeTemp("merge-done.md", `Merged in ${commit}.`)}"`,
   );
