@@ -30,10 +30,11 @@ final Playback before the podium.
   derive the current step from `timelineOf(push.events)` plus
   `Date.now() - push.receivedAt`, or extend the step clock; `usePlaybackToast`
   below is text-scoped (it keeps the last text up through text-less steps).
-- `playback/toast.ts`: `toastCues(steps, textOf)` = the steps that have text,
-  in order, with their absolute offsets; `cueAt(cues, elapsedMs)` = the last
-  cue that has started. Unit tests: `apps/web/test/playback.test.ts` (the
-  Playback core's tests, since #66).
+- `playback/toast.ts` is gone: #66 folded it into `playback/playback.ts`.
+  `cuesOf(steps, view)` = the steps that have text, in order, with their
+  absolute offsets (it replaced `toastCues`); `cueAt(cues, elapsedMs)` = the
+  last cue that has started (both internal there, reached through
+  `playbackOfPush`).
 
 ## The decision gate (one store for the whole screen)
 
