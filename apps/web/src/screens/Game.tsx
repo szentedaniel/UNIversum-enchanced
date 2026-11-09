@@ -18,8 +18,7 @@ import { bottomSlot, openDecision } from "#decision/decision.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
 import { playbackStore } from "#playback/playback-store.ts";
-import { PickTray } from "#screens/PickTray.tsx";
-import { SaleTray } from "#screens/SaleTray.tsx";
+import { DecisionTray } from "#screens/DecisionTray.tsx";
 import { TurnCard } from "#screens/TurnCard.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { inFlightOf, roomStore } from "#stores/room-store.ts";
@@ -143,9 +142,8 @@ export function Game() {
       case "fieldCard":
         return <FieldCard id={slot.field} view={view} stepThrough={slot.stepThrough} />;
       case "sale":
-        return <SaleTray view={view} slot={slot} seat={mySeat} clockOffset={clockOffset} />;
       case "pick":
-        return <PickTray view={view} slot={slot} seat={mySeat} clockOffset={clockOffset} />;
+        return <DecisionTray view={view} slot={slot} clockOffset={clockOffset} seat={mySeat} />;
       case "turnCard":
         return turnCard;
     }
