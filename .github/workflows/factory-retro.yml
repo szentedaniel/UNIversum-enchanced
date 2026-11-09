@@ -36,7 +36,6 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.AGENT_PAT }}
       GH_REPO: ${{ github.repository }}
-      OUTPUT_DIR: ${{ runner.temp }}
       DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
       FACTORY_RETRO_MAX: ${{ vars.FACTORY_RETRO_MAX }}
     steps:
@@ -57,6 +56,10 @@ jobs:
         id: collect
         run: |
           set -euo pipefail
+          # `runner` is not available in job-level env, so the scripts' output
+          # directory is exported here for every later step.
+          export OUTPUT_DIR="$RUNNER_TEMP"
+          echo "OUTPUT_DIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
           activity=$(node packages/factory/src/retro/collect.ts)
           echo "activity=$activity" >> "$GITHUB_OUTPUT"
 
