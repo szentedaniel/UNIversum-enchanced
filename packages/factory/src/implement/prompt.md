@@ -31,7 +31,7 @@ Red → green → refactor, one behaviour at a time: the failing test first, the
 # NEVER
 
 - Never push, never create or edit pull requests, never comment on or label issues: the workflow does all of that from the commits you leave behind.
-- Never change `.github/workflows/`: the factory's token cannot push it. If the ticket cannot be done without it, stop and report `STATUS: BLOCKED` with the patch inline.
+- Change `.github/workflows/` only when the ticket asks for it. Then run `actionlint` on every workflow you change when it is installed. A workflow change is a protected path, so the owner merges it.
 
 # REPORT
 

@@ -32,7 +32,7 @@ A spec-sized ticket, not a wish. Each proposal has:
 # NEVER
 
 - Never edit, create or delete a file: this pass only proposes. The script opens the issues from your JSON.
-- Never propose a change to `.github/workflows/`: the factory's token has no Workflows permission, so those issues would sit unactionable.
+- A change to `.github/workflows/` is a protected path: an agent may build it, but only the owner merges it. Propose one only when the friction is in a workflow itself.
 - Never propose a rename, a reformat, a dependency bump or a missing test on its own.
 - Never open, comment on or label an issue: the script does that.
 

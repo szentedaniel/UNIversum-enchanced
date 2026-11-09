@@ -33,7 +33,7 @@ The skill reports; it does not commit. Apply every fix you are sure of, on this 
 - Commit with `type(scope): description`, a type from `packages/repo-checks/src/commits.ts`, and no AI attribution. One commit per green slice is fine.
 - Leave the working tree clean: commit or revert everything before you finish. The workflow pushes your commits; you never push.
 
-Never change `.github/workflows/`: the factory's token has no Workflows permission. If a finding needs one, leave it in `findings`.
+Never change `.github/workflows/` yourself: it is a protected path the owner merges. If a finding needs a workflow change, leave it in `findings`.
 
 Never comment on the pull request, label it, or open another one: the workflow posts the one summary comment.
 

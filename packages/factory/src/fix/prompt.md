@@ -21,7 +21,7 @@ You are on the branch, already checked out in this working directory with full h
 # NEVER
 
 - Never push, never comment on or label the pull request, never open another one: the workflow does all of that.
-- Never change `.github/workflows/`: the factory's token cannot push it. If the fix needs a workflow change, stop and report `STATUS: BLOCKED` with the patch inline.
+- Change `.github/workflows/` only when the failure is in a workflow. Then run `actionlint` on it when it is installed. A workflow change is a protected path, so the owner merges it.
 
 # REPORT
 
