@@ -63,3 +63,12 @@ the check.
   `offer`, `sale-waiting`, `pick-waiting`, `sale-tray`, `pick-tray`, the
   checklist toggles, the meter and the chips all render from the same places
   in the tree.
+
+## Superseded by #116
+
+#116 landed after this and folded the two trays back into one
+`apps/web/src/screens/DecisionTray.tsx`: SaleTray, PickTray and TrayHeader are
+gone and the checklist is an internal function there, so a tray control now goes
+in `DecisionTray` once. This note's behaviour stands — the tray reads `uiStore`
+and sends `sendIntent` itself, `Game.tsx` passes `{ view, slot, clockOffset,
+seat }` and nothing else — and `apps/web/src/screens/TurnCard.tsx` is unchanged.
