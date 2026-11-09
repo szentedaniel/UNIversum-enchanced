@@ -168,9 +168,9 @@ export type PickSelection = {
 export type PickSync = {
   /** My open Sale's or pick's key, else `null`; a change starts a new pick UI. */
   key: string | null;
-  /** The marks for my Sale or pick, else `null`. */
+  /** The marks for my Sale or pick, else `null` (none, or a Sale without the room clock). */
   marks: PickMarks | null;
-  /** The time until Auto-sell's warning starts, else `null` (no Sale, or the warning is due). */
+  /** The time until Auto-sell's warning starts, else `null` (no Sale, the warning is due, or no clock). */
   wakeInMs: number | null;
 };
 
@@ -178,12 +178,13 @@ export type PickSync = {
  * The Board's pick sync for the open Decision: the key that starts a new pick
  * UI (it ignores `busy`, so a send never resets the picks), the marks for my
  * Sale or pick, and the time until Auto-sell's warning starts. `serverNowMs` is
- * the server's clock: the Sale's countdown runs on it.
+ * the server's clock: the Sale's countdown runs on it, so a Sale marks nothing
+ * while the clock is unknown (`null`, no push yet).
  */
 export function pickSyncOf(
   decision: OpenDecision | null,
   frame: Frame | null,
-  serverNowMs: number,
+  serverNowMs: number | null,
   selection: PickSelection,
 ): PickSync {
   const mine = mySaleOrPick(decision);
@@ -195,7 +196,7 @@ export function pickSyncOf(
     return { key, marks: singleMarks(mine.pick, field), wakeInMs: null };
   }
   const timer = frame.view.turnTimer;
-  if (timer === null) return { key, marks: null, wakeInMs: null };
+  if (timer === null || serverNowMs === null) return { key, marks: null, wakeInMs: null };
   const msLeft = timer.endsAt - serverNowMs;
   const picks = salePicksFor(selection.salePicks, key);
   return {
