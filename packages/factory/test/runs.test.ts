@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { runLog } from "#shared/runs.ts";
 
+const failingWithStdout = (): string => {
+  throw Object.assign(new Error("Command failed: gh run view 42"), { stdout: "partial log" });
+};
+
+const failingWithoutStdout = (): string => {
+  throw new Error("Command failed: gh run view 42");
+};
+
+const failingWithNonTextStdout = (): string => {
+  throw Object.assign(new Error("Command failed: gh run view 42"), {
+    stdout: Buffer.from("partial log"),
+  });
+};
+
 describe("runLog", () => {
   it("returns the log gh printed", () => {
     const commands: string[] = [];
@@ -26,24 +40,11 @@ describe("runLog", () => {
   });
 
   it("keeps the stdout of a gh that failed after printing part of the log", () => {
-    const exec = (): string => {
-      throw Object.assign(new Error("Command failed: gh run view 42"), { stdout: "partial log" });
-    };
-
-    expect(runLog("o/r", 42, { failedOnly: true }, exec)).toBe("partial log");
+    expect(runLog("o/r", 42, { failedOnly: true }, failingWithStdout)).toBe("partial log");
   });
 
   it("returns an empty string when gh failed without printing a log", () => {
-    const exec = (): string => {
-      throw new Error("Command failed: gh run view 42");
-    };
-    const execWithNonTextStdout = (): string => {
-      throw Object.assign(new Error("Command failed: gh run view 42"), {
-        stdout: Buffer.from("partial log"),
-      });
-    };
-
-    expect(runLog("o/r", 42, { failedOnly: false }, exec)).toBe("");
-    expect(runLog("o/r", 42, { failedOnly: false }, execWithNonTextStdout)).toBe("");
+    expect(runLog("o/r", 42, { failedOnly: false }, failingWithoutStdout)).toBe("");
+    expect(runLog("o/r", 42, { failedOnly: false }, failingWithNonTextStdout)).toBe("");
   });
 });
