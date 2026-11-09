@@ -4,6 +4,8 @@ Call the Skill tool with `codebase-design` before you start. Its vocabulary is t
 
 # WHERE TO LOOK
 
+Scope: {{FOCUS}}. Every file a proposal touches lies inside it.
+
 YAGNI: a deepening pays off by making future changes easier, so weight the code that keeps changing. Start from the hot spots in this commit log, not from a tidy corner:
 
 {{RECENT_COMMITS}}

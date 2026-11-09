@@ -395,7 +395,8 @@ Three independent jobs:
   one-way door anyway). The plugin also ships `improve-codebase-architecture`, but that command is
   interactive (an HTML report and a question), so the pass owns its own output contract and takes
   only the vocabulary from `codebase-design`. A manual run may lift the cap for a whole-codebase
-  sweep (`gh workflow run factory-maintain.yml -f max_proposals=10`, 1–20); proposals never share a
+  sweep (`gh workflow run factory-maintain.yml -f max_proposals=10`, 1–20), and keep it to some paths
+  (`-f focus="apps/server packages/rules"`); proposals never share a
   file, so their tickets can be built in parallel.
 - **Flaky tests**: the last seven days of `CI` runs' logs, the `check` job's Playwright `N flaky`
   summary (`failOnFlakyTests` turns a retry into a red run). One `bug` + `ready-for-agent` issue per

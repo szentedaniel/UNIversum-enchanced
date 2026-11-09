@@ -6,7 +6,7 @@
  * proposal an agent may take (`ready-for-agent`), the rest waits for the owner.
  *
  * Env: GH_REPO, CLAUDE_CODE_OAUTH_TOKEN, DRY_RUN, MAX_PROPOSALS (optional,
- * default 2).
+ * default 2), FOCUS (optional: space-separated paths the pass keeps to).
  */
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -52,6 +52,10 @@ const main = async (): Promise<void> => {
   const repo = required("GH_REPO");
   const dryRun = process.env["DRY_RUN"] === "1";
   const max = parseMax(process.env["MAX_PROPOSALS"] ?? "");
+  const focus = (process.env["FOCUS"] ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter((path) => path !== "");
 
   const result = await sandcastle.run({
     name: "architecture",
@@ -62,8 +66,12 @@ const main = async (): Promise<void> => {
     promptArgs: {
       DATE: new Date().toISOString().slice(0, 10),
       MAX_PROPOSALS: String(max),
+      FOCUS:
+        focus.length === 0 ? "the whole repository" : focus.map((path) => `\`${path}\``).join(", "),
       // The pass looks where the code keeps changing; the log is the pointer.
-      RECENT_COMMITS: safeSh("git log --oneline -80") || "(no commit history)",
+      RECENT_COMMITS:
+        safeSh(`git log --oneline -80 -- ${focus.map(shellArg).join(" ")}`) ||
+        "(no commit history)",
     },
     // Sandcastle 0.14 allows structured output only at one iteration, as the
     // review step does.

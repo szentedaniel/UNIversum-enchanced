@@ -30,6 +30,10 @@ on:
         description: Architecture proposals this run may open (the weekly cap is 2)
         type: number
         default: 2
+      focus:
+        description: Space-separated paths the architecture pass keeps to (empty is the whole repo)
+        type: string
+        default: ""
 
 # The jobs' own token stays read-only; every write goes through AGENT_PAT.
 permissions:
@@ -89,6 +93,7 @@ jobs:
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           MAX_PROPOSALS: ${{ inputs.max_proposals }}
+          FOCUS: ${{ inputs.focus }}
         run: node packages/factory/src/maintain/run-architecture.ts
 
   flaky-tests:
