@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { summaryComment } from "#review/summary.ts";
+import {
+  mergeDangerOf,
+  newestMarkerComment,
+  reviewVerdictOf,
+  summaryComment,
+} from "#review/summary.ts";
 import { REVIEW_MARKER } from "#review/window.ts";
 
 describe("summaryComment", () => {
@@ -46,5 +51,44 @@ describe("summaryComment", () => {
     expect(comment).toContain(
       "**Merge danger:** one-way door, wide blast radius. touches the protocol",
     );
+  });
+});
+
+describe("reading a review comment", () => {
+  const pass = summaryComment({
+    verdict: "pass",
+    findings: [],
+    mergeDanger: { door: "two-way", blastRadius: "local", reason: "one step, revertible" },
+  });
+  const changes = summaryComment({
+    verdict: "changes-requested",
+    findings: ["No test pins the empty list."],
+    mergeDanger: { door: "one-way", blastRadius: "wide", reason: "touches the protocol" },
+  });
+
+  it("reads back the verdict the summary writes", () => {
+    expect(reviewVerdictOf(pass)).toBe("pass");
+    expect(reviewVerdictOf(changes)).toBe("changes-requested");
+  });
+
+  it("ignores a comment without the hidden marker", () => {
+    expect(reviewVerdictOf("## Factory review: pass")).toBeUndefined();
+  });
+
+  it("reads back the merge danger the summary writes", () => {
+    expect(mergeDangerOf(changes)).toEqual({
+      door: "one-way",
+      blastRadius: "wide",
+      reason: "touches the protocol",
+    });
+  });
+
+  it("picks the newest comment carrying the marker", () => {
+    const older = { body: pass, createdAt: "2026-11-08T10:00:00Z" };
+    const newer = { body: changes, createdAt: "2026-11-08T11:00:00Z" };
+    const other = { body: "LGTM", createdAt: "2026-11-08T12:00:00Z" };
+
+    expect(newestMarkerComment([older, other, newer])).toBe(newer);
+    expect(newestMarkerComment([other])).toBeUndefined();
   });
 });

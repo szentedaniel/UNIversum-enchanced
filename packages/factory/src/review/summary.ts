@@ -1,5 +1,13 @@
-import type { Review } from "#review/schema.ts";
+import type { MergeDanger, Review } from "#review/schema.ts";
 import { REVIEW_MARKER } from "#review/window.ts";
+
+export type ReviewVerdict = Review["verdict"];
+
+/** The one heading per verdict, shared by the writer and the reader below. */
+const HEADINGS: Readonly<Record<ReviewVerdict, string>> = {
+  pass: "## Factory review: pass",
+  "changes-requested": "## Factory review: changes requested",
+};
 
 /**
  * The one comment a review posts. It opens with the hidden marker the quota
@@ -14,7 +22,7 @@ export const summaryComment = (review: Review): string => {
   const { door, blastRadius, reason } = review.mergeDanger;
   return [
     REVIEW_MARKER,
-    `## Factory review: ${review.verdict === "pass" ? "pass" : "changes requested"}`,
+    HEADINGS[review.verdict],
     "",
     "The reviewer committed the fixes it was sure of. These are the findings it left:",
     "",
@@ -24,3 +32,50 @@ export const summaryComment = (review: Review): string => {
     "",
   ].join("\n");
 };
+
+/** A pull-request comment whose body may be a review summary. */
+export interface ReviewComment {
+  readonly body: string;
+  readonly createdAt: string;
+}
+
+/** The verdict a review summary carries; `undefined` for any other comment. */
+export const reviewVerdictOf = (comment: string): ReviewVerdict | undefined => {
+  if (!comment.includes(REVIEW_MARKER)) return undefined;
+  const lines = comment.split("\n").map((line) => line.trim());
+  if (lines.includes(HEADINGS.pass)) return "pass";
+  if (lines.includes(HEADINGS["changes-requested"])) return "changes-requested";
+  return undefined;
+};
+
+const DANGER_LINE =
+  /^\*\*Merge danger:\*\* (one-way|two-way) door, (local|wide) blast radius\. (.+)$/u;
+
+/** The merge danger a review summary carries; `undefined` when it has none. */
+export const mergeDangerOf = (comment: string): MergeDanger | undefined => {
+  const line = comment.split("\n").find((candidate) => candidate.startsWith("**Merge danger:**"));
+  if (line === undefined) return undefined;
+  const match = DANGER_LINE.exec(line.trim());
+  const door = match?.[1];
+  const blastRadius = match?.[2];
+  const reason = match?.[3];
+  if (door === undefined || blastRadius === undefined || reason === undefined) return undefined;
+  return {
+    door: door === "one-way" ? "one-way" : "two-way",
+    blastRadius: blastRadius === "wide" ? "wide" : "local",
+    reason,
+  };
+};
+
+/**
+ * The newest comment carrying the review marker: the merge gate reads its
+ * verdict and merge danger, so the reviewer's latest word is the one that
+ * counts.
+ */
+export const newestMarkerComment = <T extends ReviewComment>(
+  comments: readonly T[],
+): T | undefined =>
+  comments
+    .filter((comment) => comment.body.includes(REVIEW_MARKER))
+    .toSorted((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
+    .at(-1);
