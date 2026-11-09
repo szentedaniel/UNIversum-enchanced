@@ -23,6 +23,8 @@ const SUBJECT = new RegExp(`^(${COMMIT_TYPES.join("|")})(\\([^()\\s]+\\))?!?: \\
 const SUBJECT_LIMIT = 100;
 /** Two spaces in a row, or whitespace after the last visible character. */
 const DOUBLE_SPACE = / {2,}/;
+/** A tab character; the subject is the message's first line, so it can sit anywhere in it. */
+const TAB = /\t/;
 const TRAILING_WHITESPACE = /\s$/;
 /** Git's own subject for a merge it wrote (`Merge branch 'x' into y`). */
 const GIT_MERGE_SUBJECT = /^Merge (branch|remote-tracking branch|pull request) /;
@@ -46,6 +48,9 @@ export function commitProblems(commit: Commit): string[] {
   if (subject.endsWith(".")) problems.push("subject ends with a period");
   if (!gitMerge && DOUBLE_SPACE.test(subject)) {
     problems.push("subject contains two or more consecutive spaces");
+  }
+  if (!gitMerge && TAB.test(subject)) {
+    problems.push("subject contains a tab character");
   }
   if (!gitMerge && TRAILING_WHITESPACE.test(subject)) {
     problems.push("subject ends with whitespace");

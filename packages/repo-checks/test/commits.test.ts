@@ -99,6 +99,25 @@ describe("the commit rules", () => {
     expect(commitProblems(commit(generated))).toHaveLength(1);
     expect(commitProblems(commit("docs: c\n\nThe co-author of v1 wrote this."))).toEqual([]);
   });
+
+  it("refuse a tab character in the subject, letting one in the body through", () => {
+    expect(commitProblems(commit("fix(server): write\tlogs synchronously"))).toEqual([
+      "subject contains a tab character",
+    ]);
+    expect(commitProblems(commit("fix:\tx"))).toContain("subject contains a tab character");
+    expect(commitProblems(commit("fix: write logs\t"))).toEqual([
+      "subject contains a tab character",
+      "subject ends with whitespace",
+    ]);
+    expect(commitProblems(commit("fix: write logs\n\n\tbody"))).toEqual([]);
+  });
+
+  it("exempt git's own merge subject from the tab rule on a merge commit", () => {
+    const subject = "Merge branch 'v2-modernization'\tinto ticket/35-reconnect";
+
+    expect(commitProblems(commit(subject, 2))).toEqual([]);
+    expect(commitProblems(commit(subject, 1))).toContain("subject contains a tab character");
+  });
 });
 
 const script = fileURLToPath(new URL("../src/check-commits.ts", import.meta.url));
