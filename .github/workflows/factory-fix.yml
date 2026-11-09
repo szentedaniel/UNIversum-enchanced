@@ -73,17 +73,19 @@ jobs:
             exit 0
           fi
 
-          info=$(gh pr view "$pr" --json state,headRefName,headRefOid,labels,isCrossRepository)
+          info=$(gh pr view "$pr" --json state,headRefName,headRefOid,labels,isCrossRepository,author)
           state=$(jq -r .state <<< "$info")
           branch=$(jq -r .headRefName <<< "$info")
           labels=$(jq -r '[.labels[].name] | join(" ")' <<< "$info")
+          author=$(jq -r '.author.login // ""' <<< "$info")
           reason=""
           if [ "$state" != "OPEN" ]; then
             reason="pull request #$pr is $state"
           elif [ "$(jq -r .isCrossRepository <<< "$info")" = "true" ]; then
             reason="pull request #$pr comes from a fork"
-          elif [[ "$branch" != agent/* ]] && [[ " $labels " != *" factory "* ]]; then
-            reason="pull request #$pr is not a factory branch or label"
+          elif [[ "$branch" != agent/* ]] && [[ " $labels " != *" factory "* ]] &&
+            { [[ "$branch" != dependabot/* ]] || [ "$author" != "dependabot[bot]" ]; }; then
+            reason="pull request #$pr is not a factory or Dependabot pull request"
           elif [ -n "$RUN_HEAD" ] && [ "$(jq -r .headRefOid <<< "$info")" != "$RUN_HEAD" ]; then
             # A newer push has its own CI run, which decides on its own.
             reason="the branch moved since that CI run"

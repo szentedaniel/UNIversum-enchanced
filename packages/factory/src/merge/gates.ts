@@ -248,9 +248,52 @@ const WORKFLOWS_DIR = ".github/workflows/";
 export const mainMovesWorkflows = (files: readonly string[]): boolean =>
   files.some((file) => file.startsWith(WORKFLOWS_DIR));
 
-/** Only a factory branch or a factory-labelled pull request is the gate's business. */
-export const isFactoryPull = (headRefName: string, labels: readonly string[]): boolean =>
-  headRefName.startsWith("agent/") || labels.includes("factory");
+/** Dependabot's login, as the REST author of its pull requests. */
+export const DEPENDABOT_AUTHOR = "dependabot[bot]";
+
+const DEPENDABOT_BRANCH = "dependabot/";
+
+/**
+ * A dependency bump's pull request: its branch prefix and its author together.
+ * The branch alone is not enough — anyone can name a branch `dependabot/…`.
+ */
+export const isDependabotPull = (headRefName: string, author: string): boolean =>
+  headRefName.startsWith(DEPENDABOT_BRANCH) && author === DEPENDABOT_AUTHOR;
+
+/** Only a factory branch, a factory-labelled pull or a Dependabot bump is the gate's business. */
+export const isFactoryPull = (
+  headRefName: string,
+  labels: readonly string[],
+  author = "",
+): boolean =>
+  headRefName.startsWith("agent/") ||
+  labels.includes("factory") ||
+  isDependabotPull(headRefName, author);
+
+/** What the merge commit's subject is made from. */
+export interface MergeSubjectFacts {
+  /** The pull request's number, used when it closes no issue. */
+  readonly number: number;
+  readonly title: string;
+  /** The issue the pull request closes, if any. */
+  readonly issue: number | undefined;
+  readonly headRefName: string;
+  readonly author: string;
+}
+
+/**
+ * The merge commit's subject, `chore(merge): #<issue> <title>`, or `undefined`
+ * for a factory pull that closes no issue: a factory pull always has a ticket.
+ * A dependency bump has none — its pull request is the unit of work, so it
+ * names its own number instead.
+ */
+export const mergeSubjectOf = (facts: MergeSubjectFacts): string | undefined => {
+  if (facts.issue !== undefined) return `chore(merge): #${String(facts.issue)} ${facts.title}`;
+  if (isDependabotPull(facts.headRefName, facts.author)) {
+    return `chore(merge): #${String(facts.number)} ${facts.title}`;
+  }
+  return undefined;
+};
 
 export type MergeStep =
   | { readonly kind: "merge" }
