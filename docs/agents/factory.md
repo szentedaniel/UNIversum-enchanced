@@ -161,9 +161,10 @@ Two steps finish a pull request: `factory-merge.yml` merges what the gates allow
 
 ### The merge gate
 
-`factory-merge.yml` runs when CI finishes on a pull request or a review finishes (whichever is last
-decides), and by hand. The gate code runs from a **checkout of `main`**, never the pull request's
-copy: a PR that edits `packages/factory/` must not decide its own merge.
+`factory-merge.yml` runs when a pull request's CI finishes **successfully**, when a review finishes
+(whichever is last decides), and by hand. A failed CI run is the fix loop's. The gate code runs from a
+**checkout of `main`**, never the pull request's copy: a PR that edits `packages/factory/` must not
+decide its own merge.
 
 It merges with a merge commit only when every gate holds ([spec #85, Decision
 5](https://github.com/szentedaniel/UNIversum-enchanced/issues/85)):
