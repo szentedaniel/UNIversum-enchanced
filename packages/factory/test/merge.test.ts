@@ -3,7 +3,8 @@ import type { FixReason } from "#fix/reasons.ts";
 import { readMergeFacts, type MergeReader, type PullView } from "#merge/facts.ts";
 import { performStep, type MergeActions } from "#merge/perform.ts";
 import { escalationComment } from "#merge/comment.ts";
-import type { MergeStep } from "#merge/gates.ts";
+import { mergeStep, type MergeStep } from "#merge/gates.ts";
+import { summaryComment } from "#review/summary.ts";
 
 const HEAD_SHA = "head-sha";
 
@@ -274,5 +275,99 @@ describe("performStep", () => {
 
       expect(writes, `step ${step.kind}`).toEqual([]);
     }
+  });
+});
+
+describe("the gate's flow", () => {
+  const at = "2026-11-09T09:10:00Z";
+  const ciSuccess = [
+    { headSha: HEAD_SHA, status: "completed", conclusion: "success", createdAt: at },
+  ];
+  const reviewPass = [
+    {
+      body: summaryComment({
+        verdict: "pass",
+        findings: [],
+        mergeDanger: { door: "two-way", blastRadius: "local", reason: "one step, revertible" },
+      }),
+      createdAt: "2026-11-09T09:20:00Z",
+    },
+  ];
+
+  it("escalates a green pull request with no risk label", () => {
+    const { adapter, writes } = actions();
+    const read = readMergeFacts(
+      "owner/repo",
+      "132",
+      reader({
+        pullOf: () => pull({ labels: [] }),
+        ciRuns: () => ciSuccess,
+        issueComments: () => reviewPass,
+      }),
+    );
+
+    const step = mergeStep(read.facts);
+    expect(step).toEqual({ kind: "escalate", reasons: ["no risk label"] });
+
+    performStep(step, read.pull, context(adapter));
+
+    expect(writes).toEqual([
+      { kind: "comment", body: escalationComment(["no risk label"]) },
+      { kind: "label", name: "ready-for-human" },
+    ]);
+  });
+
+  it("sends a branch main's files moved under to the fix loop", () => {
+    const { adapter, writes } = actions();
+    const read = readMergeFacts(
+      "owner/repo",
+      "132",
+      reader({
+        changedFiles: () => ["apps/web/src/Game.tsx"],
+        ciRuns: () => ciSuccess,
+        issueComments: () => reviewPass,
+        compareOf: () => ({
+          mergeBase: "merge-base",
+          mainAheadBy: 2,
+          files: ["apps/web/src/Game.tsx"],
+        }),
+      }),
+    );
+
+    const step = mergeStep(read.facts);
+    expect(step).toEqual({ kind: "fix", reason: "main-moved" });
+
+    performStep(step, read.pull, context(adapter));
+
+    expect(writes).toEqual([{ kind: "dispatchFix", reason: "main-moved" }]);
+  });
+
+  it("merges a branch that is only behind main, on files it does not touch", () => {
+    const { adapter, writes } = actions();
+    const read = readMergeFacts(
+      "owner/repo",
+      "132",
+      reader({
+        changedFiles: () => ["apps/web/src/Game.tsx"],
+        ciRuns: () => ciSuccess,
+        issueComments: () => reviewPass,
+        compareOf: () => ({
+          mergeBase: "merge-base",
+          mainAheadBy: 2,
+          files: ["apps/server/src/room.ts"],
+        }),
+      }),
+    );
+
+    const step = mergeStep(read.facts);
+    expect(step).toEqual({ kind: "merge" });
+
+    performStep(step, read.pull, context(adapter));
+
+    expect(writes).toEqual([
+      { kind: "merge", subject: "chore(merge): #132 Deepen the merge gate's script" },
+      { kind: "commentOnIssue", issue: 132, body: "Merged in abc1234." },
+      { kind: "closeIssue", issue: 132 },
+    ]);
   });
 });
