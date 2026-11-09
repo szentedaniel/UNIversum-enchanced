@@ -175,8 +175,9 @@ A run is 45 minutes at most and one runs per issue at a time (`concurrency`). Re
 the branch is force-pushed and the issue leaves `agent:blocked` and `ready-for-human`.
 
 `AGENT_PAT` is the reason a pushed branch runs CI at all: a push or a label made with the default
-`GITHUB_TOKEN` triggers no workflow. It also has **no workflows permission**, so no agent can change
-`.github/workflows/`: a factory change is proposed as a `ready-for-human` issue with the patch inline.
+`GITHUB_TOKEN` triggers no workflow. It has Workflows read/write, so the factory can build tickets that
+change `.github/workflows/`; `.github/` stays a protected path, so the merge gate never auto-merges
+them and the owner merges those pull requests.
 
 ## Reviewing a pull request
 
@@ -245,10 +246,9 @@ to `main` starts `factory-dispatch.yml` by itself, so the next ticket is dispatc
 Green but gated → `ready-for-human` on the pull request and one comment listing every reason
 ("touches .github/", "one-way door: …", "dependency major: …"). A branch merely **behind main** merges
 as it is: CI ran on the pull request merged into main. Only a conflict, or main changing a file the
-pull request changes too (handoff notes aside), sends it to the fix loop first (`main-moved`); when
-main's new commits change `.github/workflows/`, the PAT cannot push that merge, so it is
-`ready-for-human`. A pull request that is only _waiting_ — CI still
-running, the review not posted yet, `agent:review` queued — exits quietly: the next trigger decides.
+pull request changes too (handoff notes aside), sends it to the fix loop first (`main-moved`). A pull
+request that is only _waiting_ — CI still running, the review not posted yet, `agent:review` queued —
+exits quietly: the next trigger decides.
 
 A dry run prints the decision and writes nothing:
 
@@ -295,7 +295,7 @@ Claude decides; `src/retro/retro.ts` writes. Each finding's `fix.kind` chooses o
   step prompt → a `retro/<date>-<slug>` branch with the patch (`git apply --check` first) and a
   `ready-for-human` pull request; the owner merges the protected path.
 - `workflow-issue`: a `.github/workflows/` change → a `ready-for-human` issue with the patch in a
-  fenced diff (the PAT cannot push workflows).
+  fenced diff.
 - `none`: no durable fix; the finding only reaches the log.
 
 The script dedupes against the open issues and pull requests (the prompt gets them, and a title check
