@@ -629,7 +629,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /**
-   * The game is over (`commit` calls this when the game-over phase arrives,
+   * The game is over (the driver's commit calls this when the game-over phase arrives,
    * and a restore finishes a game-over state a crash left unfinished): the
    * driver records when, swaps the Turn deadline for the retention wake-up
    * and tells this Room to release its Seats (spec: Retention, Seat hold).
