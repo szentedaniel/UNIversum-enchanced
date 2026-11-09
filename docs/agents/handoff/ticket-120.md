@@ -27,7 +27,7 @@ gate) and #44 (`/errors` tunnel).
   list's own Room has no `kind` and is not counted. The request id and the
   `finish`-releases-the-Seat listener are still set before the reader.
 - `apps/server/src/http/browser-routes.ts` `errorTunnel` passes
-  `max: guard.limits.errorReportBytes` (200 KB) and `rate: guard.errorReportRefusal`. The
+  `max: guard.limits.errorReportBytes` (200 KB) and `rate: (bucket) => guard.errorReportRefusal(bucket)`. The
   404-when-reporting-off and 405 checks stay in the route before the reader, so a huge body is
   not counted while reporting is off.
 - Non-refusal browser answers (200/400/404/405/502) still use the route's local `empty()`; `reply`
