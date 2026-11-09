@@ -288,6 +288,22 @@ describe("message sizes", () => {
     expect(response.status).toBe(413);
   });
 
+  it("answers a matchmaking body over the cap with the matchmaking refusal shape", async () => {
+    const big = JSON.stringify({ roomName: "x".repeat(2100) });
+
+    const response = await fetch(`http://127.0.0.1:${server.port}/matchmake/create/game`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-real-ip": "203.0.113.52" },
+      body: big,
+    });
+
+    expect(response.status).toBe(413);
+    expect(response.headers.get("content-type")).toBe("application/json");
+    expect(response.headers.get("retry-after")).toBeNull();
+    expect(response.headers.get("access-control-allow-headers")).toContain("Content-Type");
+    expect(await response.json()).toEqual({ code: 413, error: "MALFORMED" });
+  });
+
   it("closes a WebSocket that sends a message over 1 KB", async () => {
     const lobby = await someLobby();
     const closed = new Promise<number>((resolve) => lobby.room.onLeave(resolve));
