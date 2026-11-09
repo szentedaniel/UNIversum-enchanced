@@ -6,6 +6,9 @@ import {
   isProtectedPath,
   majorBumps,
   majorOf,
+  isFactoryPull,
+  mainMovesWorkflows,
+  mergeStep,
   protectedPaths,
 } from "#merge/gates.ts";
 import type { CiRun, MergeFacts } from "#merge/gates.ts";
@@ -301,5 +304,104 @@ describe("canAutoMerge", () => {
       "touches AGENTS.md",
       "dependency major: zod ^3.25.0 → ^4.0.0",
     ]);
+  });
+});
+
+describe("mergeStep", () => {
+  it("merges when every gate holds", () => {
+    expect(mergeStep(facts())).toEqual({ kind: "merge" });
+  });
+
+  it("waits while a review is queued", () => {
+    expect(mergeStep(facts({ labels: ["risk:low", "agent:review"] }))).toEqual({
+      kind: "wait",
+      reason: "a review is queued (agent:review)",
+    });
+  });
+
+  it("does not merge, or comment again, once a human has it", () => {
+    expect(mergeStep(facts({ labels: ["risk:low", "ready-for-human"] }))).toEqual({
+      kind: "wait",
+      reason: "already waiting for a human (ready-for-human)",
+    });
+    expect(mergeStep(facts({ labels: ["risk:low", "agent:blocked"] }))).toEqual({
+      kind: "wait",
+      reason: "the pull request is blocked (agent:blocked)",
+    });
+  });
+
+  it("sends the fix loop after main when the branch fell behind", () => {
+    expect(mergeStep(facts({ behindBy: 2 }))).toEqual({ kind: "fix", reason: "main-moved" });
+    expect(mergeStep(facts({ mergeState: "dirty" }))).toEqual({
+      kind: "fix",
+      reason: "main-moved",
+    });
+  });
+
+  it("refuses to merge main in when the new commits change workflows", () => {
+    const step = mergeStep(
+      facts({ behindBy: 1, mainFiles: [".github/workflows/ci.yml", "apps/web/src/Game.tsx"] }),
+    );
+
+    expect(step).toEqual({
+      kind: "escalate",
+      reasons: ["main changed .github/workflows/, which the factory's token cannot push"],
+    });
+  });
+
+  it("waits for CI, leaving a failed run to the fix loop", () => {
+    expect(mergeStep(facts({ ciRuns: [ciRun({ status: "queued", conclusion: null })] }))).toEqual({
+      kind: "wait",
+      reason: "CI is still running on abc1234",
+    });
+    expect(mergeStep(facts({ ciRuns: [ciRun({ conclusion: "failure" })] }))).toEqual({
+      kind: "wait",
+      reason: "CI failed on abc1234",
+    });
+  });
+
+  it("waits for the first review", () => {
+    expect(mergeStep(facts({ comments: [] }))).toEqual({
+      kind: "wait",
+      reason: "no factory review comment yet",
+    });
+    expect(mergeStep(facts({ comments: [reviewComment("changes-requested")] }))).toEqual({
+      kind: "wait",
+      reason: "the newest review asked for changes",
+    });
+  });
+
+  it("re-queues a review when the head moved after it", () => {
+    expect(mergeStep(facts({ comments: [reviewComment("pass", "2026-11-09T09:00:00Z")] }))).toEqual(
+      {
+        kind: "requeue-review",
+      },
+    );
+  });
+
+  it("escalates the deterministic gate reasons", () => {
+    expect(mergeStep(facts({ files: [".github/workflows/ci.yml"] }))).toEqual({
+      kind: "escalate",
+      reasons: ["touches .github/"],
+    });
+  });
+});
+
+describe("isFactoryPull", () => {
+  it("recognises the implementer's branches and factory-labelled pull requests", () => {
+    expect(isFactoryPull("agent/issue-87-merge-gate", [])).toBe(true);
+    expect(isFactoryPull("ticket/87-merge-gate", ["factory"])).toBe(true);
+  });
+
+  it("leaves the owner's own branches alone", () => {
+    expect(isFactoryPull("main", ["risk:low"])).toBe(false);
+    expect(isFactoryPull("fix/typo", [])).toBe(false);
+  });
+});
+
+describe("mainMovesWorkflows", () => {
+  it("notices a workflow file among main's commits", () => {
+    expect(mainMovesWorkflows([".github/workflows/factory-merge.yml"])).toBe(true);
+    expect(mainMovesWorkflows(["apps/web/src/Game.tsx", "docs/agents/factory.md"])).toBe(false);
   });
 });

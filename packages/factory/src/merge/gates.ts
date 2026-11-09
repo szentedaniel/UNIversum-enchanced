@@ -1,3 +1,4 @@
+import type { FixReason } from "#fix/reasons.ts";
 import {
   mergeDangerOf,
   newestMarkerComment,
@@ -238,4 +239,60 @@ export const canAutoMerge = (facts: MergeFacts): MergeGate => {
   }
 
   return { merge: reasons.length === 0, reasons };
+};
+
+/** The directory whose changes the factory's token cannot push. */
+const WORKFLOWS_DIR = ".github/workflows/";
+
+/** Whether main's new commits change a workflow the PAT has no permission for. */
+export const mainMovesWorkflows = (files: readonly string[]): boolean =>
+  files.some((file) => file.startsWith(WORKFLOWS_DIR));
+
+/** Only a factory branch or a factory-labelled pull request is the gate's business. */
+export const isFactoryPull = (headRefName: string, labels: readonly string[]): boolean =>
+  headRefName.startsWith("agent/") || labels.includes("factory");
+
+export type MergeStep =
+  | { readonly kind: "merge" }
+  | { readonly kind: "wait"; readonly reason: string }
+  | { readonly kind: "requeue-review" }
+  | { readonly kind: "fix"; readonly reason: FixReason }
+  | { readonly kind: "escalate"; readonly reasons: readonly string[] };
+
+const wait = (reason: string): MergeStep => ({ kind: "wait", reason });
+
+/**
+ * What the merge workflow should do with this pull request now: merge it,
+ * wait for the run that is still coming, queue the re-review a push needs,
+ * send it to the fix loop, or hand it to the owner with every reason.
+ */
+export const mergeStep = (facts: MergeFacts): MergeStep => {
+  if (facts.labels.includes("agent:review")) return wait("a review is queued (agent:review)");
+  if (facts.labels.includes("ready-for-human")) {
+    return wait("already waiting for a human (ready-for-human)");
+  }
+  if (facts.labels.includes("agent:blocked"))
+    return wait("the pull request is blocked (agent:blocked)");
+
+  // Merging main in restarts CI anyway, so it comes before the CI gate; a
+  // new head also means the review has to look again.
+  if (facts.behindBy > 0 || facts.mergeState === "dirty") {
+    if (mainMovesWorkflows(facts.mainFiles)) {
+      return {
+        kind: "escalate",
+        reasons: ["main changed .github/workflows/, which the factory's token cannot push"],
+      };
+    }
+    return { kind: "fix", reason: "main-moved" };
+  }
+
+  const ci = ciState(facts.ciRuns, facts.headSha);
+  if (ci !== "success") return wait(ciReason(ci, facts.headSha));
+
+  const review = reviewState(facts);
+  if (review === "stale") return { kind: "requeue-review" };
+  if (review !== "pass") return wait(reviewReason(review));
+
+  const gate = canAutoMerge(facts);
+  return gate.merge ? { kind: "merge" } : { kind: "escalate", reasons: gate.reasons };
 };
