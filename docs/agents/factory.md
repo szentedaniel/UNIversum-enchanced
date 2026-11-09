@@ -295,7 +295,7 @@ Claude decides; `src/retro/retro.ts` writes. Each finding's `fix.kind` chooses o
   step prompt → a `retro/<date>-<slug>` branch with the patch (`git apply --check` first) and a
   `ready-for-human` pull request; the owner merges the protected path.
 - `workflow-issue`: a `.github/workflows/` change → a `ready-for-human` issue with the patch in a
-  fenced diff (the PAT cannot push workflows).
+  fenced diff.
 - `none`: no durable fix; the finding only reaches the log.
 
 The script dedupes against the open issues and pull requests (the prompt gets them, and a title check
