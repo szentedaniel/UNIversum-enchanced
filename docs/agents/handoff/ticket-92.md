@@ -53,13 +53,14 @@ The tests are `test/week.test.ts`, `test/metrics.test.ts`, `test/report-issue.te
 
 ## The shared reads
 
-- `src/shared/api.ts` — `api<T>(path)`, moved out of `dispatch.ts` unchanged (paginated
-  `gh api --paginate --slurp`, one flat list).
+- `src/shared/github.ts` — #87's comment readers (`issueComments`, `jsonLines`, `parseJson`) now also
+  hold `api<T>(path)`, moved out of `dispatch.ts` unchanged (paginated `gh api --paginate --slurp`, one
+  flat list); the report reads its markers through `issueComments`.
 - `src/shared/runs.ts` — `factoryRuns(repo, since)` returns the `factory-*.yml` runs created since
   `since`, each with its jobs. The dispatcher now uses it for the month's minutes; the report uses
   the same list for month minutes, week minutes and the agent split.
 - `src/shared/closing-pr.ts` — `closingIssues(body)` lists every `closes|fixes|resolves #N`; `closesIssue`
-  is now `closingIssues(body).includes(issue)`.
+  is now `closingIssues(body).includes(issue)`, and #87's `closingIssue` is `closingIssues(body)[0]`.
 
 ## Gotchas later tickets must know
 
