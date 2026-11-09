@@ -43,8 +43,9 @@ changed.
 - **`writes.ts`** — every mutation: `commentOn`, `labelIssue` (one `gh issue edit` for add+remove),
   `rewriteBody`, `createIssue` (returns the number), `issueIdOf` (the numeric **database id** that
   sub-issue and dependency edges need), `attachSubIssue`, `addBlocker`, `queueReady`. Bodies always
-  travel in temp files (`--body-file`). Each takes `dryRun` and prints `would …` instead, except
-  `createIssue`/`issueIdOf`, which only a real run calls. `queueReady` writes
+  travel in temp files (`--body-file`). `commentOn`/`labelIssue` take `dryRun` and print `would …`;
+  the split plan is printed by `split.ts` before anything would be created, so `createIssue`,
+  `issueIdOf`, `attachSubIssue`, `addBlocker` and `rewriteBody` are real-run-only. `queueReady` writes
   `${OUTPUT_DIR}/ready-for-agent.txt`; the workflow reads it to start the dispatcher.
 - **`tree.ts`** — `treeState()` is `git status --untracked-files=all` plus `git diff`; `changeSince`
   compares it across a Claude run. The **before/after** comparison (not a dirty check) is what lets a

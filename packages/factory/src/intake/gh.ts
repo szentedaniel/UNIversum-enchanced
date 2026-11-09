@@ -4,24 +4,16 @@
  */
 import { execFileSync } from "node:child_process";
 import { fail } from "#shared/common.ts";
+import { parseJson } from "#shared/github.ts";
 
 /** `gh` with an argument array; stdout as text, a non-zero exit throws. */
 export const gh = (args: readonly string[]): string =>
   execFileSync("gh", [...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
-/** `gh`, but an empty string when the command fails (a read that may be absent). */
-export const ghSafe = (args: readonly string[]): string => {
-  try {
-    return gh(args);
-  } catch {
-    return "";
-  }
-};
-
 /** A paginated `gh api` response, one flat list. */
 export const api = <T>(path: string): T[] => {
-  const pages: unknown[] = JSON.parse(gh(["api", "--paginate", "--slurp", path]));
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- untrusted JSON, typed by the caller's interface
+  const pages = parseJson<unknown[]>(gh(["api", "--paginate", "--slurp", path]));
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the flattened pages are the caller's REST shape
   return pages.flat() as T[];
 };
 

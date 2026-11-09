@@ -1,8 +1,7 @@
 /**
- * The intake steps' writes. Every `gh` mutation goes through this module, so a
- * dry run prints exactly what a real run would do and stops at the boundary.
- * Body text always travels in a file: an issue or a prompt's text never reaches
- * a shell.
+ * The intake steps' writes: every `gh` mutation goes through here, so the
+ * agents never call one. Body text travels in a file and arguments are arrays,
+ * so nothing an agent wrote reaches a shell.
  */
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -61,11 +60,7 @@ export const labelIssue = (
   perform(`Relabelled #${String(issue)}: ${changes}.`, args);
 };
 
-export const rewriteBody = (issue: number, body: string, dryRun: boolean): void => {
-  if (dryRun) {
-    console.log(`  would rewrite #${String(issue)}'s body with:\n\n${body}\n`);
-    return;
-  }
+export const rewriteBody = (issue: number, body: string): void => {
   perform(`Rewrote #${String(issue)}'s body.`, [
     "issue",
     "edit",
@@ -106,16 +101,7 @@ export interface ChildIssue {
   id: number;
 }
 
-export const attachSubIssue = (
-  repo: string,
-  parent: number,
-  child: ChildIssue,
-  dryRun: boolean,
-): void => {
-  if (dryRun) {
-    console.log(`  would attach #${String(child.number)} as a sub-issue of #${String(parent)}`);
-    return;
-  }
+export const attachSubIssue = (repo: string, parent: number, child: ChildIssue): void => {
   perform(`Attached #${String(child.number)} as a sub-issue of #${String(parent)}.`, [
     "api",
     "--method",
@@ -126,16 +112,7 @@ export const attachSubIssue = (
   ]);
 };
 
-export const addBlocker = (
-  repo: string,
-  child: ChildIssue,
-  blocker: ChildIssue,
-  dryRun: boolean,
-): void => {
-  if (dryRun) {
-    console.log(`  would block #${String(child.number)} by #${String(blocker.number)}`);
-    return;
-  }
+export const addBlocker = (repo: string, child: ChildIssue, blocker: ChildIssue): void => {
   perform(`Blocked #${String(child.number)} by #${String(blocker.number)}.`, [
     "api",
     "--method",

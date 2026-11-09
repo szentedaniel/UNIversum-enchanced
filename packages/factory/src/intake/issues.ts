@@ -3,6 +3,7 @@
  * from the same endpoint and are kept so the selection can skip them.
  */
 import { api, gh } from "#intake/gh.ts";
+import { parseJson } from "#shared/github.ts";
 import type { IntakeIssue } from "#intake/select.ts";
 
 interface ApiIssue {
@@ -56,10 +57,9 @@ interface IssueJson {
 }
 
 export const issueView = (number: number): IssueView => {
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- `gh --json` prints GitHub's own shape, typed above
-  const view = JSON.parse(
+  const view = parseJson<IssueJson>(
     gh(["issue", "view", String(number), "--json", "title,body,comments"]),
-  ) as IssueJson;
+  );
   return {
     title: view.title,
     body: view.body ?? "",

@@ -55,7 +55,7 @@ const createTickets = (
   for (const ticket of tickets) {
     const number = createIssue(ticket.title, childBody(parent, ticket.body), [READY_FOR_AGENT]);
     const child = { number, id: issueIdOf(repo, number) };
-    attachSubIssue(repo, parent, child, false);
+    attachSubIssue(repo, parent, child);
     created.push({ child, ticket });
   }
   return created;
@@ -130,11 +130,11 @@ const splitOne = async (repo: string, issue: IntakeIssue, dryRun: boolean): Prom
       if (blocker === undefined) {
         throw new Error(`blockedBy index ${String(dependency)} is outside the ticket list.`);
       }
-      addBlocker(repo, child, blocker.child, false);
+      addBlocker(repo, child, blocker.child);
     }
     commentOn(child.number, ticket.context, false);
   }
-  rewriteBody(issue.number, specBody(result.output.spec), false);
+  rewriteBody(issue.number, specBody(result.output.spec));
   labelIssue(issue.number, [FACTORY_LABEL], [SPEC_APPROVED], false);
   return created.map(({ child }) => child.number);
 };

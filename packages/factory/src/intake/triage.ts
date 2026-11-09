@@ -11,7 +11,7 @@
 import { join } from "node:path";
 import * as sandcastle from "@ai-hero/sandcastle";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
-import { ghSafe, optionalIssueNumber } from "#intake/gh.ts";
+import { gh, optionalIssueNumber } from "#intake/gh.ts";
 import { openIssues } from "#intake/issues.ts";
 import { triageAction } from "#intake/render.ts";
 import { triageSchema } from "#intake/schema.ts";
@@ -30,9 +30,9 @@ const MODEL = "claude-sonnet-5-5";
 
 /** Classifies one issue and performs the one write its decision asks for. */
 const triageOne = async (issue: IntakeIssue, dryRun: boolean): Promise<boolean> => {
-  const issueContext =
-    ghSafe(["issue", "view", String(issue.number), "--comments"]) ||
-    `Issue #${String(issue.number)}: ${issue.title}`;
+  // The issue is the step's whole input: an unreadable one fails the run
+  // rather than asking the owner questions about a body Claude never saw.
+  const issueContext = gh(["issue", "view", String(issue.number), "--comments"]);
 
   const before = treeState();
 

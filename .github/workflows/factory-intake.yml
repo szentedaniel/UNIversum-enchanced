@@ -4,8 +4,8 @@
 # labels. That boundary is the point: an issue's text is untrusted input, so it
 # must never steer a `gh` write.
 #
-# Triage turns each `needs-triage` issue (or the owner's or a collaborator's
-# unlabelled one) into `ready-for-agent` with the Implementation context
+# Triage turns each `needs-triage` issue (or an unlabelled one the owner, a
+# member or a collaborator filed) into `ready-for-agent` with the Implementation context
 # comment, `needs-info` with concrete questions, or `spec:proposed` with a spec
 # draft. Split turns each `spec:approved` issue into tracer-bullet sub-issues
 # with native blocking edges, each with its own context comment, and hands the
