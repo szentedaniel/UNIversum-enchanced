@@ -1,18 +1,6 @@
-/**
- * The intake steps' `gh` boundary. Reads run with an argument array, so no
- * fail: an issue number or title is never handed to a shell.
- */
-import { execFileSync } from "node:child_process";
+/** The intake steps' optional issue-number boundary. */
 import { fail } from "#shared/common.ts";
-import { parseJson } from "#shared/github.ts";
-
-/** `gh` with an argument array; stdout as text, a non-zero exit throws. */
-export const gh = (args: readonly string[]): string =>
-  execFileSync("gh", [...args], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    maxBuffer: 256 * 1024 * 1024,
-  });
+import { gh, parseJson } from "#shared/github.ts";
 
 /** A paginated `gh api` response, one flat list. */
 export const api = <T>(path: string): T[] => {

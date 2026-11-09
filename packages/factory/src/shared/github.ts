@@ -1,9 +1,25 @@
 /**
- * The `gh api` reads the factory's scripts share. GitHub's REST shapes are the
- * callers' interfaces: a schema here would only restate the docs.
+ * The factory's `gh` seam: argument-array reads that never touch a shell, and
+ * the shared `gh api` pagination. GitHub's REST shapes are the callers'
+ * interfaces: a schema here would only restate the docs.
  */
+import { execFileSync } from "node:child_process";
 import type { ReviewComment } from "#review/summary.ts";
 import { sh } from "#shared/common.ts";
+
+/**
+ * Room for a month of paginated runs and jobs: execFileSync's 1 MB default
+ * overflowed (`ENOBUFS`) once the dispatcher's jobs read passed it.
+ */
+const GH_MAX_BUFFER = 256 * 1024 * 1024;
+
+/** `gh` with an argument array; stdout as text, a non-zero exit throws. */
+export const gh = (args: readonly string[]): string =>
+  execFileSync("gh", [...args], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: GH_MAX_BUFFER,
+  });
 
 /** Untrusted JSON, typed by the caller's interface. */
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the one untyped JSON boundary; each caller names its REST shape
