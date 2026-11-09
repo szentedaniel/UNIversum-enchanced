@@ -285,6 +285,7 @@ describe("the log", () => {
       "## 2026-11-09\n\n- Opened issue #120: one helper\n",
     );
     expect(logSection("2026-11-09", [])).toContain("- Nothing new.");
+    expect(logSection("2026-11-09", ["a line\nand another"])).toContain("- a line and another");
   });
 
   it("starts the file with the header and appends the next day under it", () => {

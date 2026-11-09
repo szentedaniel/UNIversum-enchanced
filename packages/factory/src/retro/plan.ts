@@ -256,7 +256,9 @@ export const logSection = (date: string, bullets: readonly string[]): string =>
   [
     `## ${date}`,
     "",
-    ...(bullets.length === 0 ? ["- Nothing new."] : bullets.map((bullet) => `- ${bullet}`)),
+    ...(bullets.length === 0
+      ? ["- Nothing new."]
+      : bullets.map((bullet) => `- ${bullet.replace(/\s+/gu, " ").trim()}`)),
     "",
   ].join("\n");
 
