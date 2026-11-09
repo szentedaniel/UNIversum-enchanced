@@ -10,7 +10,7 @@ describe("pollUntil", () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
     const answers = [false, false, true];
-    const probe = vi.fn(async () => answers.shift() ?? true);
+    const probe = vi.fn<() => Promise<boolean>>(async () => answers.shift() ?? true);
 
     const result = pollUntil(probe, { timeoutMs: 1_000, intervalMs: 250 });
     await vi.advanceTimersByTimeAsync(500);
@@ -37,7 +37,7 @@ describe("pollUntil", () => {
   it("gives up at the deadline and reports when", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
-    const probe = vi.fn(async () => false);
+    const probe = vi.fn<() => Promise<boolean>>(async () => false);
 
     const result = pollUntil(probe, { timeoutMs: 500, intervalMs: 250 });
     await vi.advanceTimersByTimeAsync(500);
@@ -58,6 +58,7 @@ describe("waitUntil", () => {
     let finished = false;
     const waiting = waitUntil(1_500).then(() => {
       finished = true;
+      return true;
     });
 
     await vi.advanceTimersByTimeAsync(499);
