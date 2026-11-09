@@ -1,7 +1,7 @@
 /**
- * The factory's `gh` seam: argument-array reads that never touch a shell, and
- * the shared `gh api` pagination. GitHub's REST shapes are the callers'
- * interfaces: a schema here would only restate the docs.
+ * The factory's `gh` seam: the argument-array reader and the shared `gh api`
+ * pagination. GitHub's REST shapes are the callers' interfaces: a schema here
+ * would only restate the docs.
  */
 import { execFileSync } from "node:child_process";
 import type { ReviewComment } from "#review/summary.ts";
