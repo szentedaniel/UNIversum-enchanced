@@ -27,11 +27,19 @@ export const positiveInt = (value: string | undefined, fallback: number): number
 /** Where the workflow reads the failure comment's reason from. */
 export const outputDir = (): string => process.env["OUTPUT_DIR"] ?? "/tmp";
 
+/** Writes a file the workflow reads back from `OUTPUT_DIR`. */
+export const writeOutput = (name: string, content: string): string => {
+  const dir = outputDir();
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, name);
+  writeFileSync(path, content);
+  return path;
+};
+
 /** Fails the step, leaving the reason for the workflow's failure comment. */
 export const fail = (message: string): never => {
   console.error(`\nFAILED: ${message}`);
-  mkdirSync(outputDir(), { recursive: true });
-  writeFileSync(join(outputDir(), "failure_reason.txt"), message);
+  writeOutput("failure_reason.txt", message);
   process.exit(1);
 };
 

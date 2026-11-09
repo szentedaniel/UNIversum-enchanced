@@ -58,12 +58,14 @@ jobs:
       GH_REPO: ${{ github.repository }}
       INPUT_PR: ${{ inputs.pr }}
       DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
-      OUTPUT_DIR: ${{ runner.temp }}
     steps:
       - name: Resolve the pull request
         id: pr
         run: |
           set -euo pipefail
+          # `runner` is not available in job-level env, so the scripts' output
+          # directory is exported here for every later step.
+          echo "OUTPUT_DIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
           pr="$INPUT_PR"
           if [ -z "$pr" ]; then
             pr=$(jq -r '.workflow_run.pull_requests[0].number // empty' "$GITHUB_EVENT_PATH")

@@ -1,0 +1,140 @@
+# The factory's intake: the owner's one-line issue becomes work the factory can
+# start. Claude reads a checkout of `main` and returns structured JSON; the
+# scripts in `packages/factory/src/intake/` post the comments and move the
+# labels. That boundary is the point: an issue's text is untrusted input, so it
+# must never steer a `gh` write.
+#
+# Triage turns each `needs-triage` issue (or an unlabelled one the owner, a
+# member or a collaborator filed) into `ready-for-agent` with the Implementation context
+# comment, `needs-info` with concrete questions, or `spec:proposed` with a spec
+# draft. Split turns each `spec:approved` issue into tracer-bullet sub-issues
+# with native blocking edges, each with its own context comment, and hands the
+# parent to `factory`.
+name: Factory Intake
+
+run-name: Factory intake ${{ inputs.issue && format('#{0}', inputs.issue) || 'night run' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Only this issue (empty: every issue that is waiting)"
+        required: false
+        type: string
+      dry_run:
+        description: Print the decisions and the writes without performing them
+        type: boolean
+        default: false
+  schedule:
+    # 01:15 UTC is 02:15 CET or 03:15 CEST: inside the 01:00–07:00 Budapest
+    # window in both halves of the year. The scripts re-check the window, so a
+    # delayed start does not spend daytime Pro usage.
+    - cron: "15 0 * * *"
+
+# The job's own token stays read-only; every write goes through AGENT_PAT, so
+# the labels and the new issues can trigger the dispatcher.
+permissions:
+  contents: read
+
+# One intake at a time: two runs would triage or split the same issue twice.
+concurrency:
+  group: factory-intake
+  cancel-in-progress: false
+
+jobs:
+  intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_INTAKE_MAX: ${{ vars.FACTORY_INTAKE_MAX }}
+      ISSUE_NUMBER: ${{ inputs.issue }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '' }}
+
+    steps:
+      - name: Check the issue number
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.issue != '' }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$ISSUE_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::The issue input must be a number, got '$ISSUE_NUMBER'."
+            exit 1
+          fi
+
+      # The agents read the repository, so main's copy is the only checkout.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      # Sandcastle is a workspace dependency and the scripts run with plain node
+      # (Node 26 strips the types).
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@2.1.311
+
+      # The same plugin pin as the review step: the version is the factory's
+      # contract with the mattpocock skills, checked wherever Claude runs.
+      - name: Install the plugin pin
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if ! claude plugin marketplace list | grep -q "claude-plugins-official"; then
+            claude plugin marketplace add anthropics/claude-plugins-official
+          fi
+          claude plugin install "mattpocock-skills@claude-plugins-official"
+          actual=$(claude plugin list --json \
+            | jq -r '.[] | select(.id == "mattpocock-skills@claude-plugins-official") | .version')
+          if [ "$actual" != "1.3.1" ]; then
+            echo "::error::The review skill must be 1.3.1 (the pinned code-review skill); got '$actual'. Update the pin only after re-reading the skill."
+            exit 1
+          fi
+          echo "Plugin pin: mattpocock-skills@claude-plugins-official $actual"
+
+      # A triage failure must not keep an approved spec from splitting: the two
+      # steps run independently, and the job still ends red.
+      - name: Triage the waiting issues
+        id: triage
+        continue-on-error: true
+        env:
+          OUTPUT_DIR: ${{ runner.temp }}
+        run: node packages/factory/src/intake/triage.ts
+
+      - name: Split the approved specs
+        id: split
+        continue-on-error: true
+        env:
+          OUTPUT_DIR: ${{ runner.temp }}
+        run: node packages/factory/src/intake/split.ts
+
+      # A label or issue made with the PAT starts no workflow here (the
+      # dispatcher listens to pushes, runs and a cron), so start it by hand.
+      - name: Dispatch the new tickets
+        if: ${{ !cancelled() && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        run: |
+          set -euo pipefail
+          if [ ! -f "${RUNNER_TEMP}/ready-for-agent.txt" ]; then
+            echo "No issue became ready-for-agent; the dispatcher is not needed."
+            exit 0
+          fi
+          echo "Dispatching for: $(tr '\n' ' ' < "${RUNNER_TEMP}/ready-for-agent.txt")"
+          gh workflow run factory-dispatch.yml
+
+      # The issues keep their labels, so the next night retries a failed step.
+      - name: Fail when a step failed
+        if: ${{ steps.triage.outcome == 'failure' || steps.split.outcome == 'failure' }}
+        run: |
+          echo "::error::An intake step failed; see the log above. The issue keeps its label and the next intake run retries it."
+          exit 1
