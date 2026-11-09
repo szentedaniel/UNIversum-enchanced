@@ -160,6 +160,15 @@ describe("the Markdown report", () => {
     expect(text).toContain("generator CPU peaked at 81.0%");
   });
 
+  it("prints each number with the unit its verdict criterion chose", () => {
+    const data = report();
+    const text = renderReport(data);
+    const intent = data.verdict.criteria.find((criterion) => criterion.id === "intent-p95");
+    if (!intent) throw new Error("no intent-p95 criterion");
+    expect(text).toContain(`| ${intent.label} | ${intent.threshold} | ${intent.actual} |`);
+    expect(text).toContain(`| Intent duration p95 | ${intent.actual} |`);
+  });
+
   it("prints every measured number", () => {
     const text = renderReport(report());
     for (const fragment of [
