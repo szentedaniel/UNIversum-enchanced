@@ -180,6 +180,18 @@ describe("applyWrites", () => {
     expect(calls.at(-1)).toEqual({ kind: "git", args: ["checkout", "main"] });
   });
 
+  it("fails when gh prints no issue number", () => {
+    const io: RetroIo = {
+      git: () => "",
+      gh: () => "not a URL",
+      writeTemp: () => "/tmp/retro/issue.md",
+    };
+
+    expect(() =>
+      applyWrites([{ kind: "issue", title: "Name the formatter", body: "Why." }], "o/r", io),
+    ).toThrow("gh printed no issue URL: not a URL");
+  });
+
   it("keeps writing the plan after a skipped pull write", () => {
     const { io, calls } = testIo({ branches: [pull.branch] });
 
