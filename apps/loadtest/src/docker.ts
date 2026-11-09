@@ -6,7 +6,7 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import type { RunOptions } from "#args.ts";
-import { sleep } from "#wait.ts";
+import { pollUntil } from "#wait.ts";
 
 export const REPO_ROOT = resolve(import.meta.dirname, "..", "..", "..");
 export const LOADTEST_COMPOSE = `${REPO_ROOT}/compose.loadtest.yaml`;
@@ -79,15 +79,11 @@ export class Compose {
    * Returns when it first answers 200, or after `timeoutMs`.
    */
   async waitUntilReady(timeoutMs: number): Promise<{ ready: boolean; atMs: number }> {
-    const started = Date.now();
-    while (Date.now() - started <= timeoutMs) {
-      // oxlint-disable-next-line no-await-in-loop -- readiness is polled, one probe at a time
-      const result = await this.execReadyz();
-      if (result === 0) return { ready: true, atMs: Date.now() };
-      // oxlint-disable-next-line no-await-in-loop -- the probe interval
-      await sleep(250);
-    }
-    return { ready: false, atMs: Date.now() };
+    const { ok, atMs } = await pollUntil(async () => (await this.execReadyz()) === 0, {
+      timeoutMs,
+      intervalMs: 250,
+    });
+    return { ready: ok, atMs };
   }
 
   /** 0 when `/readyz` answered 200; any failure (not running, booting) otherwise. */

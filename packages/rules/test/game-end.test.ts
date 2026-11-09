@@ -6,6 +6,8 @@ import { newGame, player, reject, roll, rollOnto, T0, withField, withPlayer } fr
 const MUSEUM4 = 28;
 /** Berlin: a University far enough round the ring, with nothing to offer at Level 4. */
 const BERLIN = 15;
+/** Stanford: a University in Group 8, which no Monopoly test gives away. */
+const STANFORD = 29;
 
 /** The current Player lands on their own `field` at `level`, which does nothing. */
 function endTurnOn(state: GameState, field: number, level: number, now = T0): Applied {
@@ -123,6 +125,59 @@ describe("the Minute limit", () => {
     ]);
   });
 
+  it("R80, F25: the standings break a Wealth tie with more cash", () => {
+    // p2 has 1.5M in cash; p4 has 1.1M plus the 400,000 Museum on Field 20.
+    const state = withField(
+      withPlayer(
+        withPlayer(
+          withPlayer(withPlayer(newGame({ players: 4 }), "p1", { cash: 500_000 }), "p2", {
+            cash: 1_500_000,
+          }),
+          "p3",
+          { cash: 2_000_000 },
+        ),
+        "p4",
+        { cash: 1_100_000 },
+      ),
+      20,
+      { owner: "p4", level: 0 },
+    );
+
+    const applied = timeUp(state);
+
+    expect(publicView(applied.state).standings?.map((standing) => standing.player)).toEqual([
+      "p3",
+      "p2",
+      "p4",
+      "p1",
+    ]);
+  });
+
+  it("R80, F25: the standings break a Wealth and cash tie with the earlier Seat", () => {
+    // p2 and p4 both hold 1.5M, so Seat order decides; p3's 2M wins the game.
+    const state = withPlayer(
+      withPlayer(
+        withPlayer(withPlayer(newGame({ players: 4 }), "p1", { cash: 500_000 }), "p2", {
+          cash: 1_500_000,
+        }),
+        "p3",
+        { cash: 2_000_000 },
+      ),
+      "p4",
+      { cash: 1_500_000 },
+    );
+
+    const applied = timeUp(state);
+
+    expect(applied.state.phase).toMatchObject({ winner: "p3", reason: "timeUp" });
+    expect(publicView(applied.state).standings?.map((standing) => standing.player)).toEqual([
+      "p3",
+      "p2",
+      "p4",
+      "p1",
+    ]);
+  });
+
   it("the Minute limit does not end the game before it runs out", () => {
     const applied = endTurn(threePlayers(1_500_000, 1_000_000), ENDS_AT - 1);
 
@@ -136,16 +191,28 @@ describe("Monopolies", () => {
     1: [1, 2, 3],
     2: [5, 6, 7],
     3: [9, 10, 11],
+    4: [13, 15],
+    5: [17, 19],
+    6: [21, 22, 23],
   };
 
-  /** A 4-Player game where `owner` owns every Field of `groups`, and `museums`. */
-  function owning(owner: string, groups: number[], museums: number[] = []): GameState {
-    let state = newGame({ players: 4 });
+  /** `state` with `owner` owning every Field of `groups`, and `museums`. */
+  function owned(
+    state: GameState,
+    owner: string,
+    groups: number[],
+    museums: number[] = [],
+  ): GameState {
     for (const id of groups.flatMap((group) => GROUP_FIELDS[group] ?? [])) {
       state = withField(state, id, { owner, level: 0 });
     }
     for (const id of museums) state = withField(state, id, { owner, level: 0 });
     return state;
+  }
+
+  /** A 4-Player game where `owner` owns every Field of `groups`, and `museums`. */
+  function owning(owner: string, groups: number[], museums: number[] = []): GameState {
+    return owned(newGame({ players: 4 }), owner, groups, museums);
   }
 
   it("R78: a Player who owns all 4 Museums wins at the Turn change (a Super-monopoly)", () => {
@@ -182,6 +249,27 @@ describe("Monopolies", () => {
     const applied = endTurnOn(owning("p2", [1, 2, 3]), BERLIN, 4);
 
     expect(applied.state.phase).toEqual({ kind: "gameOver", winner: "p2", reason: "monopolies" });
+  });
+
+  it("R79: the holder of more Monopolies wins over a Wealthier holder of fewer", () => {
+    // p2 has 4 Monopolies and p3 3; p3's 9,000,000 in cash cannot outrank the count.
+    const state = withPlayer(owned(owning("p2", [1, 2, 3, 4]), "p3", [5, 6, 7]), "p3", {
+      cash: 9_000_000,
+    });
+
+    const applied = endTurnOn(state, STANFORD, 4);
+
+    expect(applied.state.phase).toEqual({ kind: "gameOver", winner: "p2", reason: "monopolies" });
+  });
+
+  it("R79, F25: tied Monopolies go to the Wealthier holder", () => {
+    const state = withPlayer(owned(owning("p2", [1, 2, 3]), "p3", [4, 5, 6]), "p3", {
+      cash: 9_000_000,
+    });
+
+    const applied = endTurnOn(state, STANFORD, 4);
+
+    expect(applied.state.phase).toEqual({ kind: "gameOver", winner: "p3", reason: "monopolies" });
   });
 
   it("R79: 2 Monopolies and 3 Museums do not end the game (Museums are no Group)", () => {

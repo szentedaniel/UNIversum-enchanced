@@ -7,7 +7,6 @@
  *
  * Env: GH_REPO, CI_RUN_ID (the failed run), DRY_RUN.
  */
-import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,6 +20,7 @@ import {
 } from "#maintain/red-main.ts";
 import { fail, required, sh, shellArg } from "#shared/common.ts";
 import { parseJson } from "#shared/github.ts";
+import { runLog } from "#shared/runs.ts";
 
 interface RunView {
   headSha: string;
@@ -42,22 +42,7 @@ const runOf = (repo: string, runId: string): RedMain => {
       `gh run view ${runId} --repo "${repo}" --json headSha,url,jobs --jq '{headSha: .headSha, url: .url, jobs: [.jobs[] | {name: .name, conclusion: .conclusion}]}'`,
     ),
   );
-  let log = "";
-  try {
-    // `--log-failed` prints only the failed steps; a big run can still fill
-    // execSync's 1 MB default buffer.
-    log = execSync(`gh run view ${runId} --repo "${repo}" --log-failed`, {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      maxBuffer: 128 * 1024 * 1024,
-    });
-  } catch (error) {
-    // The log can be gone (an expired artifact) while the run itself is enough
-    // to open the issue.
-    if (typeof error === "object" && error !== null && "stdout" in error) {
-      log = typeof error.stdout === "string" ? error.stdout : "";
-    }
-  }
+  const log = runLog(repo, runId, { failedOnly: true });
   return {
     commit: view.headSha,
     runUrl: view.url,

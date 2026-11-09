@@ -20,10 +20,10 @@ import { sendIntent } from "#connection.ts";
 import type { BottomSlot } from "#decision/decision.ts";
 import { cn } from "#lib/utils.ts";
 import { saleChecklist } from "#pick/checklist.ts";
-import { salePickedValue } from "#pick/sale.ts";
+import { salePickedValue, salePicksFor } from "#pick/sale.ts";
 import { PickChecklist } from "#screens/PickChecklist.tsx";
 import { TrayHeader } from "#screens/TrayHeader.tsx";
-import { salePicksFor, uiStore } from "#stores/ui-store.ts";
+import { uiStore } from "#stores/ui-store.ts";
 import { fieldName, formatCompactMoney, formatMoney, m } from "#text.ts";
 
 const CHARGE_LABELS: Record<PendingCharge["kind"], (amount: string) => string> = {

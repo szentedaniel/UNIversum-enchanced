@@ -14,7 +14,7 @@ import { Podium } from "#components/Podium.tsx";
 import { buttonVariants } from "#components/ui/button.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ensureJoined, JoinError } from "#connection.ts";
-import { bottomSlot, openDecision, waitingLine } from "#decision/decision.ts";
+import { bottomSlot, openDecision } from "#decision/decision.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
 import { playbackStore } from "#playback/playback-store.ts";
@@ -79,7 +79,7 @@ export function Game() {
   // One answer for the Turn card, the trays, the bottom slot and the Podium (spec #72).
   const decision = openDecision(frame, me, inFlight);
   const slot = bottomSlot(decision, frame, { selectedField, inspect });
-  const waiting = waitingLine(decision);
+  const waiting = decision !== null && decision.owner === "other" ? decision.kind : null;
 
   const players: PlayerSummary[] = view.players.map((p) => ({
     seat: p.seat,
