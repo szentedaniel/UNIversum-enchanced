@@ -1,5 +1,3 @@
-import type { PhaseOf, PublicView } from "@universum/rules";
-import { FIELDS } from "@universum/rules/board";
 import type { RejectionCode } from "@universum/protocol/messages";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
@@ -13,24 +11,20 @@ import { GameMenu } from "#components/GameMenu.tsx";
 import { EventToast, MinutePill } from "#components/GameHud.tsx";
 import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
 import { Podium } from "#components/Podium.tsx";
-import { Button, buttonVariants } from "#components/ui/button.tsx";
-import { Card } from "#components/ui/card.tsx";
+import { buttonVariants } from "#components/ui/button.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
-import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
+import { ensureJoined, JoinError } from "#connection.ts";
 import { bottomSlot, openDecision } from "#decision/decision.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
-import { salePicksFor } from "#pick/sale.ts";
 import { playbackStore } from "#playback/playback-store.ts";
 import { PickTray } from "#screens/PickTray.tsx";
 import { SaleTray } from "#screens/SaleTray.tsx";
+import { TurnCard } from "#screens/TurnCard.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { inFlightOf, roomStore } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
-import { fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
-
-const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
-  view.players.find((p) => p.id === playerId)?.quarantineRounds ?? 0;
+import { formatMoney, m, playerName, rejectionText } from "#text.ts";
 
 export function Game() {
   const { code = "" } = useParams();
@@ -39,9 +33,6 @@ export function Game() {
   const status = useStore(roomStore, (s) => s.status);
   const rejection = useStore(roomStore, (s) => s.rejection);
   const selectedField = useStore(uiStore, (s) => s.selectedField);
-  const salePicks = useStore(uiStore, (s) => s.salePicks);
-  const singleSelection = useStore(uiStore, (s) => s.singlePick);
-  const checklistOpen = useStore(uiStore, (s) => s.checklistOpen);
   const inspect = useStore(uiStore, (s) => s.inspect);
   // No optimistic UI: a tap locks the controls until the server answers.
   const inFlight = useStore(roomStore, inFlightOf);
@@ -85,11 +76,6 @@ export function Game() {
   // the dice and a drawn Chance card show for their own step of the Playback (ADR-0004).
   const { shownTurn, toast, overlay } = frame;
   const { clockOffset } = push;
-  const current = view.players.find((p) => p.id === view.currentPlayer);
-  // The turn card holds the previous Turn's values through the Playback (story 4, ADR-0004).
-  const shownPlayer = view.players.find((p) => p.id === shownTurn.currentPlayer) ?? current;
-  const shownMyTurn = shownTurn.currentPlayer === me;
-  const shownTurnNumber = shownTurn.turn;
   // One answer for the Turn card, the trays, the bottom slot and the Podium (spec #72).
   const decision = openDecision(frame, me, inFlight);
   const slot = bottomSlot(decision, frame, { selectedField, inspect });
@@ -140,75 +126,9 @@ export function Game() {
     </>
   );
 
-  // The Turn card at the bottom; the Field card takes its place while open (later: the pick tray).
+  // The Turn card at the bottom; the Field card takes its place while open.
   const turnCard = (
-    <Card className="gap-2 p-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <strong data-testid="turn-of" className="truncate text-lg font-black">
-          {shownMyTurn
-            ? m.game_your_turn()
-            : m.game_turn_of({ name: shownPlayer ? playerName(shownPlayer.name) : "" })}
-        </strong>
-        <span data-testid="turn" className="tnum shrink-0 text-sm font-bold text-ink/70">
-          {m.game_turn({ turn: shownTurnNumber })}
-        </span>
-      </div>
-      {waiting === "sale" && (
-        <p className="m-0 text-sm font-bold text-ink/70" data-testid="sale-waiting">
-          {m.sale_waiting({ name: current ? playerName(current.name) : "" })}
-        </p>
-      )}
-      {waiting === "pick" && (
-        <p className="m-0 text-sm font-bold text-ink/70" data-testid="pick-waiting">
-          {m.pick_waiting({ name: current ? playerName(current.name) : "" })}
-        </p>
-      )}
-      {decision?.kind === "roll" && (
-        <Button size="lg" onClick={() => sendIntent({ type: "Roll", turn: view.turn })}>
-          {m.game_roll()}
-        </Button>
-      )}
-      {decision?.kind === "offer" && (
-        <OfferPanel
-          view={view}
-          offer={decision.offer}
-          onBuy={(level) => sendIntent({ type: "BuyLevel", turn: view.turn, level })}
-          onBuyMuseum={() => sendIntent({ type: "BuyMuseum", turn: view.turn })}
-          onBuyout={() => sendIntent({ type: "Buyout", turn: view.turn })}
-          onDecline={() => sendIntent({ type: "DeclineOffer", turn: view.turn })}
-        />
-      )}
-      {decision?.kind === "quarantine" && (
-        <section className="flex flex-col gap-2" aria-label={m.field_quarantine()}>
-          <p className="m-0 text-sm font-bold text-ink/70">
-            {m.game_quarantine_rounds({ rounds: quarantineRoundsOf(view, view.currentPlayer) })}
-          </p>
-          <Button size="lg" onClick={() => sendIntent({ type: "RollForTwelve", turn: view.turn })}>
-            {m.game_roll_for_twelve()}
-          </Button>
-          <div className="flex flex-wrap gap-2">
-            {decision.choice.canBuyPcrTest && (
-              <Button
-                variant="plain"
-                className="flex-1"
-                onClick={() => sendIntent({ type: "BuyPcrTest", turn: view.turn })}
-              >
-                {m.game_buy_pcr_test({ price: formatMoney(decision.choice.pcrTestPrice) })}
-              </Button>
-            )}
-            {decision.choice.canUsePcrTest && (
-              <Button
-                variant="accent"
-                className="flex-1"
-                onClick={() => sendIntent({ type: "UsePcrTest", turn: view.turn })}
-              >
-                {m.game_use_pcr_test()}
-              </Button>
-            )}
-          </div>
-        </section>
-      )}
-    </Card>
+    <TurnCard view={view} decision={decision} shownTurn={shownTurn} waiting={waiting} />
   );
   const mySeat = view.players.find((p) => p.id === me)?.seat ?? 0;
   // The bottom slot in the Decision module's order (spec #72): the result
@@ -223,50 +143,9 @@ export function Game() {
       case "fieldCard":
         return <FieldCard id={slot.field} view={view} stepThrough={slot.stepThrough} />;
       case "sale":
-        return (
-          <SaleTray
-            view={view}
-            sale={slot.sale}
-            picks={salePicksFor(salePicks, slot.sale.key)}
-            seat={mySeat}
-            clockOffset={clockOffset}
-            busy={slot.busy}
-            checklistOpen={checklistOpen}
-            inspect={inspect}
-            onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
-            onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
-            onToggle={(field) => uiStore.getState().toggleSalePick(slot.sale.key, field)}
-            onFocus={(field) => uiStore.getState().focusPick(field)}
-            onUnpick={(field) => uiStore.getState().toggleSalePick(slot.sale.key, field)}
-            onAutoSell={() => sendIntent({ type: "AutoSell", turn: view.turn })}
-            onSell={(fields) => sendIntent({ type: "SellFields", turn: view.turn, fields })}
-          />
-        );
+        return <SaleTray view={view} slot={slot} seat={mySeat} clockOffset={clockOffset} />;
       case "pick":
-        return (
-          <PickTray
-            view={view}
-            pick={slot.pick}
-            selection={singleSelection}
-            seat={mySeat}
-            clockOffset={clockOffset}
-            busy={slot.busy}
-            checklistOpen={checklistOpen}
-            inspect={inspect}
-            onToggleChecklist={() => uiStore.getState().setChecklistOpen(!checklistOpen)}
-            onToggleInspect={() => uiStore.getState().setInspect(!inspect)}
-            onToggle={(field) => uiStore.getState().choosePick(slot.pick.key, field)}
-            onFocus={(field) => uiStore.getState().focusPick(field)}
-            onPick={(field) => uiStore.getState().choosePick(slot.pick.key, field)}
-            onCommit={(field) =>
-              sendIntent(
-                slot.pick.kind === "doubler"
-                  ? { type: "PlaceDoubler", turn: view.turn, field }
-                  : { type: "TravelErasmus", turn: view.turn, field },
-              )
-            }
-          />
-        );
+        return <PickTray view={view} slot={slot} seat={mySeat} clockOffset={clockOffset} />;
       case "turnCard":
         return turnCard;
     }
@@ -333,57 +212,3 @@ export function Game() {
 
 /** Desktop corner of each Seat, clockwise from top left. */
 const CORNERS = ["top-3 left-3", "top-3 right-3", "right-3 bottom-3", "bottom-3 left-3"];
-
-/**
- * The offer: one button per affordable Level with its price, or the Museum
- * buy, or the Buyout, and Decline. The phase lists what is on offer.
- */
-function OfferPanel({
-  view,
-  offer,
-  onBuy,
-  onBuyMuseum,
-  onBuyout,
-  onDecline,
-}: {
-  view: PublicView;
-  offer: PhaseOf<"offer">;
-  onBuy: (level: number) => void;
-  onBuyMuseum: () => void;
-  onBuyout: () => void;
-  onDecline: () => void;
-}) {
-  const field = fieldName(FIELDS[offer.field]?.key ?? "");
-  const own = view.fields[offer.field]?.owner === view.currentPlayer;
-  const title =
-    offer.buyout !== undefined
-      ? m.offer_buyout_title({ field })
-      : own
-        ? m.offer_build({ field })
-        : m.offer_buy({ field });
-  return (
-    <section className="flex flex-col gap-2" aria-label={title} data-testid="offer">
-      <h2 className="m-0 font-display text-xl font-normal">{title}</h2>
-      <div className="flex flex-wrap gap-2">
-        {offer.levels.map(({ level, price }) => (
-          <Button key={level} className="tnum" onClick={() => onBuy(level)}>
-            {m.offer_level({ level, price: formatMoney(price) })}
-          </Button>
-        ))}
-        {offer.museum !== undefined && (
-          <Button className="tnum" onClick={onBuyMuseum}>
-            {m.offer_museum({ price: formatMoney(offer.museum) })}
-          </Button>
-        )}
-        {offer.buyout !== undefined && (
-          <Button className="tnum" onClick={onBuyout}>
-            {m.offer_buyout({ price: formatMoney(offer.buyout) })}
-          </Button>
-        )}
-        <Button variant="plain" onClick={onDecline}>
-          {m.offer_decline()}
-        </Button>
-      </div>
-    </section>
-  );
-}
