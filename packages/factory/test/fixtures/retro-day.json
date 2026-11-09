@@ -1,0 +1,263 @@
+{
+  "owner": "szentedaniel",
+  "pulls": [
+    {
+      "number": 101,
+      "title": "Implement #96: Commit rules refuse a subject longer than 100 characters",
+      "body": "Closes #96",
+      "headRefName": "agent/issue-96-commit-rules",
+      "labels": ["factory", "risk:low"],
+      "state": "MERGED",
+      "createdAt": "2026-11-07T09:00:00Z",
+      "updatedAt": "2026-11-08T08:00:00Z",
+      "mergedAt": "2026-11-08T08:00:00Z",
+      "url": "https://github.com/szentedaniel/UNIversum-enchanced/pull/101"
+    },
+    {
+      "number": 102,
+      "title": "Implement #98: Factory dispatcher says why it dispatched nothing",
+      "body": "Closes #98",
+      "headRefName": "agent/issue-98-dispatcher-why",
+      "labels": ["factory", "agent:blocked", "ready-for-human"],
+      "state": "OPEN",
+      "createdAt": "2026-11-08T06:00:00Z",
+      "updatedAt": "2026-11-08T09:30:00Z",
+      "mergedAt": null,
+      "url": "https://github.com/szentedaniel/UNIversum-enchanced/pull/102"
+    },
+    {
+      "number": 103,
+      "title": "Add a game settings dialog",
+      "body": "Not the factory's pull request.",
+      "headRefName": "feature/game-settings",
+      "labels": [],
+      "state": "OPEN",
+      "createdAt": "2026-11-08T07:00:00Z",
+      "updatedAt": "2026-11-08T07:30:00Z",
+      "mergedAt": null,
+      "url": "https://github.com/szentedaniel/UNIversum-enchanced/pull/103"
+    },
+    {
+      "number": 104,
+      "title": "Implement #90: Factory: nightly retro turns mistakes into durable fixes",
+      "body": "Closes #90",
+      "headRefName": "agent/issue-90-retro",
+      "labels": ["factory"],
+      "state": "OPEN",
+      "createdAt": "2026-11-05T09:00:00Z",
+      "updatedAt": "2026-11-06T09:00:00Z",
+      "mergedAt": null,
+      "url": "https://github.com/szentedaniel/UNIversum-enchanced/pull/104"
+    }
+  ],
+  "comments": [
+    {
+      "body": "<!-- factory-review -->\n## Factory review: changes requested\n\nThe reviewer committed the fixes it was sure of.\n\n**Merge danger:** two-way door, local blast radius. one file",
+      "createdAt": "2026-11-07T13:00:00Z",
+      "authorLogin": "szentedaniel",
+      "issueNumber": 101
+    },
+    {
+      "body": "<!-- factory-fix:round 1 -->\nFactory fix round 1 of 2: the review's findings.",
+      "createdAt": "2026-11-07T14:00:00Z",
+      "authorLogin": "szentedaniel",
+      "issueNumber": 101
+    },
+    {
+      "body": "<!-- factory-review -->\n## Factory review: pass\n\nThe reviewer committed the fixes it was sure of.\n\n**Merge danger:** two-way door, local blast radius. one file",
+      "createdAt": "2026-11-08T07:30:00Z",
+      "authorLogin": "szentedaniel",
+      "issueNumber": 101
+    },
+    {
+      "body": "<!-- factory-review -->\n## Factory review: changes requested\n\n**Merge danger:** two-way door, local blast radius. one file",
+      "createdAt": "2026-11-08T07:00:00Z",
+      "authorLogin": "szentedaniel",
+      "issueNumber": 102
+    },
+    {
+      "body": "<!-- factory-fix:escalated -->\n## Factory fix: out of rounds\n\nThe fix loop already ran 2 rounds.",
+      "createdAt": "2026-11-08T08:00:00Z",
+      "authorLogin": "szentedaniel",
+      "issueNumber": 102
+    },
+    {
+      "body": "<!-- factory-merge -->\n## Factory merge: waiting for a human\n\n- touches packages/factory/",
+      "createdAt": "2026-11-08T09:30:00Z",
+      "authorLogin": "szentedaniel",
+      "issueNumber": 102
+    },
+    {
+      "body": "Please do not open two issues for the same dispatcher reason again.",
+      "createdAt": "2026-11-08T09:00:00Z",
+      "authorLogin": "szentedaniel",
+      "issueNumber": 102
+    },
+    {
+      "body": "I want the retro to prefer a standard over a new check when a review comment repeats.",
+      "createdAt": "2026-11-08T10:00:00Z",
+      "authorLogin": "szentedaniel",
+      "issueNumber": 85
+    },
+    {
+      "body": "Merged in 0fe95c4.",
+      "createdAt": "2026-11-08T08:00:00Z",
+      "authorLogin": "szentedaniel",
+      "issueNumber": 85
+    },
+    {
+      "body": "Can the dice be a little slower?",
+      "createdAt": "2026-11-08T08:30:00Z",
+      "authorLogin": "szentedaniel",
+      "issueNumber": 200
+    },
+    {
+      "body": "A review comment from someone else.",
+      "createdAt": "2026-11-08T08:40:00Z",
+      "authorLogin": "someone-else",
+      "issueNumber": 102
+    },
+    {
+      "body": "An owner comment from before the window.",
+      "createdAt": "2026-11-07T11:00:00Z",
+      "authorLogin": "szentedaniel",
+      "issueNumber": 101
+    }
+  ],
+  "commits": {
+    "101": [
+      {
+        "sha": "a1",
+        "message": "feat(repo-checks): refuse a subject longer than 100 characters",
+        "authorName": "universum-factory[bot]",
+        "authorEmail": "universum-factory[bot]@users.noreply.github.com",
+        "committedAt": "2026-11-07T08:50:00Z",
+        "parents": 1
+      },
+      {
+        "sha": "a2",
+        "message": "fix(repo-checks): name the subject limit constant",
+        "authorName": "universum-factory[bot]",
+        "authorEmail": "universum-factory[bot]@users.noreply.github.com",
+        "committedAt": "2026-11-07T12:30:00Z",
+        "parents": 1
+      },
+      {
+        "sha": "a3",
+        "message": "fix(repo-checks): cap the subject at 100",
+        "authorName": "universum-factory[bot]",
+        "authorEmail": "universum-factory[bot]@users.noreply.github.com",
+        "committedAt": "2026-11-07T13:30:00Z",
+        "parents": 1
+      },
+      {
+        "sha": "a4",
+        "message": "chore(merge): main into the branch",
+        "authorName": "universum-factory[bot]",
+        "authorEmail": "universum-factory[bot]@users.noreply.github.com",
+        "committedAt": "2026-11-08T06:00:00Z",
+        "parents": 2
+      },
+      {
+        "sha": "a5",
+        "message": "fix(repo-checks): say the length limit in the error",
+        "authorName": "universum-factory[bot]",
+        "authorEmail": "universum-factory[bot]@users.noreply.github.com",
+        "committedAt": "2026-11-08T07:00:00Z",
+        "parents": 1
+      }
+    ],
+    "102": [
+      {
+        "sha": "b1",
+        "message": "feat(factory): say why the dispatcher dispatched nothing",
+        "authorName": "universum-factory[bot]",
+        "authorEmail": "universum-factory[bot]@users.noreply.github.com",
+        "committedAt": "2026-11-08T05:50:00Z",
+        "parents": 1
+      },
+      {
+        "sha": "b2",
+        "message": "fix(factory): name the skipped reason",
+        "authorName": "universum-factory[bot]",
+        "authorEmail": "universum-factory[bot]@users.noreply.github.com",
+        "committedAt": "2026-11-08T06:50:00Z",
+        "parents": 1
+      },
+      {
+        "sha": "b3",
+        "message": "fix(factory): print the skipped reason",
+        "authorName": "universum-factory[bot]",
+        "authorEmail": "universum-factory[bot]@users.noreply.github.com",
+        "committedAt": "2026-11-08T07:30:00Z",
+        "parents": 1
+      }
+    ]
+  },
+  "runs": [
+    {
+      "id": 9001,
+      "conclusion": "failure",
+      "createdAt": "2026-11-08T06:30:00Z",
+      "headBranch": "agent/issue-98-dispatcher-why",
+      "displayTitle": "CI"
+    },
+    {
+      "id": 9002,
+      "conclusion": "success",
+      "createdAt": "2026-11-08T08:10:00Z",
+      "headBranch": "agent/issue-96-commit-rules",
+      "displayTitle": "CI"
+    },
+    {
+      "id": 9003,
+      "conclusion": "failure",
+      "createdAt": "2026-11-06T10:00:00Z",
+      "headBranch": "agent/issue-90-retro",
+      "displayTitle": "CI"
+    }
+  ],
+  "failedJobs": {
+    "9001": ["check"],
+    "9003": ["check", "docker"]
+  },
+  "factoryIssues": [
+    {
+      "number": 85,
+      "title": "Spec: the software factory",
+      "labels": ["factory", "spec:approved"]
+    },
+    {
+      "number": 90,
+      "title": "Factory: nightly retro turns mistakes into durable fixes",
+      "labels": ["factory", "agent:in-progress"]
+    },
+    {
+      "number": 200,
+      "title": "Slower dice",
+      "labels": ["needs-triage"]
+    }
+  ],
+  "openIssues": [
+    {
+      "number": 110,
+      "title": "Factory: the reviewer keeps rewriting the money formatter",
+      "body": "The reviewer's fix commits touch the same formatter on two pull requests."
+    },
+    {
+      "number": 200,
+      "title": "Slower dice",
+      "body": "Make the dice animation slower."
+    }
+  ],
+  "openPulls": [
+    {
+      "number": 102,
+      "title": "Implement #98: Factory dispatcher says why it dispatched nothing"
+    },
+    {
+      "number": 120,
+      "title": "Factory: retro write cap"
+    }
+  ]
+}

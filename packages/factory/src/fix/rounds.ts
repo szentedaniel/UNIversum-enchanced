@@ -11,6 +11,9 @@ export const MAX_FIX_ROUNDS = 2;
 /** The hidden marker a round's comment opens with. */
 const ROUND_PATTERN = /<!-- factory-fix:round (\d+) -->/u;
 
+/** The one escalation comment's marker; repeated triggers post it once. */
+export const ESCALATED_MARKER = "<!-- factory-fix:escalated -->";
+
 export const fixRoundOf = (body: string): number | undefined => {
   const digits = ROUND_PATTERN.exec(body)?.[1];
   return digits === undefined ? undefined : Number(digits);
