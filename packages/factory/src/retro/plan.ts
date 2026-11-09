@@ -5,6 +5,7 @@
  * repository; `retro.ts` performs it.
  */
 import type { Finding } from "#retro/schema.ts";
+import { subjectOf } from "#shared/subject.ts";
 
 /** The spec's cap: at most three writes a night, so a bad day cannot flood. */
 export const DEFAULT_MAX_WRITES = 3;
@@ -55,20 +56,11 @@ export const slugOf = (title: string): string => {
 export const branchOf = (date: string, title: string): string => `retro/${date}-${slugOf(title)}`;
 
 const COMMIT_PREFIX = "docs(factory): ";
-/** `packages/repo-checks`'s subject limit, mirrored because a PR's CI checks it. */
-const SUBJECT_LIMIT = 100;
 
 /** A retro pull request's one commit: conventional, in the limit, no period. */
 export const commitSubjectOf = (title: string): string => {
-  const room = SUBJECT_LIMIT - COMMIT_PREFIX.length;
-  const cleaned = title.replace(/\s+/gu, " ").trim();
-  let subject = cleaned.slice(0, room);
-  if (cleaned.length > room) {
-    const boundary = subject.lastIndexOf(" ");
-    if (boundary > 0) subject = subject.slice(0, boundary);
-  }
-  subject = subject.replace(/[.:;,!-]+$/u, "").trimEnd();
-  return `${COMMIT_PREFIX}${subject === "" ? "standards update" : subject}`;
+  const subject = subjectOf(COMMIT_PREFIX, title);
+  return subject === COMMIT_PREFIX.trimEnd() ? `${COMMIT_PREFIX}standards update` : subject;
 };
 
 const FENCED_PATCH = /^```[a-z]*\n([\s\S]*?)\n```\s*$/u;
