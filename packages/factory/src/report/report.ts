@@ -35,10 +35,9 @@ import {
 } from "#report/issue.ts";
 import { reportBody } from "#report/render.ts";
 import { inWindow, REPORT_HOUR, scheduleSlot, type WeekWindow, weekWindow } from "#report/week.ts";
-import { api } from "#shared/api.ts";
+import { api, issueComments } from "#shared/github.ts";
 import { closingIssues } from "#shared/closing-pr.ts";
 import { fail, positiveInt, required, safeSh, sh } from "#shared/common.ts";
-import { issueComments } from "#shared/github.ts";
 import { factoryRuns, type FactoryRun } from "#shared/runs.ts";
 import { budapestHour } from "#review/window.ts";
 

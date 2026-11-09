@@ -6,6 +6,7 @@ import type { NeedsYouItem, ReportMetrics } from "#report/metrics.ts";
 import { budgetWarning } from "#report/metrics.ts";
 import { reportMarker } from "#report/issue.ts";
 import type { WeekWindow } from "#report/week.ts";
+import { TIME_ZONE } from "#review/window.ts";
 
 export interface ReportInput {
   readonly week: WeekWindow;
@@ -55,7 +56,7 @@ export const reportBody = ({ week, metrics, needsYou }: ReportInput): string => 
     reportMarker(week.weekOf),
     `# Factory report: week of ${week.weekOf}`,
     "",
-    `Monday ${week.weekOf} 00:00 to Monday ${week.endOf} 00:00, Europe/Budapest.`,
+    `Monday ${week.weekOf} 00:00 to Monday ${week.endOf} 00:00, ${TIME_ZONE}.`,
     "",
     "| Metric | Value |",
     "| --- | --- |",

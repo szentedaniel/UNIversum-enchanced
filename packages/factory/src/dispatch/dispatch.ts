@@ -18,7 +18,7 @@ import {
 } from "#dispatch/budget.ts";
 import { frontierOf, type IssueFacts } from "#dispatch/frontier.ts";
 import { DEFAULT_MAX_PARALLEL, planOf } from "#dispatch/plan.ts";
-import { api } from "#shared/api.ts";
+import { api } from "#shared/github.ts";
 import type { PullFacts } from "#shared/closing-pr.ts";
 import { fail, positiveInt, required, sh } from "#shared/common.ts";
 import { factoryRuns } from "#shared/runs.ts";

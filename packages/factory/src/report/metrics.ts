@@ -158,7 +158,7 @@ export const needsYouOf = (items: readonly NeedsYouItem[]): NeedsYouItem[] => {
 
 const median = (values: readonly number[]): number | null => {
   if (values.length === 0) return null;
-  const sorted = [...values].toSorted((a, b) => a - b);
+  const sorted = values.toSorted((a, b) => a - b);
   if (sorted.length % 2 === 1) return sorted[(sorted.length - 1) / 2] ?? null;
   const low = sorted[sorted.length / 2 - 1] ?? 0;
   const high = sorted[sorted.length / 2] ?? 0;

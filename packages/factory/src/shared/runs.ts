@@ -4,7 +4,7 @@
  * by agent.
  */
 import { isFactoryWorkflow, type JobTiming } from "#dispatch/budget.ts";
-import { api } from "#shared/api.ts";
+import { api } from "#shared/github.ts";
 
 interface ApiRun {
   id: number;
