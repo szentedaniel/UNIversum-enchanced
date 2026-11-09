@@ -45,6 +45,18 @@ describe("pollUntil", () => {
     await expect(result).resolves.toEqual({ ok: false, atMs: 1_500 });
     expect(probe).toHaveBeenCalledTimes(3);
   });
+
+  it("clamps a long interval to the remaining budget", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const probe = vi.fn<() => Promise<boolean>>(async () => false);
+
+    const result = pollUntil(probe, { timeoutMs: 300, intervalMs: 1_000 });
+    await vi.advanceTimersByTimeAsync(300);
+
+    await expect(result).resolves.toEqual({ ok: false, atMs: 1_300 });
+    expect(probe).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("waitUntil", () => {
