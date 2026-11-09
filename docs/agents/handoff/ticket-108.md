@@ -27,8 +27,9 @@ gone. No game code changed.
   place that list lives.
 - **The push no longer catches up with main.** That catch-up existed only to make the branch's
   workflow files match main's current copy, which GitHub required without the permission. If main
-  changed a workflow after the branch was cut, the branch keeps its older copy and the pull request
-  shows that difference (and waits for the owner).
+  changed a workflow after the branch was cut, the branch keeps its older copy; the pull request's
+  diff is against the merge base, so it shows only the branch's own change, and a clash with main's
+  edit to the same file goes to the fix loop as `main-moved`.
 - **Not changed here:** the step prompts (`implement`, `fix`, `review`, `maintain`) still carry the
   "the factory's token cannot push it" rule, and the retro's `workflow-issue` kind still opens an
   issue with the patch inline (#109 replaces that kind).
