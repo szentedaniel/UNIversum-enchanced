@@ -4,7 +4,7 @@ Branch `ticket/38-board-camera`. All under `apps/web` unless noted.
 
 ## Atlas (build time)
 
-- `scripts/atlas.ts`: `recolour(rgba, from, to, tolerance)` (v1 ColorReplaceFilter maths, integer, in place) + `buildAtlas({output, cache})`. Stages PNG frames to `node_modules/.cache/universum-atlas/…/raw/board{m}/board{tps}/`, runs AssetPack `pixiPipes` (PNG only — WebP was bigger; resolutions 1 and 0.5; no cache-bust) into `public/atlas/` (**gitignored**) → `manifest.json` + `board/board.png.json` / `board@0.5x.png.json`.
+- `apps/web/scripts/atlas.ts`: `recolour(rgba, from, to, tolerance)` (v1 ColorReplaceFilter maths, integer, in place) + `buildAtlas({output, cache})`. Stages PNG frames to `node_modules/.cache/universum-atlas/…/raw/board{m}/board{tps}/`, runs AssetPack `pixiPipes` (PNG only — WebP was bigger; resolutions 1 and 0.5; no cache-bust) into `public/atlas/` (**gitignored**) → `manifest.json` + `board/board.png.json` / `board@0.5x.png.json`.
 - Run by the Vite plugin `boardAtlas()` in `vite.config.ts` (`buildStart`, dev and build; skipped under `VITEST`), or `pnpm --filter @universum/web run atlas`.
 - Frame names: `label`, `label_g1..8`, `ground`, `road`, `road_left/right/top`, `house_base|house_storey|house_roof_p0..3`, `museum`, `museum_p0..3`, `doubler`, `quarantine`, `erasmus`, `diploma`, `start_sign`, `chest_e`, `chest_n`, `tax`, `alien_p0..3`. Add a frame: add an entry to `SOURCES` (optional `maxSize`, `recolour`). v1 colours: labels `0xc2beac` tol 0.095; houses `0xd8d2be` tol 1 (NOT 0x8ab549 as the prototype had); museum `0xc2bea8` tol 0.05.
 - Deps: `@assetpack/core` 1.7.0, `sharp` 0.34.5 (catalog). `allowBuilds` in pnpm-workspace.yaml sets sharp / ffmpeg-installer / cpu-features to false (prebuilt binaries; ffmpeg unused).

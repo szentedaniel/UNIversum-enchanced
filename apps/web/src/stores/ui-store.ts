@@ -6,7 +6,7 @@
 import type { FieldId } from "@universum/rules/board";
 import { subscribeWithSelector } from "zustand/middleware";
 import { createStore } from "zustand/vanilla";
-import { toggledPicks } from "#pick/sale.ts";
+import { toggledPicks, type SalePicks } from "#pick/sale.ts";
 
 export type UiState = {
   /** The Field whose card is open (a tap on the Board, or ‹ › on the card). */
@@ -16,7 +16,7 @@ export type UiState = {
   follow: boolean;
   setFollow(follow: boolean): void;
   /** The Fields picked in the Sale whose decision is `key` (`pickKey`); stale for any other. */
-  salePicks: { key: string; fields: FieldId[] };
+  salePicks: SalePicks;
   /** A tap in a Sale: picks the Field, or unpicks it. Never commits. */
   toggleSalePick(key: string, field: FieldId): void;
   /** The Field chosen in a Doubler or Erasmus pick whose decision is `key`; one at most. */
@@ -81,9 +81,3 @@ export const uiStore = createStore<UiState>()(
     focusPick: (field) => set({ pickFocus: field }),
   })),
 );
-
-const NO_PICKS: readonly FieldId[] = [];
-
-/** The picks of the Sale whose decision is `key` (a stable empty list for any other). */
-export const salePicksFor = (picks: UiState["salePicks"], key: string): readonly FieldId[] =>
-  picks.key === key ? picks.fields : NO_PICKS;

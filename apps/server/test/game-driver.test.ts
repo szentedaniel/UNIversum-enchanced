@@ -1,7 +1,7 @@
 /**
  * The commit pipeline on its own: no Colyseus Room and no sockets. A manual
- * scheduler drives the Turn deadline, a fake store fails on demand and a
- * throwing engine stands in for an engine bug.
+ * scheduler drives the Turn deadline, a fake store fails on demand, a throwing
+ * engine stands in for an engine bug and the Room state is read live.
  */
 import {
   apply,
@@ -20,6 +20,7 @@ import { GameMetrics } from "#observability/metrics.ts";
 import {
   GameDriver,
   type DriverRoom,
+  type DriverState,
   type GameTiming,
   type SeatRecord,
 } from "#room/game-driver.ts";
@@ -114,7 +115,7 @@ function newGame(overrides: { minuteMs?: number } = {}): GameState {
   });
 }
 
-/** A driver wired to a manual clock, a fake store and recording callbacks. */
+/** A driver wired to a manual clock, a fake store, live Room state and recording callbacks. */
 function newDriver(
   options: {
     engine?: typeof apply;
@@ -127,6 +128,7 @@ function newDriver(
   const scheduler = new ManualScheduler();
   const logs = captureLogs();
   const store = fakeStore();
+  const state: DriverState = { game: null, seats: SEATS, endedAt: null };
   const published: { state: GameState; message: GameMessage }[] = [];
   const ended: number[] = [];
   const retained: string[] = [];
@@ -139,20 +141,27 @@ function newDriver(
     reporter: options.reporter ?? { report: () => {}, flush: async () => {} },
     timing: options.timing ?? { turnLimitMs: TURN_LIMIT_MS, seed: SEED },
     roomCode: "ABC123",
-    room: () => ROOM,
-    publish: (state, message) => void published.push({ state, message }),
-    ended: (endedAt) => void ended.push(endedAt),
-    retention: () => void retained.push(`ABC123`),
+    readRoom: () => ROOM,
+    readState: () => state,
+    publish: (game, message) => {
+      state.game = game;
+      published.push({ state: game, message });
+    },
+    onEnded: (endedAt) => {
+      state.endedAt = endedAt;
+      ended.push(endedAt);
+    },
+    onRetention: () => void retained.push("ABC123"),
   });
-  return { driver, scheduler, logs, ...store, published, ended, retained };
+  return { driver, scheduler, logs, state, ...store, published, ended, retained };
 }
 
 describe("committing an intent", () => {
   it("stores the new state and its events, then publishes the view, before the next wake-up", () => {
-    const { driver, scheduler, saved, published } = newDriver();
+    const { driver, scheduler, saved, published, state } = newDriver();
     const game = newGame();
 
-    expect(driver.start(game, SEATS)).toEqual({ committed: game });
+    expect(driver.start(game)).toEqual({ committed: game });
 
     expect(saved).toEqual([
       {
@@ -177,16 +186,17 @@ describe("committing an intent", () => {
         },
       },
     ]);
+    expect(state.game).toBe(game);
     expect(() => scheduler.lastTaskAt(game.turnDeadline ?? 0)).not.toThrow();
   });
 
   it("a new decision replaces the previous Turn deadline: only one wake-up is armed", () => {
     const { driver, scheduler, published } = newDriver();
     const game = newGame();
-    driver.start(game, SEATS);
+    driver.start(game);
     const firstDeadline = game.turnDeadline ?? 0;
 
-    const outcome = driver.submit(game, { type: "Roll", turn: 1 }, "p1", SEATS, null);
+    const outcome = driver.submit(game, { type: "Roll", turn: 1 }, "p1");
     expect("committed" in outcome).toBe(true);
 
     // The first deadline is cancelled: it finds no task to fire.
@@ -195,19 +205,20 @@ describe("committing an intent", () => {
   });
 
   it("a failed write changes nothing: INTERNAL, no publish and the last good state kept", () => {
-    const { driver, saved, published, fail } = newDriver();
+    const { driver, saved, published, state, fail } = newDriver();
     const game = newGame();
-    driver.start(game, SEATS);
+    driver.start(game);
 
     fail(true);
-    expect(driver.submit(game, { type: "Roll", turn: 1 }, "p1", SEATS, null)).toEqual({
+    expect(driver.submit(game, { type: "Roll", turn: 1 }, "p1")).toEqual({
       rejected: "INTERNAL",
     });
     expect(published).toHaveLength(1);
+    expect(state.game).toBe(game);
     expect(saved.at(-1)?.room.game).toBe(game);
 
     fail(false);
-    const outcome = driver.submit(game, { type: "Roll", turn: 1 }, "p1", SEATS, null);
+    const outcome = driver.submit(game, { type: "Roll", turn: 1 }, "p1");
     expect(outcome).toMatchObject({ committed: { version: 1 } });
     expect(published.at(-1)?.message.events[0]?.type).toBe("DiceRolled");
   });
@@ -222,11 +233,11 @@ describe("committing an intent", () => {
       log: createLogger({ level: "info", stream: logs.stream }).child({ roomCode: "ABC123" }),
     });
     const game = newGame();
-    driver.start(game, SEATS);
+    driver.start(game);
 
     failing.add("Roll");
     for (let i = 0; i < 3; i++) {
-      expect(driver.submit(game, { type: "Roll", turn: 1 }, "p1", SEATS, null)).toEqual({
+      expect(driver.submit(game, { type: "Roll", turn: 1 }, "p1")).toEqual({
         rejected: "INTERNAL",
       });
     }
@@ -244,9 +255,9 @@ describe("committing an intent", () => {
 
     // A good intent resets the count.
     failing.clear();
-    driver.submit(game, { type: "Roll", turn: 1 }, "p1", SEATS, null);
+    driver.submit(game, { type: "Roll", turn: 1 }, "p1");
     failing.add("Roll");
-    driver.submit(game, { type: "Roll", turn: 1 }, "p1", SEATS, null);
+    driver.submit(game, { type: "Roll", turn: 1 }, "p1");
     expect(logs.lines().filter((line) => line["level"] === 60)).toHaveLength(1);
   });
 });
@@ -255,7 +266,7 @@ describe("the Turn deadline", () => {
   it("times the Turn out, publishes it and arms the next deadline", () => {
     const { driver, scheduler, published } = newDriver();
     const game = newGame();
-    driver.start(game, SEATS);
+    driver.start(game);
 
     scheduler.advanceTo(game.turnDeadline ?? 0);
 
@@ -269,11 +280,11 @@ describe("the Turn deadline", () => {
   it("a wake-up that fires early is re-armed for the deadline, and times the Turn out once", () => {
     const { driver, scheduler, published } = newDriver();
     const game = newGame();
-    driver.start(game, SEATS);
+    driver.start(game);
     const deadline = game.turnDeadline ?? 0;
 
     scheduler.advanceTo(deadline - 1);
-    driver.timeOut(game.turn);
+    scheduler.fireEarly(deadline);
     expect(published).toHaveLength(1);
 
     scheduler.advanceTo(deadline);
@@ -286,7 +297,7 @@ describe("the Turn deadline", () => {
     const { engine, failing } = brokenEngine();
     const { driver, scheduler, published } = newDriver({ engine });
     const game = newGame();
-    driver.start(game, SEATS);
+    driver.start(game);
     const deadline = game.turnDeadline ?? 0;
 
     failing.add("TurnTimedOut");
@@ -308,7 +319,7 @@ describe("the Turn deadline", () => {
     const { engine, failing } = brokenEngine();
     const { driver, scheduler, published } = newDriver({ engine });
     const game = newGame();
-    driver.start(game, SEATS);
+    driver.start(game);
     const deadline = game.turnDeadline ?? 0;
 
     failing.add("TurnTimedOut");
@@ -327,7 +338,7 @@ describe("the Turn deadline", () => {
   it("a failed write at the deadline is retried and publishes once the write works", () => {
     const { driver, scheduler, published, fail } = newDriver();
     const game = newGame();
-    driver.start(game, SEATS);
+    driver.start(game);
     const deadline = game.turnDeadline ?? 0;
 
     fail(true);
@@ -340,23 +351,74 @@ describe("the Turn deadline", () => {
     expect(published[1]?.message.events[0]?.type).toBe("TimedOut");
   });
 
+  it("saves the Room's live Seats, not the copy from when the game started", () => {
+    const { driver, scheduler, saved, state } = newDriver();
+    const game = newGame();
+    driver.start(game);
+    const replaced: SeatRecord[] = [
+      { ...SEATS[0]!, sessionId: "s1", tokenHash: "h1" },
+      SEATS[1]!,
+      {
+        playerId: "p3",
+        name: { adjective: "test", noun: "three" },
+        sessionId: "s3",
+        tokenHash: "h3",
+      },
+    ];
+    state.seats = replaced;
+
+    scheduler.advanceTo(game.turnDeadline ?? 0);
+
+    expect(saved.at(-1)?.room.seats).toEqual(
+      replaced.map(({ playerId, name, tokenHash }) => ({ playerId, name, tokenHash })),
+    );
+    expect(saved.at(-1)?.room.seats).toHaveLength(3);
+  });
+});
+
+describe("restoring and saving the Room", () => {
   it("resume arms a stored deadline without saving or publishing, and a stored game-over ends", () => {
     const { driver, scheduler, published, ended } = newDriver();
     const game = newGame();
-    driver.resume(game, SEATS, null);
+    driver.resume(game);
     expect(published).toEqual([]);
     scheduler.advanceTo(game.turnDeadline ?? 0);
     expect(published).toHaveLength(1);
+    expect(ended).toEqual([]);
 
     const { driver: second, saved, ended: secondEnded } = newDriver();
-    second.resume(
-      { ...game, phase: { kind: "gameOver", winner: "p1", reason: "lastPlayer" } },
-      SEATS,
-      null,
-    );
+    second.resume({ ...game, phase: { kind: "gameOver", winner: "p1", reason: "lastPlayer" } });
     expect(secondEnded).toEqual([T0]);
     expect(saved.at(-1)?.room.endedAt).toBe(T0);
-    void ended;
+  });
+
+  it("saveSeats writes the live snapshot with the Seats its caller is about to have", () => {
+    const { driver, saved, state } = newDriver();
+    const game = newGame();
+    driver.start(game);
+    const joined: SeatRecord[] = [
+      ...SEATS,
+      {
+        playerId: "p3",
+        name: { adjective: "test", noun: "three" },
+        sessionId: null,
+        tokenHash: "hash",
+      },
+    ];
+
+    driver.saveSeats(joined);
+
+    expect(saved.at(-1)).toEqual({
+      room: {
+        code: "ABC123",
+        ...ROOM,
+        seats: joined.map(({ playerId, name, tokenHash }) => ({ playerId, name, tokenHash })),
+        game,
+        endedAt: null,
+      },
+      events: [],
+    });
+    expect(state.seats).toBe(SEATS);
   });
 });
 
@@ -365,7 +427,7 @@ describe("the game ending", () => {
     const { driver, scheduler, saved, published, ended, deleted, retained } = newDriver();
     // 15 "minutes" of 100 ms: the Minute limit runs out before the first deadline.
     const game = newGame({ minuteMs: 100 });
-    driver.start(game, SEATS);
+    driver.start(game);
     const deadline = game.turnDeadline ?? 0;
     expect(game.endsAt).toBeLessThan(deadline);
 
@@ -391,19 +453,19 @@ describe("the game ending", () => {
   });
 
   it("endGame finishes a game-over state (the restore self-heal) and never wakes up for Turns again", () => {
-    const { driver, scheduler, saved, published, ended, deleted } = newDriver();
+    const { driver, scheduler, state, saved, published, ended, deleted } = newDriver();
     const game = newGame();
-    driver.start(game, SEATS);
+    driver.start(game);
 
     driver.endGame();
     expect(ended).toEqual([T0]);
+    expect(state.endedAt).toBe(T0);
     expect(saved.at(-1)?.room.endedAt).toBe(T0);
     expect(published).toHaveLength(1);
 
     driver.endGame(); // already ended: nothing changes
     expect(ended).toEqual([T0]);
 
-    driver.timeOut(game.turn); // a stale deadline after the end changes nothing
     scheduler.advanceTo(T0 + RETENTION_MS);
     expect(published).toHaveLength(1);
     expect(deleted).toEqual(["ABC123"]);

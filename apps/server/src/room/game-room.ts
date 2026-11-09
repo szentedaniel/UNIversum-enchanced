@@ -29,7 +29,6 @@ import {
   apply,
   publicView,
   setupGame,
-  type GameEvent,
   type GameState,
   type PlayerId,
   type PlayerIntent,
@@ -37,11 +36,7 @@ import {
 import { FloodMeter } from "#abuse/flood.ts";
 import { REQUEST_ID_HEADER, type AbuseGuard } from "#abuse/guard.ts";
 import { ipBucket } from "#abuse/ip.ts";
-import {
-  noReporter,
-  type ErrorContext,
-  type ErrorReporter,
-} from "#observability/error-reporting.ts";
+import { noReporter, type ErrorReporter } from "#observability/error-reporting.ts";
 import { silentLogger, type Logger } from "#observability/logger.ts";
 import type { GameMetrics, RoomGauges } from "#observability/metrics.ts";
 import { guestTokenIn, hashGuestToken } from "#room/guest-token.ts";
@@ -56,8 +51,8 @@ import {
 } from "#room/password.ts";
 import { claimRoomCode, releaseRoomCode, reserveRoomCode } from "#room/room-code.ts";
 import { checkRoomName } from "#room/room-name.ts";
-import { systemScheduler, type Scheduler } from "#room/scheduler.ts";
 import { GameDriver, type GameTiming, type SeatRecord } from "#room/game-driver.ts";
+import { systemScheduler, type Scheduler } from "#room/scheduler.ts";
 import type { RoomStore, StoredRoom } from "#store/room-store.ts";
 
 export type { GameTiming, SeatRecord } from "#room/game-driver.ts";
@@ -169,11 +164,10 @@ function restoreFrom(options: unknown): StoredRoom | null {
  * Every change is written to the `RoomStore` before anyone hears of it, and a
  * Room is rebuilt from its stored snapshot on boot (spec: Restore on boot).
  *
- * Extension points: `driver` (`GameDriver`: the one place a game state is
- * accepted — store, broadcast, deadline), `endGame` (#32), `onJoin`/`onLeave`
- * (Guest token and Seat hold #35), `ROOM_INTENTS` (Room-level intents),
- * `onIntent` (flood control #37), `seatReconnected` (#35: log + metric when a
- * held Seat is back).
+ * Extension points: `commit` (the one place a game state is accepted: store,
+ * broadcast, deadline), `endGame` (#32), `onJoin`/`onLeave` (Guest token and
+ * Seat hold #35), `ROOM_INTENTS` (Room-level intents), `onIntent` (flood
+ * control #37), `seatReconnected` (#35: log + metric when a held Seat is back).
  */
 export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   settings!: RoomSettings;
@@ -206,7 +200,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   engine: typeof apply = apply;
   /** Shorter Turns and minutes for e2e runs; empty in production. */
   timing: GameTiming = {};
-  /** The commit pipeline: the engine, the store, the broadcast and the one wake-up. */
+  /** The commit pipeline: the engine, the store, the broadcast and the one wake-up; `onCreate` creates it. */
   #driver: GameDriver | null = null;
   /** Set when the process shuts down: Seats and the stored Room must then stay as they are. */
   #shuttingDown = false;
@@ -217,35 +211,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   /** Intent flood control, per connected client. */
   readonly #flood = new Map<string, FloodMeter>();
 
-  /** The pipeline for this Room, wired to its Colyseus concerns once its fields are set. */
+  /** The commit pipeline; `onCreate` creates it once every dependency is set. */
   private get driver(): GameDriver {
-    return (this.#driver ??= new GameDriver({
-      engine: this.engine,
-      scheduler: this.scheduler,
-      store: this.store,
-      metrics: this.metrics,
-      log: this.log,
-      reporter: this.reporter,
-      timing: this.timing,
-      roomCode: this.roomId,
-      room: () => ({
-        settings: this.settings,
-        roomName: this.displayName,
-        creatorId: this.creatorId,
-        password: this.password && encodePassword(this.password),
-      }),
-      publish: (state, message) => {
-        this.game = state;
-        this.broadcast(MESSAGE.game, message);
-      },
-      ended: (endedAt) => {
-        this.endedAt = endedAt;
-        this.releaseHolds();
-      },
-      retention: () => {
-        void this.disconnect();
-      },
-    }));
+    if (this.#driver === null) throw new Error("the driver is created in onCreate");
+    return this.#driver;
   }
 
   /**
@@ -326,12 +295,40 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (!this.game) this.guard.lobbyOpened(this.roomId);
     this.metadata = this.listing();
     this.log = this.log.child({ roomCode: this.roomId });
+    this.#driver = new GameDriver({
+      engine: this.engine,
+      scheduler: this.scheduler,
+      store: this.store,
+      metrics: this.metrics,
+      log: this.log,
+      reporter: this.reporter,
+      timing: this.timing,
+      roomCode: this.roomId,
+      readRoom: () => ({
+        settings: this.settings,
+        roomName: this.displayName,
+        creatorId: this.creatorId,
+        password: this.password && encodePassword(this.password),
+      }),
+      readState: () => ({ game: this.game, seats: this.seats, endedAt: this.endedAt }),
+      publish: (state, message) => {
+        this.game = state;
+        this.broadcast(MESSAGE.game, message);
+      },
+      onEnded: (endedAt) => {
+        this.endedAt = endedAt;
+        this.releaseHolds();
+      },
+      onRetention: () => {
+        void this.disconnect();
+      },
+    });
     this.metrics.trackRoom(this);
     if (restored) {
       this.log.info({ playing: this.game !== null, seats: this.seats.length }, "Room restored");
       // A running game re-arms its deadline; one a crash left game-over (the
       // final save landed, `endedAt` did not) is finished now, so retention applies.
-      if (this.game) this.driver.resume(this.game, this.seats, this.endedAt);
+      if (this.game) this.driver.resume(this.game);
     } else {
       this.log.info({ ...this.settings, hasPassword: this.password !== null }, "Room created");
     }
@@ -363,8 +360,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.autoDispose = false;
     if (this.game) {
       // A running game lives on with nobody connected (its Turns time out),
-      // until it ends; `resume` arms a deadline that passed while the server
-      // was down, and it fires at once.
+      // until it ends; `onCreate` arms its deadline once the driver exists.
       this.unlist();
     } else {
       // A Lobby holds each Seat for its 60 s, as if its Player had just dropped.
@@ -397,7 +393,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     };
     if (auth?.creates && this.seats.length === 0) this.creatorId = seat.playerId;
     // Saved first: a Seat the store doesn't have isn't taken (the join fails).
-    this.save([...this.seats, seat], this.game, []);
+    this.driver.saveSeats([...this.seats, seat]);
     this.seats.push(seat);
     this.log.info({ playerId: seat.playerId }, "Seat taken");
     client.send(MESSAGE.welcome, { playerId: seat.playerId } satisfies WelcomeMessage);
@@ -616,7 +612,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       turnLimitMs: this.timing.turnLimitMs,
       minuteMs: this.timing.minuteMs,
     });
-    const outcome = this.driver.start(game, this.seats);
+    const outcome = this.driver.start(game);
     if ("rejected" in outcome) return outcome.rejected;
     this.log.info("Room started");
     // The game outlives its connections: Seats are held until it ends.
@@ -629,10 +625,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /**
-   * The game is over (the driver's commit calls this when the game-over phase arrives,
-   * and a restore finishes a game-over state a crash left unfinished): the
-   * driver records when, swaps the Turn deadline for the retention wake-up
-   * and tells this Room to release its Seats (spec: Retention, Seat hold).
+   * The game is over (the driver's commit calls this when the game-over phase
+   * arrives, and a restore finishes a game-over state a crash left unfinished):
+   * the driver records when, swaps the Turn deadline for the retention
+   * wake-up and tells this Room to release its Seats (spec: Retention, Seat hold).
    */
   endGame(): void {
     this.driver.endGame();
@@ -685,7 +681,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
           : this.play(seat, intent);
       } catch (error) {
         // A bug outside the engine's own call (say, in game setup): same as an engine throw.
-        this.failed(error, "Intent failed", intent.type);
+        this.driver.failed(error, "Intent failed", intent.type);
         refused = "INTERNAL";
       }
     }
@@ -722,51 +718,17 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     return { state, connected, held: state === null ? 0 : this.seats.length - connected };
   }
 
-  /**
-   * Logs a bug outside the engine's own call and reports it, with the Room
-   * code, the game's `version` and `phase`, and the intent type: never the
-   * snapshot or payload. (The driver reports its own engine and store errors.)
-   */
-  private failed(error: unknown, message: string, intent: string): void {
-    const context: ErrorContext = { intent };
-    if (this.game) {
-      context.version = this.game.version;
-      context.phase = this.game.phase.kind;
-    }
-    this.log.error({ err: error, ...context }, message);
-    this.reporter.report(error, { roomCode: this.roomId, ...context });
-  }
-
   /** Runs a Player intent through the commit pipeline. */
   private play(seat: SeatRecord, intent: PlayerIntent): RejectionCode | void {
     if (!this.game) return "NOT_OFFERED";
-    const outcome = this.driver.submit(this.game, intent, seat.playerId, this.seats, this.endedAt);
+    const outcome = this.driver.submit(this.game, intent, seat.playerId);
     return "rejected" in outcome ? outcome.rejected : undefined;
-  }
-
-  /** Writes the Room's snapshot (and an intent's events) to the store; throws if the write fails. */
-  private save(seats: SeatRecord[], game: GameState | null, events: GameEvent[]): void {
-    this.metrics.timeStoreWrite(() =>
-      this.store.save(
-        {
-          code: this.roomId,
-          settings: this.settings,
-          roomName: this.displayName,
-          creatorId: this.creatorId,
-          password: this.password && encodePassword(this.password),
-          seats: seats.map(({ playerId, name, tokenHash }) => ({ playerId, name, tokenHash })),
-          game,
-          endedAt: this.endedAt,
-        },
-        events,
-      ),
-    );
   }
 
   /** A Lobby change nobody can refuse (a Guest left): a failed write is caught up by the next one. */
   private trySave(): void {
     try {
-      this.save(this.seats, this.game, []);
+      this.driver.saveSeats(this.seats);
     } catch (error) {
       // The next successful save writes the current Seats.
       this.log.error({ err: error }, "Seats not saved");

@@ -2,7 +2,18 @@ import { describe, expect, it } from "vitest";
 import { THRESHOLDS, type LoadThresholds } from "#config.ts";
 import type { ClientSummary } from "#stats.ts";
 import type { ServerMetrics } from "#metrics.ts";
-import { verdict, type Verdict, type VerdictInput } from "#verdict.ts";
+import {
+  bytesShort,
+  count,
+  cores,
+  gib,
+  ms,
+  ratio,
+  seconds,
+  verdict,
+  type Verdict,
+  type VerdictInput,
+} from "#verdict.ts";
 
 const server = (overrides: Partial<ServerMetrics> = {}): ServerMetrics => ({
   intentP95Ms: 20,
@@ -76,6 +87,22 @@ const row = (result: Verdict, id: string) => {
   if (!found) throw new Error(`no criterion ${id}`);
   return found;
 };
+
+describe("the display units", () => {
+  it("prints a push size as whole B under 1 KB and one-decimal KB above", () => {
+    expect(bytesShort(999)).toBe("999 B");
+    expect(bytesShort(5_940)).toBe("5.8 KB");
+  });
+
+  it("prints each unit the verdict and the report share", () => {
+    expect(ms(12)).toBe("12.0 ms");
+    expect(seconds(4.5)).toBe("4.5 s");
+    expect(gib(1024 ** 3)).toBe("1.00 GB");
+    expect(ratio(0.25)).toBe("25.0%");
+    expect(count(999.6)).toBe("1000");
+    expect(cores(0.42)).toBe("0.42 cores");
+  });
+});
 
 describe("the verdict", () => {
   it("passes a clean run", () => {

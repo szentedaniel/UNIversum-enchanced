@@ -1,8 +1,8 @@
 # Ticket #68 (the fence as import rules and one pattern check): gotchas
 
 Branch `ticket/68-fence-import-rules` (on `v2-modernization`), spec #63. The
-358-line source scanner `apps/web/test/playback-fence.test.ts` is gone. Its two
-rules became an Oxlint import override and a 105-line server-clock check.
+358-line source scanner in `playback-fence.test.ts` is gone. Its two rules
+became an Oxlint import override and a 105-line server-clock check.
 
 ## The Playback import rule (`.oxlintrc.json`)
 
