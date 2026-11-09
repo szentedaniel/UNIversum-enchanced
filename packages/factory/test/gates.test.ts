@@ -10,6 +10,7 @@ import {
   mainMovesWorkflows,
   mergeStep,
   mergeSubjectOf,
+  needsMain,
   protectedPaths,
 } from "#merge/gates.ts";
 import type { CiRun, MergeFacts } from "#merge/gates.ts";
@@ -331,17 +332,37 @@ describe("mergeStep", () => {
     });
   });
 
-  it("sends the fix loop after main when the branch fell behind", () => {
-    expect(mergeStep(facts({ mainAheadBy: 2 }))).toEqual({ kind: "fix", reason: "main-moved" });
+  it("sends the fix loop after main when the branch conflicts or shares files with it", () => {
     expect(mergeStep(facts({ mergeState: "dirty" }))).toEqual({
       kind: "fix",
       reason: "main-moved",
     });
+    expect(
+      mergeStep(facts({ mainAheadBy: 2, mainFiles: ["apps/web/src/foo.ts", "README.md"] })),
+    ).toEqual({ kind: "fix", reason: "main-moved" });
+  });
+
+  it("merges a branch that is only behind main, on files it does not touch", () => {
+    expect(mergeStep(facts({ mainAheadBy: 2, mainFiles: ["apps/server/src/bar.ts"] }))).toEqual({
+      kind: "merge",
+    });
+    expect(
+      needsMain(
+        facts({
+          mainAheadBy: 1,
+          files: ["apps/web/src/foo.ts", "docs/agents/handoff/INDEX.md"],
+          mainFiles: [".github/workflows/ci.yml", "docs/agents/handoff/INDEX.md"],
+        }),
+      ),
+    ).toBe(false);
   });
 
   it("refuses to merge main in when the new commits change workflows", () => {
     const step = mergeStep(
-      facts({ mainAheadBy: 1, mainFiles: [".github/workflows/ci.yml", "apps/web/src/Game.tsx"] }),
+      facts({
+        mainAheadBy: 1,
+        mainFiles: [".github/workflows/ci.yml", "apps/web/src/foo.ts"],
+      }),
     );
 
     expect(step).toEqual({
@@ -411,17 +432,17 @@ describe("mergeSubjectOf", () => {
   const dependabot = {
     number: 97,
     title: "build(deps): Bump vitest from 5.0.5 to 5.0.6",
-    issue: undefined,
+    ticket: undefined,
     headRefName: "dependabot/npm_and_yarn/vitest-5.0.6",
     author: "dependabot[bot]",
   };
 
-  it("names the ticket a factory pull closes", () => {
+  it("names the ticket a factory pull closes, by the ticket's title", () => {
     expect(
       mergeSubjectOf({
         ...dependabot,
-        title: "Factory: weekly maintenance",
-        issue: 91,
+        title: "Implement #91: Weekly maintenance",
+        ticket: { number: 91, title: "Factory: weekly maintenance" },
         headRefName: "agent/issue-91-maintenance",
         author: "universum-factory[bot]",
       }),
@@ -439,7 +460,7 @@ describe("mergeSubjectOf", () => {
       mergeSubjectOf({
         number: 95,
         title: "A factory pull with no ticket",
-        issue: undefined,
+        ticket: undefined,
         headRefName: "agent/issue-95-something",
         author: "universum-factory[bot]",
       }),

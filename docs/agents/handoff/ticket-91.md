@@ -82,8 +82,10 @@ reporter's `N flaky` block padded with `─`.
 - `isFactoryPull(headRefName, labels, author)` grew a third argument: a `dependabot/…` branch counts
   only when the author is `dependabot[bot]` (`isDependabotPull`). `factory-fix.yml`'s preflight asks
   the same question in jq, so **change both together** (the preflight runs before the checkout).
-- `mergeSubjectOf` names a Dependabot pull request by its **pull request number** because it closes
-  no issue; every other factory pull request still fails the gate without one.
+- `mergeSubjectOf(facts)` names the merge commit: `#<ticket> <the ticket's title>` when the pull
+  closes one (main's rule — the pull's own `Implement #N: …` title is not used), and
+  `#<pr> <the pull's title>` for a Dependabot pull, which closes no issue. Every other factory pull
+  still fails the gate without a ticket. `facts.ticket` is `{number, title}` or `undefined`.
 - `.github/dependabot.yml` prefixes commits with `build(deps)`: `check:commits` runs on the bump and
   Dependabot's own subject has no type. A grouped PR keeps the prefix.
 - `factory-dependabot.yml` runs on `pull_request_target: opened` for `dependabot[bot]`, and **never

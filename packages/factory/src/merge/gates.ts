@@ -272,23 +272,25 @@ export const isFactoryPull = (
 
 /** What the merge commit's subject is made from. */
 export interface MergeSubjectFacts {
-  /** The pull request's number, used when it closes no issue. */
+  /** The pull request's number and title: what a pull with no ticket names itself by. */
   readonly number: number;
   readonly title: string;
-  /** The issue the pull request closes, if any. */
-  readonly issue: number | undefined;
+  /** The ticket the pull closes: the merge names the ticket, not the pull request. */
+  readonly ticket: { readonly number: number; readonly title: string } | undefined;
   readonly headRefName: string;
   readonly author: string;
 }
 
 /**
- * The merge commit's subject, `chore(merge): #<issue> <title>`, or `undefined`
- * for a factory pull that closes no issue: a factory pull always has a ticket.
- * A dependency bump has none — its pull request is the unit of work, so it
- * names its own number instead.
+ * The merge commit's subject, `chore(merge): #<ticket> <its title>`, or
+ * `undefined` for a factory pull that closes no issue: a factory pull always
+ * has a ticket. A dependency bump has none — its pull request is the unit of
+ * work, so it names its own number and title instead.
  */
 export const mergeSubjectOf = (facts: MergeSubjectFacts): string | undefined => {
-  if (facts.issue !== undefined) return `chore(merge): #${String(facts.issue)} ${facts.title}`;
+  if (facts.ticket !== undefined) {
+    return `chore(merge): #${String(facts.ticket.number)} ${facts.ticket.title}`;
+  }
   if (isDependabotPull(facts.headRefName, facts.author)) {
     return `chore(merge): #${String(facts.number)} ${facts.title}`;
   }
@@ -305,6 +307,18 @@ export type MergeStep =
 const wait = (reason: string): MergeStep => ({ kind: "wait", reason });
 
 /**
+ * Whether main must be merged into the branch before the gate decides: it
+ * conflicts, or main changed a file the pull request changes too. The handoff
+ * notes every ticket appends to don't count; their merge is a union.
+ */
+export const needsMain = (facts: MergeFacts): boolean => {
+  if (facts.mergeState === "dirty") return true;
+  if (facts.mainAheadBy === 0) return false;
+  const mainFiles = new Set(facts.mainFiles);
+  return facts.files.some((file) => !file.startsWith(HANDOFF_DIR) && mainFiles.has(file));
+};
+
+/**
  * What the merge workflow should do with this pull request now: merge it,
  * wait for the run that is still coming, queue the re-review a push needs,
  * send it to the fix loop, or hand it to the owner with every reason.
@@ -317,9 +331,10 @@ export const mergeStep = (facts: MergeFacts): MergeStep => {
   if (facts.labels.includes("agent:blocked"))
     return wait("the pull request is blocked (agent:blocked)");
 
-  // Merging main in restarts CI anyway, so it comes before the CI gate; a
-  // new head also means the review has to look again.
-  if (facts.mainAheadBy > 0 || facts.mergeState === "dirty") {
+  // CI already ran on the pull request merged into main, so a branch that is
+  // merely behind can merge as it is. Only a conflict, or main touching the
+  // same files, needs main merged in first; that restarts CI and the review.
+  if (needsMain(facts)) {
     if (mainMovesWorkflows(facts.mainFiles)) {
       return {
         kind: "escalate",

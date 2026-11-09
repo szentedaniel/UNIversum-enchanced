@@ -52,8 +52,65 @@ agent:blocked ──re-dispatch──▸ agent:in-progress
 
 `agent:review` is set by the implement run once its pull request exists; the review step swaps it for
 `risk:low` or `risk:high`, the merge gate merges what the gates allow, and the fix loop sends a
-failing pull request back to omp at most twice. The weekly `factory:report` issue is a later ticket in
-the same spec.
+failing pull request back to omp at most twice. The weekly `factory:report` issue is described under
+[The weekly report](#the-weekly-report).
+
+## Intake
+
+The owner files a one-line idea as an issue; intake turns it into work the factory can start.
+`factory-intake.yml` runs every night at 01:15 UTC (02:15 CET / 03:15 CEST, inside the Budapest
+window) and can be dispatched by hand at any time — outside the window too:
+
+```bash
+gh workflow run factory-intake.yml                                   # every waiting issue
+gh workflow run factory-intake.yml -f issue=93                       # one issue, whatever its labels
+gh workflow run factory-intake.yml -f dry_run=true                   # print the decisions and writes
+```
+
+A scheduled run that starts after 07:00 Budapest does nothing (the script re-checks the window), so a
+delayed cron spends no daytime Pro usage. One run handles at most `FACTORY_INTAKE_MAX` issues per
+step (repository variable; default 3), oldest first.
+
+**Triage** classifies each issue into exactly one outcome, with one comment and a label:
+
+| Outcome     | Comment                                                                                   | Labels                                    |
+| ----------- | ----------------------------------------------------------------------------------------- | ----------------------------------------- |
+| bug / small | the **Implementation context** comment: files, seams, hazards, checks                     | `ready-for-agent`, `needs-triage` removed |
+| unclear     | concrete questions, numbered                                                              | `needs-info`                              |
+| feature     | a spec draft: Problem, Solution, User stories, Decisions, Testing Decisions, Out of scope | `spec:proposed`                           |
+
+The issues it looks at are the open `needs-triage` ones and the open issues with no label at all that
+the owner, a member or a collaborator filed; sub-issues and pull requests are never triaged. The
+`agent:in-progress` label marks the factory's own work, so it excludes an issue just like any other
+label. `-f issue=<n>` is the override: that open issue is triaged whatever its labels.
+
+**Split** turns each open `spec:approved` issue into tickets: the approved spec — the newest comment
+between `<!-- factory-spec -->` and `<!-- /factory-spec -->`, else the issue body — is written into
+the parent's body, and the children are created with
+
+- `Parent: #<n>` as their first line and the native sub-issue link,
+- their blocking edges (the plan's `blockedBy` indices, acyclic and in range — validated before the
+  first write),
+- an Implementation context comment each, and `ready-for-agent`.
+
+The parent then swaps `spec:approved` for `factory`. A spec that already has sub-issues is never
+split again, so a failed run cannot duplicate its tickets; a partially split spec keeps
+`spec:approved` as the owner's clue.
+
+Claude only reads. It runs on a checkout of `main` (`claudeAgent`, pinned Claude Code and plugin as in
+the review step) and returns one structured `<triage>` or `<split>` block; the script in
+`packages/factory/src/intake/` performs every comment, label, issue and edge with `AGENT_PAT`. A run
+that leaves the checkout changed fails, so an issue's text cannot steer a write. A label made with
+the PAT starts no workflow here (the dispatcher listens to pushes, runs and a cron), so the workflow
+runs `factory-dispatch.yml` itself once something became `ready-for-agent`.
+
+A failed step leaves the issue's label in place, so the next night retries it; the red Actions run is
+the alarm. The two steps are independent — a triage failure still lets an approved spec split. The
+same decisions against the live repo, read-only:
+
+```bash
+DRY_RUN=1 GH_REPO=<owner>/<repo> ISSUE_NUMBER=<n> node packages/factory/src/intake/triage.ts
+```
 
 ## Dispatch
 
@@ -179,14 +236,18 @@ It merges with a merge commit only when every gate holds ([spec #85, Decision
    writes a handoff note and its `INDEX` line, so blocking those would block every ticket.
 5. No `package.json` moves a dependency to another major (the first non-zero number for `0.x`).
 
-The merge is `gh pr merge --merge --subject "chore(merge): #<issue> <title>"`. The issue gets a
+The merge is `gh pr merge --merge --subject "chore(merge): #<issue> <the ticket's title>"` (the
+ticket's title, not the pull request's `Implement #N: …`; a Dependabot pull request closes no ticket,
+so it names its own number and title). The issue gets a
 comment naming the merge commit and is closed (`Closes #…` in the body already closed it). The push
 to `main` starts `factory-dispatch.yml` by itself, so the next ticket is dispatched without a chain.
 
 Green but gated → `ready-for-human` on the pull request and one comment listing every reason
-("touches .github/", "one-way door: …", "dependency major: …"). A branch **behind main** goes to the
-fix loop first (`main-moved`); when main's new commits change `.github/workflows/`, the PAT cannot
-push them, so that too is `ready-for-human`. A pull request that is only _waiting_ — CI still
+("touches .github/", "one-way door: …", "dependency major: …"). A branch merely **behind main** merges
+as it is: CI ran on the pull request merged into main. Only a conflict, or main changing a file the
+pull request changes too (handoff notes aside), sends it to the fix loop first (`main-moved`); when
+main's new commits change `.github/workflows/`, the PAT cannot push that merge, so it is
+`ready-for-human`. A pull request that is only _waiting_ — CI still
 running, the review not posted yet, `agent:review` queued — exits quietly: the next trigger decides.
 
 A dry run prints the decision and writes nothing:
@@ -199,7 +260,7 @@ DRY_RUN=1 GH_REPO=<owner>/<repo> PR_NUMBER=95 node packages/factory/src/merge/me
 ### The fix loop
 
 `factory-fix.yml` runs when a pull request's CI concludes `failure`, when the review asks for
-changes, and when the merge gate finds the branch behind main. omp gets one prompt
+changes, and when the merge gate needs main merged in (`needsMain`). omp gets one prompt
 (`src/fix/prompt.md`) with the failure: the failed jobs' log tail (`gh run view --log-failed`,
 trimmed to the prompt's budget), the review's findings, or the conflict it must resolve. It commits
 on the branch and the workflow pushes with `AGENT_PAT`; CI runs again and the merge gate decides.
@@ -215,6 +276,46 @@ on the branch and the workflow pushes with `AGENT_PAT`; CI runs again and the me
 
 ```bash
 gh workflow run factory-fix.yml -f pr=95 -f reason=review      # ci | review | main-moved
+```
+
+## The weekly report
+
+`factory-report.yml` opens the owner's weekly glance, a `factory:report` issue, every Monday at 06:00
+Europe/Budapest. GitHub's cron is UTC, so it schedules 04:00 and 05:00 UTC;
+`packages/factory/src/report/week.ts` lets through only the run whose Budapest hour is 6 (one slot per
+side of the DST switch). A manual dispatch always runs, and its `dry_run` input only prints the body.
+
+The issue is titled `Factory report: week of YYYY-MM-DD` (the Monday that started the reported week)
+and opens with `<!-- factory-report:YYYY-MM-DD -->`, so a re-run in the same week edits it instead of
+duplicating it. The script writes the new week's issue **before** closing the older weekly ones — the
+dispatcher comments its budget notice on the newest open report issue — and leaves a `Factory report —
+YYYY-MM` month issue open, because that is where the budget notice lives.
+
+The week is the Budapest Monday-to-Monday that just ended. Its rows:
+
+| Row                   | What it counts                                                                                                                                                                                                                                                                                                 |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tickets merged        | Issues closed by a pull request merged in the week; a merged pull that closes no issue (Dependabot, maintenance) is not a ticket pull                                                                                                                                                                          |
+| Blocked               | Open `agent:blocked` issues, plus the issues whose timeline shows the label was added during the week                                                                                                                                                                                                          |
+| Fix rounds (mean)     | The highest `<!-- factory-fix:round N -->` on each merged ticket pull, averaged; `none yet` without a merged pull                                                                                                                                                                                              |
+| Merges                | Auto when #87's merge gate merged it — its `Merged in <sha>.` comment on the closing issue — and human otherwise; a merged pull request carrying the gate's `<!-- factory-merge -->` escalation marker is always a person's merge (the PAT is the owner's account, so the merging user cannot tell them apart) |
+| Idea → merge (median) | Issue `created_at` to the closing pull's `merged_at`, in hours under two days and days above                                                                                                                                                                                                                   |
+| Minutes               | Billed factory minutes (`src/dispatch/budget.ts`) for the month to date against `FACTORY_MONTHLY_MINUTES` (default 1400), and the week's; a warning appears at 80 percent                                                                                                                                      |
+| Claude runs           | Runs of `factory-review.yml`, `factory-intake.yml` and `factory-retro.yml` started in the week, split by whether the start was in the night window                                                                                                                                                             |
+| omp runs              | Runs of `factory-implement.yml` and `factory-fix.yml` started in the week                                                                                                                                                                                                                                      |
+| Retro changes         | Lines added to `docs/agents/factory-log.md` in the week (#90); `none yet` while the file does not exist                                                                                                                                                                                                        |
+
+Runs are classified by their workflow **path**: the runs API's `name` is the workflow's `run-name`
+(`Factory review #97`), not its `name:`, so matching names would silently count nothing.
+
+`## Needs you` lists the open `ready-for-human` issues and pull requests and the `spec:proposed`
+issues, oldest first, as links — the owner's whole queue.
+
+The workflow uses the default `GITHUB_TOKEN` (issues write; actions, pull requests and contents read):
+it writes one issue and triggers nothing. To read the current week's numbers without writing:
+
+```bash
+DRY_RUN=1 GH_REPO=<owner>/<repo> node packages/factory/src/report/report.ts
 ```
 
 ## Maintenance

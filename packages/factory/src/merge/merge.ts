@@ -189,13 +189,23 @@ const main = (): void => {
   }
 
   const issue = pull.closing[0] ?? closingIssue(pull.body);
-  // A factory pull request always closes its ticket; without one the merge
-  // subject cannot name it. A dependency bump has no ticket and names itself.
+  // The ticket's title, not the pull request's (`Implement #N: …`), as the
+  // hand merges have always named it. A dependency bump closes no ticket and
+  // names its own pull request instead.
+  const ticket =
+    issue === undefined
+      ? undefined
+      : {
+          number: issue,
+          title:
+            sh(`gh issue view ${String(issue)} --repo "${repo}" --json title --jq .title`).trim() ||
+            pull.title,
+        };
   const subject =
     mergeSubjectOf({
       number: pull.number,
       title: pull.title,
-      issue,
+      ticket,
       headRefName: pull.headRefName,
       author: pull.author,
     }) ?? fail(`Pull request #${pr} closes no issue; cannot name the merge commit.`);

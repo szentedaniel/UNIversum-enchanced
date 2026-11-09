@@ -158,9 +158,19 @@ jobs:
           status=$(cat "${RUNNER_TEMP}/status.txt")
           echo "status=$status" >> "$GITHUB_OUTPUT"
 
+      # GitHub checks a new branch's workflow files against main's current
+      # ones, and the PAT has no `workflow` scope: if main changed a workflow
+      # while omp worked, the push would read as reverting it. Catching up
+      # with main first makes the branch's workflows main's own.
       - name: Push the branch
         if: steps.preflight.outputs.proceed == 'true' && success()
-        run: git push --force origin "$BRANCH"
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if ! git merge-base --is-ancestor origin/main HEAD; then
+            git merge --no-edit origin/main
+          fi
+          git push --force origin "$BRANCH"
 
       - name: Open the pull request
         if: steps.preflight.outputs.proceed == 'true' && success() && steps.report.outputs.status == 'DONE'
