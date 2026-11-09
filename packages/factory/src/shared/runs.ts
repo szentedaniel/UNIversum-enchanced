@@ -65,9 +65,20 @@ const execLog = (command: string): string =>
     maxBuffer: LOG_MAX_BUFFER,
   });
 
+/** The text `gh` printed before it exited non-zero, when it printed any. */
+const stdoutOf = (error: unknown): string => {
+  if (typeof error === "object" && error !== null && "stdout" in error) {
+    const { stdout } = error;
+    if (typeof stdout === "string") return stdout;
+  }
+  return "";
+};
+
 /**
  * A run's log: `--log-failed` keeps a red main's issue to the failed steps,
- * while the flaky pass needs every step's output.
+ * while the flaky pass needs every step's output. GitHub prunes old logs, and
+ * `gh` can fail after printing part of one; the part it printed is still the
+ * caller's log, and an empty string when it printed nothing.
  */
 export const runLog = (
   repo: string,
@@ -76,5 +87,9 @@ export const runLog = (
   exec: (command: string) => string = execLog,
 ): string => {
   const flag = failedOnly ? "--log-failed" : "--log";
-  return exec(`gh run view ${String(runId)} --repo "${repo}" ${flag}`);
+  try {
+    return exec(`gh run view ${String(runId)} --repo "${repo}" ${flag}`);
+  } catch (error) {
+    return stdoutOf(error);
+  }
 };

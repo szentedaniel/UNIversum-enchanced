@@ -24,4 +24,26 @@ describe("runLog", () => {
 
     expect(commands).toEqual(['gh run view 42 --repo "o/r" --log-failed']);
   });
+
+  it("keeps the stdout of a gh that failed after printing part of the log", () => {
+    const exec = (): string => {
+      throw Object.assign(new Error("Command failed: gh run view 42"), { stdout: "partial log" });
+    };
+
+    expect(runLog("o/r", 42, { failedOnly: true }, exec)).toBe("partial log");
+  });
+
+  it("returns an empty string when gh failed without printing a log", () => {
+    const exec = (): string => {
+      throw new Error("Command failed: gh run view 42");
+    };
+    const execWithNonTextStdout = (): string => {
+      throw Object.assign(new Error("Command failed: gh run view 42"), {
+        stdout: Buffer.from("partial log"),
+      });
+    };
+
+    expect(runLog("o/r", 42, { failedOnly: false }, exec)).toBe("");
+    expect(runLog("o/r", 42, { failedOnly: false }, execWithNonTextStdout)).toBe("");
+  });
 });
