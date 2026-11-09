@@ -13,7 +13,7 @@ Branch `ticket/35-reconnect`.
 - `guest-token.ts`: `guestTokenIn(options)` (validated or `null`), `hashGuestToken` (SHA-256 hex; 128-bit tokens need no scrypt).
 - `SeatRecord` has `tokenHash: string | null`; stored as `StoredSeat.tokenHash` (optional on old rows → `null`). `publicView`/`LobbyMessage`/metadata never carry it (test: `reconnect.test.ts` "never reach another client").
 - **Holds** (`#holds: Map<playerId, Hold>`, `Hold = { release, until, cancel }`):
-  - `onDrop` → `allowReconnection(client, "manual")` + `hold(seat, () => reconnection.reject())`. Lobby: `until = now + LOBBY_SEAT_HOLD_MS` (60 s) via **`scheduler.at`** (so tests drive it with `ManualScheduler`); game: `until: null`, held until `endGame()` (`releaseHolds()`).
+  - `onDrop` → `allowReconnection(client, "manual")` + `hold(seat, () => reconnection.reject())`. A client that dropped before it answered the join handshake gets a rejected promise, not a `Deferred` (`reject` would throw), so its Seat is held with `release: null` for the Guest token to take back. Lobby: `until = now + LOBBY_SEAT_HOLD_MS` (60 s) via **`scheduler.at`** (so tests drive it with `ManualScheduler`); game: `until: null`, held until `endGame()` (`releaseHolds()`).
   - Lobby expiry → `release()` → Colyseus calls `onLeave` → `freeSeat`. Restored Lobby Seats have `release: null` and are freed directly.
   - `startGame` turns Lobby holds into game holds (no expiry): a game can start with an absent Player.
   - `onReconnect` → `unhold` + `sendCurrent` (game: one `game` message with `events: []` to that client; Lobby: `broadcastLobby`).
