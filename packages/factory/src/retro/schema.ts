@@ -39,8 +39,9 @@ export const retroSchema = z.object({
       fix: z.discriminatedUnion("kind", [issueFix, standardsFix, workflowFix, noFix]),
     }),
   ),
-  // The dated log's bullets: what changed and why. `[]` on a quiet day.
-  logEntry: z.array(z.string().min(1)),
+  // The dated log's bullets: what changed and why. `[]` on a quiet day; a
+  // model that forgets the key must not lose the night's writes.
+  logEntry: z.array(z.string().min(1)).default([]),
 });
 
 export type Retro = z.infer<typeof retroSchema>;

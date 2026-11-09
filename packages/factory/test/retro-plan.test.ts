@@ -91,6 +91,12 @@ describe("retroSchema", () => {
     ]);
   });
 
+  it("keeps the findings when the model forgets the log entry", () => {
+    const answer = retroSchema.parse({ findings: [finding(issueFix("A ticket"))] });
+
+    expect(answer.logEntry).toEqual([]);
+  });
+
   it("refuses a fix kind the script cannot write", () => {
     expect(() =>
       retroSchema.parse({

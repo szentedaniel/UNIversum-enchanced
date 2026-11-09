@@ -114,9 +114,10 @@ const main = async (): Promise<void> => {
       OPEN: JSON.stringify({ issues: openIssues, pulls: openPulls }, null, 2),
       MAX_WRITES: maxWrites,
     },
-    // One pass: the retro decides, it does not run a loop of fixes.
+    // One pass: the retro decides, it does not run a loop of fixes. A bad tag
+    // or schema gets one resumed retry, so a long patch does not lose the night.
     maxIterations: 1,
-    output: sandcastle.Output.object({ tag: "retro", schema: retroSchema }),
+    output: sandcastle.Output.object({ tag: "retro", schema: retroSchema, maxRetries: 1 }),
   });
 
   // The agent answers; every write is this script's. A change it left behind

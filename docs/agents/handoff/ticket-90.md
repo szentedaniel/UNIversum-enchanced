@@ -12,8 +12,10 @@ ticket, a standards pull request, a workflow issue — and appends the day to th
   test imports the module. It writes `OUTPUT_DIR/facts.json` and prints `true`/`false`; `DRY_RUN=1`
   also prints the facts to stderr.
 - **`schema.ts`** — the `<retro>` answer: `findings` (each with `problem`, non-empty `evidence`,
-  `severity`, and a `fix` discriminated on `kind`) and `logEntry`. `retro.ts` runs with
-  `maxIterations: 1` and `Output.object({ tag: "retro", schema })`, as the review step does.
+  `severity`, and a `fix` discriminated on `kind`) and `logEntry` (defaults to `[]`, so a model that
+  forgets the key does not lose the night's writes). `retro.ts` runs with `maxIterations: 1` and
+  `Output.object({ tag: "retro", schema, maxRetries: 1 })`: one resumed retry for a malformed tag or
+  schema, as the review step's structured output allows.
 - **`plan.ts`** — the pure write decision: dedupe against open issue/PR titles, the write cap, patch
   path validation, body composition, branch/slug/commit-subject helpers, the log section. Tested in
   `test/retro-plan.test.ts`.
