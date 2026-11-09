@@ -50,7 +50,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.path == '.github/workflows/ci.yml' && github.event.workflow_run.conclusion == 'success') ||
-      (github.event.workflow_run.path == '.github/workflows/factory-review.yml' && startsWith(github.event.workflow_run.name, 'Factory review #'))
+      (github.event.workflow_run.path == '.github/workflows/factory-review.yml' && startsWith(github.event.workflow_run.display_title, 'Factory review #'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -71,7 +71,7 @@ jobs:
           if [ -z "$pr" ]; then
             # `/night queue` carries no number: the cron's own run has nothing
             # to merge, the review runs it dispatched do.
-            pr=$(jq -r '.workflow_run.name // ""' "$GITHUB_EVENT_PATH" \
+            pr=$(jq -r '.workflow_run.display_title // ""' "$GITHUB_EVENT_PATH" \
               | grep -oE '#[0-9]+' | head -n 1 | tr -d '#' || true)
           fi
           if ! [[ "$pr" =~ ^[0-9]+$ ]]; then
