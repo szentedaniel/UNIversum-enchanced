@@ -157,11 +157,9 @@ describe("the Minute limit", () => {
     // p2 and p4 both hold 1.5M, so Seat order decides; p3's 2M wins the game.
     const state = withPlayer(
       withPlayer(
-        withPlayer(
-          withPlayer(newGame({ players: 4 }), "p1", { cash: 500_000 }),
-          "p2",
-          { cash: 1_500_000 },
-        ),
+        withPlayer(withPlayer(newGame({ players: 4 }), "p1", { cash: 500_000 }), "p2", {
+          cash: 1_500_000,
+        }),
         "p3",
         { cash: 2_000_000 },
       ),
@@ -255,11 +253,9 @@ describe("Monopolies", () => {
 
   it("R79: the holder of more Monopolies wins over a Wealthier holder of fewer", () => {
     // p2 has 4 Monopolies and p3 3; p3's 9,000,000 in cash cannot outrank the count.
-    const state = withPlayer(
-      owned(owning("p2", [1, 2, 3, 4]), "p3", [5, 6, 7]),
-      "p3",
-      { cash: 9_000_000 },
-    );
+    const state = withPlayer(owned(owning("p2", [1, 2, 3, 4]), "p3", [5, 6, 7]), "p3", {
+      cash: 9_000_000,
+    });
 
     const applied = endTurnOn(state, STANFORD, 4);
 
@@ -267,11 +263,9 @@ describe("Monopolies", () => {
   });
 
   it("R79, F25: tied Monopolies go to the Wealthier holder", () => {
-    const state = withPlayer(
-      owned(owning("p2", [1, 2, 3]), "p3", [4, 5, 6]),
-      "p3",
-      { cash: 9_000_000 },
-    );
+    const state = withPlayer(owned(owning("p2", [1, 2, 3]), "p3", [4, 5, 6]), "p3", {
+      cash: 9_000_000,
+    });
 
     const applied = endTurnOn(state, STANFORD, 4);
 
