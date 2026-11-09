@@ -1,32 +1,38 @@
 /**
  * The weekly architecture pass's contract with Claude: at most two refactor
- * proposals, each with the door that decides whether an agent may implement it
+ * proposals a week (more on a manual run), each with the door that decides whether an agent may implement it
  * or the owner must. "Claude decides, the script writes": this module turns a
  * proposal into the issue the script opens, and keeps the dedupe pure.
  */
 import { z } from "zod";
 
-export const proposalsSchema = z.object({
-  // Two is the spec's cap: a weekly issue stream nobody reads is worse than
-  // none, so the pass proposes the two it would do first.
-  proposals: z
-    .array(
-      z.object({
-        title: z.string().min(1),
-        /** The friction: where depth, a seam or locality is missing. */
-        problem: z.string().min(1),
-        /** The refactor in plain English, with the deepened module's interface. */
-        proposal: z.string().min(1),
-        files: z.array(z.string().min(1)),
-        // The merge gate's door: `true` when a revert is clean.
-        twoWayDoor: z.boolean(),
-        doorReason: z.string().min(1),
-      }),
-    )
-    .max(2),
-});
+/** The weekly cap: a weekly issue stream nobody reads is worse than none. */
+export const DEFAULT_MAX_PROPOSALS = 2;
 
-export type Proposal = z.infer<typeof proposalsSchema>["proposals"][number];
+/**
+ * The owner may lift the cap for one run (`max_proposals` on a manual
+ * dispatch) to sweep the whole codebase at once.
+ */
+export const proposalsSchemaOf = (max: number) =>
+  z.object({
+    proposals: z
+      .array(
+        z.object({
+          title: z.string().min(1),
+          /** The friction: where depth, a seam or locality is missing. */
+          problem: z.string().min(1),
+          /** The refactor in plain English, with the deepened module's interface. */
+          proposal: z.string().min(1),
+          files: z.array(z.string().min(1)),
+          // The merge gate's door: `true` when a revert is clean.
+          twoWayDoor: z.boolean(),
+          doorReason: z.string().min(1),
+        }),
+      )
+      .max(max),
+  });
+
+export type Proposal = z.infer<ReturnType<typeof proposalsSchemaOf>>["proposals"][number];
 
 /** The hidden marker every architecture issue carries. */
 export const ARCHITECTURE_MARKER = "<!-- factory:architecture -->";
