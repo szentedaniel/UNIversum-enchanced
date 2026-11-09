@@ -1,6 +1,6 @@
 # Ticket #115 (TurnClock) — extension points and gotchas
 
-Branch `ticket/115-turn-clock`, from #44 (engine throws, deadline retry), #48 (early re-arm), #34 (restore).
+Branch `agent/issue-115-turn-deadline-module-one-place-for-the-wake-up-its`, from #44 (engine throws, deadline retry), #48 (early re-arm), #34 (restore).
 
 ## The module
 
