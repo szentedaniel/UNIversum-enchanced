@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { closingIssues, closingPull, closesIssue } from "#shared/closing-pr.ts";
+import { closingIssue, closingIssues, closingPull, closesIssue } from "#shared/closing-pr.ts";
 
 describe("closesIssue", () => {
   it("matches the closing keywords GitHub itself honours", () => {
@@ -59,5 +59,22 @@ describe("closingPull", () => {
 
     expect(closingPull(pulls, 88)?.url).toBe("https://example.test/2");
     expect(closingPull(pulls, 89)).toBeUndefined();
+  });
+});
+
+describe("closingIssue", () => {
+  it("reads the issue a pull request body closes", () => {
+    expect(closingIssue("Closes #87\n\n## What landed")).toBe(87);
+    expect(closingIssue("resolves\t#88")).toBe(88);
+  });
+
+  it("takes the first closing keyword when the body names more", () => {
+    expect(closingIssue("Fixes #12\n\nAlso closes #13.")).toBe(12);
+  });
+
+  it("has no issue for a bare mention or an empty body", () => {
+    expect(closingIssue("Spec #88 holds the decisions.")).toBeUndefined();
+    expect(closingIssue("Closes\n#88")).toBeUndefined();
+    expect(closingIssue(null)).toBeUndefined();
   });
 });

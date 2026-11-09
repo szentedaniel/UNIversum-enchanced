@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_MONTHLY_MINUTES, minutesUsed, monthStart } from "#dispatch/budget.ts";
 import {
-  AUTO_MERGE_MARKER,
+  autoMergeOf,
   fixRoundsOf,
   linesAdded,
   needsYouOf,
@@ -38,6 +38,7 @@ import { inWindow, REPORT_HOUR, scheduleSlot, type WeekWindow, weekWindow } from
 import { api } from "#shared/api.ts";
 import { closingIssues } from "#shared/closing-pr.ts";
 import { fail, positiveInt, required, safeSh, sh } from "#shared/common.ts";
+import { issueComments } from "#shared/github.ts";
 import { factoryRuns, type FactoryRun } from "#shared/runs.ts";
 import { budapestHour } from "#review/window.ts";
 
@@ -85,10 +86,6 @@ interface SearchPage {
   items: ApiSearchPull[];
 }
 
-interface ApiComment {
-  body: string;
-}
-
 interface ApiTimelineEvent {
   event: string;
   created_at?: string;
@@ -114,9 +111,7 @@ const mergedPulls = (repo: string, week: WeekWindow): MergedPullFacts[] => {
   const commentsOf = (number: number): string[] => {
     const cached = comments.get(number);
     if (cached !== undefined) return cached;
-    const bodies = api<ApiComment>(
-      `repos/${repo}/issues/${String(number)}/comments?per_page=100`,
-    ).map((comment) => comment.body);
+    const bodies = issueComments(repo, String(number)).map((comment) => comment.body);
     comments.set(number, bodies);
     return bodies;
   };
@@ -139,9 +134,12 @@ const mergedPulls = (repo: string, week: WeekWindow): MergedPullFacts[] => {
           mergedAt,
           closes,
           fixRounds: fixRoundsOf(commentsOf(pull.number)),
-          // #87 posts this marker on the issue when the merge gate merged it.
-          auto: closes.some((issue) =>
-            commentsOf(issue.number).some((body) => body.includes(AUTO_MERGE_MARKER)),
+          // #87's gate comments `Merged in <sha>.` on the closing issue after an
+          // auto-merge; its escalation marker on the pull request means a person
+          // merged it instead.
+          auto: autoMergeOf(
+            commentsOf(pull.number),
+            closes.flatMap((issue) => commentsOf(issue.number)),
           ),
         },
       ];

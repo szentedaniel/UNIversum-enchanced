@@ -20,6 +20,10 @@ export const closingIssues = (body: string | null | undefined): number[] => {
 export const closesIssue = (body: string | null | undefined, issue: number): boolean =>
   closingIssues(body).includes(issue);
 
+/** The first issue number a body says it closes, if it says one. */
+export const closingIssue = (body: string | null | undefined): number | undefined =>
+  closingIssues(body)[0];
+
 /** The fields of a pull request the closing test reads. */
 export interface PullFacts {
   url: string;

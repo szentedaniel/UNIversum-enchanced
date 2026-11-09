@@ -17,8 +17,9 @@ the owner's queue. Nothing of the game changed.
   counts, omp run count, retro lines. A week with nothing in it is zeros and `null`s, never a throw.
   Helpers the script uses: `fixRoundsOf` (highest `<!-- factory-fix:round N -->` in comment bodies),
   `linesAdded` (`git log --numstat`), `budgetWarning` (80 percent, integer math; "spent" above the
-  limit), `needsYouOf` (filters `NEEDS_YOU_LABELS`, one entry per number, oldest first).
-  `AUTO_MERGE_MARKER` is the one home of `<!-- factory-merge -->`.
+  limit), `needsYouOf` (filters `NEEDS_YOU_LABELS`, one entry per number, oldest first), and
+  `autoMergeOf` (reads #87's gate comment; see the gotchas). `MERGE_ESCALATION_MARKER` is the one
+  home of `<!-- factory-merge -->`.
 - **`issue.ts`** — pure. `reportMarker(weekOf)` = `<!-- factory-report:YYYY-MM-DD -->`,
   `reportTitle(weekOf)` = `Factory report: week of YYYY-MM-DD`, `REPORT_LABEL`, and `reportPlan(open
   issues, weekOf)` → `create` or `edit` plus the older weekly issues to close.
@@ -75,10 +76,15 @@ The tests are `test/week.test.ts`, `test/metrics.test.ts`, `test/report-issue.te
   leaves the month issue open; it writes the new week's issue **before** closing older ones, so the
   dispatcher's "newest open report issue" still sees the fresh one. If a later step opens a report
   issue, keep the weekly title prefix and the body marker, or the plan will not find it.
-- **#87 must post the markers for the numbers to move.** `<!-- factory-fix:round N -->` on the pull
-  request (report reads all comments, takes the max) and `<!-- factory-merge -->` on the **closing
-  issue** when the gate merged it (report reads the closing issue's comments). Until then, fix rounds
-  read 0 and every merge reads human. The marker literal lives once, in `AUTO_MERGE_MARKER`.
+- **The auto/human merge split reads #87's real trail, not its escalation marker.** After an
+  auto-merge the gate comments `Merged in <sha>.` on the **closing issue**; a person's merge leaves
+  no such comment. The gate's `<!-- factory-merge -->` marker is on the **pull request** and means it
+  escalated — the ticket context described it the other way round, but #87's merged code is what the
+  data shows (`autoMergeOf(pullComments, issueComments)`). Fix rounds come from
+  `<!-- factory-fix:round N -->` on the pull request, which matches `src/fix/rounds.ts` exactly; if
+  that format changes, `fixRoundsOf` must change with it.
+- **#87's marker literals live in two packages.** `MERGE_ESCALATION_MARKER` here mirrors the literal
+  in `src/merge/merge.ts`; there is no shared constant across the two steps today.
 - **Blocked-this-week is a timeline read.** `repos/.../issues/{n}/timeline` for each issue updated
   since the week start; a label event is `event: "labeled"`, `label.name: "agent:blocked"`. The open
   set is a plain issues query. A week with many updated issues costs one call each; still fine for a

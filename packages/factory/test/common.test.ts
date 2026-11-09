@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { positiveInt } from "#shared/common.ts";
+import { positiveInt, sh, shellArg } from "#shared/common.ts";
 
 describe("positiveInt", () => {
   it("reads a positive integer", () => {
@@ -14,5 +14,13 @@ describe("positiveInt", () => {
     expect(positiveInt("-5", 1400)).toBe(1400);
     expect(positiveInt("900m", 1400)).toBe(1400);
     expect(positiveInt("1.5", 1400)).toBe(1400);
+  });
+});
+
+describe("shellArg", () => {
+  it("hands a value with spaces, quotes and dollars to the shell as one word", () => {
+    const value = `chore(merge): #87 it's a "title" $HOME \`id\``;
+
+    expect(sh(`printf %s ${shellArg(value)}`)).toBe(value);
   });
 });

@@ -25,7 +25,7 @@ export interface MergedPullFacts {
   readonly closes: readonly ClosingIssueFacts[];
   /** The highest `<!-- factory-fix:round N -->` the pull request carries. */
   readonly fixRounds: number;
-  /** #87's `<!-- factory-merge -->` marker on the closing issue. */
+  /** True when #87's merge gate merged it; a person merged it otherwise. */
   readonly auto: boolean;
 }
 
@@ -84,8 +84,24 @@ export interface ReportMetrics {
 /** The labels that make an issue or pull request the owner's queue. */
 export const NEEDS_YOU_LABELS: readonly string[] = ["ready-for-human", "spec:proposed"];
 
-/** #87's marker on the closing issue when the merge gate merged the pull request. */
-export const AUTO_MERGE_MARKER = "<!-- factory-merge -->";
+/** #87's escalation marker on a pull request: the gate refused, so a person merges it. */
+export const MERGE_ESCALATION_MARKER = "<!-- factory-merge -->";
+
+/** #87's comment on the closing issue after the gate auto-merges: `Merged in <sha>.` */
+const MERGE_DONE = /(?:^|\n)Merged in [0-9a-f]{7,40}\./u;
+
+/**
+ * Whether #87's gate merged the pull request. Only the gate writes the
+ * `Merged in <sha>.` comment on the closing issue; an escalation marker on the
+ * pull request means the gate refused and a person merged it instead. Anything
+ * else — no merge comment — is a person's merge too.
+ */
+export const autoMergeOf = (
+  pullComments: readonly string[],
+  issueComments: readonly string[],
+): boolean =>
+  !pullComments.some((body) => body.includes(MERGE_ESCALATION_MARKER)) &&
+  issueComments.some((body) => MERGE_DONE.test(body));
 
 /** The share of `FACTORY_MONTHLY_MINUTES` at which the report warns. */
 export const BUDGET_WARN_PERCENT = 80;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  autoMergeOf,
   budgetWarning,
   fixRoundsOf,
   linesAdded,
@@ -81,6 +82,23 @@ describe("budgetWarning", () => {
   it("says the dispatcher is idle once the month is spent", () => {
     expect(budgetWarning(1400, 1400)).toContain("spent");
     expect(budgetWarning(1402, 1400)).toContain("1402 of 1400 minutes");
+  });
+});
+
+describe("autoMergeOf", () => {
+  const merged = "Merged in 4a5ae77c5d2b4a5ae77c5d2b4a5ae77c5d2b4a5a.";
+
+  it("reads the gate's merge comment on the closing issue as an auto-merge", () => {
+    expect(autoMergeOf([], [merged])).toBe(true);
+  });
+
+  it("reads a merge with no gate comment as a person's", () => {
+    expect(autoMergeOf([], [])).toBe(false);
+    expect(autoMergeOf(["Reviewed."], ["Deployed to staging."])).toBe(false);
+  });
+
+  it("reads a merged escalation as a person's, whatever else the issue says", () => {
+    expect(autoMergeOf(["<!-- factory-merge -->\nWaiting for a human."], [merged])).toBe(false);
   });
 });
 
