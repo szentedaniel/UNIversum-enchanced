@@ -78,19 +78,10 @@ export const LOBBY_SEAT_HOLD_MS = 60_000;
 /**
  * A Seat held for its absent Player. `release` gives up the Colyseus
  * reconnection of a dropped client (Colyseus then calls `onLeave`); a Seat
- * restored without a connection, or a client that dropped before it finished
- * joining, has none. `until`: when a Lobby frees it; `null` in a running game,
- * which holds it until the game ends.
+ * restored without a connection has none. `until`: when a Lobby frees it;
+ * `null` in a running game, which holds it until the game ends.
  */
 type Hold = { release: (() => void) | null; until: number | null; cancel: () => void };
-
-/**
- * What `allowReconnection` hands back: a `Deferred`, whose `reject` gives the
- * hold up — except for a client that never finished its join handshake (or a
- * Room already disposing), where Colyseus answers with a plain rejected
- * promise and there is no reconnection to give up.
- */
-type PendingReconnection = { catch: (onRejected: () => void) => unknown; reject?: Function };
 
 /**
  * `client.auth` of a Guest `onAuth` admitted: the IP bucket and Seat
@@ -420,12 +411,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (this.#shuttingDown || this.endedAt !== null) return;
     const seat = this.seatOf(client);
     if (!seat) return; // its Seat was already taken back from another connection
-    const reconnection: PendingReconnection = this.allowReconnection(client, "manual");
+    const reconnection = this.allowReconnection(client, "manual");
     // Rejected when the hold is released: that is how it ends, not an error.
     reconnection.catch(() => {});
-    // Without a rejection the client never finished joining: its Seat is held
-    // for the Guest token alone, and there is no reconnection to give up.
-    this.hold(seat, reconnection.reject ? () => reconnection.reject?.() : null);
+    this.hold(seat, () => reconnection.reject());
     this.metrics.seatDropped();
     this.log.info({ playerId: seat.playerId }, "Seat dropped");
     if (!this.game) this.broadcastLobby();
