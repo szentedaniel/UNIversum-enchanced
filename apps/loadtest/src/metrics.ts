@@ -6,6 +6,7 @@
  * counters add up.
  */
 import type { PrometheusClient } from "#prometheus.ts";
+import { maxOf } from "#stats.ts";
 
 export type PromWindows = {
   /** The run's first second (for counting server process starts). */
@@ -61,7 +62,7 @@ export async function collectServerMetrics(
         ),
       ),
     );
-    return values.reduce(maxOf, null);
+    return maxOf(values);
   };
 
   const maxOver = async (metric: string): Promise<number | null> => {
@@ -70,7 +71,7 @@ export async function collectServerMetrics(
         prom.instant(`max_over_time(${metric}[${Math.round(window.seconds)}s])`, window.endMs),
       ),
     );
-    return values.reduce(maxOf, null);
+    return maxOf(values);
   };
 
   const intentP95Ms = await scale(hist(0.95, "intent_duration_seconds"), 1_000);
@@ -154,12 +155,6 @@ async function heapGrowth(
   const start = await prom.instant("max(nodejs_heap_size_used_bytes)", startMs);
   if (end === null || start === null || start <= 0) return null;
   return (end - start) / start;
-}
-
-function maxOf(a: number | null, b: number | null): number | null {
-  if (a === null) return b;
-  if (b === null) return a;
-  return Math.max(a, b);
 }
 
 async function scale(value: Promise<number | null>, factor: number): Promise<number | null> {

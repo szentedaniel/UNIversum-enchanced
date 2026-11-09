@@ -110,12 +110,13 @@ export function percentile(samples: number[], p: number): number | null {
   return sorted[Math.min(sorted.length - 1, Math.max(0, rank - 1))] ?? null;
 }
 
-/** The largest sample; `null` without samples. */
-export function maxOf(samples: number[]): number | null {
-  return samples.reduce<number | null>(
-    (max, value) => (max === null || value > max ? value : max),
-    null,
-  );
+/** The largest value; `null` when there is none (or every value is `null`). */
+export function maxOf(values: readonly (number | null)[]): number | null {
+  let max: number | null = null;
+  for (const value of values) {
+    if (value !== null && (max === null || value > max)) max = value;
+  }
+  return max;
 }
 
 const CPU_SAMPLE_MS = 5_000;

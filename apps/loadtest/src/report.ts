@@ -81,12 +81,12 @@ export function writeReport(reportDir: string, report: RunReport): string {
 
 const iso = (date: Date) => date.toISOString().replace("T", " ").replace(".000Z", " UTC");
 
-const shortDuration = (seconds: number) =>
-  seconds >= 60 && seconds % 60 === 0
-    ? `${seconds / 60}m`
-    : seconds >= 60
-      ? `${Math.floor(seconds / 60)}m ${seconds % 60}s`
-      : `${seconds}s`;
+const shortDuration = (total: number) =>
+  total >= 60 && total % 60 === 0
+    ? `${total / 60}m`
+    : total >= 60
+      ? `${Math.floor(total / 60)}m ${total % 60}s`
+      : `${total}s`;
 
 const cell = (value: string) => value.replaceAll("|", "\\|");
 
