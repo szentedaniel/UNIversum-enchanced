@@ -35,6 +35,9 @@ export const fail = (message: string): never => {
   process.exit(1);
 };
 
+/** A value as one POSIX shell word, for the arguments that are data (a title). */
+export const shellArg = (value: string): string => `'${value.replaceAll("'", `'\\''`)}'`;
+
 export const sh = (cmd: string): string =>
   execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 

@@ -1,0 +1,116 @@
+# The merge gate: when CI or a review finishes, this decides one pull request —
+# merge it with a merge commit, wait for the trigger still in flight, queue the
+# re-review a push needs, send the fix loop after main, or hand it to the owner
+# with the reasons. The gate code always runs from a checkout of `main`: a pull
+# request that edits `packages/factory/` must never decide its own merge.
+#
+# Labels: reads `risk:low`/`risk:high`, `agent:review`, `ready-for-human` and
+# `agent:blocked`; queues `agent:review` when the head moved after its review,
+# and adds `ready-for-human` when the gates say no. The merge closes the issue
+# with a comment naming the merge commit; the push to `main` starts the
+# dispatcher by itself.
+name: Factory Merge
+
+run-name: "Factory merge #${{ inputs.pr || github.event.workflow_run.pull_requests[0].number }}"
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Factory Review
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: The pull request number to consider
+        required: true
+        type: string
+      dry_run:
+        description: Print the decision without merging or labelling
+        type: boolean
+        default: false
+
+# One decision per pull request at a time; a second trigger waits, then sees
+# the first run's merge or label.
+concurrency:
+  group: factory-merge-${{ inputs.pr || github.event.workflow_run.pull_requests[0].number || github.run_id }}
+  cancel-in-progress: false
+
+# The job's own token stays read-only; every write goes through AGENT_PAT.
+permissions:
+  contents: read
+
+jobs:
+  merge:
+    # Only a CI success can merge, a failed run is the fix loop's; a push to
+    # main runs CI too but has no pull request. A review run dispatched by the
+    # night cron is a workflow_dispatch, so it is let in and the resolve step
+    # reads the number from its run-name.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.path == '.github/workflows/ci.yml' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event.workflow_run.path == '.github/workflows/factory-review.yml' && startsWith(github.event.workflow_run.display_title, 'Factory review #'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+      INPUT_PR: ${{ inputs.pr }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+      OUTPUT_DIR: ${{ runner.temp }}
+    steps:
+      - name: Resolve the pull request
+        id: pr
+        run: |
+          set -euo pipefail
+          pr="$INPUT_PR"
+          if [ -z "$pr" ]; then
+            pr=$(jq -r '.workflow_run.pull_requests[0].number // empty' "$GITHUB_EVENT_PATH")
+          fi
+          if [ -z "$pr" ]; then
+            # `/night queue` carries no number: the cron's own run has nothing
+            # to merge, the review runs it dispatched do.
+            pr=$(jq -r '.workflow_run.display_title // ""' "$GITHUB_EVENT_PATH" \
+              | grep -oE '#[0-9]+' | head -n 1 | tr -d '#' || true)
+          fi
+          if ! [[ "$pr" =~ ^[0-9]+$ ]]; then
+            echo "::notice::This run names no pull request; nothing to merge."
+            echo "pr=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "pr=$pr" >> "$GITHUB_OUTPUT"
+
+      # The gate code runs main's copy, never the pull request's.
+      - uses: actions/checkout@v7
+        if: steps.pr.outputs.pr != ''
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v7
+        if: steps.pr.outputs.pr != ''
+        with:
+          node-version-file: .node-version
+
+      - name: Decide and act
+        if: steps.pr.outputs.pr != ''
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.pr }}
+        run: node packages/factory/src/merge/merge.ts
+
+      # A gate that crashes must not leave the pull request looking mergeable.
+      - name: Hand a failed gate to a human
+        if: failure() && steps.pr.outputs.pr != ''
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.pr }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          reason="(no reason file written; check the run log)"
+          if [ -f "${RUNNER_TEMP}/failure_reason.txt" ]; then
+            reason=$(cat "${RUNNER_TEMP}/failure_reason.txt")
+          fi
+          body="${RUNNER_TEMP}/failure-comment.md"
+          printf 'The merge gate could not decide this pull request.\n\n**Reason:** %s\n\n**Run:** %s\n' "$reason" "$RUN_URL" > "$body"
+          gh pr comment "$PR_NUMBER" --body-file "$body" || true
+          gh pr edit "$PR_NUMBER" --add-label "ready-for-human" || true

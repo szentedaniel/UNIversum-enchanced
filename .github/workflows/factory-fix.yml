@@ -1,0 +1,229 @@
+# The fix loop: a red CI run or a review that asked for changes sends the pull
+# request back to omp, twice at most. The round count is a hidden marker
+# comment on the pull request (`<!-- factory-fix:round N -->`), so both
+# triggers share one budget; when it is spent the pull request goes to the
+# owner with what came back.
+#
+# Labels: a manual dispatch clears `agent:blocked`/`ready-for-human`; a spent
+# budget or a failed run adds `agent:blocked` + `ready-for-human` and comments
+# the reason. A run that fixes the branch pushes with AGENT_PAT, so CI runs
+# again and the merge gate decides.
+name: Factory Fix
+
+run-name: "Factory fix #${{ inputs.pr || github.event.workflow_run.pull_requests[0].number }}"
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: The pull request number to fix
+        required: true
+        type: string
+      reason:
+        description: Why the pull request is back
+        required: true
+        type: choice
+        options:
+          - review
+          - ci
+          - main-moved
+
+# One fix per pull request at a time: the second trigger sees the first's push.
+concurrency:
+  group: factory-fix-${{ inputs.pr || github.event.workflow_run.pull_requests[0].number || github.run_id }}
+  cancel-in-progress: false
+
+# The job's own token stays read-only; every write goes through AGENT_PAT.
+permissions:
+  contents: read
+
+jobs:
+  fix:
+    # Only a red CI run on a pull request is the fix loop's; a push to main
+    # has no pull request to fix.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+      INPUT_PR: ${{ inputs.pr }}
+      FIX_REASON: ${{ inputs.reason || 'ci' }}
+      OUTPUT_DIR: ${{ runner.temp }}
+      RUN_HEAD: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Resolve the pull request
+        id: preflight
+        run: |
+          set -euo pipefail
+          pr="$INPUT_PR"
+          if [ -z "$pr" ]; then
+            pr=$(jq -r '.workflow_run.pull_requests[0].number // empty' "$GITHUB_EVENT_PATH")
+          fi
+          if ! [[ "$pr" =~ ^[0-9]+$ ]]; then
+            echo "::notice::This run names no pull request; nothing to fix."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          info=$(gh pr view "$pr" --json state,headRefName,headRefOid,labels,isCrossRepository)
+          state=$(jq -r .state <<< "$info")
+          branch=$(jq -r .headRefName <<< "$info")
+          labels=$(jq -r '[.labels[].name] | join(" ")' <<< "$info")
+          reason=""
+          if [ "$state" != "OPEN" ]; then
+            reason="pull request #$pr is $state"
+          elif [ "$(jq -r .isCrossRepository <<< "$info")" = "true" ]; then
+            reason="pull request #$pr comes from a fork"
+          elif [[ "$branch" != agent/* ]] && [[ " $labels " != *" factory "* ]]; then
+            reason="pull request #$pr is not a factory branch or label"
+          elif [ -n "$RUN_HEAD" ] && [ "$(jq -r .headRefOid <<< "$info")" != "$RUN_HEAD" ]; then
+            # A newer push has its own CI run, which decides on its own.
+            reason="the branch moved since that CI run"
+          elif [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ] &&
+            { [[ " $labels " == *" ready-for-human "* ]] || [[ " $labels " == *" agent:blocked "* ]]; }; then
+            reason="a human already holds pull request #$pr"
+          fi
+          if [ -n "$reason" ]; then
+            echo "::notice::$reason; nothing to fix."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "proceed=true"
+            echo "pr=$pr"
+            echo "branch=$branch"
+          } >> "$GITHUB_OUTPUT"
+
+      # A manual dispatch is the owner's retry: it takes the pull request back
+      # from the escalation labels, as a re-dispatched implement run does.
+      - name: Take the pull request from the owner
+        if: steps.preflight.outputs.proceed == 'true' && github.event_name == 'workflow_dispatch'
+        env:
+          PR_NUMBER: ${{ steps.preflight.outputs.pr }}
+        run: |
+          set -euo pipefail
+          gh pr edit "$PR_NUMBER" --remove-label "agent:blocked" || true
+          gh pr edit "$PR_NUMBER" --remove-label "ready-for-human" || true
+
+      # The round count and the setup run main's code, never the pull
+      # request's: a PR that edits packages/factory/ must not raise its cap.
+      - uses: actions/checkout@v7
+        if: steps.preflight.outputs.proceed == 'true'
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v7
+        if: steps.preflight.outputs.proceed == 'true'
+        with:
+          node-version-file: .node-version
+
+      # Reads the rounds and the failure, and writes problem.md for the run;
+      # a spent budget writes the escalation comment instead of running omp.
+      - name: Decide the round
+        id: plan
+        if: steps.preflight.outputs.proceed == 'true'
+        env:
+          PR_NUMBER: ${{ steps.preflight.outputs.pr }}
+          BRANCH: ${{ steps.preflight.outputs.branch }}
+          CI_RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || '' }}
+        run: |
+          set -euo pipefail
+          node packages/factory/src/fix/decide.ts
+          echo "run=$(jq -r .run "${RUNNER_TEMP}/plan.json")" >> "$GITHUB_OUTPUT"
+          echo "round=$(jq -r '.round // empty' "${RUNNER_TEMP}/plan.json")" >> "$GITHUB_OUTPUT"
+          echo "escalate=$(jq -r .escalate "${RUNNER_TEMP}/plan.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Hand the spent rounds to a human
+        if: steps.preflight.outputs.proceed == 'true' && steps.plan.outputs.escalate == 'true'
+        env:
+          PR_NUMBER: ${{ steps.preflight.outputs.pr }}
+        run: |
+          set -euo pipefail
+          gh pr comment "$PR_NUMBER" --body-file "${RUNNER_TEMP}/escalation.md"
+          gh pr edit "$PR_NUMBER" --add-label "agent:blocked" || true
+          gh pr edit "$PR_NUMBER" --add-label "ready-for-human"
+
+      - uses: actions/checkout@v7
+        if: steps.preflight.outputs.proceed == 'true' && steps.plan.outputs.run == 'true'
+        with:
+          ref: ${{ steps.preflight.outputs.branch }}
+          fetch-depth: 0
+          token: ${{ secrets.AGENT_PAT }}
+
+      - name: Configure git
+        if: steps.preflight.outputs.proceed == 'true' && steps.plan.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "universum-factory[bot]"
+          git config user.email "universum-factory[bot]@users.noreply.github.com"
+
+      # The same setup as ci.yml: the fix run checks the repo's fast checks.
+      - uses: pnpm/action-setup@v6
+        if: steps.preflight.outputs.proceed == 'true' && steps.plan.outputs.run == 'true'
+        with:
+          cache: true
+
+      - name: Install
+        if: steps.preflight.outputs.proceed == 'true' && steps.plan.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate messages
+        if: steps.preflight.outputs.proceed == 'true' && steps.plan.outputs.run == 'true'
+        run: pnpm --filter @universum/web run paraglide
+
+      # omp needs Bun >= 1.4.4; the CLI is pi's fork, so the model and the
+      # stream come from the same flags.
+      - uses: oven-sh/setup-bun@v2
+        if: steps.preflight.outputs.proceed == 'true' && steps.plan.outputs.run == 'true'
+        with:
+          bun-version: 1.4.4
+
+      - name: Install omp
+        if: steps.preflight.outputs.proceed == 'true' && steps.plan.outputs.run == 'true'
+        run: bun i -g @oh-my-pi/pi-coding-agent@18.18.1
+
+      - name: Fix
+        if: steps.preflight.outputs.proceed == 'true' && steps.plan.outputs.run == 'true'
+        env:
+          PR_NUMBER: ${{ steps.preflight.outputs.pr }}
+          BRANCH: ${{ steps.preflight.outputs.branch }}
+          FIX_ROUND: ${{ steps.plan.outputs.round }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: node packages/factory/src/fix/fix.ts
+
+      - name: Push the fix
+        if: steps.preflight.outputs.proceed == 'true' && steps.plan.outputs.run == 'true'
+        env:
+          BRANCH: ${{ steps.preflight.outputs.branch }}
+        run: git push origin "HEAD:${BRANCH}"
+
+      - name: Announce the round
+        if: steps.preflight.outputs.proceed == 'true' && steps.plan.outputs.run == 'true'
+        env:
+          PR_NUMBER: ${{ steps.preflight.outputs.pr }}
+        run: gh pr comment "$PR_NUMBER" --body-file "${RUNNER_TEMP}/fix-comment.md"
+
+      - name: Hand a failed fix to a human
+        if: failure() && steps.preflight.outputs.proceed == 'true'
+        env:
+          PR_NUMBER: ${{ steps.preflight.outputs.pr }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          reason="(no reason file written; check the run log)"
+          if [ -f "${RUNNER_TEMP}/failure_reason.txt" ]; then
+            reason=$(cat "${RUNNER_TEMP}/failure_reason.txt")
+          fi
+          body="${RUNNER_TEMP}/failure-comment.md"
+          printf 'The fix loop could not finish this pull request.\n\n**Reason:** %s\n\n**Run:** %s\n\nRe-dispatch `factory-fix.yml` with this pull request to retry.\n' "$reason" "$RUN_URL" > "$body"
+          gh pr comment "$PR_NUMBER" --body-file "$body" || true
+          gh pr edit "$PR_NUMBER" --add-label "agent:blocked" || true
+          gh pr edit "$PR_NUMBER" --add-label "ready-for-human" || true
