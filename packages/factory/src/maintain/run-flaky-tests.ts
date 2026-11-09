@@ -6,7 +6,6 @@
  *
  * Env: GH_REPO, DRY_RUN.
  */
-import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,6 +20,7 @@ import {
 } from "#maintain/flaky.ts";
 import { fail, required, sh, shellArg } from "#shared/common.ts";
 import { parseJson } from "#shared/github.ts";
+import { runLog } from "#shared/runs.ts";
 
 /** The spec's window: the last week of CI history. */
 const WINDOW_DAYS = 7;
@@ -43,25 +43,6 @@ const runsInWindow = (repo: string, now: Date): ApiRun[] => {
   ).filter((run) => run.status === "completed" && Date.parse(run.createdAt) >= since);
 };
 
-/**
- * A run's log, or an empty string when GitHub no longer holds it: an expired
- * log is not a reason to fail the weekly pass.
- */
-const logOf = (repo: string, runId: number): string => {
-  try {
-    return execSync(`gh run view ${String(runId)} --repo "${repo}" --log`, {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      maxBuffer: 128 * 1024 * 1024,
-    });
-  } catch (error) {
-    if (typeof error === "object" && error !== null && "stdout" in error) {
-      return typeof error.stdout === "string" ? error.stdout : "";
-    }
-    return "";
-  }
-};
-
 const keyOf = (test: FlakyTest): string => testNameOf(test);
 
 /** Every flaky test in the window, with the runs that retried it. */
@@ -71,7 +52,7 @@ const flakyOf = (
 ): Map<string, { test: FlakyTest; runs: FlakyRun[] }> => {
   const found = new Map<string, { test: FlakyTest; runs: FlakyRun[] }>();
   for (const run of runs) {
-    const log = logOf(repo, run.databaseId);
+    const log = runLog(repo, run.databaseId, { failedOnly: false });
     if (log === "") {
       console.log(`Run ${String(run.databaseId)}: no log available.`);
       continue;

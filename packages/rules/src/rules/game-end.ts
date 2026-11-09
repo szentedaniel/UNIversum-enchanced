@@ -6,7 +6,7 @@
  * there is always exactly one winner (F4, F5, F25).
  */
 import { FIELDS, type GroupId } from "#board.ts";
-import { wealthOf } from "#rules/pricing.ts";
+import { isMonopoly, museumsOf, wealthOf } from "#rules/pricing.ts";
 import type { GameState, PlayerId, PlayerState } from "#state.ts";
 import { emit, setFinalPhase, type Tx } from "#tx.ts";
 
@@ -39,9 +39,33 @@ function finish(tx: Tx, winner: PlayerId, reason: GameEndReason): void {
   emit(tx, { type: "GameEnded", winner, reason });
 }
 
-/** Most Wealth first (R77), then more cash, then the earlier Seat (F25). */
-function byWealth(state: GameState, a: PlayerState, b: PlayerState): number {
-  return wealthOf(state, b.id) - wealthOf(state, a.id) || b.cash - a.cash || a.seat - b.seat;
+/** What `rank` orders by; the Wealth chain breaks every tie (R77–R79). */
+type Ranking = { by?: "wealth" | "monopolies" };
+
+/**
+ * `players` best first: most Monopolies when asked (R79), then most Wealth
+ * (R77), then more cash, then the earlier Seat (F25). Each Player's numbers are
+ * read once, not once per comparison.
+ */
+function rank(
+  state: GameState,
+  players: readonly PlayerState[],
+  { by = "wealth" }: Ranking = {},
+): PlayerState[] {
+  const ranked = players.map((player) => ({
+    player,
+    wealth: wealthOf(state, player.id),
+    monopolies: by === "monopolies" ? monopoliesOf(state, player.id) : 0,
+  }));
+  return ranked
+    .toSorted(
+      (a, b) =>
+        b.monopolies - a.monopolies ||
+        b.wealth - a.wealth ||
+        b.player.cash - a.player.cash ||
+        a.player.seat - b.player.seat,
+    )
+    .map(({ player }) => player);
 }
 
 /**
@@ -49,7 +73,7 @@ function byWealth(state: GameState, a: PlayerState, b: PlayerState): number {
  * earlier Seat (F25). `players` is never empty where this is called.
  */
 function richest(tx: Tx, players: readonly PlayerState[]): PlayerState | undefined {
-  return players.toSorted((a, b) => byWealth(tx.state, a, b))[0];
+  return rank(tx.state, players)[0];
 }
 
 /** One Player's final place; `publicView.standings` lists these in podium order. */
@@ -66,8 +90,14 @@ export function standingsOf(state: GameState): Standing[] | null {
   const others = state.players.filter((player) => player.id !== phase.winner);
   const ordered = [
     ...state.players.filter((player) => player.id === phase.winner),
-    ...others.filter((player) => !player.bankrupt).toSorted((a, b) => byWealth(state, a, b)),
-    ...others.filter((player) => player.bankrupt).toSorted((a, b) => byWealth(state, a, b)),
+    ...rank(
+      state,
+      others.filter((player) => !player.bankrupt),
+    ),
+    ...rank(
+      state,
+      others.filter((player) => player.bankrupt),
+    ),
   ];
   return ordered.map((player) => ({ player: player.id, wealth: wealthOf(state, player.id) }));
 }
@@ -75,19 +105,17 @@ export function standingsOf(state: GameState): Standing[] | null {
 /** The 8 University Groups, in Board order. */
 const GROUPS: readonly GroupId[] = [...new Set(FIELDS.flatMap((f) => (f.group ? [f.group] : [])))];
 
+/** The 4 Museums, in Board order. */
+const MUSEUMS = FIELDS.filter((f) => f.kind === "museum");
+
 /** The Player owning every Museum, if any: the Super-monopoly (R78). */
 function superMonopolyOwner(state: GameState, alive: readonly PlayerState[]): PlayerId | undefined {
-  const owners = FIELDS.filter((f) => f.kind === "museum").map((f) => state.fields[f.id]?.owner);
-  const [first] = owners;
-  if (first == null || !owners.every((owner) => owner === first)) return undefined;
-  return alive.some((player) => player.id === first) ? first : undefined;
+  return alive.find((player) => museumsOf(state, player.id) === MUSEUMS.length)?.id;
 }
 
 /** How many Groups the Player owns every University of (R79); Museums are no Group. */
 function monopoliesOf(state: GameState, playerId: PlayerId): number {
-  return GROUPS.filter((group) =>
-    FIELDS.filter((f) => f.group === group).every((f) => state.fields[f.id]?.owner === playerId),
-  ).length;
+  return GROUPS.filter((group) => isMonopoly(state, group, playerId)).length;
 }
 
 /**
@@ -95,17 +123,8 @@ function monopoliesOf(state: GameState, playerId: PlayerId): number {
  * the one with more of them wins, then the Wealthier, then the earlier Seat.
  */
 function mostMonopolies(tx: Tx, alive: readonly PlayerState[]): PlayerState | undefined {
-  const holders = alive
-    .map((player) => ({ player, monopolies: monopoliesOf(tx.state, player.id) }))
-    .filter(({ monopolies }) => monopolies >= 3)
-    .toSorted(
-      (a, b) =>
-        b.monopolies - a.monopolies ||
-        wealthOf(tx.state, b.player.id) - wealthOf(tx.state, a.player.id) ||
-        b.player.cash - a.player.cash ||
-        a.player.seat - b.player.seat,
-    );
-  return holders[0]?.player;
+  const [leader] = rank(tx.state, alive, { by: "monopolies" });
+  return leader && monopoliesOf(tx.state, leader.id) >= 3 ? leader : undefined;
 }
 
 /**

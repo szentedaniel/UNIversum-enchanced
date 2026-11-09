@@ -1,6 +1,9 @@
 /**
- * What the server last told this client. Only the connection module
- * (`#connection.ts`) writes it; screens and the Board read and subscribe.
+ * What the server last told this client, and the one counter behind it. The
+ * connection module (`#connection.ts`) writes pushes, Rejections and the
+ * in-flight lock through the functions below; the e2e test hooks fake the same
+ * writes, so a made-up push cannot collide with a real answer. Screens and the
+ * Board read and subscribe.
  */
 import type { LobbyMessage, RejectionCode } from "@universum/protocol/messages";
 import type { GameEvent, PlayerId, PublicView, Reveal } from "@universum/rules";
@@ -44,7 +47,7 @@ export type RoomState = {
   takenElsewhere: boolean;
 };
 
-export const initialRoomState: RoomState = {
+const initialRoomState: RoomState = {
   status: "idle",
   code: null,
   me: null,
@@ -57,26 +60,64 @@ export const initialRoomState: RoomState = {
 };
 
 /**
- * The latest `seq` the server has answered at. Pushes and Rejections share one
- * counter in `#connection.ts`, so the newer of the two is the newest answer.
+ * The one counter pushes and Rejections share, so the newer of the two is the
+ * later answer and neither can take the other's `seq`.
  */
-export const answeredAtOf = (state: RoomState): number =>
+let seq = 0;
+
+/** The latest `seq` the server has answered at. */
+const answeredAtOf = (state: RoomState): number =>
   Math.max(state.push?.seq ?? 0, state.rejection?.seq ?? 0);
 
+/** One full-view push as the server sent it, with the server's clock at the send. */
+type ReceivedPush = {
+  view: PublicView;
+  events: readonly GameEvent[];
+  reveals: readonly Reveal[];
+  now: number;
+};
+
 /**
- * The in-flight lock's one write: `sentAt` at the latest answered `seq`.
- * `sendIntent` applies it before sending, and the `holdIntent` test hook applies
- * it to hold an intent the server never answered.
+ * A push arrived: keeps the shown view when the server's is older (spec:
+ * Client → State), otherwise puts it up with the next `seq` and this client's
+ * clock offset. An ignored push spends no `seq`.
  */
-export const inFlightPatch = (state: RoomState): Pick<RoomState, "sentAt"> => ({
-  sentAt: answeredAtOf(state),
-});
+export function receivePush(
+  { view, events, reveals, now }: ReceivedPush,
+  receivedAt: number,
+): void {
+  const last = roomStore.getState().push;
+  if (last && view.version < last.view.version) return;
+  roomStore.setState({
+    push: { view, events, reveals, seq: ++seq, clockOffset: now - receivedAt, receivedAt },
+  });
+}
+
+/** A Rejection of one of this client's intents arrived: it answers with the next `seq`. */
+export function receiveRejection(code: RejectionCode): void {
+  roomStore.setState({ rejection: { code, seq: ++seq } });
+}
+
+/**
+ * The in-flight lock's one write: `sentAt` at the latest answered `seq`. The
+ * connection applies it before sending an intent; the `holdIntent` test hook
+ * applies it to hold an intent the server never answered.
+ */
+export function markIntentSent(): void {
+  roomStore.setState({ sentAt: answeredAtOf(roomStore.getState()) });
+}
+
+/** Back to the initial state: the latest answer, the lock and the counter go with it. */
+export function reset(): void {
+  seq = 0;
+  roomStore.setState(initialRoomState);
+}
 
 /**
  * The in-flight lock ("No optimistic UI"): this client sent an intent and no
  * push or Rejection with a later `seq` has arrived. The two share one counter,
- * so a single comparison with `answeredAtOf` covers both; a reset to
- * `initialRoomState` clears the lock too.
+ * so a single comparison with `answeredAtOf` covers both; a `reset` clears the
+ * lock too.
  */
 export const inFlightOf = (state: RoomState): boolean =>
   state.sentAt !== null && answeredAtOf(state) <= state.sentAt;
