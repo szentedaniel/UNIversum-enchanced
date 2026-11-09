@@ -83,6 +83,15 @@ describe("triageCandidates", () => {
     expect(numbers(triageCandidates(issues, 3, 7))).toEqual([7]);
     expect(numbers(triageCandidates(issues, 3, 9))).toEqual([]);
   });
+
+  it("triages a named issue whatever its labels, but never a closed one or a pull request", () => {
+    const labelled = issue({ number: 7, labels: ["ready-for-agent", "agent:blocked"] });
+    const subIssue = issue({ number: 8, parent: 85 });
+    expect(numbers(triageCandidates([labelled], 3, 7))).toEqual([7]);
+    expect(numbers(triageCandidates([subIssue], 3, 8))).toEqual([8]);
+    expect(triageCandidates([issue({ number: 7, state: "closed" })], 3, 7)).toEqual([]);
+    expect(triageCandidates([issue({ number: 7, isPullRequest: true })], 3, 7)).toEqual([]);
+  });
 });
 
 const approved = (overrides: Partial<IntakeIssue> & { number: number }): IntakeIssue =>

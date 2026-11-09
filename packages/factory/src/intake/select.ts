@@ -68,20 +68,22 @@ const oldestFirst = (issues: readonly IntakeIssue[], limit: number): IntakeIssue
     .toSorted((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.number - b.number)
     .slice(0, limit);
 
-/** The issues one triage run classifies, oldest first; `only` is a dispatch's issue. */
+/** The issues one triage run classifies, oldest first. */
 export const triageCandidates = (
   issues: readonly IntakeIssue[],
   limit: number,
   only?: number,
 ): IntakeIssue[] =>
   oldestFirst(
-    issues.filter(
-      (issue) => isTriageCandidate(issue) && (only === undefined || issue.number === only),
-    ),
+    only === undefined
+      ? issues.filter(isTriageCandidate)
+      : // A dispatch that names an issue is the owner's override: it is triaged
+        // whatever its labels, as long as it is an open issue.
+        issues.filter((issue) => issue.number === only && isOpenIssue(issue)),
     limit,
   );
 
-/** The specs one split run turns into tickets, oldest first. */
+/** The specs one split run turns into tickets, oldest first; `only` narrows, never overrides. */
 export const splitCandidates = (
   issues: readonly IntakeIssue[],
   limit: number,
