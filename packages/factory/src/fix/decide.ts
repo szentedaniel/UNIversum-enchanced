@@ -7,7 +7,6 @@
  * Env: PR_NUMBER, BRANCH, FIX_REASON, CI_RUN_ID (optional), GH_REPO,
  * OUTPUT_DIR.
  */
-import { execSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { excerptOf } from "#fix/excerpt.ts";
@@ -22,6 +21,7 @@ import {
 import { newestMarkerComment, type ReviewComment } from "#review/summary.ts";
 import { fail, outputDir, required, sh, shellArg } from "#shared/common.ts";
 import { issueComments, parseJson } from "#shared/github.ts";
+import { runLog } from "#shared/runs.ts";
 
 /** How much of the failure the escalation comment carries; the prompt gets more. */
 const ESCALATION_CHARS = 4000;
@@ -37,31 +37,6 @@ interface FixPlan {
 
 const writePlan = (output: string, plan: FixPlan): void => {
   writeFileSync(join(output, "plan.json"), `${JSON.stringify(plan, null, 2)}\n`);
-};
-
-const stdoutOf = (error: unknown): string => {
-  if (typeof error === "object" && error !== null && "stdout" in error) {
-    const { stdout } = error;
-    if (typeof stdout === "string") return stdout;
-  }
-  return "";
-};
-
-/**
- * The failed jobs' logs. `--log-failed` can print far more than execSync's
- * default buffer, so the cap is explicit; `excerptOf` trims it to the prompt's
- * budget afterwards.
- */
-const failedLog = (repo: string, runId: string): string => {
-  try {
-    return execSync(`gh run view ${runId} --repo "${repo}" --log-failed`, {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      maxBuffer: 128 * 1024 * 1024,
-    });
-  } catch (error) {
-    return stdoutOf(error);
-  }
 };
 
 /** The branch's newest failed CI run: a dispatched `ci` run gets no run id. */
@@ -91,7 +66,7 @@ const problemOf = (
     const passed = process.env["CI_RUN_ID"] ?? "";
     const runId = passed === "" ? latestFailedRun(repo, branch) : passed;
     if (runId === "") fail(`No failed CI run found on ${branch}.`);
-    return excerptOf(failedLog(repo, runId));
+    return excerptOf(runLog(repo, runId, { failedOnly: true }));
   }
   return [
     "main moved since this branch was cut, or merging it conflicts.",
