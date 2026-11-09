@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  canAutoMerge,
+  ciState,
   dependencyMap,
   isProtectedPath,
   majorBumps,
   majorOf,
   protectedPaths,
 } from "#merge/gates.ts";
+import type { CiRun, MergeFacts } from "#merge/gates.ts";
+import { summaryComment } from "#review/summary.ts";
 
 describe("protected paths", () => {
   it("names the spec's protected paths", () => {
@@ -125,5 +129,177 @@ describe("dependency majors", () => {
     ]);
 
     expect(bumps).toEqual([]);
+  });
+});
+
+const HEAD = "abc1234def5678";
+
+const ciRun = (overrides: Partial<CiRun> = {}): CiRun => ({
+  headSha: HEAD,
+  status: "completed",
+  conclusion: "success",
+  createdAt: "2026-11-09T10:10:00Z",
+  ...overrides,
+});
+
+const reviewComment = (
+  verdict: "pass" | "changes-requested",
+  createdAt = "2026-11-09T10:20:00Z",
+) => ({
+  body: summaryComment({
+    verdict,
+    findings: [],
+    mergeDanger: { door: "two-way", blastRadius: "local", reason: "one step, revertible" },
+  }),
+  createdAt,
+});
+
+const facts = (overrides: Partial<MergeFacts> = {}): MergeFacts => ({
+  headSha: HEAD,
+  headCommittedAt: "2026-11-09T10:00:00Z",
+  labels: ["risk:low"],
+  ciRuns: [ciRun()],
+  comments: [reviewComment("pass")],
+  files: ["apps/web/src/foo.ts"],
+  dependencyChanges: [],
+  mergeState: "clean",
+  behindBy: 0,
+  mainFiles: [],
+  ...overrides,
+});
+
+describe("ciState", () => {
+  it("reads the newest run on the head commit", () => {
+    const runs = [
+      ciRun({ createdAt: "2026-11-09T10:05:00Z", conclusion: "failure" }),
+      ciRun({ createdAt: "2026-11-09T10:20:00Z" }),
+    ];
+
+    expect(ciState(runs, HEAD)).toBe("success");
+  });
+
+  it("is pending while the head's newest run has not completed", () => {
+    expect(ciState([ciRun({ status: "in_progress", conclusion: null })], HEAD)).toBe("pending");
+  });
+
+  it("is missing when no run matches the head", () => {
+    expect(ciState([ciRun({ headSha: "other" })], HEAD)).toBe("missing");
+  });
+
+  it("is failure for any conclusion other than success", () => {
+    expect(ciState([ciRun({ conclusion: "cancelled" })], HEAD)).toBe("failure");
+  });
+});
+
+describe("canAutoMerge", () => {
+  it("merges when CI, the review, the risk label and the paths all hold", () => {
+    expect(canAutoMerge(facts())).toEqual({ merge: true, reasons: [] });
+  });
+
+  it("waits on CI: only success on the head sha passes", () => {
+    expect(canAutoMerge(facts({ ciRuns: [ciRun({ conclusion: "failure" })] })).reasons).toEqual([
+      "CI failed on abc1234",
+    ]);
+    expect(canAutoMerge(facts({ ciRuns: [] })).reasons).toEqual(["CI is missing on abc1234"]);
+    expect(
+      canAutoMerge(facts({ ciRuns: [ciRun({ status: "queued", conclusion: null })] })).reasons,
+    ).toEqual(["CI is still running on abc1234"]);
+  });
+
+  it("refuses a changes-requested review", () => {
+    const gate = canAutoMerge(facts({ comments: [reviewComment("changes-requested")] }));
+
+    expect(gate.reasons).toEqual(["the newest review asked for changes"]);
+  });
+
+  it("refuses a review older than the head commit: a push needs a new review", () => {
+    const gate = canAutoMerge(facts({ comments: [reviewComment("pass", "2026-11-09T09:59:00Z")] }));
+
+    expect(gate.reasons).toEqual(["the newest review predates the head commit"]);
+  });
+
+  it("refuses when no review carries the marker", () => {
+    const gate = canAutoMerge(
+      facts({ comments: [{ body: "LGTM", createdAt: "2026-11-09T10:20:00Z" }] }),
+    );
+
+    expect(gate.reasons).toEqual(["no factory review comment yet"]);
+  });
+
+  it("requires risk:low", () => {
+    expect(canAutoMerge(facts({ labels: [] })).reasons).toEqual(["no risk label"]);
+    expect(canAutoMerge(facts({ labels: ["risk:low", "risk:high"] })).reasons).toEqual([
+      "both risk:low and risk:high are set",
+    ]);
+  });
+
+  it("names the reviewer's one-way door or wide blast radius as the reason", () => {
+    const oneWay = {
+      body: summaryComment({
+        verdict: "pass",
+        findings: [],
+        mergeDanger: { door: "one-way", blastRadius: "local", reason: "a state migration" },
+      }),
+      createdAt: "2026-11-09T10:20:00Z",
+    };
+    expect(canAutoMerge(facts({ labels: ["risk:high"], comments: [oneWay] })).reasons).toEqual([
+      "one-way door: a state migration",
+    ]);
+
+    const wide = {
+      body: summaryComment({
+        verdict: "pass",
+        findings: [],
+        mergeDanger: { door: "two-way", blastRadius: "wide", reason: "spans two packages" },
+      }),
+      createdAt: "2026-11-09T10:20:00Z",
+    };
+    expect(canAutoMerge(facts({ labels: ["risk:high"], comments: [wide] })).reasons).toEqual([
+      "wide blast radius: spans two packages",
+    ]);
+  });
+
+  it("refuses a protected path, and lets the handoff notes through", () => {
+    expect(canAutoMerge(facts({ files: [".github/workflows/ci.yml"] })).reasons).toEqual([
+      "touches .github/",
+    ]);
+    expect(
+      canAutoMerge(
+        facts({
+          files: ["docs/agents/handoff/ticket-87.md", "docs/agents/handoff/INDEX.md"],
+        }),
+      ),
+    ).toEqual({ merge: true, reasons: [] });
+  });
+
+  it("refuses a dependency major change", () => {
+    const gate = canAutoMerge(
+      facts({
+        dependencyChanges: [
+          { file: "package.json", before: { react: "^18.2.0" }, after: { react: "^19.0.0" } },
+        ],
+      }),
+    );
+
+    expect(gate.reasons).toEqual(["dependency major: react ^18.2.0 → ^19.0.0"]);
+  });
+
+  it("lists every reason that holds", () => {
+    const gate = canAutoMerge(
+      facts({
+        labels: [],
+        files: ["packages/factory/src/merge/gates.ts", "AGENTS.md"],
+        dependencyChanges: [
+          { file: "package.json", before: { zod: "^3.25.0" }, after: { zod: "^4.0.0" } },
+        ],
+      }),
+    );
+
+    expect(gate.reasons).toEqual([
+      "no risk label",
+      "touches packages/factory/",
+      "touches AGENTS.md",
+      "dependency major: zod ^3.25.0 → ^4.0.0",
+    ]);
   });
 });
