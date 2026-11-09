@@ -6,8 +6,8 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { gh } from "#intake/gh.ts";
 import { writeOutput } from "#shared/common.ts";
+import { gh } from "#shared/github.ts";
 
 const bodies = mkdtempSync(join(tmpdir(), "factory-intake-"));
 let bodyCount = 0;

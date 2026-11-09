@@ -8,6 +8,7 @@ import {
   majorOf,
   isFactoryPull,
   mergeStep,
+  MERGE_SUBJECT_LIMIT,
   mergeSubjectOf,
   needsMain,
   protectedPaths,
@@ -341,6 +342,13 @@ describe("mergeStep", () => {
     ).toEqual({ kind: "fix", reason: "main-moved" });
   });
 
+  it("waits while GitHub has not computed whether the branch conflicts", () => {
+    expect(mergeStep(facts({ mergeState: "unknown" }))).toEqual({
+      kind: "wait",
+      reason: "GitHub has not computed mergeability yet",
+    });
+  });
+
   it("merges a branch that is only behind main, on files it does not touch", () => {
     expect(mergeStep(facts({ mainAheadBy: 2, mainFiles: ["apps/server/src/bar.ts"] }))).toEqual({
       kind: "merge",
@@ -449,6 +457,23 @@ describe("mergeSubjectOf", () => {
     expect(mergeSubjectOf(dependabot)).toBe(
       "chore(merge): #97 build(deps): Bump vitest from 5.0.5 to 5.0.6",
     );
+  });
+
+  it("cuts a long ticket title at a word so the subject passes the commit check", () => {
+    const subject = mergeSubjectOf({
+      ...dependabot,
+      ticket: {
+        number: 125,
+        title:
+          "Pick and Sale trays and the Turn card own their uiStore wiring and intents, so Game.tsx stops relaying 13 props",
+      },
+      headRefName: "agent/issue-125-trays",
+      author: "universum-factory[bot]",
+    });
+    expect(subject).toBe(
+      "chore(merge): #125 Pick and Sale trays and the Turn card own their uiStore wiring and intents, so…",
+    );
+    expect(subject?.length).toBeLessThanOrEqual(MERGE_SUBJECT_LIMIT);
   });
 
   it("still refuses a factory pull that closes no issue", () => {

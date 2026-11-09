@@ -44,15 +44,13 @@ export function buyoutPriceOf(state: GameState, field: FieldId): number {
   return (valueOf(state, field) * BUYOUT_PERCENT) / 100;
 }
 
-/** True when one Player owns every University of the Group (R29, F1). */
-export function isMonopoly(state: GameState, group: GroupId): boolean {
-  const owners = FIELDS.filter((f) => f.group === group).map((f) => state.fields[f.id]?.owner);
-  const [first] = owners;
-  return first != null && owners.every((owner) => owner === first);
+/** True when `owner` owns every University of the Group (R29, F1). */
+export function isMonopoly(state: GameState, group: GroupId, owner: PlayerId): boolean {
+  return FIELDS.filter((f) => f.group === group).every((f) => state.fields[f.id]?.owner === owner);
 }
 
-/** How many Museums `owner` holds. */
-function museumsOf(state: GameState, owner: PlayerId): number {
+/** How many Museums `owner` holds (R53). */
+export function museumsOf(state: GameState, owner: PlayerId): number {
   return FIELDS.filter((f) => f.kind === "museum" && state.fields[f.id]?.owner === owner).length;
 }
 
@@ -65,7 +63,7 @@ export function fieldsValue(state: GameState, playerId: PlayerId): number {
   let total = 0;
   for (const info of FIELDS) {
     if (state.fields[info.id]?.owner !== playerId) continue;
-    total += info.kind === "museum" ? MUSEUM_VALUE : valueOf(state, info.id);
+    total += valueOf(state, info.id);
   }
   return total;
 }
@@ -109,5 +107,7 @@ export function rentWithCount(state: GameState, field: FieldId, count: number): 
   const base = baseRentOf(state, field);
   if (info?.kind === "museum" || count > 0) return base * (count + 1);
   if (!info?.group) return 0;
-  return Math.round(isMonopoly(state, info.group) ? (base * MONOPOLY_TENTHS) / 10 : base);
+  return Math.round(
+    isMonopoly(state, info.group, fieldState.owner) ? (base * MONOPOLY_TENTHS) / 10 : base,
+  );
 }
