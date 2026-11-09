@@ -1,93 +1,26 @@
 /**
  * The nightly retro's run: Claude reads the day's facts and the open issues,
  * picks the recurring problems and their cheapest durable fixes, and answers
- * with JSON only. The script performs every write: a `ready-for-agent` issue,
- * a `retro/<date>-<slug>` pull request labelled `ready-for-human` (applied
- * with `git apply --check` first) for a standards or workflow change, or
- * nothing. Then it appends the dated entry to the factory log and commits that
- * straight to `main` with `[skip ci]`.
+ * with JSON only. The script then performs every write through `writes.ts`: a
+ * `ready-for-agent` issue, a `retro/<date>-<slug>` pull request labelled
+ * `ready-for-human` (applied with `git apply --check` first) for a standards or
+ * workflow change, or nothing. Then it appends the dated entry to the factory
+ * log and commits that straight to `main` with `[skip ci]`.
  *
  * Env: GH_REPO, CLAUDE_CODE_OAUTH_TOKEN, OUTPUT_DIR (holds `facts.json`),
  * FACTORY_RETRO_MAX (optional, default 3), DRY_RUN.
  */
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as sandcastle from "@ai-hero/sandcastle";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import { hasActivity, type RetroFacts } from "#retro/collect.ts";
-import {
-  appendLog,
-  commitSubjectOf,
-  DEFAULT_MAX_WRITES,
-  LOG_FILE,
-  logSection,
-  planWrites,
-  type PlannedWrite,
-} from "#retro/plan.ts";
+import { appendLog, DEFAULT_MAX_WRITES, LOG_FILE, logSection, planWrites } from "#retro/plan.ts";
 import { retroSchema } from "#retro/schema.ts";
+import { applyWrites, shellIo } from "#retro/writes.ts";
 import { claudeAgent } from "#shared/agents.ts";
-import { fail, outputDir, positiveInt, required, safeSh, sh, shellArg } from "#shared/common.ts";
+import { fail, outputDir, positiveInt, required, sh, shellArg } from "#shared/common.ts";
 import { parseJson } from "#shared/github.ts";
-
-const writeTemp = (name: string, content: string): string => {
-  const file = join(mkdtempSync(join(tmpdir(), "factory-retro-")), name);
-  writeFileSync(file, `${content}\n`);
-  return file;
-};
-
-/** `gh issue create` prints the new issue's URL; its last segment is the number. */
-const issueNumberOf = (url: string): string => {
-  const number = url.trim().split("\n").at(-1)?.split("/").at(-1) ?? "";
-  if (!/^\d+$/u.test(number)) fail(`gh printed no issue URL: ${url.trim()}`);
-  return number;
-};
-
-const createIssue = (repo: string, title: string, body: string, label: string): string =>
-  issueNumberOf(
-    sh(
-      `gh issue create --repo "${repo}" --title ${shellArg(title)} --body-file "${writeTemp("issue.md", body)}" --label ${shellArg(label)}`,
-    ),
-  );
-
-/**
- * A retro pull request: a branch with the patch, pushed with the PAT so CI
- * runs on it, and a `ready-for-human` pull request (it touches a protected
- * path; the owner merges). A patch that no longer applies is a skip, not a
- * failed night; a push or PR failure is real and stops the run.
- */
-const openPatchPull = (
-  repo: string,
-  write: Extract<PlannedWrite, { kind: "standards-pr" | "workflow-pr" }>,
-  skipped: string[],
-): string | undefined => {
-  if (safeSh(`git ls-remote --heads origin ${shellArg(write.branch)}`).trim() !== "") {
-    skipped.push(`"${write.title}": branch ${write.branch} already exists`);
-    return undefined;
-  }
-  const patchFile = writeTemp("retro.patch", write.patch);
-  try {
-    sh(`git apply --check ${shellArg(patchFile)}`);
-  } catch {
-    skipped.push(`"${write.title}": the patch does not apply to main`);
-    return undefined;
-  }
-
-  sh(`git checkout -b ${shellArg(write.branch)}`);
-  try {
-    sh(`git apply ${shellArg(patchFile)}`);
-    sh("git add -A");
-    sh(`git commit -m ${shellArg(commitSubjectOf(write.title))}`);
-    sh(`git push origin ${shellArg(`HEAD:${write.branch}`)}`);
-    return issueNumberOf(
-      sh(
-        `gh pr create --repo "${repo}" --base main --head ${shellArg(write.branch)} --title ${shellArg(write.title)} --body-file "${writeTemp("pull.md", write.body)}" --label ready-for-human`,
-      ),
-    );
-  } finally {
-    sh("git checkout main");
-  }
-};
 
 const main = async (): Promise<void> => {
   const repo = required("GH_REPO");
@@ -147,19 +80,7 @@ const main = async (): Promise<void> => {
     return;
   }
 
-  const skipped = [...plan.skipped];
-  const opened: string[] = [];
-  for (const write of plan.writes) {
-    if (write.kind === "issue") {
-      const number = createIssue(repo, write.title, write.body, "ready-for-agent");
-      opened.push(`Opened #${number}: ${write.title}`);
-    } else {
-      const number = openPatchPull(repo, write, skipped);
-      if (number !== undefined) {
-        opened.push(`Opened pull request #${number}: ${write.title} (${write.branch})`);
-      }
-    }
-  }
+  const { opened, skipped } = applyWrites(plan.writes, repo, shellIo);
 
   // The push to main is the last write: main may have moved while Claude read.
   sh("git fetch origin main");
@@ -168,6 +89,7 @@ const main = async (): Promise<void> => {
   const bullets = [
     ...result.output.logEntry,
     ...opened,
+    ...plan.skipped,
     ...skipped.map((skip) => `Skipped: ${skip}`),
   ];
   writeFileSync(LOG_FILE, appendLog(existingLog, date, bullets));
