@@ -217,6 +217,41 @@ on the branch and the workflow pushes with `AGENT_PAT`; CI runs again and the me
 gh workflow run factory-fix.yml -f pr=95 -f reason=review      # ci | review | main-moved
 ```
 
+## The nightly retro
+
+`factory-retro.yml` runs at 03:30 UTC (inside the night window, after the review cron) and by hand.
+It reads the last 24 hours of the factory's own trail — the reviewer's summaries and the fixes it
+committed, fix rounds and escalations, merge escalations, merged and blocked pull requests, red `CI`
+runs with their failed jobs, and the owner's own comments on factory issues and pull requests — then
+asks Claude (one session, structured output) for the problems that **recur** and the cheapest durable
+fix for each. A day with no factory activity stops before the install and the Claude call.
+
+Claude decides; `src/retro/retro.ts` writes. Each finding's `fix.kind` chooses one of:
+
+- `issue`: a lint rule, a test or a small code change → a `ready-for-agent` ticket with the
+  implementer protocol's Implementation context section.
+- `standards-pr`: a change to the standards, the implementer protocol, the factory docs, an ADR or a
+  step prompt → a `retro/<date>-<slug>` branch with the patch (`git apply --check` first) and a
+  `ready-for-human` pull request; the owner merges the protected path.
+- `workflow-issue`: a `.github/workflows/` change → a `ready-for-human` issue with the patch in a
+  fenced diff (the PAT cannot push workflows).
+- `none`: no durable fix; the finding only reaches the log.
+
+The script dedupes against the open issues and pull requests (the prompt gets them, and a title check
+backs it up), and writes at most `FACTORY_RETRO_MAX` (default 3) things per run. Every day with
+factory activity appends a dated entry to [`factory-log.md`](factory-log.md), committed straight to
+`main` as `docs(factory): retro log YYYY-MM-DD` with `[skip ci]`; a quiet day writes one
+`- Nothing new.` line and opens nothing.
+
+```bash
+gh workflow run factory-retro.yml -f dry_run=true
+```
+
+A dry run prints Claude's answer, the writes it would make, and the log entry, and writes nothing.
+Locally (read-only, no Claude call): `DRY_RUN=1 OUTPUT_DIR=$(mktemp -d) node
+packages/factory/src/retro/collect.ts` prints the shaped facts to stderr and writes them to
+`facts.json`.
+
 ## Secrets
 
 Three repository secrets, all set by the wizard:
