@@ -46,8 +46,14 @@ export const fail = (message: string): never => {
 /** A value as one POSIX shell word, for the arguments that are data (a title). */
 export const shellArg = (value: string): string => `'${value.replaceAll("'", `'\\''`)}'`;
 
+/**
+ * Room for a month of paginated runs and jobs: execSync's 1 MB default
+ * overflowed (`ENOBUFS`) once the dispatcher's jobs read passed it.
+ */
+const SH_MAX_BUFFER = 256 * 1024 * 1024;
+
 export const sh = (cmd: string): string =>
-  execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: SH_MAX_BUFFER });
 
 /** `sh`, but an empty string when the command fails. */
 export const safeSh = (cmd: string): string => {

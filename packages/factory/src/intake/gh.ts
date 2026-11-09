@@ -8,7 +8,11 @@ import { parseJson } from "#shared/github.ts";
 
 /** `gh` with an argument array; stdout as text, a non-zero exit throws. */
 export const gh = (args: readonly string[]): string =>
-  execFileSync("gh", [...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  execFileSync("gh", [...args], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 256 * 1024 * 1024,
+  });
 
 /** A paginated `gh api` response, one flat list. */
 export const api = <T>(path: string): T[] => {
