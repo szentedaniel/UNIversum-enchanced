@@ -25,31 +25,35 @@ lint, typecheck, vitest. Playwright and `docker compose build` run once, in CI, 
 
 ## Labels
 
-| Label                   | Means                                                                  |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `ready-for-agent`       | Specified enough for an AFK agent; the dispatcher's frontier is these  |
-| `ready-for-human`       | The owner implements it; protected paths and risky work land here      |
-| `agent:in-progress`     | A run holds this issue; removed on every exit path                     |
-| `agent:review`          | On a pull request: the review step may look at it                      |
-| `agent:blocked`         | The last run failed or asked a question; the issue waits for a human   |
-| `risk:low`, `risk:high` | The reviewer's merge-danger verdict (two-way door, local blast radius) |
-| `spec:proposed`         | A spec draft waits for the owner's `spec:approved`                     |
-| `spec:approved`         | The owner approved the spec; the next step splits it into tickets      |
-| `factory`               | An issue about the factory itself; only the owner merges these         |
-| `factory:report`        | The weekly health issue                                                |
+| Label                   | Means                                                                         |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `ready-for-agent`       | Specified enough for an AFK agent; the dispatcher's frontier is these         |
+| `ready-for-human`       | The owner implements it (an issue) or merges it (a pull request)              |
+| `agent:in-progress`     | A run holds this issue; removed on every exit path                            |
+| `agent:review`          | On a pull request: the review step may look at it                             |
+| `agent:blocked`         | A run failed or asked a question; the issue or pull request waits for a human |
+| `risk:low`, `risk:high` | The reviewer's merge-danger verdict (two-way door, local blast radius)        |
+| `spec:proposed`         | A spec draft waits for the owner's `spec:approved`                            |
+| `spec:approved`         | The owner approved the spec; the next step splits it into tickets             |
+| `factory`               | An issue about the factory itself; only the owner merges these                |
+| `factory:report`        | The weekly health issue                                                       |
 
 The path a ticket takes:
 
 ```text
 ready-for-agent ──dispatch──▸ agent:in-progress ──PR opened──▸ agent:review (on the PR)
-                                        │
-                                        └──any failure──▸ agent:blocked (on the issue)
+                                        │                              │
+                                        └──any failure──▸ agent:blocked│
+                                                                       ▼
+                   changes requested ──▸ factory-fix (2 rounds) ──▸ CI ──▸ factory-merge
+                   pass + risk:low ────────────────────────────────────▸ factory-merge ──▸ merged
 agent:blocked ──re-dispatch──▸ agent:in-progress
 ```
 
-`agent:review` is set by the implement run once its pull request exists; the review step (#86) swaps
-it for `risk:low` or `risk:high`, and the merge gate and fix loop (#87) follow it. The weekly
-`factory:report` issue is a later ticket in the same spec.
+`agent:review` is set by the implement run once its pull request exists; the review step swaps it for
+`risk:low` or `risk:high`, the merge gate merges what the gates allow, and the fix loop sends a
+failing pull request back to omp at most twice. The weekly `factory:report` issue is a later ticket in
+the same spec.
 
 ## Dispatch
 
@@ -140,14 +144,77 @@ hand (`gh workflow run factory-review.yml -f pr=95`), and every night at 01:30 U
    `mergeDanger`.
 4. Pushes the reviewer's commits with `AGENT_PAT` (a plain push, never forced), posts one summary
    comment, and swaps `agent:review` for `risk:low` (only a two-way door with a local blast radius)
-   or `risk:high`. A `changes-requested` verdict also adds `ready-for-human` until the fix loop (#87)
-   exists; a later passing review clears it again.
+   or `risk:high`. A `changes-requested` verdict dispatches the fix loop
+   (`gh workflow run factory-fix.yml -f pr=<n> -f reason=review`); a pass leaves the merge gate to
+   decide and clears a stale `ready-for-human`.
 5. On failure, comments the reason on the pull request, removes `agent:review` and adds
    `ready-for-human`: the night cron must not retry a broken review forever.
 
 Claude runs with `--permission-mode bypassPermissions` (`claudeAgent` in `src/shared/agents.ts`):
 Sandcastle's `noSandbox()` provider reports no sandbox, so it passes no permission flag, and
 `claude -p` would deny every edit and Bash call. The runner is an ephemeral VM.
+
+## Merging and fixing
+
+Two steps finish a pull request: `factory-merge.yml` merges what the gates allow, and
+`factory-fix.yml` sends a failing one back to omp.
+
+### The merge gate
+
+`factory-merge.yml` runs when CI finishes on a pull request or a review finishes (whichever is last
+decides), and by hand. The gate code runs from a **checkout of `main`**, never the pull request's
+copy: a PR that edits `packages/factory/` must not decide its own merge.
+
+It merges with a merge commit only when every gate holds ([spec #85, Decision
+5](https://github.com/szentedaniel/UNIversum-enchanced/issues/85)):
+
+1. The `CI` workflow concluded `success` on the pull request's head sha (a re-run that passed counts).
+2. The newest `<!-- factory-review -->` comment says pass and was posted **after** the head commit;
+   a push after the review queues `agent:review` again, so a fix commit is reviewed before merging.
+3. The pull request carries `risk:low` — a two-way door with a local blast radius.
+4. It touches no protected path: `.github/`, `packages/factory/`, `CODING_STANDARDS.md`, `AGENTS.md`,
+   `CLAUDE.md`, `docs/agents/`, `docs/adr/`, `packages/rules/src/migrate.ts` and
+   `packages/rules/test/fixtures/`. `docs/agents/handoff/` is the one exception: every implementer
+   writes a handoff note and its `INDEX` line, so blocking those would block every ticket.
+5. No `package.json` moves a dependency to another major (the first non-zero number for `0.x`).
+
+The merge is `gh pr merge --merge --subject "chore(merge): #<issue> <title>"`. The issue gets a
+comment naming the merge commit and is closed (`Closes #…` in the body already closed it). The push
+to `main` starts `factory-dispatch.yml` by itself, so the next ticket is dispatched without a chain.
+
+Green but gated → `ready-for-human` on the pull request and one comment listing every reason
+("touches .github/", "one-way door: …", "dependency major: …"). A branch **behind main** goes to the
+fix loop first (`main-moved`); when main's new commits change `.github/workflows/`, the PAT cannot
+push them, so that too is `ready-for-human`. A pull request that is only _waiting_ — CI still
+running, the review not posted yet, `agent:review` queued — exits quietly: the next trigger decides.
+
+A dry run prints the decision and writes nothing:
+
+```bash
+gh workflow run factory-merge.yml -f pr=95 -f dry_run=true
+DRY_RUN=1 GH_REPO=<owner>/<repo> PR_NUMBER=95 node packages/factory/src/merge/merge.ts
+```
+
+### The fix loop
+
+`factory-fix.yml` runs when a pull request's CI concludes `failure`, when the review asks for
+changes, and when the merge gate finds the branch behind main. omp gets one prompt
+(`src/fix/prompt.md`) with the failure: the failed jobs' log tail (`gh run view --log-failed`,
+trimmed to the prompt's budget), the review's findings, or the conflict it must resolve. It commits
+on the branch and the workflow pushes with `AGENT_PAT`; CI runs again and the merge gate decides.
+
+- The rounds are counted from hidden comments on the pull request,
+  `<!-- factory-fix:round N -->`, so the CI and review triggers share one budget: **two** rounds
+  (`MAX_FIX_ROUNDS` in `src/fix/rounds.ts`). A spent budget posts one escalation comment
+  (`<!-- factory-fix:escalated -->`), adds `agent:blocked` + `ready-for-human` and runs no agent.
+- Merging main in is housekeeping, not a round: a conflict-free merge is git's own merge commit, and
+  only a conflict reaches the agent.
+- A failed run (no commit, a dirty tree, `STATUS: BLOCKED`) comments the reason and adds the same
+  two labels. Re-dispatch by hand to retry; the dispatch clears both labels first.
+
+```bash
+gh workflow run factory-fix.yml -f pr=95 -f reason=review      # ci | review | main-moved
+```
 
 ## Secrets
 
