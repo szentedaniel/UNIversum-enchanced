@@ -236,14 +236,20 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     const resolveDecision = async (roller: Page, view: PublicView) => {
       const [waiter] = roller === desktop ? [phone] : [desktop];
       const { phase } = view;
+      let choice: ReturnType<typeof takeOffer> | undefined;
       if (phase.kind === "offer") {
         await expect(roller.getByTestId("offer")).toBeVisible();
         await expect(waiter.getByTestId("offer")).toHaveCount(0);
-        if (takeOffer(phase) === "decline" && phase.buyout !== undefined) {
+        choice = takeOffer(phase);
+        if (choice === "decline" && phase.buyout !== undefined) {
           await expect(roller.getByRole("button", { name: /^Buy out · / })).toBeVisible();
         }
       }
-      const result = await resolveSharedDecision(actor(roller), view, takeOffer);
+      const result = await resolveSharedDecision(
+        actor(roller),
+        view,
+        (offer) => choice ?? takeOffer(offer),
+      );
       if (result.kind === "buy") {
         const taken = { field: result.field, owner: result.owner };
         if (result.choice === "level") bought = taken;
