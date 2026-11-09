@@ -66,6 +66,12 @@ const main = async (): Promise<void> => {
     promptArgs: {
       DATE: new Date().toISOString().slice(0, 10),
       MAX_PROPOSALS: String(max),
+      // The weekly pass is picky; a sweep the owner lifted the cap for wants
+      // every opportunity that pays for a ticket.
+      CAP_RULE:
+        max > DEFAULT_MAX_PROPOSALS
+          ? "This run is a sweep the owner asked for: propose every opportunity in scope that would pay for a ticket, strongest first, up to the cap. Leave out only the ones you would not defend."
+          : "It is not a target: propose one strong opportunity rather than two weak ones, and none when nothing this week would pay for a ticket.",
       FOCUS:
         focus.length === 0 ? "the whole repository" : focus.map((path) => `\`${path}\``).join(", "),
       // The pass looks where the code keeps changing; the log is the pointer.

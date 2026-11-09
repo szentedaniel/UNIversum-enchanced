@@ -29,7 +29,7 @@ A spec-sized ticket, not a wish. Each proposal has:
 - `twoWayDoor`: `true` when reverting the change is a clean revert — no stored state or migration, no protocol or wire change, no public interface, no lost data. `false` otherwise.
 - `doorReason`: one sentence a person can check, in the same words the review's merge-danger line uses.
 
-{{MAX_PROPOSALS}} is the cap, not a target: propose one strong opportunity rather than two weak ones, and none when nothing this week would pay for a ticket. Proposals must not overlap: no two may change the same file, so their tickets can be built in parallel.
+{{MAX_PROPOSALS}} is the cap. {{CAP_RULE}} Proposals must not overlap: no two may change the same file, so their tickets can be built in parallel.
 
 # NEVER
 
