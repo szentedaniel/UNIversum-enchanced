@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { frontierOf, type IssueFacts } from "#dispatch/frontier.ts";
+import { frontierOf, PRIORITY_LABELS, type IssueFacts } from "#dispatch/frontier.ts";
 import type { PullFacts } from "#shared/closing-pr.ts";
 
 /** The REST fields the dispatcher hands the frontier; only what a test reads. */
@@ -104,5 +104,19 @@ describe("frontierOf", () => {
 
     expect(frontier.eligible.map((entry) => entry.number)).toEqual([100, 101, 103]);
     expect(frontier.skipped.map((entry) => entry.issue.number)).toEqual([102]);
+  });
+
+  it("picks a priority:top issue before an older one: red main goes first", () => {
+    const old = issue(101, { createdAt: "2026-11-01T00:00:00Z" });
+    const redMain = issue(102, {
+      createdAt: "2026-11-05T00:00:00Z",
+      title: "Red main: CI failed on 0b9af87",
+      labels: ["ready-for-agent", "bug", "priority:top"],
+    });
+
+    const frontier = frontierOf([old, redMain], [], new Set());
+
+    expect(frontier.eligible.map((entry) => entry.number)).toEqual([102, 101]);
+    expect(PRIORITY_LABELS).toEqual(["priority:top"]);
   });
 });

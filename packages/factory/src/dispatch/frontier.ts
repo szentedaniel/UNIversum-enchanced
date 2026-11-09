@@ -38,10 +38,11 @@ export const BLOCKED_LABEL = "agent:blocked";
 export const HUMAN_LABEL = "ready-for-human";
 
 /**
- * The priority seam. There is no priority label yet, so every issue ties and
- * age decides; a label added here sorts above age without touching the rules.
+ * The priority seam: a label here sorts above age, in list order. Red main
+ * carries `priority:top`, so the bug the maintenance watch opens is the next
+ * implementer an empty frontier would start on.
  */
-export const PRIORITY_LABELS: readonly string[] = [];
+export const PRIORITY_LABELS: readonly string[] = ["priority:top"];
 
 export const priorityOf = (labels: readonly string[]): number => {
   const index = PRIORITY_LABELS.findIndex((label) => labels.includes(label));

@@ -1,0 +1,37 @@
+# Dependabot opens the factory's dependency work. Minor and patch bumps come
+# as one grouped pull request a week; a major comes on its own, because the
+# merge gate always hands a dependency major to the owner (`ready-for-human`).
+#
+# Dependabot labels its own pull requests `agent:review`. A run Dependabot
+# triggers gets no Actions secrets, so factory-review.yml skips that label
+# event and its night cron dispatches the review instead (as the owner, with
+# secrets). Then the normal path: CI, merge gate, and the fix loop when red.
+version: 2
+updates:
+  # pnpm workspace: Dependabot reads pnpm-workspace.yaml (catalogs included)
+  # and the root pnpm-lock.yaml.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    # CI's commit check wants `type(scope): description`; Dependabot's own
+    # subject ("Bump x from a to b") has no type. The prefix covers development
+    # dependencies too (a colon follows the closing bracket).
+    commit-message:
+      prefix: "build(deps)"
+    labels:
+      - agent:review
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "build(deps)"
+    labels:
+      - agent:review

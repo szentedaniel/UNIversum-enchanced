@@ -1,0 +1,127 @@
+# The weekly maintenance pass: the factory keeps the codebase healthy while
+# nobody is looking. Three independent jobs, each a thin shell around a script
+# in `packages/factory/src/maintain/`:
+#  - architecture: Claude Code, with the pinned plugin's `codebase-design`
+#    vocabulary, proposes at most two deep-module refactors; the script opens
+#    one issue each, `ready-for-agent` only for a two-way door.
+#  - flaky-tests: the last week's CI logs' Playwright `N flaky` summaries, one
+#    `bug` + `ready-for-agent` issue per test name, deduped by title.
+#  - handoff-hygiene: handoff notes naming paths git no longer has, one
+#    `ready-for-human` issue.
+#
+# `workflow_dispatch` with dry_run prints what each step would open and writes
+# nothing. The gate code and the scripts always run main's copy.
+name: Factory Maintain
+
+run-name: Factory maintain ${{ inputs.dry_run && '(dry run)' || '(weekly)' }}
+
+on:
+  schedule:
+    # Sunday 02:00 UTC is 03:00 or 04:00 in Budapest: inside the 01:00–07:00
+    # night window all year, so the Claude run spends no daytime quota.
+    - cron: "0 2 * * 0"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print what would be opened, without writing
+        type: boolean
+        default: false
+
+# The jobs' own token stays read-only; every write goes through AGENT_PAT.
+permissions:
+  contents: read
+
+jobs:
+  architecture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+    steps:
+      # Full history: the pass weights the code that keeps changing, and
+      # `git log --oneline` is how it finds it.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      # Sandcastle imports come from the workspace; the pass needs no build.
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@2.1.311
+
+      # The same plugin pin as the review step: `codebase-design` is the
+      # vocabulary the proposals use, and a renamed skill must fail loudly.
+      - name: Install the design skill
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if ! claude plugin marketplace list | grep -q "claude-plugins-official"; then
+            claude plugin marketplace add anthropics/claude-plugins-official
+          fi
+          claude plugin install "mattpocock-skills@claude-plugins-official"
+          actual=$(claude plugin list --json \
+            | jq -r '.[] | select(.id == "mattpocock-skills@claude-plugins-official") | .version')
+          if [ "$actual" != "1.3.1" ]; then
+            echo "::error::The plugin must be 1.3.1 (the pinned codebase-design skill); got '$actual'. Update the pin only after re-reading the skill."
+            exit 1
+          fi
+          echo "Design skill: mattpocock-skills@claude-plugins-official $actual"
+
+      - name: Propose the refactors
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: node packages/factory/src/maintain/run-architecture.ts
+
+  flaky-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+    steps:
+      # The logs are the input: the pass installs nothing.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - name: Find the flaky tests
+        run: node packages/factory/src/maintain/run-flaky-tests.ts
+
+  handoff-hygiene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+    steps:
+      # The notes and git's own tree are the whole input.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - name: Check the handoff notes
+        run: node packages/factory/src/maintain/run-handoff-hygiene.ts

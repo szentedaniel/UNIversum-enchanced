@@ -9,6 +9,7 @@ import {
   isFactoryPull,
   mainMovesWorkflows,
   mergeStep,
+  mergeSubjectOf,
   needsMain,
   protectedPaths,
 } from "#merge/gates.ts";
@@ -417,6 +418,53 @@ describe("isFactoryPull", () => {
   it("leaves the owner's own branches alone", () => {
     expect(isFactoryPull("main", ["risk:low"])).toBe(false);
     expect(isFactoryPull("fix/typo", [])).toBe(false);
+  });
+
+  it("takes Dependabot's own branch, only from Dependabot", () => {
+    expect(isFactoryPull("dependabot/npm_and_yarn/vitest-5.0.6", [], "dependabot[bot]")).toBe(true);
+    // A branch can be named anything; the author is what makes it Dependabot's.
+    expect(isFactoryPull("dependabot/npm_and_yarn/vitest-5.0.6", [], "szentedaniel")).toBe(false);
+    expect(isFactoryPull("agent/issue-91-maintenance", [], "dependabot[bot]")).toBe(true);
+  });
+});
+
+describe("mergeSubjectOf", () => {
+  const dependabot = {
+    number: 97,
+    title: "build(deps): Bump vitest from 5.0.5 to 5.0.6",
+    ticket: undefined,
+    headRefName: "dependabot/npm_and_yarn/vitest-5.0.6",
+    author: "dependabot[bot]",
+  };
+
+  it("names the ticket a factory pull closes, by the ticket's title", () => {
+    expect(
+      mergeSubjectOf({
+        ...dependabot,
+        title: "Implement #91: Weekly maintenance",
+        ticket: { number: 91, title: "Factory: weekly maintenance" },
+        headRefName: "agent/issue-91-maintenance",
+        author: "universum-factory[bot]",
+      }),
+    ).toBe("chore(merge): #91 Factory: weekly maintenance");
+  });
+
+  it("names a dependency bump by its pull request, which closes no ticket", () => {
+    expect(mergeSubjectOf(dependabot)).toBe(
+      "chore(merge): #97 build(deps): Bump vitest from 5.0.5 to 5.0.6",
+    );
+  });
+
+  it("still refuses a factory pull that closes no issue", () => {
+    expect(
+      mergeSubjectOf({
+        number: 95,
+        title: "A factory pull with no ticket",
+        ticket: undefined,
+        headRefName: "agent/issue-95-something",
+        author: "universum-factory[bot]",
+      }),
+    ).toBeUndefined();
   });
 });
 
