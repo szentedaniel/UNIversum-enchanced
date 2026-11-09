@@ -184,9 +184,11 @@ comment naming the merge commit and is closed (`Closes #…` in the body already
 to `main` starts `factory-dispatch.yml` by itself, so the next ticket is dispatched without a chain.
 
 Green but gated → `ready-for-human` on the pull request and one comment listing every reason
-("touches .github/", "one-way door: …", "dependency major: …"). A branch **behind main** goes to the
-fix loop first (`main-moved`); when main's new commits change `.github/workflows/`, the PAT cannot
-push them, so that too is `ready-for-human`. A pull request that is only _waiting_ — CI still
+("touches .github/", "one-way door: …", "dependency major: …"). A branch merely **behind main** merges
+as it is: CI ran on the pull request merged into main. Only a conflict, or main changing a file the
+pull request changes too (handoff notes aside), sends it to the fix loop first (`main-moved`); when
+main's new commits change `.github/workflows/`, the PAT cannot push that merge, so it is
+`ready-for-human`. A pull request that is only _waiting_ — CI still
 running, the review not posted yet, `agent:review` queued — exits quietly: the next trigger decides.
 
 A dry run prints the decision and writes nothing:
@@ -199,7 +201,7 @@ DRY_RUN=1 GH_REPO=<owner>/<repo> PR_NUMBER=95 node packages/factory/src/merge/me
 ### The fix loop
 
 `factory-fix.yml` runs when a pull request's CI concludes `failure`, when the review asks for
-changes, and when the merge gate finds the branch behind main. omp gets one prompt
+changes, and when the merge gate needs main merged in (`needsMain`). omp gets one prompt
 (`src/fix/prompt.md`) with the failure: the failed jobs' log tail (`gh run view --log-failed`,
 trimmed to the prompt's budget), the review's findings, or the conflict it must resolve. It commits
 on the branch and the workflow pushes with `AGENT_PAT`; CI runs again and the merge gate decides.
