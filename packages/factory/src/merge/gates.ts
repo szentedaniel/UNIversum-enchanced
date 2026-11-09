@@ -202,7 +202,7 @@ export interface MergeFacts {
   readonly mergeState: string;
   /** Commits on main the head does not have (`compare/<head>...main`'s `ahead_by`). */
   readonly mainAheadBy: number;
-  /** The files main changed since the merge base: a workflow change cannot be pushed. */
+  /** The files main changed since the merge base; `needsMain` compares them with `files`. */
   readonly mainFiles: readonly string[];
 }
 
