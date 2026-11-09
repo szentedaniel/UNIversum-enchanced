@@ -342,6 +342,13 @@ describe("mergeStep", () => {
     ).toEqual({ kind: "fix", reason: "main-moved" });
   });
 
+  it("waits while GitHub has not computed whether the branch conflicts", () => {
+    expect(mergeStep(facts({ mergeState: "unknown" }))).toEqual({
+      kind: "wait",
+      reason: "GitHub has not computed mergeability yet",
+    });
+  });
+
   it("merges a branch that is only behind main, on files it does not touch", () => {
     expect(mergeStep(facts({ mainAheadBy: 2, mainFiles: ["apps/server/src/bar.ts"] }))).toEqual({
       kind: "merge",
