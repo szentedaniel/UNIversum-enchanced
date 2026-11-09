@@ -43,12 +43,13 @@ permissions:
 
 jobs:
   merge:
-    # A push to main runs CI too; skip it before billing a job. A review run
-    # dispatched by the night cron is a workflow_dispatch, so it is let in and
-    # the resolve step reads the number from its run-name.
+    # Only a CI success can merge, a failed run is the fix loop's; a push to
+    # main runs CI too but has no pull request. A review run dispatched by the
+    # night cron is a workflow_dispatch, so it is let in and the resolve step
+    # reads the number from its run-name.
     if: |
       github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.event == 'pull_request' ||
+      (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.path == '.github/workflows/ci.yml' && github.event.workflow_run.conclusion == 'success') ||
       (github.event.workflow_run.path == '.github/workflows/factory-review.yml' && startsWith(github.event.workflow_run.name, 'Factory review #'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
