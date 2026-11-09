@@ -4,7 +4,11 @@ Branch `ticket/59-retro-review-fixes` (on `v2-modernization`), spec #58. No
 product code changed: the Playback fence, the e2e helpers and the docs.
 Version: #58.
 
-## The ADR-0004 fence (`apps/web/test/playback-fence.test.ts`)
+## The ADR-0004 fence (the old `playback-fence.test.ts`, split by #68)
+
+#68 replaced this one scanner with the Oxlint import override and
+`apps/web/test/server-clock-fence.test.ts`; the points below record how the
+scanner #59 reviewed worked.
 
 - **Matching is whole-file, not line by line.** `scan(fence, source, file)`
   runs `matchAll` over the comment-stripped source, so `\s*` may span a
