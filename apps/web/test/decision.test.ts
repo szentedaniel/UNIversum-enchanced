@@ -254,13 +254,21 @@ describe("openDecision", () => {
   it("shows another Player's Sale as a waiting line", () => {
     const view = publicView(sellingState());
 
-    expect(openDecision(frameOf(view), "p1", false)).toEqual({ owner: "p2", kind: "sale" });
+    expect(openDecision(frameOf(view), "p1", false)).toEqual({
+      owner: "other",
+      player: "p2",
+      kind: "sale",
+    });
   });
 
   it("shows another Player's pick as a waiting line", () => {
     const view = publicView(doublerState("p2"));
 
-    expect(openDecision(frameOf(view), "p1", false)).toEqual({ owner: "p2", kind: "pick" });
+    expect(openDecision(frameOf(view), "p1", false)).toEqual({
+      owner: "other",
+      player: "p2",
+      kind: "pick",
+    });
   });
 
   it("shows no Decision for another Player's Roll, Offer or Quarantine choice", () => {
@@ -316,7 +324,11 @@ describe("openDecision", () => {
   it("keeps another Player's waiting line while an intent is in flight", () => {
     const view = publicView(sellingState());
 
-    expect(openDecision(frameOf(view), "p1", true)).toEqual({ owner: "p2", kind: "sale" });
+    expect(openDecision(frameOf(view), "p1", true)).toEqual({
+      owner: "other",
+      player: "p2",
+      kind: "sale",
+    });
   });
 });
 
@@ -327,10 +339,8 @@ describe("mySaleOrPick", () => {
 
     expect(mySaleOrPick(myDecision(view))).toMatchObject({
       kind: "sale",
-      key,
-      pickable: [VESZPREM, BERLIN],
       busy: false,
-      sale: { key, shortfall: 824_000 },
+      sale: { key, shortfall: 824_000, pickable: [VESZPREM, BERLIN] },
     });
     expect(mySaleOrPick(myDecision(view, true))).toMatchObject({ kind: "sale", busy: true });
   });
@@ -341,10 +351,8 @@ describe("mySaleOrPick", () => {
 
     expect(mySaleOrPick(myDecision(view))).toMatchObject({
       kind: "pick",
-      key,
-      pickable: [VESZPREM, BUDAPEST, MUSEUM_1],
       busy: false,
-      pick: { kind: "doubler" },
+      pick: { kind: "doubler", key, pickable: [VESZPREM, BUDAPEST, MUSEUM_1] },
     });
     expect(mySaleOrPick(myDecision(view, true))).toMatchObject({ kind: "pick", busy: true });
   });
