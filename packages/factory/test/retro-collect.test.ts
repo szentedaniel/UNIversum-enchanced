@@ -102,6 +102,33 @@ describe("factsOf", () => {
     expect(hasActivity(facts(emptyFacts))).toBe(false);
     expect(hasActivity(facts({ ...emptyFacts, comments: fixture.comments }))).toBe(false);
   });
+
+  it("reads a closed pull request as closed, and a merge from mergedAt", () => {
+    const closed = {
+      number: 105,
+      title: "Implement #99: a closed pull request",
+      body: "",
+      headRefName: "agent/issue-99-closed",
+      labels: ["factory"],
+      state: "closed",
+      createdAt: "2026-11-08T06:00:00Z",
+      updatedAt: "2026-11-08T09:00:00Z",
+      mergedAt: null,
+      url: "https://github.com/szentedaniel/UNIversum-enchanced/pull/105",
+    };
+    const merged = {
+      ...closed,
+      number: 106,
+      state: "closed",
+      mergedAt: "2026-11-08T08:00:00Z",
+    };
+
+    const states = facts({ ...emptyFacts, pulls: [closed, merged] }).pulls.map(
+      (pull) => pull.state,
+    );
+
+    expect(states).toEqual(["CLOSED", "MERGED"]);
+  });
 });
 
 describe("isFactoryComment", () => {

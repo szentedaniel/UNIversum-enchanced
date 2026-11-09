@@ -287,7 +287,8 @@ const shapePull = (
     title: pull.title,
     url: pull.url,
     branch: pull.headRefName,
-    state: pull.state === "MERGED" ? "MERGED" : pull.state === "CLOSED" ? "CLOSED" : "OPEN",
+    state:
+      pull.mergedAt !== null ? "MERGED" : pull.state.toUpperCase() === "CLOSED" ? "CLOSED" : "OPEN",
     labels: [...pull.labels],
     createdAt: pull.createdAt,
     mergedAt: pull.mergedAt,
@@ -379,36 +380,13 @@ export const hasActivity = (facts: RetroFacts): boolean =>
 const fetchFacts = (repo: string, since: Date): RawFacts => {
   const owner = repo.split("/")[0] ?? "";
   const sinceIso = since.toISOString();
-  const ghPulls = parseJson<
-    {
-      number: number;
-      title: string;
-      body: string;
-      headRefName: string;
-      labels: { name: string }[];
-      state: string;
-      createdAt: string;
-      updatedAt: string;
-      mergedAt: string | null;
-      url: string;
-    }[]
-  >(
+  // Sorted by update, not creation: a pull request opened months ago and
+  // merged today is exactly what the retro must see. One page is a day's worth.
+  const pulls = parseJson<RawPull[]>(
     sh(
-      `gh pr list --repo "${repo}" --state all --limit 100 --json number,title,body,headRefName,labels,state,createdAt,updatedAt,mergedAt,url`,
+      `gh api "repos/${repo}/pulls?state=all&sort=updated&direction=desc&per_page=100" --jq '[.[] | {number, title, body, headRefName: .head.ref, labels: [.labels[].name], state, createdAt: .created_at, updatedAt: .updated_at, mergedAt: .merged_at, url: .html_url}]'`,
     ),
   );
-  const pulls: RawPull[] = ghPulls.map((pull) => ({
-    number: pull.number,
-    title: pull.title,
-    body: pull.body,
-    headRefName: pull.headRefName,
-    labels: pull.labels.map((label) => label.name),
-    state: pull.state,
-    createdAt: pull.createdAt,
-    updatedAt: pull.updatedAt,
-    mergedAt: pull.mergedAt,
-    url: pull.url,
-  }));
   const windowPulls = pulls.filter(
     (pull) =>
       isFactoryPull(pull.headRefName, pull.labels) && Date.parse(pull.updatedAt) >= since.getTime(),
