@@ -8,7 +8,8 @@ const SUBJECT_LIMIT = 100;
 /**
  * `prefix` followed by `title` as one commit subject the check accepts:
  * whitespace collapsed, cut at a word boundary when it would pass the limit,
- * and never ending in punctuation or whitespace (the rules refuse both).
+ * and never ending in a period (or a similar separator) or whitespace, which
+ * the rules refuse.
  */
 export const subjectOf = (prefix: string, title: string): string => {
   const room = SUBJECT_LIMIT - prefix.length;
