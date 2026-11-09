@@ -58,6 +58,9 @@ function readBody(req: IncomingMessage, max: number): Promise<string | null> {
 /** What reading a route's request got: its client bucket and body, or the refusal to answer. */
 export type RequestRead = { bucket: string; body: string } | { refusal: Refusal; status: number };
 
+/** A body over the route's cap, declared or read. */
+const TOO_LARGE: RequestRead = { refusal: { code: "MALFORMED" }, status: 413 };
+
 /**
  * Reads a route's request: resolves the client bucket, refuses a declared or
  * actual body over `max` bytes (413 `MALFORMED`), and consults `rate` once the
@@ -68,15 +71,13 @@ export async function readRequest(
   { max, rate }: { max: number; rate?: (bucket: string) => Promise<Refusal | null> },
 ): Promise<RequestRead> {
   const bucket = ipBucket(clientIp(req.headers, req.socket.remoteAddress));
-  if (Number(req.headers["content-length"] ?? 0) > max) {
-    return { refusal: { code: "MALFORMED" }, status: 413 };
-  }
+  if (Number(req.headers["content-length"] ?? 0) > max) return TOO_LARGE;
   if (rate) {
     const refusal = await rate(bucket);
     if (refusal) return { refusal, status: 429 };
   }
   const body = await readBody(req, max);
-  if (body === null) return { refusal: { code: "MALFORMED" }, status: 413 };
+  if (body === null) return TOO_LARGE;
   return { bucket, body };
 }
 
