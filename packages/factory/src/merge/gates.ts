@@ -241,13 +241,6 @@ export const canAutoMerge = (facts: MergeFacts): MergeGate => {
   return { merge: reasons.length === 0, reasons };
 };
 
-/** The directory whose changes the factory's token cannot push. */
-const WORKFLOWS_DIR = ".github/workflows/";
-
-/** Whether main's new commits change a workflow the PAT has no permission for. */
-export const mainMovesWorkflows = (files: readonly string[]): boolean =>
-  files.some((file) => file.startsWith(WORKFLOWS_DIR));
-
 /** Dependabot's login, as the REST author of its pull requests. */
 export const DEPENDABOT_AUTHOR = "dependabot[bot]";
 
@@ -335,12 +328,6 @@ export const mergeStep = (facts: MergeFacts): MergeStep => {
   // merely behind can merge as it is. Only a conflict, or main touching the
   // same files, needs main merged in first; that restarts CI and the review.
   if (needsMain(facts)) {
-    if (mainMovesWorkflows(facts.mainFiles)) {
-      return {
-        kind: "escalate",
-        reasons: ["main changed .github/workflows/, which the factory's token cannot push"],
-      };
-    }
     return { kind: "fix", reason: "main-moved" };
   }
 

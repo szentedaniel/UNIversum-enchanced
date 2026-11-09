@@ -7,7 +7,6 @@ import {
   majorBumps,
   majorOf,
   isFactoryPull,
-  mainMovesWorkflows,
   mergeStep,
   mergeSubjectOf,
   needsMain,
@@ -357,7 +356,7 @@ describe("mergeStep", () => {
     ).toBe(false);
   });
 
-  it("refuses to merge main in when the new commits change workflows", () => {
+  it("sends the fix loop after main even when main changed workflows", () => {
     const step = mergeStep(
       facts({
         mainAheadBy: 1,
@@ -365,10 +364,7 @@ describe("mergeStep", () => {
       }),
     );
 
-    expect(step).toEqual({
-      kind: "escalate",
-      reasons: ["main changed .github/workflows/, which the factory's token cannot push"],
-    });
+    expect(step).toEqual({ kind: "fix", reason: "main-moved" });
   });
 
   it("waits for CI, leaving a failed run to the fix loop", () => {
@@ -465,12 +461,5 @@ describe("mergeSubjectOf", () => {
         author: "universum-factory[bot]",
       }),
     ).toBeUndefined();
-  });
-});
-
-describe("mainMovesWorkflows", () => {
-  it("notices a workflow file among main's commits", () => {
-    expect(mainMovesWorkflows([".github/workflows/factory-merge.yml"])).toBe(true);
-    expect(mainMovesWorkflows(["apps/web/src/Game.tsx", "docs/agents/factory.md"])).toBe(false);
   });
 });
