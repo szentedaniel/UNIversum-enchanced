@@ -124,8 +124,9 @@ export function Board() {
         clearTimeout(warningTimer);
         const { frame } = playbackStore.getState();
         const { push } = roomStore.getState();
-        // The Sale's marks count down on the server's clock: only the push's offset applies.
-        const serverNowMs = push === null ? Date.now() : serverNow(push.clockOffset);
+        // The Sale's marks count down on the server's clock: only the push's offset applies,
+        // and with no push the clock is unknown, so the Sale marks nothing.
+        const serverNowMs = push === null ? null : serverNow(push.clockOffset);
         const sync = pickSyncOf(currentDecision(), frame, serverNowMs, uiStore.getState());
         // `key` is null while the gate is shut, so the open card and inspect mode
         // reset at the Playback's start; it ignores `busy`, so a send never resets the picks.
