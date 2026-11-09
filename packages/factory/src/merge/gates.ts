@@ -266,6 +266,18 @@ const wait = (reason: string): MergeStep => ({ kind: "wait", reason });
  * wait for the run that is still coming, queue the re-review a push needs,
  * send it to the fix loop, or hand it to the owner with every reason.
  */
+/**
+ * Whether main must be merged into the branch before the gate decides: it
+ * conflicts, or main changed a file the pull request changes too. The handoff
+ * notes every ticket appends to don't count; their merge is a union.
+ */
+export const needsMain = (facts: MergeFacts): boolean => {
+  if (facts.mergeState === "dirty") return true;
+  if (facts.mainAheadBy === 0) return false;
+  const mainFiles = new Set(facts.mainFiles);
+  return facts.files.some((file) => !file.startsWith(HANDOFF_DIR) && mainFiles.has(file));
+};
+
 export const mergeStep = (facts: MergeFacts): MergeStep => {
   if (facts.labels.includes("agent:review")) return wait("a review is queued (agent:review)");
   if (facts.labels.includes("ready-for-human")) {
@@ -274,9 +286,10 @@ export const mergeStep = (facts: MergeFacts): MergeStep => {
   if (facts.labels.includes("agent:blocked"))
     return wait("the pull request is blocked (agent:blocked)");
 
-  // Merging main in restarts CI anyway, so it comes before the CI gate; a
-  // new head also means the review has to look again.
-  if (facts.mainAheadBy > 0 || facts.mergeState === "dirty") {
+  // CI already ran on the pull request merged into main, so a branch that is
+  // merely behind can merge as it is. Only a conflict, or main touching the
+  // same files, needs main merged in first; that restarts CI and the review.
+  if (needsMain(facts)) {
     if (mainMovesWorkflows(facts.mainFiles)) {
       return {
         kind: "escalate",

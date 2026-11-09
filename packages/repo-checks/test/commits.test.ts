@@ -17,7 +17,7 @@ describe("the commit rules", () => {
   });
 
   it("refuse an unknown type, a missing colon or an empty description", () => {
-    const subjects = ["wip: try again", "fix(server) no colon", "fix: ", "Fix: capitalised"];
+    const subjects = ["wip: try again", "fix(server) no colon", "fix:", "Fix: capitalised"];
     expect(subjects.map((subject) => commitProblems(commit(subject)).length)).toEqual([1, 1, 1, 1]);
   });
 
@@ -36,6 +36,32 @@ describe("the commit rules", () => {
     ]);
     expect(commitProblems(commit("fix: is the parser done?"))).toEqual([]);
     expect(commitProblems(commit("fix(web): keep the old parser (v2)"))).toEqual([]);
+  });
+
+  it("refuse a subject with two spaces in a row or trailing whitespace, letting single spaces through", () => {
+    expect(commitProblems(commit("fix(server): write  logs synchronously"))).toEqual([
+      "subject contains two or more consecutive spaces",
+    ]);
+    expect(commitProblems(commit("fix(server): write logs synchronously "))).toEqual([
+      "subject ends with whitespace",
+    ]);
+    expect(commitProblems(commit("fix: write  logs "))).toEqual([
+      "subject contains two or more consecutive spaces",
+      "subject ends with whitespace",
+    ]);
+    expect(commitProblems(commit("fix(server): write stdout logs synchronously"))).toEqual([]);
+  });
+
+  it("exempt git's own merge subject from the whitespace rules on a merge commit", () => {
+    const doubleSpaced = "Merge branch 'v2-modernization' into  ticket/35-reconnect";
+    const trailing = "Merge branch 'v2-modernization' into ticket/35-reconnect ";
+
+    expect(commitProblems(commit(doubleSpaced, 2))).toEqual([]);
+    expect(commitProblems(commit(trailing, 2))).toEqual([]);
+    expect(commitProblems(commit(doubleSpaced, 1))).toContain(
+      "subject contains two or more consecutive spaces",
+    );
+    expect(commitProblems(commit(trailing, 1))).toContain("subject ends with whitespace");
   });
 
   it("refuse a subject over 100 characters, naming its length and the limit", () => {

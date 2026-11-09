@@ -9,6 +9,7 @@ import {
   isFactoryPull,
   mainMovesWorkflows,
   mergeStep,
+  needsMain,
   protectedPaths,
 } from "#merge/gates.ts";
 import type { CiRun, MergeFacts } from "#merge/gates.ts";
@@ -330,17 +331,37 @@ describe("mergeStep", () => {
     });
   });
 
-  it("sends the fix loop after main when the branch fell behind", () => {
-    expect(mergeStep(facts({ mainAheadBy: 2 }))).toEqual({ kind: "fix", reason: "main-moved" });
+  it("sends the fix loop after main when the branch conflicts or shares files with it", () => {
     expect(mergeStep(facts({ mergeState: "dirty" }))).toEqual({
       kind: "fix",
       reason: "main-moved",
     });
+    expect(
+      mergeStep(facts({ mainAheadBy: 2, mainFiles: ["apps/web/src/foo.ts", "README.md"] })),
+    ).toEqual({ kind: "fix", reason: "main-moved" });
+  });
+
+  it("merges a branch that is only behind main, on files it does not touch", () => {
+    expect(mergeStep(facts({ mainAheadBy: 2, mainFiles: ["apps/server/src/bar.ts"] }))).toEqual({
+      kind: "merge",
+    });
+    expect(
+      needsMain(
+        facts({
+          mainAheadBy: 1,
+          files: ["apps/web/src/foo.ts", "docs/agents/handoff/INDEX.md"],
+          mainFiles: [".github/workflows/ci.yml", "docs/agents/handoff/INDEX.md"],
+        }),
+      ),
+    ).toBe(false);
   });
 
   it("refuses to merge main in when the new commits change workflows", () => {
     const step = mergeStep(
-      facts({ mainAheadBy: 1, mainFiles: [".github/workflows/ci.yml", "apps/web/src/Game.tsx"] }),
+      facts({
+        mainAheadBy: 1,
+        mainFiles: [".github/workflows/ci.yml", "apps/web/src/foo.ts"],
+      }),
     );
 
     expect(step).toEqual({

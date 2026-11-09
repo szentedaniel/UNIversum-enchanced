@@ -21,6 +21,9 @@ export type Commit = { sha: string; parents: number; message: string };
 const SUBJECT = new RegExp(`^(${COMMIT_TYPES.join("|")})(\\([^()\\s]+\\))?!?: \\S`);
 /** The longest a subject may be, in characters. */
 const SUBJECT_LIMIT = 100;
+/** Two spaces in a row, or whitespace after the last visible character. */
+const DOUBLE_SPACE = / {2,}/;
+const TRAILING_WHITESPACE = /\s$/;
 /** Git's own subject for a merge it wrote (`Merge branch 'x' into y`). */
 const GIT_MERGE_SUBJECT = /^Merge (branch|remote-tracking branch|pull request) /;
 const ATTRIBUTION = /^\s*(co-authored-by:|\S*\s*generated with\b)/im;
@@ -41,6 +44,12 @@ export function commitProblems(commit: Commit): string[] {
     );
   }
   if (subject.endsWith(".")) problems.push("subject ends with a period");
+  if (!gitMerge && DOUBLE_SPACE.test(subject)) {
+    problems.push("subject contains two or more consecutive spaces");
+  }
+  if (!gitMerge && TRAILING_WHITESPACE.test(subject)) {
+    problems.push("subject ends with whitespace");
+  }
   const attribution = ATTRIBUTION.exec(commit.message);
   if (attribution) problems.push(`carries an attribution line: "${attribution[0].trim()}"`);
   return problems;

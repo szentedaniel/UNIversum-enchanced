@@ -19,6 +19,17 @@ export const jsonLines = <T>(raw: string): T[] =>
     .filter((line) => line.trim() !== "")
     .map((line) => parseJson<T>(line));
 
+/**
+ * A paginated `gh api` response, one flat list. `--slurp` wraps each page in
+ * an array, so a single-object endpoint also arrives as one entry.
+ */
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the one untyped JSON boundary; each caller names its REST shape
+export const api = <T>(path: string): T[] => {
+  const pages: unknown[] = JSON.parse(sh(`gh api --paginate --slurp "${path}"`));
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- untrusted JSON, typed by the caller
+  return pages.flat() as T[];
+};
+
 /** Every comment on an issue or pull request, oldest first. */
 export const issueComments = (repo: string, number: string): ReviewComment[] =>
   jsonLines<ReviewComment>(

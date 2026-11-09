@@ -184,7 +184,12 @@ const main = (): void => {
     // subject cannot name it.
     fail(`Pull request #${pr} closes no issue; cannot name the merge commit.`);
   }
-  const subject = `chore(merge): #${String(issue)} ${pull.title}`;
+  // The ticket's title, not the pull request's (`Implement #N: …`), as the
+  // hand merges have always named it.
+  const issueTitle = sh(
+    `gh issue view ${String(issue)} --repo "${repo}" --json title --jq .title`,
+  ).trim();
+  const subject = `chore(merge): #${String(issue)} ${issueTitle === "" ? pull.title : issueTitle}`;
   console.log(`Merging #${pr} as "${subject}".`);
   if (dryRun) return;
   sh(`gh pr merge ${pr} --repo "${repo}" --merge --subject ${shellArg(subject)}`);
