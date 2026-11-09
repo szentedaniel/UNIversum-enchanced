@@ -7,7 +7,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { commitProblems } from "#commits.ts";
+import { commitProblems, messageFromFile } from "#commits.ts";
 
 const file = process.argv[2];
 if (file === undefined) {
@@ -15,13 +15,7 @@ if (file === undefined) {
   process.exit(2);
 }
 
-const SCISSORS = "# ------------------------ >8 ------------------------";
-const message = readFileSync(file, "utf8")
-  .split(SCISSORS, 1)[0]!
-  .split("\n")
-  .filter((line) => !line.startsWith("#"))
-  .join("\n")
-  .trim();
+const message = messageFromFile(readFileSync(file, "utf8"));
 const merging =
   spawnSync("git", ["rev-parse", "-q", "--verify", "MERGE_HEAD"], { stdio: "ignore" }).status === 0;
 

@@ -8,7 +8,18 @@ import { join } from "node:path";
 import type { KneeProfile, LoadProfile } from "#config.ts";
 import type { PromWindows, ServerMetrics } from "#metrics.ts";
 import type { ClientSummary } from "#stats.ts";
-import type { Criterion, RestartMeasurements, Verdict } from "#verdict.ts";
+import {
+  bytesShort,
+  cores,
+  count,
+  gib,
+  ms,
+  ratio,
+  seconds,
+  type Criterion,
+  type RestartMeasurements,
+  type Verdict,
+} from "#verdict.ts";
 
 export type KneeResult = {
   /** The last whole-minute count that passed; 0 when the first sample failed. */
@@ -70,22 +81,12 @@ export function writeReport(reportDir: string, report: RunReport): string {
 
 const iso = (date: Date) => date.toISOString().replace("T", " ").replace(".000Z", " UTC");
 
-const shortDuration = (seconds: number) =>
-  seconds >= 60 && seconds % 60 === 0
-    ? `${seconds / 60}m`
-    : seconds >= 60
-      ? `${Math.floor(seconds / 60)}m ${seconds % 60}s`
-      : `${seconds}s`;
-
-const longDuration = (seconds: number) => shortDuration(seconds);
-
-const ms = (value: number) => `${value.toFixed(1)} ms`;
-const seconds = (value: number) => `${value.toFixed(1)} s`;
-const gib = (value: number) => `${(value / 1024 ** 3).toFixed(2)} GB`;
-const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
-const number = (value: number) => String(Math.round(value));
-const bytes = (value: number) =>
-  value < 1024 ? `${number(value)} B` : `${(value / 1024).toFixed(1)} KB`;
+const shortDuration = (total: number) =>
+  total >= 60 && total % 60 === 0
+    ? `${total / 60}m`
+    : total >= 60
+      ? `${Math.floor(total / 60)}m ${total % 60}s`
+      : `${total}s`;
 
 const cell = (value: string) => value.replaceAll("|", "\\|");
 
@@ -104,14 +105,14 @@ export function renderReport(report: RunReport): string {
     "",
     `- Started: ${iso(report.startedAt)}`,
     `- Mode: ${mode}`,
-    `- Duration: ${longDuration(Math.round(report.durationSeconds))}`,
+    `- Duration: ${shortDuration(Math.round(report.durationSeconds))}`,
     `- Git SHA: \`${report.gitSha}\``,
     `- Host: ${report.host.cpuModel} (${report.host.cpuCount} cores), ${report.host.platform}, ${gib(
       report.host.totalMemoryBytes,
     )} RAM, Node ${report.host.node}`,
     `- Endpoint: ${report.options.endpoint}`,
     `- Compose project: \`${report.options.projectName}\``,
-    `- Generator CPU peak: ${percent(report.client.generatorCpuPeakFraction)} of the machine — ${
+    `- Generator CPU peak: ${ratio(report.client.generatorCpuPeakFraction)} of the machine — ${
       report.verdict.valid ? "VALID" : "INVALID"
     }`,
     "",
@@ -129,12 +130,12 @@ export function renderReport(report: RunReport): string {
     )} ramp; ${shortDuration(profile.holdSeconds)} hold; kill at ${shortDuration(
       profile.restartAfterHoldSeconds,
     )} of the hold; ${shortDuration(profile.restartExclusionSeconds)} excluded after the restart`,
-    `- ${profile.minuteLimit}-minute Minute limit; ${percent(profile.passwordRoomRate)} password Rooms; ${profile.lobbyWatchers} Lobby watchers; joins over ${shortDuration(
+    `- ${profile.minuteLimit}-minute Minute limit; ${ratio(profile.passwordRoomRate)} password Rooms; ${profile.lobbyWatchers} Lobby watchers; joins over ${shortDuration(
       Math.round(profile.joinDelayMs[0] / 1_000),
     )}–${shortDuration(Math.round(profile.joinDelayMs[1] / 1_000))}`,
     `- Actions after ${shortDuration(Math.round(profile.actionDelayMs[0] / 1_000))}–${shortDuration(
       Math.round(profile.actionDelayMs[1] / 1_000),
-    )}; ${percent(profile.timeoutRate)} Turn timeouts; ${percent(profile.dropRate)} drops per game (${percent(
+    )}; ${ratio(profile.timeoutRate)} Turn timeouts; ${ratio(profile.dropRate)} drops per game (${ratio(
       profile.longReturnRate,
     )} long, > 60 s by Guest token)`,
     `- Seed: ${profile.seed}`,
@@ -163,15 +164,15 @@ export function renderReport(report: RunReport): string {
     `| Intent duration p99 | ${orNoData(report.server.intentP99Ms, ms)} |`,
     `| Store write p99 | ${orNoData(report.server.storeWriteP99Ms, ms)} |`,
     `| Event-loop lag p99 | ${orNoData(report.server.eventLoopP99Ms, ms)} |`,
-    `| Server CPU | ${orNoData(report.server.serverCpuCores, (v) => `${v.toFixed(2)} cores`)} |`,
+    `| Server CPU | ${orNoData(report.server.serverCpuCores, cores)} |`,
     `| Server RSS | ${orNoData(report.server.serverRssBytes, gib)} |`,
-    `| Heap growth | ${orNoData(report.server.heapGrowthRatio, percent)} |`,
-    `| Rooms restored | ${orNoData(report.server.roomsRestored, number)} |`,
+    `| Heap growth | ${orNoData(report.server.heapGrowthRatio, ratio)} |`,
+    `| Rooms restored | ${orNoData(report.server.roomsRestored, count)} |`,
     `| Restore time | ${orNoData(report.server.restoreSeconds, seconds)} |`,
-    `| Rooms playing at the kill | ${orNoData(report.server.roomsPlayingAtKill, number)} |`,
-    `| Server process starts | ${orNoData(report.server.serverStarts, number)} |`,
+    `| Rooms playing at the kill | ${orNoData(report.server.roomsPlayingAtKill, count)} |`,
+    `| Server process starts | ${orNoData(report.server.serverStarts, count)} |`,
     ...Object.entries(report.server.rejections).map(
-      ([code, value]) => `| ${code} rejections | ${number(value)} |`,
+      ([code, value]) => `| ${code} rejections | ${count(value)} |`,
     ),
     "",
     "## Restart",
@@ -180,10 +181,10 @@ export function renderReport(report: RunReport): string {
     "| --- | --- |",
     `| /readyz after the kill | ${orNoData(report.restart.readyzSeconds, seconds)} |`,
     `| Restore time at boot | ${orNoData(report.restart.restoreSeconds, seconds)} |`,
-    `| Rooms restored | ${orNoData(report.restart.roomsRestored, number)} |`,
-    `| Rooms live at the kill | ${orNoData(report.restart.roomsLiveAtKill, number)} |`,
-    `| Clients at the kill | ${orNoData(report.restart.clientsAtKill, number)} |`,
-    `| Clients back in time | ${orNoData(report.restart.clientsBackInTime, number)} |`,
+    `| Rooms restored | ${orNoData(report.restart.roomsRestored, count)} |`,
+    `| Rooms live at the kill | ${orNoData(report.restart.roomsLiveAtKill, count)} |`,
+    `| Clients at the kill | ${orNoData(report.restart.clientsAtKill, count)} |`,
+    `| Clients back in time | ${orNoData(report.restart.clientsBackInTime, count)} |`,
     `| Slowest Seat back after /readyz | ${orNoData(report.restart.maxRejoinAfterReadyMs, ms)} |`,
     "",
     "## Client generator",
@@ -195,29 +196,29 @@ export function renderReport(report: RunReport): string {
     `| Room round trip p99 | ${orNoData(report.client.rttP99Ms, ms)} |`,
     `| Room round trip max | ${orNoData(report.client.maxRttMs, ms)} |`,
     `| Game push size | ${report.client.pushSamples} samples |`,
-    `| Game push size p50 | ${orNoData(report.client.pushP50Bytes, bytes)} |`,
-    `| Game push size p95 | ${orNoData(report.client.pushP95Bytes, bytes)} |`,
-    `| Game push size max | ${orNoData(report.client.maxPushBytes, bytes)} |`,
-    `| Intents sent / accepted | ${number(report.client.intentsSent)} / ${number(
+    `| Game push size p50 | ${orNoData(report.client.pushP50Bytes, bytesShort)} |`,
+    `| Game push size p95 | ${orNoData(report.client.pushP95Bytes, bytesShort)} |`,
+    `| Game push size max | ${orNoData(report.client.maxPushBytes, bytesShort)} |`,
+    `| Intents sent / accepted | ${count(report.client.intentsSent)} / ${count(
       report.client.intentsAccepted,
     )} |`,
     `| Client rejections | ${rejectionList(report.client.rejections)} |`,
-    `| Decisions / Turn timeouts | ${number(report.client.decisions)} / ${number(
+    `| Decisions / Turn timeouts | ${count(report.client.decisions)} / ${count(
       report.client.timeouts,
     )} |`,
-    `| Drops (short / long) | ${number(report.client.drops)} (${number(
+    `| Drops (short / long) | ${count(report.client.drops)} (${count(
       report.client.shortDrops,
-    )} / ${number(report.client.longDrops)}) |`,
-    `| Rejoins (token / Guest) | ${number(report.client.tokenRejoins)} / ${number(
+    )} / ${count(report.client.longDrops)}) |`,
+    `| Rejoins (token / Guest) | ${count(report.client.tokenRejoins)} / ${count(
       report.client.guestRejoins,
     )} |`,
-    `| Failed rejoins | ${number(report.client.failedRejoins)} |`,
-    `| Seat mismatches | ${number(report.client.seatMismatches)} |`,
-    `| Version regressions | ${number(report.client.versionRegressions)} |`,
-    `| Unplanned exits | ${number(report.client.unplannedExits)} |`,
-    `| Rooms started | ${number(report.client.roomsStarted)} |`,
-    `| Games finished | ${number(report.client.gamesFinished)} |`,
-    `| Generator CPU peak | ${percent(report.client.generatorCpuPeakFraction)} |`,
+    `| Failed rejoins | ${count(report.client.failedRejoins)} |`,
+    `| Seat mismatches | ${count(report.client.seatMismatches)} |`,
+    `| Version regressions | ${count(report.client.versionRegressions)} |`,
+    `| Unplanned exits | ${count(report.client.unplannedExits)} |`,
+    `| Rooms started | ${count(report.client.roomsStarted)} |`,
+    `| Games finished | ${count(report.client.gamesFinished)} |`,
+    `| Generator CPU peak | ${ratio(report.client.generatorCpuPeakFraction)} |`,
     "",
     "Game push size is the UTF-8 byte length of each `game` push the bot received, re-encoded from the decoded message as JSON (the wire itself is msgpack). Reported only; no verdict threshold.",
     "",
@@ -263,8 +264,8 @@ function orNoData(value: number | null, format: (value: number) => string): stri
 }
 
 function rejectionList(rejections: Record<string, number>): string {
-  const entries = Object.entries(rejections).filter(([, count]) => count > 0);
+  const entries = Object.entries(rejections).filter(([, value]) => value > 0);
   return entries.length === 0
     ? "none"
-    : entries.map(([code, count]) => `${code} ${number(count)}`).join(", ");
+    : entries.map(([code, value]) => `${code} ${count(value)}`).join(", ");
 }

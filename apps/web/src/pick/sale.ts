@@ -61,6 +61,15 @@ export function toggledPicks(picks: readonly FieldId[], id: FieldId): FieldId[] 
   return picks.includes(id) ? picks.filter((p) => p !== id) : [...picks, id];
 }
 
+/** The Fields picked in a Sale, keyed by the Decision (`pickKey`) they belong to. */
+export type SalePicks = { key: string; fields: FieldId[] };
+
+const NO_PICKS: readonly FieldId[] = [];
+
+/** The picks of the Sale whose decision is `key` (a stable empty list for any other). */
+export const salePicksFor = (picks: SalePicks, key: string): readonly FieldId[] =>
+  picks.key === key ? picks.fields : NO_PICKS;
+
 /** What the Bank pays for the picked Fields. */
 export function salePickedValue(view: PublicView, picks: readonly FieldId[]): number {
   return picks.reduce((sum, id) => sum + (view.fields[id]?.sale ?? 0), 0);

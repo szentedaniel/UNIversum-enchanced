@@ -17,15 +17,16 @@ import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { Card } from "#components/ui/card.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
-import { bottomSlot, openDecision, waitingLine } from "#decision/decision.ts";
+import { bottomSlot, openDecision } from "#decision/decision.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
+import { salePicksFor } from "#pick/sale.ts";
 import { playbackStore } from "#playback/playback-store.ts";
 import { PickTray } from "#screens/PickTray.tsx";
 import { SaleTray } from "#screens/SaleTray.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { inFlightOf, roomStore } from "#stores/room-store.ts";
-import { salePicksFor, uiStore } from "#stores/ui-store.ts";
+import { uiStore } from "#stores/ui-store.ts";
 import { fieldName, formatMoney, m, playerName, rejectionText } from "#text.ts";
 
 const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
@@ -92,7 +93,7 @@ export function Game() {
   // One answer for the Turn card, the trays, the bottom slot and the Podium (spec #72).
   const decision = openDecision(frame, me, inFlight);
   const slot = bottomSlot(decision, frame, { selectedField, inspect });
-  const waiting = waitingLine(decision);
+  const waiting = decision !== null && decision.owner === "other" ? decision.kind : null;
 
   const players: PlayerSummary[] = view.players.map((p) => ({
     seat: p.seat,
