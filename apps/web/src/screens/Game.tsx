@@ -20,7 +20,6 @@ import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
 import { bottomSlot, openDecision } from "#decision/decision.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
-import { salePicksFor } from "#pick/sale.ts";
 import { playbackStore } from "#playback/playback-store.ts";
 import { DecisionTray } from "#screens/DecisionTray.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";

@@ -18,9 +18,9 @@ import type { BottomSlot } from "#decision/decision.ts";
 import { cn } from "#lib/utils.ts";
 import { saleChecklist, singleChecklist, type ChecklistRow } from "#pick/checklist.ts";
 import { selectedPick, type SinglePick } from "#pick/pick.ts";
-import { salePickedValue, type SalePick } from "#pick/sale.ts";
+import { salePickedValue, salePicksFor, type SalePick } from "#pick/sale.ts";
 import { TurnRing } from "#screens/TurnRing.tsx";
-import { salePicksFor, uiStore } from "#stores/ui-store.ts";
+import { uiStore } from "#stores/ui-store.ts";
 import { fieldName, formatCompactMoney, formatMoney, m } from "#text.ts";
 
 const CHARGE_LABELS: Record<PendingCharge["kind"], (amount: string) => string> = {
