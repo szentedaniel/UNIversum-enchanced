@@ -73,16 +73,17 @@ const dependencyChanges = (
     });
 
 /**
- * One pull request's decision facts. The pull request itself comes back too:
- * `main` checks that it is open and a factory pull before deciding, and every
- * action names it.
+ * One pull request's decision facts, once `mergeGate` has read the pull and
+ * checked it is open and a factory pull. The pull is passed in so that guard
+ * stays the first read: these must not run for a pull request the gate leaves
+ * alone (a closed one, a fork, a human's).
  */
 export const readMergeFacts = (
   repo: string,
   pr: string,
+  pull: PullView,
   reader: MergeReader,
-): { pull: PullView; facts: MergeFacts } => {
-  const pull = reader.pullOf(repo, pr);
+): MergeFacts => {
   const files = reader.changedFiles(repo, pr);
   const base = reader.compareOf(repo, pull.headRefOid);
   const facts: MergeFacts = {
@@ -97,5 +98,5 @@ export const readMergeFacts = (
     mainAheadBy: base.mainAheadBy,
     mainFiles: base.files,
   };
-  return { pull, facts };
+  return facts;
 };

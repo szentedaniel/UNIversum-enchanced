@@ -1,9 +1,10 @@
 /**
- * The factory's merge gate: `readMergeFacts` reads one pull request's facts,
- * `mergeStep` decides, and `performStep` merges it, waits for a run still in
- * flight, queues the re-review a push needs, sends the fix loop after main, or
- * hands the reasons to the owner. `DRY_RUN=1` prints what it would do and
- * writes nothing.
+ * The factory's merge gate: `mergeGate` reads the pull request and leaves a
+ * closed, fork or human pull alone before `readMergeFacts` reads anything
+ * else; `mergeStep` decides, and `performStep` merges it, waits for a run
+ * still in flight, queues the re-review a push needs, sends the fix loop after
+ * main, or hands the reasons to the owner. `DRY_RUN=1` prints what it would do
+ * and writes nothing.
  *
  * Env: PR_NUMBER, GH_REPO, GH_TOKEN (the PAT, in the workflow), DRY_RUN.
  */
@@ -26,16 +27,24 @@ const readPull = (repo: string, pr: string): PullView => {
   return parseJson<PullView>(raw);
 };
 
-/**
- * GitHub computes mergeability lazily: the first read after main moves says
+/** GitHub answers `UNKNOWN` for a few reads after main moves. */
+const MERGEABILITY_READS = 6;
+
+/** GitHub computes mergeability lazily: the first read after main moves says
  * UNKNOWN. Deciding on that once merged a conflicting pull request, so the
- * read waits for an answer, about half a minute at most.
+ * read waits for an answer, about half a minute at most. The pause is a seam
+ * so the retry is testable without sleeping.
  */
-const pullOf = (repo: string, pr: string): PullView => {
+export const waitForMergeability = (
+  read: () => PullView,
+  pause: () => void = () => sh("sleep 5"),
+): PullView => {
   for (let attempt = 1; ; attempt++) {
-    const pull = readPull(repo, pr);
-    if (pull.mergeStateStatus.toLowerCase() !== "unknown" || attempt === 6) return pull;
-    sh("sleep 5");
+    const pull = read();
+    if (pull.mergeStateStatus.toLowerCase() !== "unknown" || attempt === MERGEABILITY_READS) {
+      return pull;
+    }
+    pause();
   }
 };
 
@@ -81,7 +90,7 @@ const writeTemp = (name: string, content: string): string => {
 
 /** The gate's `gh` reads, as `readMergeFacts` consumes them. */
 const ghReader: MergeReader = {
-  pullOf,
+  pullOf: (repo, pr) => waitForMergeability(() => readPull(repo, pr)),
   changedFiles,
   ciRuns,
   compareOf,
@@ -122,13 +131,19 @@ const ghActions = (repo: string, pr: string): MergeActions => ({
     sh(`gh issue view ${String(issue)} --repo "${repo}" --json title --jq .title`),
 });
 
-const main = (): void => {
-  const repo = required("GH_REPO");
-  const pr = required("PR_NUMBER");
-  if (!/^\d+$/u.test(pr)) fail(`PR_NUMBER must be a pull request number, got '${pr}'.`);
-  const dryRun = process.env["DRY_RUN"] === "1";
-
-  const { pull, facts } = readMergeFacts(repo, pr, ghReader);
+/**
+ * The gate's flow for one pull request: the pull read and the open/factory
+ * guard first, because a pull request the gate leaves alone must not cost
+ * further reads (a closed pull's CI, a fork's files, a human's compare).
+ */
+export const mergeGate = (
+  repo: string,
+  pr: string,
+  reader: MergeReader,
+  actions: MergeActions,
+  dryRun: boolean,
+): void => {
+  const pull = reader.pullOf(repo, pr);
   if (pull.state !== "OPEN") {
     console.log(`Pull request #${pr} is ${pull.state}; nothing to merge.`);
     return;
@@ -138,11 +153,22 @@ const main = (): void => {
     return;
   }
 
-  performStep(mergeStep(facts), pull, { actions: ghActions(repo, pr), dryRun });
+  performStep(mergeStep(readMergeFacts(repo, pr, pull, reader)), pull, { actions, dryRun });
 };
 
-try {
-  main();
-} catch (error) {
-  fail(error instanceof Error ? error.message : String(error));
+const main = (): void => {
+  const repo = required("GH_REPO");
+  const pr = required("PR_NUMBER");
+  if (!/^\d+$/u.test(pr)) fail(`PR_NUMBER must be a pull request number, got '${pr}'.`);
+  const dryRun = process.env["DRY_RUN"] === "1";
+
+  mergeGate(repo, pr, ghReader, ghActions(repo, pr), dryRun);
+};
+
+if (import.meta.main) {
+  try {
+    main();
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
 }

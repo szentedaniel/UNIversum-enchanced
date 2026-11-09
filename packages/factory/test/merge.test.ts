@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FixReason } from "#fix/reasons.ts";
 import { readMergeFacts, type MergeReader, type PullView } from "#merge/facts.ts";
+import { mergeGate, waitForMergeability } from "#merge/merge.ts";
 import { performStep, type MergeActions } from "#merge/perform.ts";
 import { escalationComment } from "#merge/comment.ts";
 import { mergeStep, type MergeStep } from "#merge/gates.ts";
@@ -45,11 +46,11 @@ describe("readMergeFacts", () => {
     ];
     const comments = [{ body: "<!-- factory-review -->\npass", createdAt: "2026-11-09T09:20:00Z" }];
 
-    const read = readMergeFacts(
+    const facts = readMergeFacts(
       "owner/repo",
       "132",
+      pull({ mergeStateStatus: "DIRTY" }),
       reader({
-        pullOf: () => pull({ mergeStateStatus: "DIRTY" }),
         changedFiles: () => ["apps/web/src/Game.tsx"],
         ciRuns: () => ciRuns,
         compareOf: () => ({
@@ -61,8 +62,7 @@ describe("readMergeFacts", () => {
       }),
     );
 
-    expect(read.pull.number).toBe(132);
-    expect(read.facts).toEqual({
+    expect(facts).toEqual({
       headSha: HEAD_SHA,
       headCommittedAt: "2026-11-09T09:00:00Z",
       labels: ["risk:low"],
@@ -82,31 +82,33 @@ describe("readMergeFacts", () => {
       "package.json@head-sha": '{"dependencies":{"react":"^19.0.0"}}',
     };
 
-    const read = readMergeFacts(
+    const facts = readMergeFacts(
       "owner/repo",
       "132",
+      pull(),
       reader({
         changedFiles: () => ["package.json", "apps/web/src/Game.tsx"],
         contentAt: (_repo, file, ref) => contents[`${file}@${ref}`],
       }),
     );
 
-    expect(read.facts.dependencyChanges).toEqual([
+    expect(facts.dependencyChanges).toEqual([
       { file: "package.json", before: { react: "^18.2.0" }, after: { react: "^19.0.0" } },
     ]);
   });
 
   it("skips a package.json the pull request adds or removes", () => {
-    const read = readMergeFacts(
+    const facts = readMergeFacts(
       "owner/repo",
       "132",
+      pull(),
       reader({
         changedFiles: () => ["package.json"],
         contentAt: (_repo, _file, ref) => (ref === HEAD_SHA ? '{"dependencies":{}}' : undefined),
       }),
     );
 
-    expect(read.facts.dependencyChanges).toEqual([]);
+    expect(facts.dependencyChanges).toEqual([]);
   });
 });
 
@@ -277,6 +279,116 @@ describe("performStep", () => {
   });
 });
 
+const unread = (): never => {
+  throw new Error("the gate read facts before its guard");
+};
+
+describe("mergeGate", () => {
+  it("leaves a closed pull request alone after the pull read", () => {
+    const { adapter, writes } = actions();
+    let pulls = 0;
+
+    mergeGate(
+      "owner/repo",
+      "132",
+      reader({
+        pullOf: () => {
+          pulls += 1;
+          return pull({ state: "CLOSED" });
+        },
+        changedFiles: unread,
+        ciRuns: unread,
+        compareOf: unread,
+        contentAt: unread,
+        issueComments: unread,
+      }),
+      adapter,
+      false,
+    );
+
+    expect(pulls).toBe(1);
+    expect(writes).toEqual([]);
+  });
+
+  it("leaves a human's pull request alone after the pull read", () => {
+    const { adapter, writes } = actions();
+    let pulls = 0;
+
+    mergeGate(
+      "owner/repo",
+      "132",
+      reader({
+        pullOf: () => {
+          pulls += 1;
+          return pull({ headRefName: "feature/owner-change", labels: [], author: "szentedaniel" });
+        },
+        changedFiles: unread,
+        ciRuns: unread,
+        compareOf: unread,
+        contentAt: unread,
+        issueComments: unread,
+      }),
+      adapter,
+      false,
+    );
+
+    expect(pulls).toBe(1);
+    expect(writes).toEqual([]);
+  });
+});
+
+describe("waitForMergeability", () => {
+  it("waits out UNKNOWN until GitHub answers", () => {
+    const statuses = ["UNKNOWN", "UNKNOWN", "CLEAN"];
+    let reads = 0;
+    let pauses = 0;
+
+    const result = waitForMergeability(
+      () => pull({ mergeStateStatus: statuses[reads++] ?? "CLEAN" }),
+      () => {
+        pauses += 1;
+      },
+    );
+
+    expect(reads).toBe(3);
+    expect(pauses).toBe(2);
+    expect(result.mergeStateStatus).toBe("CLEAN");
+  });
+
+  it("gives up after six reads and decides on the last answer", () => {
+    let reads = 0;
+    let pauses = 0;
+
+    const result = waitForMergeability(
+      () => {
+        reads += 1;
+        return pull({ mergeStateStatus: "UNKNOWN" });
+      },
+      () => {
+        pauses += 1;
+      },
+    );
+
+    expect(reads).toBe(6);
+    expect(pauses).toBe(5);
+    expect(result.mergeStateStatus).toBe("UNKNOWN");
+  });
+
+  it("returns a known answer without pausing", () => {
+    let pauses = 0;
+
+    const result = waitForMergeability(
+      () => pull({ mergeStateStatus: "DIRTY" }),
+      () => {
+        pauses += 1;
+      },
+    );
+
+    expect(result.mergeStateStatus).toBe("DIRTY");
+    expect(pauses).toBe(0);
+  });
+});
+
 describe("the gate's flow", () => {
   const at = "2026-11-09T09:10:00Z";
   const ciSuccess = [
@@ -295,20 +407,21 @@ describe("the gate's flow", () => {
 
   it("escalates a green pull request with no risk label", () => {
     const { adapter, writes } = actions();
-    const read = readMergeFacts(
+    const subject = pull({ labels: [] });
+    const facts = readMergeFacts(
       "owner/repo",
       "132",
+      subject,
       reader({
-        pullOf: () => pull({ labels: [] }),
         ciRuns: () => ciSuccess,
         issueComments: () => reviewPass,
       }),
     );
 
-    const step = mergeStep(read.facts);
+    const step = mergeStep(facts);
     expect(step).toEqual({ kind: "escalate", reasons: ["no risk label"] });
 
-    performStep(step, read.pull, context(adapter));
+    performStep(step, subject, context(adapter));
 
     expect(writes).toEqual([
       { kind: "comment", body: escalationComment(["no risk label"]) },
@@ -318,9 +431,11 @@ describe("the gate's flow", () => {
 
   it("sends a branch main's files moved under to the fix loop", () => {
     const { adapter, writes } = actions();
-    const read = readMergeFacts(
+    const subject = pull();
+    const facts = readMergeFacts(
       "owner/repo",
       "132",
+      subject,
       reader({
         changedFiles: () => ["apps/web/src/Game.tsx"],
         ciRuns: () => ciSuccess,
@@ -333,19 +448,21 @@ describe("the gate's flow", () => {
       }),
     );
 
-    const step = mergeStep(read.facts);
+    const step = mergeStep(facts);
     expect(step).toEqual({ kind: "fix", reason: "main-moved" });
 
-    performStep(step, read.pull, context(adapter));
+    performStep(step, subject, context(adapter));
 
     expect(writes).toEqual([{ kind: "dispatchFix", reason: "main-moved" }]);
   });
 
   it("merges a branch that is only behind main, on files it does not touch", () => {
     const { adapter, writes } = actions();
-    const read = readMergeFacts(
+    const subject = pull();
+    const facts = readMergeFacts(
       "owner/repo",
       "132",
+      subject,
       reader({
         changedFiles: () => ["apps/web/src/Game.tsx"],
         ciRuns: () => ciSuccess,
@@ -358,10 +475,10 @@ describe("the gate's flow", () => {
       }),
     );
 
-    const step = mergeStep(read.facts);
+    const step = mergeStep(facts);
     expect(step).toEqual({ kind: "merge" });
 
-    performStep(step, read.pull, context(adapter));
+    performStep(step, subject, context(adapter));
 
     expect(writes).toEqual([
       { kind: "merge", subject: "chore(merge): #132 Deepen the merge gate's script" },

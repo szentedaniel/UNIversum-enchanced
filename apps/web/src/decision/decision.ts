@@ -7,14 +7,23 @@
  */
 import type { PhaseOf, PlayerId } from "@universum/rules";
 import type { FieldId } from "@universum/rules/board";
-import { singlePickFor, type SinglePick } from "#pick/pick.ts";
-import { saleFor, type SalePick } from "#pick/sale.ts";
+import { selectedPick, singleMarks, singlePickFor, type SinglePick } from "#pick/pick.ts";
+import {
+  AUTO_SELL_WARNING_MS,
+  saleFor,
+  saleMarks,
+  salePicksFor,
+  type PickMarks,
+  type SalePick,
+  type SalePicks,
+} from "#pick/sale.ts";
 import type { Frame } from "#playback/playback.ts";
 
 /**
  * The Decision this client shows: its own, with the value the tray needs, or
  * another Player's Sale or pick as a waiting line. A Roll, Offer or Quarantine
  * choice in flight is hidden (no optimistic UI); a Sale or pick stays, `busy`.
+ * `owner` tells mine from another Player's without reading the payload.
  */
 export type OpenDecision =
   | { owner: "me"; kind: "roll" }
@@ -22,44 +31,18 @@ export type OpenDecision =
   | { owner: "me"; kind: "quarantine"; choice: PhaseOf<"quarantineChoice"> }
   | { owner: "me"; kind: "sale"; sale: SalePick; busy: boolean }
   | { owner: "me"; kind: "pick"; pick: SinglePick; busy: boolean }
-  | { owner: PlayerId; kind: "sale" | "pick" };
+  | { owner: "other"; player: PlayerId; kind: "sale" | "pick" };
+
+/** This client's Sale or pick. */
+type MySaleOrPick = Extract<OpenDecision, { owner: "me"; kind: "sale" | "pick" }>;
 
 /**
- * This client's Sale or pick, read the one way the slot, a tap and the pick UI
- * read it: the value, the key that marks a new Decision, the Fields a tap may
- * pick, and whether an intent is in flight.
+ * This client's Sale or pick, or `null` for every other Decision: the one
+ * place the `owner` discrimination is read.
  */
-export type MySaleOrPick =
-  | { kind: "sale"; sale: SalePick; key: string; pickable: readonly FieldId[]; busy: boolean }
-  | { kind: "pick"; pick: SinglePick; key: string; pickable: readonly FieldId[]; busy: boolean };
-
-/**
- * This client's Sale or pick, or `null` for every other Decision. Only this
- * client's Decision carries `sale` or `pick`; a waiting line has neither, and
- * `owner` cannot tell them apart (`PlayerId` is a string).
- */
-export function mySaleOrPick(decision: OpenDecision | null): MySaleOrPick | null {
-  if (decision === null) return null;
-  if ("sale" in decision) {
-    const { key, pickable } = decision.sale;
-    return { kind: "sale", sale: decision.sale, key, pickable, busy: decision.busy };
-  }
-  if ("pick" in decision) {
-    const { key, pickable } = decision.pick;
-    return { kind: "pick", pick: decision.pick, key, pickable, busy: decision.busy };
-  }
-  return null;
-}
-
-/**
- * Another Player's Sale or pick as the Turn card's waiting line, else `null`.
- * Keyed on the absence of the Sale or pick payload, not on `owner` (`PlayerId`
- * is a string, so it cannot tell "me" from another Player).
- */
-export function waitingLine(decision: OpenDecision | null): "sale" | "pick" | null {
-  if (decision === null || mySaleOrPick(decision) !== null) return null;
-  if (decision.kind === "sale" || decision.kind === "pick") return decision.kind;
-  return null;
+function mySaleOrPick(decision: OpenDecision | null): MySaleOrPick | null {
+  if (decision === null || decision.owner !== "me") return null;
+  return decision.kind === "sale" || decision.kind === "pick" ? decision : null;
 }
 
 /** What the bottom slot shows, in the screen's order. */
@@ -116,9 +99,9 @@ export function openDecision(
   }
   // Another Player's Sale or pick is a waiting line; their Roll, Offer and
   // Quarantine choice leave this client with nothing to show.
-  if (phase.kind === "selling") return { owner: currentPlayer, kind: "sale" };
+  if (phase.kind === "selling") return { owner: "other", player: currentPlayer, kind: "sale" };
   if (phase.kind === "placingDoubler" || phase.kind === "choosingErasmus") {
-    return { owner: currentPlayer, kind: "pick" };
+    return { owner: "other", player: currentPlayer, kind: "pick" };
   }
   return null;
 }
@@ -142,7 +125,8 @@ export function bottomSlot(
   const mine = mySaleOrPick(decision);
   if (mine !== null) {
     if (ui.inspect && ui.selectedField !== null) {
-      return { kind: "fieldCard", field: ui.selectedField, stepThrough: mine.pickable };
+      const pickable = mine.kind === "sale" ? mine.sale.pickable : mine.pick.pickable;
+      return { kind: "fieldCard", field: ui.selectedField, stepThrough: pickable };
     }
     return mine.kind === "sale"
       ? { kind: "sale", sale: mine.sale, busy: mine.busy }
@@ -168,14 +152,56 @@ export function fieldTap(
   if (mine === null || ui.inspect) return { kind: "selectField", field };
   if (mine.busy || field === null) return { kind: "ignore" };
   return mine.kind === "sale"
-    ? { kind: "toggleSale", key: mine.key, field }
-    : { kind: "choosePick", key: mine.key, field };
+    ? { kind: "toggleSale", key: mine.sale.key, field }
+    : { kind: "choosePick", key: mine.pick.key, field };
 }
 
+/** The picks a tap made (`uiStore`), keyed by the Decision each belongs to. */
+export type PickSelection = {
+  /** A Sale's picked Fields, and the Sale they belong to. */
+  salePicks: SalePicks;
+  /** A single pick's chosen Field, and the pick it belongs to. */
+  singlePick: { key: string; field: FieldId | null };
+};
+
+/** What the Board draws for the open Decision. */
+export type PickSync = {
+  /** My open Sale's or pick's key, else `null`; a change starts a new pick UI. */
+  key: string | null;
+  /** The marks for my Sale or pick, else `null` (none, or a Sale without the room clock). */
+  marks: PickMarks | null;
+  /** The time until Auto-sell's warning starts, else `null` (no Sale, the warning is due, or no clock). */
+  wakeInMs: number | null;
+};
+
 /**
- * The key whose change starts a new pick UI: my Sale's or pick's key, else
- * `null`. It ignores `busy`, so a send does not reset the picks.
+ * The Board's pick sync for the open Decision: the key that starts a new pick
+ * UI (it ignores `busy`, so a send never resets the picks), the marks for my
+ * Sale or pick, and the time until Auto-sell's warning starts. `serverNowMs` is
+ * the server's clock: the Sale's countdown runs on it, so a Sale marks nothing
+ * while the clock is unknown (`null`, no push yet).
  */
-export function decisionKey(decision: OpenDecision | null): string | null {
-  return mySaleOrPick(decision)?.key ?? null;
+export function pickSyncOf(
+  decision: OpenDecision | null,
+  frame: Frame | null,
+  serverNowMs: number | null,
+  selection: PickSelection,
+): PickSync {
+  const mine = mySaleOrPick(decision);
+  if (mine === null) return { key: null, marks: null, wakeInMs: null };
+  const key = mine.kind === "sale" ? mine.sale.key : mine.pick.key;
+  if (frame === null) return { key, marks: null, wakeInMs: null };
+  if (mine.kind === "pick") {
+    const field = selectedPick(mine.pick, selection.singlePick);
+    return { key, marks: singleMarks(mine.pick, field), wakeInMs: null };
+  }
+  const timer = frame.view.turnTimer;
+  if (timer === null || serverNowMs === null) return { key, marks: null, wakeInMs: null };
+  const msLeft = timer.endsAt - serverNowMs;
+  const picks = salePicksFor(selection.salePicks, key);
+  return {
+    key,
+    marks: saleMarks(mine.sale, frame.view, picks, msLeft),
+    wakeInMs: msLeft > AUTO_SELL_WARNING_MS ? msLeft - AUTO_SELL_WARNING_MS : null,
+  };
 }

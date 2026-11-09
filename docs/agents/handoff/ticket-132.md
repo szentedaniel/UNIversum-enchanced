@@ -8,14 +8,15 @@ script: `facts.ts` reads, `gates.ts` decides (unchanged), `perform.ts` acts.
 - **`MergeReader`** is the seam: `pullOf`, `changedFiles`, `ciRuns`, `compareOf`, `contentAt`,
   `issueComments`, each named after the fact it yields. `merge.ts` wires the `gh`/`sh` impl as a
   `MergeReader` object; `test/merge.test.ts` hands in a fake.
-- **`readMergeFacts(repo, pr, reader)`** returns `{ pull, facts }`, where `facts` is the exact
-  `MergeFacts` `gates.ts` decides on. A new read is a `MergeReader` method plus one field in that
-  object; the assembly (head sha, merge base, main's lead, dependency maps) is what the tests pin.
+- **`readMergeFacts(repo, pr, pull, reader)`** returns the exact `MergeFacts` `gates.ts` decides
+  on; the pull is passed in, already read and guarded. A new read is a `MergeReader` method plus
+  one field in that object; the assembly (head sha, merge base, main's lead, dependency maps) is
+  what the tests pin.
 - **`PullView` / `CompareView`** live here now. `PullView.closing` comes from
   `closingIssuesReferences`; `pull.body` is the fallback through `closingIssue`.
-- **The reads run before `main`'s open/factory guard**, because `readMergeFacts` owns the pull read.
-  So a new reader call must be safe for any pull request (a human's, a fork's, a closed one) and
-  must not assume the gate will act.
+- **The pull read and the open/factory guard come first**, in `mergeGate`: a closed, fork or
+  human pull request costs one `gh pr view` and no other read. The tests throw from every other
+  reader to pin that. A new reader call may assume an open factory pull.
 
 ## The actions (`merge/perform.ts`)
 
@@ -37,7 +38,11 @@ script: `facts.ts` reads, `gates.ts` decides (unchanged), `perform.ts` acts.
 
 - `ghReader` is the six-read object; `ghActions(repo, pr)` binds the pull and builds each `gh`
   command, including the two body-file temp files (`merge-comment.md`, `merge-done.md`).
-- `main` is read → the open/factory guard → `mergeStep` → `performStep`. The subjects come from
+- `waitForMergeability` owns the UNKNOWN retry: six reads, five `sleep 5` pauses; the pause is a
+  parameter, so the test covers the retry without sleeping. `ghReader.pullOf` wires it to
+  `readPull`.
+- `main` parses the env, then `mergeGate` does pull read → open/factory guard → facts →
+  `mergeStep` → `performStep`. The subjects come from
   `gates.mergeSubjectOf`: the ticket's title, or the pull request's for a dependency bump.
 - The escalation is still deduped by `ready-for-human`, and the close still tolerates the pull
   request's `Closes #…` having closed the issue; the actions changed shape, not their commands.

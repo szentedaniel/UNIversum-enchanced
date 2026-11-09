@@ -30,8 +30,7 @@ const DEFINITIONS: Record<string, RegExp> = {
 const READ = /\b(?:saleFor|singlePickFor)\b/g;
 
 const RULE = "the Decision module is the one reader of a Sale or pick (spec #72)";
-const INSTEAD =
-  "openDecision/bottomSlot/fieldTap/decisionKey/mySaleOrPick/waitingLine from #decision/decision.ts";
+const INSTEAD = "openDecision/bottomSlot/fieldTap/pickSyncOf from #decision/decision.ts";
 
 /** Every violation in `source`, as `file:line: rule — use replacement. Line: code`. */
 function scan(source: string, file: string): string[] {
