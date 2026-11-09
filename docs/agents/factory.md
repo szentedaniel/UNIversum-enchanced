@@ -51,6 +51,63 @@ agent:blocked ──re-dispatch──▸ agent:in-progress
 it for `risk:low` or `risk:high`, and the merge gate and fix loop (#87) follow it. The weekly
 `factory:report` issue is a later ticket in the same spec.
 
+## Intake
+
+The owner files a one-line idea as an issue; intake turns it into work the factory can start.
+`factory-intake.yml` runs every night at 01:15 UTC (02:15 CET / 03:15 CEST, inside the Budapest
+window) and can be dispatched by hand at any time — outside the window too:
+
+```bash
+gh workflow run factory-intake.yml                                   # every waiting issue
+gh workflow run factory-intake.yml -f issue=93                       # one issue, whatever its labels
+gh workflow run factory-intake.yml -f dry_run=true                   # print the decisions and writes
+```
+
+A scheduled run that starts after 07:00 Budapest does nothing (the script re-checks the window), so a
+delayed cron spends no daytime Pro usage. One run handles at most `FACTORY_INTAKE_MAX` issues per
+step (repository variable; default 3), oldest first.
+
+**Triage** classifies each issue into exactly one outcome, with one comment and a label:
+
+| Outcome     | Comment                                                                                   | Labels                                    |
+| ----------- | ----------------------------------------------------------------------------------------- | ----------------------------------------- |
+| bug / small | the **Implementation context** comment: files, seams, hazards, checks                     | `ready-for-agent`, `needs-triage` removed |
+| unclear     | concrete questions, numbered                                                              | `needs-info`                              |
+| feature     | a spec draft: Problem, Solution, User stories, Decisions, Testing Decisions, Out of scope | `spec:proposed`                           |
+
+The issues it looks at are the open `needs-triage` ones and the open issues with no label at all that
+the owner, a member or a collaborator filed; sub-issues and pull requests are never triaged. The
+`agent:in-progress` label marks the factory's own work, so it excludes an issue just like any other
+label. `-f issue=<n>` is the override: that open issue is triaged whatever its labels.
+
+**Split** turns each open `spec:approved` issue into tickets: the approved spec — the newest comment
+between `<!-- factory-spec -->` and `<!-- /factory-spec -->`, else the issue body — is written into
+the parent's body, and the children are created with
+
+- `Parent: #<n>` as their first line and the native sub-issue link,
+- their blocking edges (the plan's `blockedBy` indices, acyclic and in range — validated before the
+  first write),
+- an Implementation context comment each, and `ready-for-agent`.
+
+The parent then swaps `spec:approved` for `factory`. A spec that already has sub-issues is never
+split again, so a failed run cannot duplicate its tickets; a partially split spec keeps
+`spec:approved` as the owner's clue.
+
+Claude only reads. It runs on a checkout of `main` (`claudeAgent`, pinned Claude Code and plugin as in
+the review step) and returns one structured `<triage>` or `<split>` block; the script in
+`packages/factory/src/intake/` performs every comment, label, issue and edge with `AGENT_PAT`. A run
+that leaves the checkout changed fails, so an issue's text cannot steer a write. A label made with
+the PAT starts no workflow here (the dispatcher listens to pushes, runs and a cron), so the workflow
+runs `factory-dispatch.yml` itself once something became `ready-for-agent`.
+
+A failed step leaves the issue's label in place, so the next night retries it; the red Actions run is
+the alarm. The two steps are independent — a triage failure still lets an approved spec split. The
+same decisions against the live repo, read-only:
+
+```bash
+DRY_RUN=1 GH_REPO=<owner>/<repo> ISSUE_NUMBER=<n> node packages/factory/src/intake/triage.ts
+```
+
 ## Dispatch
 
 `factory-dispatch.yml` picks the frontier: open `ready-for-agent` issues that no run holds

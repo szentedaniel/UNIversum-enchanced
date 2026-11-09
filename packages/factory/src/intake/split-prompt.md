@@ -21,7 +21,7 @@ write.
 
 # THE TICKETS
 
-The smallest set of tickets that lands the spec, two to eight. Every ticket is a vertical slice: one
+The smallest set of tickets that lands the spec, one to eight. Every ticket is a vertical slice: one
 behaviour that can be built, tested and merged alone, with no placeholders, no `TODO` and no "later
 ticket fills this in". The first ticket is the tracer bullet that makes the rest implementable (a
 seam, an end-to-end path, a flag); the rest build on it.

@@ -16,4 +16,4 @@ Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agen
 
 ### Software factory
 
-Tickets are implemented on GitHub Actions: the dispatcher picks the `ready-for-agent` frontier and omp implements, Claude Code reviews. See `docs/agents/factory.md`.
+Tickets are implemented on GitHub Actions: the dispatcher picks the `ready-for-agent` frontier and omp implements, Claude Code reviews. Intake turns a one-line issue into a ticket or a spec (the owner approves specs with `spec:approved`). See `docs/agents/factory.md`.
