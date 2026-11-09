@@ -50,9 +50,9 @@ near-duplicates are yours to avoid.
      `CODING_STANDARDS.md`, `AGENTS.md`, `CLAUDE.md`, `GLOSSARY.md`, `docs/agents/` (not
      `docs/agents/factory-log.md` and not the handoff notes), `docs/adr/`, and
      `packages/factory/src/*/prompt.md`. The script opens a pull request the owner merges.
-   - `workflow-issue`: the workflow itself is the cause (a missing trigger, a wrong label, a check
-     that runs too late). The factory's token has no Workflows permission, so the patch becomes a
-     `ready-for-human` issue with the diff inline. `patch` may touch only `.github/workflows/`.
+   - `workflow-pr`: the workflow itself is the cause (a missing trigger, a wrong label, a check
+     that runs too late). The patch becomes a `retro/<date>-<slug>` branch and a
+     `ready-for-human` pull request the owner merges; `patch` may touch only `.github/workflows/`.
    - `none`: the fix is not durable, the evidence is one-off, or the cheap fix would be worse than
      the problem. Say why in `problem`.
 4. **Write the log.** `logEntry` is what changed and why, one bullet per finding, in the same
@@ -81,6 +81,6 @@ it.
 </retro>
 
 - `findings`: ordered most severe first.
-- `fix.kind`: `issue`, `standards-pr`, `workflow-issue` or `none`. `standards-pr` and
-  `workflow-issue` also carry `patch` (a unified diff, no fence); `none` carries nothing else.
+- `fix.kind`: `issue`, `standards-pr`, `workflow-pr` or `none`. `standards-pr` and
+  `workflow-pr` also carry `patch` (a unified diff, no fence); `none` carries nothing else.
 - `logEntry`: one line per finding, no leading `- ` (the script adds it).

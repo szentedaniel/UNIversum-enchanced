@@ -58,7 +58,7 @@ const COMMIT_PREFIX = "docs(factory): ";
 /** `packages/repo-checks`'s subject limit, mirrored because a PR's CI checks it. */
 const SUBJECT_LIMIT = 100;
 
-/** The standards pull request's one commit: conventional, in the limit, no period. */
+/** A retro pull request's one commit: conventional, in the limit, no period. */
 export const commitSubjectOf = (title: string): string => {
   const room = SUBJECT_LIMIT - COMMIT_PREFIX.length;
   const cleaned = title.replace(/\s+/gu, " ").trim();
@@ -114,7 +114,7 @@ export const isStandardsPath = (path: string): boolean => {
   );
 };
 
-/** Only the workflows directory: the PAT has no Workflows permission. */
+/** Only the workflows directory: the owner merges a workflow change. */
 export const isWorkflowPath = (path: string): boolean => path.startsWith(".github/workflows/");
 
 const evidenceLines = (finding: Finding): string[] => finding.evidence.map((item) => `- ${item}`);
@@ -148,35 +148,15 @@ export const standardsBody = (body: string, finding: Finding): string =>
     "The nightly retro opened this pull request: it touches a protected path, so the owner merges it.",
   ].join("\n");
 
-export const workflowBody = (body: string, finding: Finding, patch: string): string =>
-  [
-    body.trim(),
-    "",
-    "## Why",
-    "",
-    finding.problem,
-    "",
-    ...evidenceLines(finding),
-    "",
-    "## Proposed workflow change",
-    "",
-    "The factory's token has no Workflows permission, so apply this patch by hand:",
-    "",
-    "```diff",
-    patch,
-    "```",
-  ].join("\n");
-
 export type PlannedWrite =
   | { readonly kind: "issue"; readonly title: string; readonly body: string }
   | {
-      readonly kind: "standards-pr";
+      readonly kind: "standards-pr" | "workflow-pr";
       readonly title: string;
       readonly body: string;
       readonly patch: string;
       readonly branch: string;
-    }
-  | { readonly kind: "workflow-issue"; readonly title: string; readonly body: string };
+    };
 
 export interface WritePlan {
   readonly writes: readonly PlannedWrite[];
@@ -220,31 +200,20 @@ export const planWrites = (options: {
         skipped.push(`"${fix.title}" has no patch paths`);
         continue;
       }
-      if (fix.kind === "standards-pr") {
-        const outside = paths.find((path) => !isStandardsPath(path));
-        if (outside !== undefined) {
-          skipped.push(`"${fix.title}" touches ${outside}, not a standards path`);
-          continue;
-        }
-        writes.push({
-          kind: "standards-pr",
-          title: fix.title,
-          body: standardsBody(fix.body, finding),
-          patch,
-          branch: branchOf(options.date, fix.title),
-        });
-      } else {
-        const outside = paths.find((path) => !isWorkflowPath(path));
-        if (outside !== undefined) {
-          skipped.push(`"${fix.title}" touches ${outside}, not a workflow path`);
-          continue;
-        }
-        writes.push({
-          kind: "workflow-issue",
-          title: fix.title,
-          body: workflowBody(fix.body, finding, patch),
-        });
+      const allowed = fix.kind === "standards-pr" ? isStandardsPath : isWorkflowPath;
+      const outside = paths.find((path) => !allowed(path));
+      if (outside !== undefined) {
+        const scope = fix.kind === "standards-pr" ? "standards" : "workflow";
+        skipped.push(`"${fix.title}" touches ${outside}, not a ${scope} path`);
+        continue;
       }
+      writes.push({
+        kind: fix.kind,
+        title: fix.title,
+        body: standardsBody(fix.body, finding),
+        patch,
+        branch: branchOf(options.date, fix.title),
+      });
     }
     planned.add(key);
   }

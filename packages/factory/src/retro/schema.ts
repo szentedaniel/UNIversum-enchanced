@@ -21,7 +21,7 @@ const standardsFix = z.object({
 });
 
 const workflowFix = z.object({
-  kind: z.literal("workflow-issue"),
+  kind: z.literal("workflow-pr"),
   title: z.string().min(1),
   body: z.string().min(1),
   patch: z.string().min(1),
