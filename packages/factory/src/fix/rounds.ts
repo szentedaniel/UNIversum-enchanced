@@ -42,11 +42,14 @@ const REASON_TEXT: Readonly<Record<FixReason, string>> = {
   "main-moved": "main moved",
 };
 
+/** What brought the pull request back, as a sentence fragment. */
+export const fixReasonText = (reason: FixReason): string => REASON_TEXT[reason];
+
 /** The comment a counted round posts: the marker that counts it, and why. */
 export const roundComment = (round: number, reason: FixReason): string =>
   [
     `<!-- factory-fix:round ${String(round)} -->`,
-    `Factory fix round ${String(round)} of ${String(MAX_FIX_ROUNDS)}: ${REASON_TEXT[reason]}.`,
+    `Factory fix round ${String(round)} of ${String(MAX_FIX_ROUNDS)}: ${fixReasonText(reason)}.`,
   ].join("\n");
 
 /** Merging main in is housekeeping, not a fix round: it leaves no marker. */

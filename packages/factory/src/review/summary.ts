@@ -42,9 +42,9 @@ export interface ReviewComment {
 /** The verdict a review summary carries; `undefined` for any other comment. */
 export const reviewVerdictOf = (comment: string): ReviewVerdict | undefined => {
   if (!comment.includes(REVIEW_MARKER)) return undefined;
-  const lines = comment.split("\n").map((line) => line.trim());
-  if (lines.includes(HEADINGS.pass)) return "pass";
-  if (lines.includes(HEADINGS["changes-requested"])) return "changes-requested";
+  const lines = new Set(comment.split("\n").map((line) => line.trim()));
+  if (lines.has(HEADINGS.pass)) return "pass";
+  if (lines.has(HEADINGS["changes-requested"])) return "changes-requested";
   return undefined;
 };
 
