@@ -84,6 +84,7 @@ describe("the commit rules", () => {
 
   it("name the length of a long subject in the length rule's message", () => {
     const subject = `fix: ${"b".repeat(145)}`;
+    expect(subject).toHaveLength(150);
     expect(commitProblems(commit(subject))).toEqual([
       "subject is 150 characters, over the 100-character limit",
     ]);
