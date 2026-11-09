@@ -32,7 +32,8 @@ final Playback before the podium.
   below is text-scoped (it keeps the last text up through text-less steps).
 - `playback/toast.ts`: `toastCues(steps, textOf)` = the steps that have text,
   in order, with their absolute offsets; `cueAt(cues, elapsedMs)` = the last
-  cue that has started. Unit tests: `apps/web/test/timeline.test.ts`.
+  cue that has started. Unit tests: `apps/web/test/playback.test.ts` (the
+  Playback core's tests, since #66).
 
 ## The decision gate (one store for the whole screen)
 
@@ -46,8 +47,8 @@ final Playback before the podium.
   `playbackStore` is `{ seq, over }`; it subscribes to `roomStore.push` at
   module load, publishes synchronously, and schedules **one** wake-up at the
   opening (+20 ms). It reads timestamps, never animation frames, so a hidden
-  tab cannot open the gate early or wedge it. `apps/web/test/playback-gate.test.ts`
-  covers the arithmetic.
+  tab cannot open the gate early or wedge it. `apps/web/test/playback.test.ts`
+  covers the arithmetic (the Playback core's tests, since #66).
 - `Game.tsx` reads `useStore(playbackStore, (s) => s.over)` as `playbackOver`
   and gates every control, the Sale/pick trays, the "other Player is choosing"
   lines and the podium (`gameOver && playbackOver`) on it. Do not re-add a

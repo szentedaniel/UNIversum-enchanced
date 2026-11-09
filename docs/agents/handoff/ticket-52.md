@@ -46,7 +46,7 @@ Both are timed from `Push.receivedAt`, and each shows for its own step only.
 
 ## Tests and test hooks
 
-- `apps/web/test/timeline.test.ts`: the Chance charge followed by its forced
+- `apps/web/test/playback.test.ts`: the Chance charge followed by its forced
   Sale, and `stepAt` (dice step-scoped, card for its 7 s, zero-length never
   current, nothing after the Playback).
 - `window.universumTest.showView(view, events?)` now takes the push's events

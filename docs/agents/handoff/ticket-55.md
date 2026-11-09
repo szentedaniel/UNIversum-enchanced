@@ -1,9 +1,14 @@
 # Ticket #55 (ADR-0004 fence) — what changed and gotchas
 
 Branch `ticket/55-playback-fence` (on `v2-modernization`), spec #58. One
-vitest file, `apps/web/test/playback-fence.test.ts`, reads every `.ts`/`.tsx`
-file under `apps/web/src` (minus the generated `paraglide/` folder) and fails
-when either of two ADR-0004 patterns comes back. No product code changed.
+vitest file, `playback-fence.test.ts` (the one in `apps/web/test`, since
+deleted), read every `.ts`/`.tsx` file under `apps/web/src` (minus the
+generated `paraglide/` folder) and failed when either of two ADR-0004 patterns
+came back. No product code changed. #68
+split it: the import rule is the Oxlint override in `.oxlintrc.json` (tested by
+`apps/web/test/import-fence.test.ts`) and the clock rule is
+`apps/web/test/server-clock-fence.test.ts` (see `ticket-68.md`). The sections
+below record the fence as #55 built it.
 
 ## The rules it enforces
 
