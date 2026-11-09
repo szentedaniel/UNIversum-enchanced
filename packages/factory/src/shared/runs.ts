@@ -1,7 +1,8 @@
 /**
  * The factory's workflow runs, with the jobs each billed: the dispatcher sums
  * them for the monthly budget, the weekly report also splits them by week and
- * by agent.
+ * by agent. The run scripts read a run's log through `runLog` here too, so the
+ * `gh run view` command, its buffer and its partial-stdout salvage live once.
  */
 import { execSync } from "node:child_process";
 import { isFactoryWorkflow, type JobTiming } from "#dispatch/budget.ts";
