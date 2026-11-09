@@ -73,7 +73,8 @@ reporter's `N flaky` block padded with `─`.
   dispatch ran before the issue existed.
 - The dedupe marker `<!-- factory:red-main -->` lives in the **issue body**; the watch lists open
   issues and comments on the one that carries it. A second red run does not open a second issue.
-- `run-red-main.ts` reads `gh run view --log-failed` (128 MB buffer) and trims with
+- `run-red-main.ts` reads the failed log through `runLog(repo, runId, { failedOnly: true })` from
+  `src/shared/runs.ts` (it owns the buffer and the partial-stdout salvage) and trims with
   `excerptOf` from `src/fix/excerpt.ts`; the body fences the excerpt with **four** backticks so a log
   that prints a fence stays readable.
 
