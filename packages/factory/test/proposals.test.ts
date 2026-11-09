@@ -118,7 +118,11 @@ describe("architectureRun", () => {
   it("bounds the schema by the run's cap", () => {
     const { schema } = architectureRun({ MAX_PROPOSALS: "4" }, now);
 
-    expect(schema.parse({ proposals: Array.from({ length: 4 }, () => proposal) })).toBeDefined();
-    expect(() => schema.parse({ proposals: Array.from({ length: 5 }, () => proposal) })).toThrow();
+    expect(schema.safeParse({ proposals: Array.from({ length: 4 }, () => proposal) }).success).toBe(
+      true,
+    );
+    expect(schema.safeParse({ proposals: Array.from({ length: 5 }, () => proposal) }).success).toBe(
+      false,
+    );
   });
 });
