@@ -41,8 +41,8 @@ export const jsonLines = <T>(raw: string): T[] =>
  */
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the one untyped JSON boundary; each caller names its REST shape
 export const api = <T>(path: string): T[] => {
-  const pages: unknown[] = JSON.parse(sh(`gh api --paginate --slurp "${path}"`));
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- untrusted JSON, typed by the caller
+  const pages = parseJson<unknown[]>(gh(["api", "--paginate", "--slurp", path]));
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the flattened pages are the caller's REST shape
   return pages.flat() as T[];
 };
 

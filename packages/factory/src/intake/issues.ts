@@ -2,8 +2,7 @@
  * The REST issue list as the intake selection's facts. Pull requests come back
  * from the same endpoint and are kept so the selection can skip them.
  */
-import { api } from "#intake/gh.ts";
-import { gh, parseJson } from "#shared/github.ts";
+import { api, gh, parseJson } from "#shared/github.ts";
 import type { IntakeIssue } from "#intake/select.ts";
 
 interface ApiIssue {
