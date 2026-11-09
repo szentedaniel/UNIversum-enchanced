@@ -1,0 +1,61 @@
+# The factory's weekly health report: every Monday at 06:00 Europe/Budapest,
+# open the week's `factory:report` issue with the numbers, the budget warning
+# and the owner's queue, and close last week's. `packages/factory/src/report/`
+# holds the numbers and the body; this file only starts the script.
+#
+# GitHub's cron is UTC, so both hours that land at 06:00 Budapest are
+# scheduled — 04:00 UTC in summer (CEST), 05:00 UTC in winter (CET) — and the
+# script skips the one that is not 06:00. A manual dispatch always runs.
+name: Factory Report
+
+on:
+  schedule:
+    - cron: "0 4 * * 1"
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print the report without writing it
+        type: boolean
+        default: false
+
+# The report reads its numbers and writes one issue. The default token is
+# enough: nothing it does has to trigger another workflow.
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  actions: read
+
+# Two cron slots on a Monday must not both post; the second waits and then
+# sees the first's issue.
+concurrency:
+  group: factory-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      # The script skips a scheduled run that is not the 06:00 Budapest one.
+      EVENT_NAME: ${{ github.event_name }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+      FACTORY_MONTHLY_MINUTES: ${{ vars.FACTORY_MONTHLY_MINUTES }}
+
+    steps:
+      # Plain API work plus the retro log's history: no install, no agent.
+      # fetch-depth 0 is what `git log --since` reads the log's added lines from.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - name: Report
+        run: node packages/factory/src/report/report.ts
