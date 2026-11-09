@@ -5,7 +5,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { matchMaker } from "@colyseus/core";
 import { Client, type Room } from "@colyseus/sdk";
 import {
@@ -25,6 +25,7 @@ import {
   type WelcomeMessage,
 } from "@universum/protocol";
 import type { apply, PublicView } from "@universum/rules";
+import type { ServerConfig } from "#config.ts";
 import type { Dsn } from "#observability/dsn.ts";
 import type { ErrorReporter } from "#observability/error-reporting.ts";
 import type { Logger } from "#observability/logger.ts";
@@ -32,7 +33,7 @@ import { GameMetrics } from "#observability/metrics.ts";
 import { DEFAULT_LIMITS, type Limits } from "#limits.ts";
 import { GameRoom, type GameTiming } from "#room/game-room.ts";
 import type { Scheduler } from "#room/scheduler.ts";
-import { createGameServer, restoreRooms } from "#server.ts";
+import { startServer } from "#server.ts";
 import type { RoomStore } from "#store/room-store.ts";
 import { openSqliteRoomStore } from "#store/sqlite-room-store.ts";
 
@@ -197,9 +198,9 @@ export type TestServer = {
 };
 
 /**
- * Starts the Room server in-process the way `main.ts` does: listen, then
- * restore every unfinished Room from the store. One at a time per test file:
- * Colyseus' matchmaker is a process-wide singleton.
+ * Starts the Room server in-process the way `main.ts` does: the store, both
+ * ports, listen, restore every unfinished Room, then ready. One at a time per
+ * test file: Colyseus' matchmaker is a process-wide singleton.
  */
 export async function startTestServer(options: TestServerOptions = {}): Promise<TestServer> {
   const scheduler = options.scheduler ?? new ManualScheduler();
@@ -208,24 +209,31 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
   const sqlite = openSqliteRoomStore(databasePath);
   const store = options.wrapStore?.(sqlite) ?? sqlite;
   const metrics = new GameMetrics({ release: "test" });
-  const { log, engine, reporter, errorReporting } = options;
-  const server = createGameServer({
-    engine,
-    reporter,
-    errorReporting,
-    gracefullyShutdown: false,
-    scheduler,
-    store,
+  const config: ServerConfig = {
+    port: 0,
+    host: "127.0.0.1",
+    dataDir: dirname(databasePath),
     limits: { ...TEST_LIMITS, ...options.limits },
+    databasePath,
+    internalPort: 0,
+    logLevel: "silent",
+    prettyLogs: false,
+    release: "test",
+    sentryDsn: null,
+    timing: options.timing ?? {},
+  };
+  const started = await startServer(config, {
+    store,
+    scheduler,
     metrics,
-    log,
-    timing: options.timing,
+    log: options.log,
+    engine: options.engine,
+    reporter: options.reporter,
+    errorReporting: options.errorReporting,
+    gracefullyShutdown: false,
+    crashHandlers: false,
   });
-  await server.listen(0, "127.0.0.1");
-  const restored = await restoreRooms({ store, scheduler, metrics, log });
-  const address = server.transport.server?.address();
-  if (!address || typeof address === "string") throw new Error("the server has no TCP port");
-  const { port } = address;
+  const { port, restored } = started;
   const sdk = new Client(`ws://127.0.0.1:${port}`);
   const clients: { leave(): Promise<void> }[] = [];
   const track = <T extends { leave(): Promise<void> }>(client: T) => {
@@ -275,9 +283,8 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
       return room instanceof GameRoom ? room : undefined;
     },
     async stop() {
-      await server.gracefullyShutdown(false);
+      await started.stop();
       await Promise.all(clients.map((c) => c.leave()));
-      sqlite.close();
     },
   };
 }

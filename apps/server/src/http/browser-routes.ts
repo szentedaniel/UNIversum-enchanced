@@ -10,8 +10,7 @@
  * stripped before the envelope is forwarded to the tracker with the real DSN.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { ipBucket, clientIp } from "#abuse/ip.ts";
-import { readBody } from "#abuse/gated-http.ts";
+import { readRequest, reply } from "#abuse/gated-http.ts";
 import type { AbuseGuard } from "#abuse/guard.ts";
 import type { Dsn } from "#observability/dsn.ts";
 import {
@@ -66,18 +65,12 @@ export function createBrowserRoutes({
   async function errorTunnel(request: IncomingMessage, response: ServerResponse) {
     if (dsn === null) return empty(response, 404);
     if (request.method !== "POST") return empty(response, 405, { allow: "POST" });
-    const max = guard.limits.errorReportBytes;
-    if (Number(request.headers["content-length"] ?? 0) > max) return empty(response, 413);
-    const bucket = ipBucket(clientIp(request.headers, request.socket.remoteAddress));
-    const refusal = await guard.errorReportRefusal(bucket);
-    if (refusal) {
-      return empty(response, 429, {
-        "retry-after": String(refusal.retryAfter ?? 60),
-      });
-    }
-    const body = await readBody(request, max);
-    if (body === null) return empty(response, 413);
-    const envelope = splitEnvelope(Buffer.from(body, "utf8"));
+    const read = await readRequest(request, {
+      max: guard.limits.errorReportBytes,
+      rate: (bucket) => guard.errorReportRefusal(bucket),
+    });
+    if ("refusal" in read) return reply(response, read.status, read.refusal);
+    const envelope = splitEnvelope(Buffer.from(read.body, "utf8"));
     if (envelope === null) return empty(response, 400);
     const events: EnvelopeItem[] = [];
     for (const item of envelope.items) {

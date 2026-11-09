@@ -3,9 +3,9 @@
  * there normally. Split from `erasmus.ts` because `landing.ts` imports the
  * corner's landing function, so the handler cannot import `landOn` back.
  */
-import { FIELD_COUNT } from "#board.ts";
 import type { IntentHandlers } from "#handlers.ts";
 import { rejection } from "#rejections.ts";
+import { erasmusRoute } from "#rules/erasmus.ts";
 import { landOn } from "#rules/landing.ts";
 import { moveForward } from "#rules/movement.ts";
 import { passTurn } from "#rules/pass-turn.ts";
@@ -22,8 +22,7 @@ export const erasmusIntents = {
       }
       const player = playerById(tx, tx.state.currentPlayer);
       // Always forward round the ring: the bonus and the landing follow the dice path (R65).
-      const steps = (intent.field - player.position + FIELD_COUNT) % FIELD_COUNT;
-      moveForward(tx, player.id, steps);
+      moveForward(tx, player.id, erasmusRoute(tx.state, intent.field).steps);
       landOn(tx, player.id);
       if (!tx.decided) passTurn(tx);
       return undefined;

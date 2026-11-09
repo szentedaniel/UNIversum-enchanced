@@ -10,6 +10,12 @@
  * It also counts each IP's open WebSockets (refused in `beforeUpgrade`), and
  * hands Colyseus the resolved client IP as `X-Real-IP`, since Colyseus's
  * matchmaking `onAuth` context does not fall back to the socket address.
+ *
+ * `readRequest` is the one reader for a route's request, matchmaking or
+ * browser (`#http/browser-routes.ts`): it resolves the client bucket, refuses
+ * a declared body over its cap, optionally consults a rate check, then reads
+ * the body under the same cap. `reply` is the one writer for a refusal, with
+ * the matchmaking JSON and CORS headers or an empty body.
  */
 import { createServer, IncomingMessage, ServerResponse, type Server } from "node:http";
 import { Duplex } from "node:stream";
@@ -29,24 +35,8 @@ function kindOf(method: string, room: string): RequestKind | null {
   return null;
 }
 
-/** Answers like Colyseus's own matchmaking errors: `{ code, error }`, the error being the Rejection. */
-function refuse(req: IncomingMessage, res: ServerResponse, status: number, refusal: Refusal): void {
-  const json = JSON.stringify({ code: status, error: refusalMessage(refusal) });
-  const headers: Record<string, string | number> = {
-    ...matchMaker.controller.DEFAULT_CORS_HEADERS,
-    ...matchMaker.controller.getCorsHeaders(
-      new Headers(typeof req.headers.origin === "string" ? { origin: req.headers.origin } : {}),
-    ),
-    "content-type": "application/json",
-    "content-length": Buffer.byteLength(json),
-  };
-  if (refusal.retryAfter !== undefined) headers["retry-after"] = refusal.retryAfter;
-  res.writeHead(status, headers);
-  res.end(json);
-}
-
 /** The whole body, or `null` once it grows past `max` bytes. */
-export function readBody(req: IncomingMessage, max: number): Promise<string | null> {
+function readBody(req: IncomingMessage, max: number): Promise<string | null> {
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
     let size = 0;
@@ -63,6 +53,65 @@ export function readBody(req: IncomingMessage, max: number): Promise<string | nu
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", () => resolve(null));
   });
+}
+
+/** What reading a route's request got: its client bucket and body, or the refusal to answer. */
+export type RequestRead = { bucket: string; body: string } | { refusal: Refusal; status: number };
+
+/** A body over the route's cap, declared or read. */
+const TOO_LARGE: RequestRead = { refusal: { code: "MALFORMED" }, status: 413 };
+
+/**
+ * Reads a route's request: resolves the client bucket, refuses a declared or
+ * actual body over `max` bytes (413 `MALFORMED`), and consults `rate` once the
+ * declared body fits (429 with its Refusal).
+ */
+export async function readRequest(
+  req: IncomingMessage,
+  { max, rate }: { max: number; rate?: (bucket: string) => Promise<Refusal | null> },
+): Promise<RequestRead> {
+  const bucket = ipBucket(clientIp(req.headers, req.socket.remoteAddress));
+  if (Number(req.headers["content-length"] ?? 0) > max) return TOO_LARGE;
+  if (rate) {
+    const refusal = await rate(bucket);
+    if (refusal) return { refusal, status: 429 };
+  }
+  const body = await readBody(req, max);
+  if (body === null) return TOO_LARGE;
+  return { bucket, body };
+}
+
+/**
+ * Answers a refusal: `status`, `retry-after` when the Refusal carries one,
+ * and, when `request` is given, Colyseus's CORS headers and the
+ * `{ code, error }` JSON its matchmaking clients read.
+ */
+export function reply(
+  response: ServerResponse,
+  status: number,
+  refusal: Refusal,
+  request?: IncomingMessage,
+): void {
+  const headers: Record<string, string | number> = {};
+  if (refusal.retryAfter !== undefined) headers["retry-after"] = refusal.retryAfter;
+  if (request === undefined) {
+    response.writeHead(status, headers);
+    response.end();
+    return;
+  }
+  const json = JSON.stringify({ code: status, error: refusalMessage(refusal) });
+  response.writeHead(status, {
+    ...matchMaker.controller.DEFAULT_CORS_HEADERS,
+    ...matchMaker.controller.getCorsHeaders(
+      new Headers(
+        typeof request.headers.origin === "string" ? { origin: request.headers.origin } : {},
+      ),
+    ),
+    ...headers,
+    "content-type": "application/json",
+    "content-length": Buffer.byteLength(json),
+  });
+  response.end(json);
 }
 
 /**
@@ -91,17 +140,12 @@ async function gate(
     if (res.statusCode >= 400) guard.release(id);
   });
   const kind = kindOf(method, room);
-  if (kind) {
-    const refusal = await guard.admitRequest(kind, ipBucket(ip));
-    if (refusal) return refuse(req, res, 429, refusal);
-  }
-  const max = guard.limits.matchmakeBodyBytes;
-  if (Number(req.headers["content-length"] ?? 0) > max) {
-    return refuse(req, res, 413, { code: "MALFORMED" });
-  }
-  const body = await readBody(req, max);
-  if (body === null) return refuse(req, res, 413, { code: "MALFORMED" });
-  req.body = body;
+  const read = await readRequest(req, {
+    max: guard.limits.matchmakeBodyBytes,
+    rate: kind === null ? undefined : (bucket) => guard.admitRequest(kind, bucket),
+  });
+  if ("refusal" in read) return reply(res, read.status, read.refusal, req);
+  req.body = read.body;
   next();
 }
 
@@ -115,7 +159,7 @@ export function createGatedHttpServer(guard: AbuseGuard, routes?: BrowserRoutes)
     const [req, second] = args;
     if (event === "request" && req instanceof IncomingMessage && second instanceof ServerResponse) {
       gate(guard, routes, req, second, () => emit(event, ...args)).catch(() => {
-        if (!second.headersSent) refuse(req, second, 500, { code: "INTERNAL" });
+        if (!second.headersSent) reply(second, 500, { code: "INTERNAL" }, req);
       });
       return true;
     }
