@@ -19,6 +19,8 @@ export const COMMIT_TYPES = [
 export type Commit = { sha: string; parents: number; message: string };
 
 const SUBJECT = new RegExp(`^(${COMMIT_TYPES.join("|")})(\\([^()\\s]+\\))?!?: \\S`);
+/** The longest a subject may be, in characters. */
+const SUBJECT_LIMIT = 100;
 /** Git's own subject for a merge it wrote (`Merge branch 'x' into y`). */
 const GIT_MERGE_SUBJECT = /^Merge (branch|remote-tracking branch|pull request) /;
 const ATTRIBUTION = /^\s*(co-authored-by:|\S*\s*generated with\b)/im;
@@ -31,6 +33,11 @@ export function commitProblems(commit: Commit): string[] {
   if (!gitMerge && !SUBJECT.test(subject)) {
     problems.push(
       `subject is not \`type(scope): description\` with a type of ${COMMIT_TYPES.join(", ")}`,
+    );
+  }
+  if (!gitMerge && subject.length > SUBJECT_LIMIT) {
+    problems.push(
+      `subject is ${subject.length} characters, over the ${SUBJECT_LIMIT}-character limit`,
     );
   }
   if (subject.endsWith(".")) problems.push("subject ends with a period");
