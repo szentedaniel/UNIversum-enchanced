@@ -26,3 +26,16 @@ export const planOf = (
   const slots = Math.max(0, maxParallel - running);
   return { dispatch: eligible.slice(0, slots), waiting: eligible.slice(slots) };
 };
+
+/**
+ * Why the plan dispatches nothing, as the dispatcher logs it: the frontier
+ * offered nothing, or the cap is reached. The budget case is the caller's.
+ */
+export const noDispatchReason = (
+  eligible: readonly IssueFacts[],
+  running: number,
+  maxParallel: number,
+): string =>
+  eligible.length === 0
+    ? "Dispatch: none — the frontier is empty."
+    : `Dispatch: none — no free slot (${String(running)} of ${String(maxParallel)} running).`;
