@@ -1,21 +1,27 @@
+import { mkdirSync } from "node:fs";
 import { LobbyRoom, matchMaker, Server, type AuthContext } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { GAME_ROOM, LOBBY_ROOM, refusalMessage } from "@universum/protocol";
 import { createGatedHttpServer } from "#abuse/gated-http.ts";
 import { AbuseGuard } from "#abuse/guard.ts";
 import { ipBucket } from "#abuse/ip.ts";
+import type { ServerConfig } from "#config.ts";
+import { startInternalServer } from "#internal-server.ts";
 import { DEFAULT_LIMITS, type Limits } from "#limits.ts";
 import { apply, migrate } from "@universum/rules";
-import type { Dsn } from "#observability/dsn.ts";
+import { installCrashHandlers } from "#observability/crash-handlers.ts";
+import { parseDsn, type Dsn } from "#observability/dsn.ts";
 import { noReporter, type ErrorReporter } from "#observability/error-reporting.ts";
 import { createIpTagger, limiterRefused } from "#observability/limiter-refusals.ts";
 import { colyseusLogger, silentLogger, type Logger } from "#observability/logger.ts";
 import { GameMetrics } from "#observability/metrics.ts";
+import { createSentryReporter } from "#observability/sentry-reporter.ts";
 import { createBrowserRoutes } from "#http/browser-routes.ts";
 import { GameRoom, restoreOptions, type GameTiming } from "#room/game-room.ts";
 import { systemScheduler, type Scheduler } from "#room/scheduler.ts";
 import { deleteAfterRetention } from "#store/retention.ts";
 import type { RoomStore } from "#store/room-store.ts";
+import { openSqliteRoomStore } from "#store/sqlite-room-store.ts";
 
 export type GameServerOptions = {
   /** Where every Room is saved and restored from. */
@@ -39,6 +45,113 @@ export type GameServerOptions = {
   /** Shorter Turns and minutes for e2e runs (`GAME_TURN_LIMIT_MS`, `GAME_MINUTE_MS`); empty by default. */
   timing?: GameTiming;
 };
+
+/** What `startServer` takes over: every server seam, and the process hooks. */
+export type StartServerDeps = Partial<GameServerOptions> & {
+  /**
+   * Install the process crash handlers (the default, as the real server
+   * does). In-process test servers turn them off with `gracefullyShutdown`.
+   */
+  crashHandlers?: boolean;
+};
+
+/** A booted server: the bound ports, the restored Rooms and the shutdown. */
+export type StartedServer = {
+  /** The actual bound HTTP + WebSocket port (`PORT=0` picks a free one). */
+  port: number;
+  /** The actual bound internal port (`/healthz`, `/readyz`, `/metrics`). */
+  internalPort: number;
+  /** How many stored Rooms the boot restored. */
+  restored: number;
+  /** Stops every Room, then the store and the internal server; safe to call twice. */
+  stop(): Promise<void>;
+};
+
+/**
+ * Boots the server the way `main.ts` does after it has config and a logger:
+ * open the store, start the internal port, define every Room, listen, restore
+ * the stored Rooms, and only then report ready. Production and every
+ * in-process test take this one path, so the order is exercised by tests.
+ */
+export async function startServer(
+  config: ServerConfig,
+  deps: StartServerDeps = {},
+): Promise<StartedServer> {
+  const log = deps.log ?? silentLogger;
+  const metrics = deps.metrics ?? new GameMetrics({ release: config.release });
+  const errorReporting =
+    deps.errorReporting !== undefined
+      ? deps.errorReporting
+      : config.sentryDsn === null
+        ? null
+        : parseDsn(config.sentryDsn);
+  const reporter =
+    deps.reporter ??
+    (errorReporting === null
+      ? noReporter
+      : createSentryReporter({ dsn: errorReporting, release: config.release }));
+  if (deps.crashHandlers ?? true) {
+    installCrashHandlers({
+      source: process,
+      log,
+      reporter,
+      exit: (code) => process.exit(code),
+    });
+  }
+
+  const store = deps.store ?? openStore(config);
+  const scheduler = deps.scheduler ?? systemScheduler;
+  const internal = await startInternalServer({
+    port: config.internalPort,
+    host: config.host,
+    metrics,
+  });
+  const server = createGameServer({
+    store,
+    scheduler,
+    metrics,
+    log,
+    reporter,
+    errorReporting,
+    engine: deps.engine,
+    limits: deps.limits ?? config.limits,
+    timing: deps.timing ?? config.timing,
+    gracefullyShutdown: deps.gracefullyShutdown ?? true,
+  });
+  server.onBeforeShutdown(() => log.info("Server shutting down"));
+  // Every Room has stopped before the store closes.
+  server.onShutdown(async () => {
+    store.close();
+    await internal.close();
+    log.info("Server stopped");
+  });
+
+  await server.listen(config.port, config.host);
+  // The actual port (PORT=0 binds any free one), so a caller can reach it.
+  const address = server.transport.server?.address();
+  const port = address && typeof address !== "string" ? address.port : config.port;
+  log.info({ port, internalPort: internal.port, release: config.release }, "Server listening");
+
+  const started = performance.now();
+  const restored = await restoreRooms({ store, scheduler, metrics, log });
+  log.info({ restored, durationMs: Math.round(performance.now() - started) }, "Rooms restored");
+  internal.ready();
+  log.info("Server ready");
+
+  let stopping: Promise<void> | undefined;
+  return {
+    port,
+    internalPort: internal.port,
+    restored,
+    stop: () => (stopping ??= server.gracefullyShutdown(false)),
+  };
+}
+
+/** Opens the configured SQLite store, creating its folder first. */
+function openStore(config: ServerConfig): RoomStore {
+  mkdirSync(config.dataDir, { recursive: true });
+  return openSqliteRoomStore(config.databasePath);
+}
 
 /** The Colyseus server with every Room type defined, not yet listening. */
 export function createGameServer(options: GameServerOptions): Server {
@@ -104,10 +217,10 @@ export type RestoreOptions = {
 /**
  * Restore on boot (spec): every unfinished Room comes back under its own
  * code, its game run through the engine's migrations first; ended Rooms are
- * scheduled for deletion. Call it once the server listens; `/readyz` turns
- * green when it resolves. Returns how many Rooms were restored.
+ * scheduled for deletion. Called by `startServer` once the server listens;
+ * `/readyz` turns green when it resolves. Returns how many Rooms were restored.
  */
-export async function restoreRooms({
+async function restoreRooms({
   store,
   scheduler = systemScheduler,
   metrics,
