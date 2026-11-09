@@ -94,12 +94,19 @@ export function baseRentOf(state: GameState, field: FieldId): number {
  * on a University; a Museum keeps its count multiplier (R61, F10).
  */
 export function rentOf(state: GameState, field: FieldId): number {
+  return rentWithCount(state, field, state.doubler?.field === field ? state.doubler.count : 0);
+}
+
+/**
+ * The Rent with `count` Doublers on the Field (R61, F10), so a pick can price
+ * the placement it offers without restating the rule.
+ */
+export function rentWithCount(state: GameState, field: FieldId, count: number): number {
   const info = FIELDS[field];
   const fieldState = state.fields[field];
   if (!fieldState?.owner) return 0;
-  const doubler = state.doubler?.field === field ? state.doubler.count : 0;
   const base = baseRentOf(state, field);
-  if (info?.kind === "museum" || doubler > 0) return base * (doubler + 1);
+  if (info?.kind === "museum" || count > 0) return base * (count + 1);
   if (!info?.group) return 0;
   return Math.round(
     isMonopoly(state, info.group, fieldState.owner) ? (base * MONOPOLY_TENTHS) / 10 : base,

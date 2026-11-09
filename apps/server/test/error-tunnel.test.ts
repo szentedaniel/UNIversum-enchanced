@@ -264,7 +264,7 @@ describe("the error tunnel", () => {
     expect(scrape).toContain('limiter_refusals_total{limit="error_events"} 1');
   });
 
-  it("refuses a body over the size cap", async () => {
+  it("refuses a body over the size cap with an empty reply", async () => {
     const { dsn } = await fakeTracker();
     server = await startTestServer({ errorReporting: dsn, limits: { errorReportBytes: 64 } });
 
@@ -274,6 +274,30 @@ describe("the error tunnel", () => {
     );
 
     expect(response.status).toBe(413);
+    expect(response.headers.get("retry-after")).toBeNull();
+    expect(await response.text()).toBe("");
+  });
+
+  it("refuses a chunked body that grows over the size cap", async () => {
+    const { dsn } = await fakeTracker();
+    server = await startTestServer({ errorReporting: dsn, limits: { errorReportBytes: 64 } });
+    const chunk = new TextEncoder().encode(" ".repeat(32));
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let i = 0; i < 3; i++) controller.enqueue(chunk);
+        controller.close();
+      },
+    });
+
+    const response = await fetch(`http://127.0.0.1:${server.port}/errors`, {
+      method: "POST",
+      headers: { "content-type": "application/x-sentry-envelope" },
+      body,
+      duplex: "half",
+    });
+
+    expect(response.status).toBe(413);
+    expect(await response.text()).toBe("");
   });
 
   it("only accepts POST on the tunnel, and only GET on the client config", async () => {
