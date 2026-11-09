@@ -7,13 +7,7 @@
 import { FIELDS, type FieldId } from "#board.ts";
 import type { IntentHandlers } from "#handlers.ts";
 import { rejection } from "#rejections.ts";
-import {
-  autoSellPicks,
-  payFromCash,
-  saleValueOfAll,
-  sellFields,
-  type PendingCharge,
-} from "#rules/charge.ts";
+import { saleValueOfAll, settleAfterSale, type PendingCharge } from "#rules/charge.ts";
 import { passTurn } from "#rules/pass-turn.ts";
 import { offerBuyout } from "#rules/universities.ts";
 import type { PhaseOf, PlayerId } from "#state.ts";
@@ -34,9 +28,8 @@ function saleOf(tx: Tx): PhaseOf<"selling"> {
   return phase;
 }
 
-/** After the Sale: the Charge is paid, then whatever followed it at landing. */
-function resume(tx: Tx, playerId: PlayerId, pending: PendingCharge): void {
-  payFromCash(tx, playerId, pending);
+/** After the Charge: the Buyout a Rent on a University offers (R52), then the Turn passing. */
+function afterCharge(tx: Tx, playerId: PlayerId, pending: PendingCharge): void {
   if (pending.kind === "rent" && FIELDS[pending.field]?.kind === "university") {
     offerBuyout(tx, playerId, pending.field);
   }
@@ -44,14 +37,12 @@ function resume(tx: Tx, playerId: PlayerId, pending: PendingCharge): void {
 }
 
 /**
- * Auto-sell for the open Sale, then the Charge is paid (R68, F9). The timeout
- * (R69) runs this before the Timeout penalty, without passing the Turn.
+ * Auto-sell the open Sale and pay its Charge (R68, F9). The timeout (R69)
+ * runs this before the Timeout penalty, without passing the Turn.
  */
 export function autoSellAndPay(tx: Tx): void {
-  const { shortfall, resume: pending } = saleOf(tx);
-  const playerId = tx.state.currentPlayer;
-  sellFields(tx, playerId, autoSellPicks(tx.state, playerId, shortfall), true);
-  payFromCash(tx, playerId, pending);
+  const { resume: pending } = saleOf(tx);
+  settleAfterSale(tx, tx.state.currentPlayer, pending);
 }
 
 export const saleIntents = {
@@ -65,8 +56,8 @@ export const saleIntents = {
       const own = fields.every((field) => tx.state.fields[field]?.owner === playerId);
       if (!own || new Set(fields).size !== fields.length) return rejection("NOT_OFFERED");
       if (saleValueOfAll(tx.state, fields) < shortfall) return rejection("SHORTFALL_NOT_COVERED");
-      sellFields(tx, playerId, fields, false);
-      resume(tx, playerId, pending);
+      settleAfterSale(tx, playerId, pending, fields);
+      afterCharge(tx, playerId, pending);
       return undefined;
     },
   },
@@ -74,10 +65,10 @@ export const saleIntents = {
     actor: "player",
     phases: ["selling"],
     run(tx) {
-      const { shortfall, resume: pending } = saleOf(tx);
+      const { resume: pending } = saleOf(tx);
       const playerId = tx.state.currentPlayer;
-      sellFields(tx, playerId, autoSellPicks(tx.state, playerId, shortfall), true);
-      resume(tx, playerId, pending);
+      settleAfterSale(tx, playerId, pending);
+      afterCharge(tx, playerId, pending);
     },
   },
 } satisfies Partial<IntentHandlers>;

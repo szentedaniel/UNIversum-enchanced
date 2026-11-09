@@ -21,11 +21,14 @@ import {
   SEED,
   seats,
   T0,
+  withField,
   withPlayer,
 } from "./helpers.ts";
 
 /** 20 s on the ring plus about 3 s of slack for animations (F22). */
 const DEADLINE_AFTER = 23_000;
+
+const VESZPREM = 1; // Level 1: sale value 180,000
 
 const timeOut = (state: ReturnType<typeof newGame>, now = deadlineOf(state)) =>
   accept(state, { type: "TurnTimedOut", turn: state.turn }, SYSTEM, now);
@@ -127,6 +130,21 @@ describe("TurnTimedOut", () => {
     const state = withPlayer(newGame(), "p1", { cash: 100_001 });
 
     expect(player(timeOut(state).state, "p1").cash).toBe(100_001 - 10_000);
+  });
+
+  it("R19: above the threshold cash pays the penalty, so no Field is sold", () => {
+    const owning = withField(newGame(), VESZPREM, { owner: "p1", level: 1 });
+    const state = withPlayer(owning, "p1", { cash: 150_000 });
+
+    const applied = timeOut(state);
+
+    expect(applied.events).toEqual([
+      { type: "TimedOut", player: "p1" },
+      { type: "TimeoutPenaltyPaid", player: "p1", amount: 15_000 },
+      { type: "TurnPassed", player: "p2", turn: 2 },
+    ]);
+    expect(applied.state.fields[VESZPREM]).toEqual({ owner: "p1", level: 1 });
+    expect(player(applied.state, "p1").cash).toBe(135_000);
   });
 
   it("R18/R19: the events say who timed out, the penalty, then the Turn passing", () => {

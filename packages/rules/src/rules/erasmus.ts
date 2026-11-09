@@ -3,11 +3,13 @@
  * Museum no other Player owns; the Player travels forward to the chosen Field
  * (the Round bonus applies when the route passes Start) and lands normally.
  * With nothing to pick the Turn passes at once, with no penalty.
+ * `erasmusRoute` is the travel rule, shared by the intent and `publicView`.
  *
  * The intent handler lives in `erasmus-travel.ts`: it needs `landOn`, and
  * `landing.ts` imports this module, so importing it back would be a cycle.
  */
-import { FIELDS, type FieldId } from "#board.ts";
+import { FIELDS, FIELD_COUNT, type FieldId } from "#board.ts";
+import { ROUND_BONUS } from "#constants.ts";
 import type { Landing } from "#rules/landing.ts";
 import type { GameState, PlayerId } from "#state.ts";
 import { decide, type Tx } from "#tx.ts";
@@ -33,6 +35,21 @@ export function erasmusTargets(state: GameState, playerId: PlayerId): FieldId[] 
     const owner = state.fields[field.id]?.owner ?? null;
     return owner === null || owner === playerId;
   }).map((field) => field.id);
+}
+
+/** How the current Player reaches `field`: the Fields ahead, Start, and the bonus it pays then. */
+export type ErasmusRoute = { steps: number; passesStart: boolean; bonus: number | null };
+
+/**
+ * The one rule of Erasmus travel (R65): the current Player always moves
+ * forward round the ring, so the route passes Start and pays the Round bonus
+ * when it wraps.
+ */
+export function erasmusRoute(state: GameState, field: FieldId): ErasmusRoute {
+  const from = state.players.find((player) => player.id === state.currentPlayer)?.position ?? 0;
+  const steps = (field - from + FIELD_COUNT) % FIELD_COUNT;
+  const passesStart = from + steps >= FIELD_COUNT;
+  return { steps, passesStart, bonus: passesStart ? ROUND_BONUS : null };
 }
 
 /** Landing on Erasmus: a pick when something is free or the Player's, else nothing (R64, F16). */

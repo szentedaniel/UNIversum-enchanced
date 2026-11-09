@@ -9,15 +9,15 @@ Branch `agent/issue-124-decision-module-owns-the-board-s-pick-sync-marks-d`, fro
   and every Decision of mine has `owner: "me"`. `owner` is the discrimination now (`PlayerId` is a
   string, so the payload-presence test of #76 is gone); `Game.tsx`'s waiting line is
   `decision?.owner === "other" ? decision.kind : null`.
-- `pickSyncOf(decision, frame, serverNowMs, selection)` → `{ key, marks, wakeInMs }`:
+- `pickSyncOf(decision, frame, serverNowMs: number | null, selection)` → `{ key, marks, wakeInMs }`:
   - `key` is my Sale's or pick's key, else `null` — the new-Decision marker. It ignores `busy`, so
     a send never resets the picks, and it is `null` through a Playback's gate (`openDecision`
     returns `null` there).
   - `marks` are `singleMarks`/`saleMarks`, with the selection filtered by the Decision's key: a
-    pick made for an earlier Decision is ignored. A Sale without a `turnTimer` marks nothing (as
-    #76's Board did).
+    pick made for an earlier Decision is ignored. A Sale without a `turnTimer` — or without the
+    server clock (`serverNowMs` is `null`, no push yet; #162) — marks nothing (as #76's Board did).
   - `wakeInMs` is `msLeft - AUTO_SELL_WARNING_MS` when the Sale's countdown is still outside the
-    warning window, else `null` (no Sale, the warning is due, or no Turn timer).
+    warning window, else `null` (no Sale, the warning is due, no Turn timer, or no server clock).
 - `PickSelection` is the two `uiStore` slices: `{ salePicks: SalePicks; singlePick: { key, field } }`.
   The Board passes `uiStore.getState()` whole; a fourth argument is the one deviation from the
   issue's sketch signature, because the picked marks need the client's selection.
@@ -26,8 +26,9 @@ Branch `agent/issue-124-decision-module-owns-the-board-s-pick-sync-marks-d`, fro
 
 ## Board (`apps/web/src/board/Board.tsx`)
 
-- `syncPick` is now: clear its timer, read the frame and `serverNow(push.clockOffset)` (or
-  `Date.now()` with no push), call `pickSyncOf(currentDecision(), frame, now, uiStore.getState())`,
+- `syncPick` is now: clear its timer, read the frame and `serverNow(push.clockOffset)` — or `null`
+  with no push, so the Sale marks nothing on an uncorrected clock (#162) — call
+  `pickSyncOf(currentDecision(), frame, now, uiStore.getState())`,
   reset the pick UI when `key` changes, `renderer.setPick(sync.marks)`, and arm
   `setTimeout(syncPick, wakeInMs + WAKE_SLACK_MS)`.
 - `WAKE_SLACK_MS = 50` replaces the old inline `+ 50`: the wake-up must not land before the
