@@ -106,7 +106,7 @@ const ghActions = (repo: string, pr: string): MergeActions => ({
     }
   },
   ticketTitle: (issue) =>
-    sh(`gh issue view ${String(issue)} --repo "${repo}" --json title --jq .title`).trim(),
+    sh(`gh issue view ${String(issue)} --repo "${repo}" --json title --jq .title`),
 });
 
 const main = (): void => {

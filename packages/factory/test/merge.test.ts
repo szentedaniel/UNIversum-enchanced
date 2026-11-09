@@ -232,10 +232,9 @@ describe("performStep", () => {
     );
 
     expect(ticketReads).toEqual([]);
-    expect(writes[0]).toEqual({
-      kind: "merge",
-      subject: "chore(merge): #132 Bump react from 18 to 19",
-    });
+    expect(writes).toEqual([
+      { kind: "merge", subject: "chore(merge): #132 Bump react from 18 to 19" },
+    ]);
   });
 
   it("fails when the merge reports no merge commit", () => {
