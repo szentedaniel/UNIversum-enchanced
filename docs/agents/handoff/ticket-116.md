@@ -1,9 +1,9 @@
 # Ticket #116 (the Decision tray): extension points and gotchas
 
-Branch `agent/issue-116-pick-tray-module-…`, from `main`. One tray module owns
-the chrome of this client's Sale and single pick; `Game.tsx` no longer wires a
-tray's stores or intents. Pure client restructure: no stored state, protocol or
-wire change.
+Branch `agent/issue-116-pick-tray-module-saletray-and-picktray-share-one-t`,
+from `main`. One tray module owns the chrome of this client's Sale and single
+pick; `Game.tsx` no longer wires a tray's stores or intents. Pure client
+restructure: no stored state, protocol or wire change.
 
 ## The module (`apps/web/src/screens/DecisionTray.tsx`)
 
