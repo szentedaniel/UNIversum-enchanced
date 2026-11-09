@@ -1,8 +1,8 @@
 /**
- * The one connection to the Room server, and the only writer of `roomStore`.
- * It owns the `@colyseus/sdk` client; screens call these functions and read
- * the store. It also streams the Lobby list (`watchLobbyList`), which lives
- * outside the store.
+ * The one connection to the Room server. It owns the `@colyseus/sdk` client,
+ * feeds `roomStore` every push and Rejection, and streams the Lobby list
+ * (`watchLobbyList`), which lives outside the store. Screens call these
+ * functions and read the store.
  *
  * Reconnecting (spec: Client → State): a short drop is the SDK's own
  * reconnection by `reconnectionToken`; anything else (server restart, the SDK
@@ -34,14 +34,19 @@ import {
   type WelcomeMessage,
 } from "@universum/protocol/messages";
 import { guestToken } from "#guest-token.ts";
-import { inFlightPatch, initialRoomState, roomStore } from "#stores/room-store.ts";
+import {
+  markIntentSent,
+  receivePush,
+  receiveRejection,
+  reset,
+  roomStore,
+} from "#stores/room-store.ts";
 
 /** Vite (dev) and Caddy (production) forward this path to the Room server. */
 const COLYSEUS_PATH = "/colyseus";
 
 const sdk = new Client(COLYSEUS_PATH);
 let room: Room | null = null;
-let seq = 0;
 let rejoinTimer: ReturnType<typeof setTimeout> | undefined;
 
 /**
@@ -97,9 +102,9 @@ export async function ensureJoined(code: string): Promise<void> {
 }
 
 export function sendIntent(intent: ClientIntent): void {
-  // No optimistic UI: the lock is set even with no Room attached (`answeredAtOf`
-  // is 0 then); the push a rejoin brings has a later `seq` and clears it.
-  roomStore.setState(inFlightPatch(roomStore.getState()));
+  // No optimistic UI: the lock is set even with no Room attached (the latest
+  // answer is 0 then); the push a rejoin brings has a later `seq` and clears it.
+  markIntentSent();
   room?.send(MESSAGE.intent, intent);
 }
 
@@ -107,7 +112,7 @@ export async function leaveRoom(): Promise<void> {
   clearTimeout(rejoinTimer);
   const leaving = room;
   room = null;
-  roomStore.setState(initialRoomState);
+  reset();
   if (leaving?.connection.isOpen) await leaving.leave();
 }
 
@@ -140,18 +145,11 @@ function listen(joined: Room): void {
   joined.onMessage(MESSAGE.lobby, (lobby: LobbyMessage) => {
     if (mine()) roomStore.setState({ lobby, lobbyClockOffset: lobby.now - Date.now() });
   });
-  joined.onMessage(MESSAGE.game, ({ view, events, reveals, now }: GameMessage) => {
-    if (!mine()) return;
-    // Never back to an older state after a reconnect (spec: Client → State).
-    const last = roomStore.getState().push;
-    if (last && view.version < last.view.version) return;
-    const receivedAt = Date.now();
-    roomStore.setState({
-      push: { view, events, reveals, seq: ++seq, clockOffset: now - receivedAt, receivedAt },
-    });
+  joined.onMessage(MESSAGE.game, (push: GameMessage) => {
+    if (mine()) receivePush(push, Date.now());
   });
   joined.onMessage(MESSAGE.rejected, ({ code }: RejectionMessage) => {
-    if (mine()) roomStore.setState({ rejection: { code, seq: ++seq } });
+    if (mine()) receiveRejection(code);
   });
   joined.onDrop(() => {
     if (mine()) roomStore.setState({ status: "reconnecting" });
