@@ -152,6 +152,25 @@ const ROOM_INTENTS: { [K in RoomIntent["type"]]: RoomIntentHandler<K> } = {
 const isRoomIntent = (intent: ClientIntent): intent is RoomIntent => intent.type in ROOM_INTENTS;
 
 /**
+ * Runs one Room intent through its handler. The switch is exhaustive, so a
+ * new Room intent fails typecheck until its handler is registered above.
+ */
+function dispatchRoomIntent(
+  room: GameRoom,
+  seat: SeatRecord,
+  intent: RoomIntent,
+): RejectionCode | void {
+  switch (intent.type) {
+    case "Start":
+      return ROOM_INTENTS.Start(room, seat, intent);
+    case "AddBot":
+      return ROOM_INTENTS.AddBot(room, seat, intent);
+    case "RemoveBot":
+      return ROOM_INTENTS.RemoveBot(room, seat, intent);
+  }
+}
+
+/**
  * Create options that rebuild a Room from the store on boot. A class
  * instance, so no client's JSON create options can ever pose as one.
  */
@@ -756,7 +775,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (intent !== null) {
       try {
         refused = isRoomIntent(intent)
-          ? ROOM_INTENTS[intent.type](this, seat, intent)
+          ? dispatchRoomIntent(this, seat, intent)
           : this.play(seat, intent);
       } catch (error) {
         // A bug outside the engine's own call (say, in game setup): same as an engine throw.

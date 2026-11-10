@@ -124,9 +124,11 @@ describe("Bots in the Lobby", () => {
     const withBot = await alice.until("lobby", (message) => message.seats.length === 2);
     // No empty Seat left: a stranger looking for a game has nothing to join.
     await list.until((l) => l.get(alice.code) === undefined);
+    expect(list.get(alice.code)).toBeUndefined();
 
     alice.send({ type: "RemoveBot", playerId: withBot.seats[1]!.playerId });
     await list.until((l) => l.get(alice.code)?.players === 1);
+    expect(list.get(alice.code)).toMatchObject({ players: 1, maxPlayers: 2 });
   });
 
   it("starts a game with one Guest and a Bot, and the Bot plays its Turn after the gate", async () => {
