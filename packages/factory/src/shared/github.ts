@@ -46,11 +46,38 @@ export const api = <T>(path: string): T[] => {
   return pages.flat() as T[];
 };
 
+const STATUS_LINE = /^HTTP\/[\d.]+ \d{3}/u;
+
+/**
+ * A `gh api --include` response's body: gh prints every page's status line and
+ * headers to stdout before that page's body, so the gate's reads can ask for
+ * the headers (a refusal then names its wait) and still parse only the body.
+ */
+export const apiBody = (text: string): string => {
+  const lines: string[] = [];
+  let inHeaders = false;
+  for (const line of text.split("\n")) {
+    if (STATUS_LINE.test(line)) {
+      inHeaders = true;
+      continue;
+    }
+    if (inHeaders) {
+      // The headers end at the blank line gh prints after them.
+      if (line.trimEnd() === "") inHeaders = false;
+      continue;
+    }
+    lines.push(line);
+  }
+  return lines.join("\n");
+};
+
 /** Every comment on an issue or pull request, oldest first. */
 export const issueComments = (repo: string, number: string): ReviewComment[] =>
   jsonLines<ReviewComment>(
-    sh(
-      `gh api "repos/${repo}/issues/${number}/comments?per_page=100" --paginate --jq '.[] | {body: .body, createdAt: .created_at}'`,
+    apiBody(
+      sh(
+        `gh api -i "repos/${repo}/issues/${number}/comments?per_page=100" --paginate --jq '.[] | {body: .body, createdAt: .created_at}'`,
+      ),
     ),
   );
 
@@ -81,14 +108,16 @@ const RATE_LIMIT_STATUSES = new Set([403, 429]);
 export const isNotFound = (error: unknown): boolean => httpStatusOf(textOf(error)) === 404;
 
 /**
- * Whether GitHub refused the call for a rate limit: a 403 or 429 whose reason
- * mentions one. A 500 that happens to say "rate limit" is a server fault, not
- * a refusal to wait out.
+ * Whether GitHub refused the call for a rate limit. REST sends a 403 or 429;
+ * a GraphQL call (`pr view`, `issue view`) names the limit with no status. A
+ * 5xx that happens to say "rate limit" is a server fault, not a refusal to
+ * wait out.
  */
-const isRateLimit = (error: unknown): boolean => {
+export const isRateLimit = (error: unknown): boolean => {
   const text = textOf(error);
+  if (!/rate limit/iu.test(text)) return false;
   const status = httpStatusOf(text);
-  return status !== undefined && RATE_LIMIT_STATUSES.has(status) && /rate limit/iu.test(text);
+  return status === undefined || RATE_LIMIT_STATUSES.has(status);
 };
 
 /** The default waits between attempts, for a refusal that names none: 30 s, 2 min, 5 min. */

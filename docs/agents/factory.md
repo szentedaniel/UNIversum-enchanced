@@ -230,9 +230,9 @@ Two steps finish a pull request: `factory-merge.yml` merges what the gates allow
 ### The merge gate
 
 `factory-merge.yml` runs when a pull request's CI finishes **successfully**, when a review finishes
-(whichever is last decides), and by hand. A failed CI run is the fix loop's. The gate code runs from a
-**checkout of `main`**, never the pull request's copy: a PR that edits `packages/factory/` must not
-decide its own merge.
+(whichever is last decides), hourly as a backstop, and by hand. A failed CI run is the fix loop's. The
+gate code runs from a **checkout of `main`**, never the pull request's copy: a PR that edits
+`packages/factory/` must not decide its own merge.
 
 It merges with a merge commit only when every gate holds ([spec #85, Decision
 5](https://github.com/szentedaniel/UNIversum-enchanced/issues/85)):
@@ -260,13 +260,17 @@ pull request changes too (handoff notes aside), sends it to the fix loop first (
 request that is only _waiting_ — CI still running, the review not posted yet, `agent:review` queued —
 exits quietly: the next trigger decides.
 
-A `gh` call GitHub refuses for a rate limit — HTTP 403 or 429 saying "rate limit", as when many pull
-requests merge at once — is waited out and retried instead of escalating. The wait the refusal names
-(`retry-after`, or the `x-ratelimit-reset` instant) wins; otherwise the retries take 30 s, 2 min and
-5 min. The whole run shares one 10-minute wait budget (the job times out at 15): when a wait would
-pass it, the step exits green and comments nothing, so the pull request waits for the next merge-gate
-run instead of the owner reading "could not decide". Every other failure still fails the step and
-reaches that escalation.
+A `gh` read GitHub refuses for a rate limit — a 403 or 429 saying "rate limit", or a GraphQL error
+(`pr view`, `issue view`) naming one — is waited out and retried, as when many pull requests merge at
+once. The wait the refusal names (`retry-after`, or the `x-ratelimit-reset` instant from the headers
+the reads ask for with `--include`) wins; otherwise the retries take 30 s, 2 min and 5 min. The whole
+run shares one 10-minute wait budget (the job times out at 15): when a wait would pass it, the step
+exits green and comments nothing, so the pull request waits for the next merge-gate run instead of the
+owner reading "could not decide". A write is never retried — a refused write did not apply, and
+retrying a merge or a second comment can leave half a finished state behind — so a refused write also
+exits green for a later run. Every other failure still fails the step and reaches that escalation. The
+hourly `schedule` re-dispatches the gate for every open factory or Dependabot pull request, so a
+deferred one is decided without another CI or review event.
 
 A dry run prints the decision and writes nothing:
 
