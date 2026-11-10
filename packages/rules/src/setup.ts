@@ -45,6 +45,7 @@ export function setupGame({
       id: seat.playerId,
       name: { adjective: seat.name.adjective, noun: seat.name.noun },
       seat: index,
+      bot: seat.bot === true,
       cash: START_CASH,
       position: 0,
       bankrupt: false,

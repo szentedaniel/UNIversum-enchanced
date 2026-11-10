@@ -8,7 +8,7 @@
 import type { ChanceCardId, FieldId } from "#board.ts";
 
 /** The version of the state's shape (not the per-intent `version`). */
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 /** A Player's public id: what every client sees instead of a Guest token. */
 export type PlayerId = string;
@@ -20,7 +20,12 @@ export type PlayerId = string;
 export type PlayerName = { adjective: string; noun: string };
 
 /** A taken Seat, in join order, as the Room hands it to `setupGame`. */
-export type Seat = { playerId: PlayerId; name: PlayerName };
+export type Seat = {
+  playerId: PlayerId;
+  name: PlayerName;
+  /** True for a Bot: the Room plays this Seat's Decisions (spec: Bots). */
+  bot?: boolean;
+};
 
 /** The Room settings the game needs. */
 export type Settings = {
@@ -37,6 +42,8 @@ export type PlayerState = {
   name: PlayerName;
   /** Seat index in join order, 0–3; also the Player colour. */
   seat: number;
+  /** The Room plays this Player's Decisions (spec: Bots); the rules themselves never read it. */
+  bot: boolean;
   cash: number;
   /** The Field the Player stands on. */
   position: FieldId;

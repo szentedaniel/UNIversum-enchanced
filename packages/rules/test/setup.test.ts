@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FIELD_COUNT, STATE_VERSION } from "#index.ts";
-import { newGame, T0 } from "./helpers.ts";
+import { FIELD_COUNT, publicView, setupGame, STATE_VERSION } from "#index.ts";
+import { newGame, SEED, T0 } from "./helpers.ts";
 
 describe("game setup", () => {
   it("R6: turn order and Player colours follow join order (Seat i gets colour i)", () => {
@@ -54,6 +54,22 @@ describe("game setup", () => {
     expect(state.fields).toHaveLength(32);
     expect(state.fields.every((f) => f.owner === null && f.level === 0)).toBe(true);
     expect(state.doubler).toBeNull();
+  });
+
+  it("records which Seats are Bots, and the view carries the flag", () => {
+    const state = setupGame({
+      seats: [
+        { playerId: "p1", name: { adjective: "adj0", noun: "noun0" } },
+        { playerId: "p2", name: { adjective: "adj1", noun: "noun1" }, bot: true },
+      ],
+      settings: { maxPlayers: 2, minuteLimit: 50 },
+      seed: SEED,
+      now: T0,
+    });
+
+    expect(state.players.map((p) => p.bot)).toEqual([false, true]);
+    // The Seat's Bot flag reaches every client's view, so the UI can mark it.
+    expect(publicView(state).players.map((p) => p.bot)).toEqual([false, true]);
   });
 
   it("R11: the Minute limit becomes the end time `now + minutes`", () => {

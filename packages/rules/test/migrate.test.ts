@@ -11,6 +11,7 @@ import {
 } from "#index.ts";
 import stateV1 from "./fixtures/state-v1.json" with { type: "json" };
 import stateV2 from "./fixtures/state-v2.json" with { type: "json" };
+import stateV3 from "./fixtures/state-v3.json" with { type: "json" };
 import { deadlineOf, newGame, roll } from "./helpers.ts";
 
 /**
@@ -26,6 +27,7 @@ import { deadlineOf, newGame, roll } from "./helpers.ts";
 const fixtures: { version: number; state: unknown }[] = [
   { version: 1, state: stateV1 },
   { version: 2, state: stateV2 },
+  { version: 3, state: stateV3 },
 ];
 
 /** The keys of an object, and of its first array item or nested object, as paths. */
@@ -90,6 +92,12 @@ describe("state migrations", () => {
     const migrated = migrate(stored);
 
     expect(migrated.actsAfter).toBe(stored.endsAt);
+  });
+
+  it("a version-2 state seats no Bots: every Player was a Guest", () => {
+    const migrated = migrate(stateV2);
+
+    expect(migrated.players.map((p) => p.bot)).toEqual(migrated.players.map(() => false));
   });
 
   it("a state at the current version comes back unchanged", () => {
