@@ -1,4 +1,10 @@
-import { PLAYER_NAME_ADJECTIVES, PLAYER_NAME_NOUNS } from "@universum/protocol";
+import { MatchMakeError } from "@colyseus/sdk";
+import {
+  matchmakeRejection,
+  PLAYER_NAME_ADJECTIVES,
+  PLAYER_NAME_NOUNS,
+  type RejectionCode,
+} from "@universum/protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BOT_DELAY_MS } from "#room/game-driver.ts";
 import { startTestServer, withDeadline, type TestClient, type TestServer } from "./helpers.ts";
@@ -12,6 +18,17 @@ beforeAll(async () => {
 afterAll(async () => {
   await server.stop();
 });
+
+/** The Rejection code a failed create or join shows, as the web app maps it. */
+async function refusal(attempt: Promise<unknown>): Promise<RejectionCode> {
+  const error: unknown = await attempt.then(
+    () => null,
+    (e: unknown) => e,
+  );
+  if (!(error instanceof MatchMakeError))
+    throw new Error(`expected a MatchMakeError, got ${String(error)}`);
+  return matchmakeRejection(error);
+}
 
 /** Creates a 3-Seat Room and has a second Guest join; both have their Lobby read. */
 async function twoGuests(): Promise<{ alice: TestClient; bob: TestClient }> {
@@ -80,6 +97,38 @@ describe("Bots in the Lobby", () => {
 
     expect(await alice.next("rejected")).toEqual({ code: "NOT_OFFERED" });
     expect(alice.pending("lobby")).toEqual([]);
+  });
+
+  it("gives a Guest the Seat of a Bot when it joins a full Lobby", async () => {
+    const alice = await server.create({ maxPlayers: 2 });
+    const aliceId = (await alice.next("welcome")).playerId;
+    await alice.next("lobby");
+    alice.send({ type: "AddBot" });
+    const full = await alice.until("lobby", (message) => message.seats.length === 2);
+    const bot = full.seats[1]!;
+
+    const bob = await server.join(alice.code);
+    const bobId = (await bob.next("welcome")).playerId;
+    const [seenByAlice, seenByBob] = await Promise.all([
+      alice.until("lobby", (message) => message.seats.some((seat) => seat.playerId === bobId)),
+      bob.until("lobby", (message) => message.seats.some((seat) => seat.playerId === bobId)),
+    ]);
+
+    expect(seenByAlice).toEqual(seenByBob);
+    // The Bot's Seat, not a new one: the Guest takes its place in the join order.
+    expect(seenByAlice.seats.map(({ playerId, bot: isBot }) => ({ playerId, isBot }))).toEqual([
+      { playerId: aliceId, isBot: undefined },
+      { playerId: bobId, isBot: undefined },
+    ]);
+    expect(seenByAlice.seats.some((seat) => seat.playerId === bot.playerId)).toBe(false);
+  });
+
+  it("still answers ROOM_FULL when every Seat of a full Lobby has a Guest", async () => {
+    const alice = await server.create({ maxPlayers: 2 });
+    await server.join(alice.code);
+    await alice.until("lobby", (message) => message.seats.length === 2);
+
+    expect(await refusal(server.join(alice.code))).toBe("ROOM_FULL");
   });
 
   it("refuses a Bot when every Seat is taken", async () => {
