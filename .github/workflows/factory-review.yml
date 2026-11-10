@@ -17,8 +17,8 @@ on:
   workflow_dispatch:
     inputs:
       pr:
-        description: The pull request number to review
-        required: true
+        description: "The pull request number to review (empty: drain the night queue, as the cron does)"
+        required: false
         type: string
   schedule:
     # 01:23 UTC is 02:23 CET or 03:23 CEST: inside the 01:00–07:00 Budapest
@@ -44,7 +44,8 @@ jobs:
   # The cron only dispatches; each dispatched run checks the gate and reviews.
   # One review per pull request still labelled `agent:review`.
   dispatch-queued:
-    if: github.event_name == 'schedule'
+    # The external scheduler (cron-job.org) dispatches with no `pr`: same job.
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.pr == '')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -67,7 +68,7 @@ jobs:
   review:
     # Dependabot's own label event runs without secrets; the night cron
     # dispatches its review instead.
-    if: github.event_name != 'schedule' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.label.name == 'agent:review')
+    if: github.event_name != 'schedule' && !(github.event_name == 'workflow_dispatch' && inputs.pr == '') && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.label.name == 'agent:review')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
