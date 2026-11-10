@@ -52,6 +52,9 @@ or pull request already holds. Both checks are deterministic path matching, no m
 - `run-architecture.ts` reads open issues, the last 30 days of closed issues
   (`closed:>=YYYY-MM-DD sort:updated-desc`) and open pull requests, all through `gh issue list`/`gh
   pr list`, then drops a proposal before opening any issue. The prompt now says the script does this.
+- `gh issue list --json subIssues` is an object (`{nodes, totalCount}`), not an array; the script
+  reads `subIssuesSummary.total` instead. `gh pr list --json files` is an array of `{path, …}`, so
+  the pull reader maps `file.path`.
 - `RECENT_CLOSED_DAYS` is 30; it is the window in which a closed issue still claims its module.
 
 ## Tests

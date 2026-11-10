@@ -36,7 +36,7 @@ interface ListedIssue {
   title: string;
   body: string | null;
   labels: { name: string }[];
-  subIssues: unknown[];
+  subIssuesSummary: { total: number };
 }
 
 interface ListedPull {
@@ -50,7 +50,7 @@ const trackedIssues = (repo: string, state: "open" | "closed", search?: string):
   const searchArg = search === undefined ? "" : ` --search ${shellArg(search)}`;
   return parseJson<ListedIssue[]>(
     sh(
-      `gh issue list --repo "${repo}" --state ${state}${searchArg} --limit 200 --json number,title,body,labels,subIssues`,
+      `gh issue list --repo "${repo}" --state ${state}${searchArg} --limit 200 --json number,title,body,labels,subIssuesSummary`,
     ),
   ).map((issue) =>
     issueWork({
@@ -58,7 +58,7 @@ const trackedIssues = (repo: string, state: "open" | "closed", search?: string):
       title: issue.title,
       body: issue.body,
       labels: issue.labels.map((label) => label.name),
-      subIssues: issue.subIssues.length,
+      subIssues: issue.subIssuesSummary.total,
     }),
   );
 };
