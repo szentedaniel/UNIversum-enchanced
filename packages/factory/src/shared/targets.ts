@@ -20,6 +20,13 @@ const FILE_PATH = new RegExp(
 
 const KNOWN_EXTENSION = new RegExp(`\\.(?:${SOURCE_EXTENSION})$`, "iu");
 
+/**
+ * How deep a directory must be to name a module: a package root
+ * (`packages/factory`) or a broad folder (`.github`, `.github/workflows`) is not
+ * a target, or one sentence about protected paths would claim the whole repo.
+ */
+const MODULE_DIRECTORY_DEPTH = 4;
+
 /** The repo's top-level folders: a backticked directory under one is a target. */
 const ROOT_DIRS: Record<string, true> = {
   apps: true,
@@ -87,8 +94,10 @@ const sameModulePath = (a: ModulePath, b: ModulePath): boolean => {
       a.key === b.key ||
       a.key.endsWith(`/${b.key}`) ||
       b.key.endsWith(`/${a.key}`) ||
-      (a.directory && b.key.startsWith(`${a.key}/`)) ||
-      (b.directory && a.key.startsWith(`${b.key}/`))
+      (a.directory &&
+        a.segments.length >= MODULE_DIRECTORY_DEPTH &&
+        b.key.startsWith(`${a.key}/`)) ||
+      (b.directory && b.segments.length >= MODULE_DIRECTORY_DEPTH && a.key.startsWith(`${b.key}/`))
     );
   }
   const aIsDistinct = a.bare && a.stem !== "" && !GENERIC_STEMS[a.stem.toLowerCase()];
@@ -122,8 +131,10 @@ const spanDirectories = (text: string): FoundPath[] => {
     if (/[\s*?{}<>|]/u.test(span) || span.includes("://")) continue;
     const path = normalizePath(span);
     if (KNOWN_EXTENSION.test(path)) continue;
-    const first = path.split("/")[0];
+    const segments = path.split("/");
+    const first = segments[0];
     if (first === undefined || !ROOT_DIRS[first]) continue;
+    if (segments.length < MODULE_DIRECTORY_DEPTH) continue;
     found.push({ at: match.index, path });
   }
   return found;

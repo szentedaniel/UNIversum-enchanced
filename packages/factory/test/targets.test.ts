@@ -19,8 +19,11 @@ describe("targetPathsIn", () => {
     ]);
   });
 
-  it("reads a directory module too, but not prose that looks like a path", () => {
-    const body = "Keep it in `apps/server/src/room`; read/write is `src/foo.ts`.";
+  it("reads a deep module directory too, but not prose or a package root", () => {
+    const body = [
+      "Keep it in `apps/server/src/room`; read/write is `src/foo.ts`.",
+      "`.github/` and `packages/factory/` are protected paths.",
+    ].join("\n");
 
     expect(targetPathsIn(body)).toEqual(["apps/server/src/room", "src/foo.ts"]);
   });
@@ -63,6 +66,13 @@ describe("shareModule", () => {
 
   it("keeps same-named files under different packages apart", () => {
     expect(shareModule(["apps/web/src/foo.ts"], ["apps/server/src/foo.ts"])).toBe(false);
+  });
+
+  it("does not treat a package root or a broad folder as a module", () => {
+    expect(shareModule(["packages/factory"], ["packages/factory/src/dispatch/frontier.ts"])).toBe(
+      false,
+    );
+    expect(shareModule([".github"], [".github/workflows/ci.yml"])).toBe(false);
   });
 
   it("matches a bare file name, but not a generic one", () => {

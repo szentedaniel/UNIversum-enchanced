@@ -9,14 +9,17 @@ or pull request already holds. Both checks are deterministic path matching, no m
 ## The matcher (`packages/factory/src/shared/targets.ts`)
 
 - `targetPathsIn(text)` reads repo paths from a title or body: every token with a source extension,
-  plus a backticked directory whose first segment is one of `ROOTS` (`apps`, `packages`, `docs`,
-  `scripts`, `monitoring`, `patches`, `.github`). URLs, versions, hashes and command flags are
-  skipped. Add a top-level folder to `ROOTS` when a ticket starts naming directories under it.
+  plus a backticked directory of at least four segments whose first segment is one of `ROOTS`
+  (`apps`, `packages`, `docs`, `scripts`, `monitoring`, `patches`, `.github`). URLs, versions,
+  hashes and command flags are skipped; a package root (`packages/factory`) or a broad folder
+  (`.github/workflows`) is not a module, or one sentence about protected paths would claim every
+  ticket in the package. Add a top-level folder to `ROOTS` when a ticket starts naming directories
+  under it.
 - `shareModule(a, b)` compares two path lists. Two paths match when one is a segment-suffix of the
-  other (`shared/runs.ts` ↔ `packages/factory/src/shared/runs.ts`), when one is a directory prefix
-  of the other (a directory of at least two segments), or when a one-segment path names a
-  non-generic stem (`turn-clock.ts`). Generic stems (`index`, `test`, `utils`, `config`, …) never
-  match bare; keep that list for any new very common file name.
+  other (`shared/runs.ts` ↔ `packages/factory/src/shared/runs.ts`), when a directory of at least
+  four segments is a prefix of a file path (`apps/server/src/room`), or when a one-segment path
+  names a non-generic stem (`turn-clock.ts`). Generic stems (`index`, `test`, `utils`, `config`, …)
+  never match bare; keep that list for any new very common file name.
 - `branchNamesTarget(branch, path)` matches the last two or three path segments against the branch
   slug with hyphens, so `shared/runs.ts` finds `…-shared-runs-ts-…`. It is only used for open pull
   request branches.
