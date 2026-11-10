@@ -41,12 +41,14 @@ describe("dueJobs", () => {
     ).toEqual(["factory-intake.yml", "factory-review.yml", "factory-retro.yml"]);
   });
 
-  it("does not start a missed night after its latest start", () => {
+  it("does not start a missed night at or after its latest start", () => {
     expect(dueWorkflows("2026-11-10T05:59:00Z")).toEqual([
       "factory-intake.yml",
       "factory-review.yml",
       "factory-retro.yml",
     ]);
+    // Exactly 07:00 CET, when the night window closes: too late.
+    expect(dueWorkflows("2026-11-10T06:00:00Z")).toEqual([]);
     expect(dueWorkflows("2026-11-10T06:01:00Z")).toEqual([]);
   });
 

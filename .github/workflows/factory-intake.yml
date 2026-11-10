@@ -12,11 +12,15 @@
 # parent to `factory`.
 name: Factory Intake
 
-run-name: Factory intake ${{ inputs.issue && format('#{0}', inputs.issue) || 'night run' }}
+run-name: Factory intake ${{ inputs.scheduled && '(factory tick)' || inputs.issue && format('#{0}', inputs.issue) || (inputs.dry_run && '(dry run)' || 'manual run') }}
 
 on:
   workflow_dispatch:
     inputs:
+      scheduled:
+        description: "Set by the factory tick: this run is the scheduled occurrence"
+        type: boolean
+        default: false
       issue:
         description: "Only this issue (empty: every issue that is waiting)"
         required: false
@@ -46,6 +50,7 @@ jobs:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       FACTORY_INTAKE_MAX: ${{ vars.FACTORY_INTAKE_MAX }}
       ISSUE_NUMBER: ${{ inputs.issue }}
+      SCHEDULED: ${{ inputs.scheduled }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '' }}
 
     steps:

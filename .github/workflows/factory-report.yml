@@ -3,13 +3,19 @@
 # and the owner's queue, and close last week's. `packages/factory/src/report/`
 # holds the numbers and the body; this file only starts the script.
 #
-# The nightly tick dispatches it; a repeat dispatch in the same week edits the
+# The factory tick dispatches it; a repeat dispatch in the same week edits the
 # week's issue. A manual dispatch always runs.
 name: Factory Report
+
+run-name: Factory report ${{ inputs.scheduled && '(factory tick)' || '(manual)' }}
 
 on:
   workflow_dispatch:
     inputs:
+      scheduled:
+        description: "Set by the factory tick: this run is the scheduled occurrence"
+        type: boolean
+        default: false
       dry_run:
         description: Print the report without writing it
         type: boolean
@@ -36,9 +42,6 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      # The script's 06:00 Budapest gate only applies to a `schedule` event; the
-      # tick dispatches with `workflow_dispatch`, which always runs.
-      EVENT_NAME: ${{ github.event_name }}
       DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
       FACTORY_MONTHLY_MINUTES: ${{ vars.FACTORY_MONTHLY_MINUTES }}
 

@@ -8,6 +8,11 @@ export const TIME_ZONE = "Europe/Budapest";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** A weekday, Monday 0 … Sunday 6. */
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
+
 const PARTS = new Intl.DateTimeFormat("en-GB", {
   timeZone: TIME_ZONE,
   year: "numeric",
@@ -60,9 +65,10 @@ export const shiftDay = (day: string, days: number): string => {
 };
 
 /** Where `day` falls in the week, Monday 0 … Sunday 6. */
-export const mondayIndex = (day: string): number => {
+export const mondayIndex = (day: string): Weekday => {
   const { year, month, date } = civilDate(day);
-  return (new Date(Date.UTC(year, month - 1, date)).getUTCDay() + 6) % 7;
+  const index = (new Date(Date.UTC(year, month - 1, date)).getUTCDay() + 6) % 7;
+  return WEEKDAYS[index] ?? 0;
 };
 
 /**

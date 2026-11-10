@@ -137,24 +137,17 @@ describe("splitCandidates", () => {
 });
 
 describe("intakeAllowed", () => {
-  it("lets a scheduled night run inside the Budapest night window", () => {
+  it("lets a tick dispatch run inside the Budapest night window", () => {
     // 01:15 UTC is 02:15 CET.
-    expect(intakeAllowed({ eventName: "schedule", at: new Date("2026-01-15T01:15:00Z") })).toBe(
-      true,
-    );
+    expect(intakeAllowed({ scheduled: true, at: new Date("2026-01-15T01:15:00Z") })).toBe(true);
   });
 
-  it("skips a scheduled run that starts after the window closed", () => {
+  it("skips a tick dispatch that starts after the window closed", () => {
     // 06:30 UTC is 07:30 CET: a delayed start must not spend daytime Pro usage.
-    expect(intakeAllowed({ eventName: "schedule", at: new Date("2026-01-15T06:30:00Z") })).toBe(
-      false,
-    );
+    expect(intakeAllowed({ scheduled: true, at: new Date("2026-01-15T06:30:00Z") })).toBe(false);
   });
 
   it("always lets the owner dispatch a run, day or night", () => {
-    expect(
-      intakeAllowed({ eventName: "workflow_dispatch", at: new Date("2026-01-15T12:00:00Z") }),
-    ).toBe(true);
-    expect(intakeAllowed({ eventName: "", at: new Date("2026-01-15T12:00:00Z") })).toBe(true);
+    expect(intakeAllowed({ scheduled: false, at: new Date("2026-01-15T12:00:00Z") })).toBe(true);
   });
 });

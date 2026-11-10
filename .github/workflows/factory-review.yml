@@ -10,13 +10,17 @@
 # (`factory-merge.yml`) to decide.
 name: Factory Review
 
-run-name: Factory review ${{ format('#{0}', inputs.pr || github.event.pull_request.number || 'night queue') }}
+run-name: Factory review ${{ inputs.pr && format('#{0}', inputs.pr) || inputs.scheduled && '(factory tick)' || format('#{0}', github.event.pull_request.number || 'night queue') }}
 
 on:
   pull_request:
     types: [labeled]
   workflow_dispatch:
     inputs:
+      scheduled:
+        description: "Set by the factory tick: this run is the scheduled queue drain"
+        type: boolean
+        default: false
       pr:
         description: "The pull request number to review (empty: drain the queue of every agent:review pull request)"
         required: false

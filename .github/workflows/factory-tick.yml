@@ -3,6 +3,10 @@
 # scheduled runs hours late and drops some, so the tick is the scheduler and
 # `packages/factory/src/schedule/due.ts` decides what a tick may start. The
 # five scheduled workflows no longer carry a cron of their own.
+#
+# Every dispatch sets `scheduled=true`; the workflows turn that into the
+# `(factory tick)` run-name marker that `schedule/tick.ts` counts, so a manual,
+# dry or per-pull-request run never suppresses the scheduled one.
 name: Factory Tick
 
 on:

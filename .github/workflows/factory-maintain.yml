@@ -13,11 +13,15 @@
 # nothing. The scripts always run main's copy.
 name: Factory Maintain
 
-run-name: Factory maintain ${{ inputs.dry_run && '(dry run)' || '(weekly)' }}
+run-name: Factory maintain ${{ inputs.scheduled && '(factory tick)' || inputs.dry_run && '(dry run)' || '(manual)' }}
 
 on:
   workflow_dispatch:
     inputs:
+      scheduled:
+        description: "Set by the factory tick: this run is the scheduled occurrence"
+        type: boolean
+        default: false
       dry_run:
         description: Print what would be opened, without writing
         type: boolean
