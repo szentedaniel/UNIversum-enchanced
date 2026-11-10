@@ -147,6 +147,8 @@ export function nextMove(state: GameState, pick: Pick, timeoutEvery = 8): Move |
       if (field === undefined) throw new Error("the Erasmus pick offers no Field");
       return { intent: { type: "TravelErasmus", turn, field }, now };
     }
+    case "dealAnswer":
+      return { intent: { type: pick(2) === 0 ? "AcceptDeal" : "DeclineDeal", turn }, now };
     default: {
       const unhandled: never = phase;
       throw new Error(`the driver has no move for phase ${JSON.stringify(unhandled)}`);
@@ -276,6 +278,10 @@ export function ledgerOf(before: GameState, events: readonly GameEvent[]): Ledge
       case "BoughtOut":
         move(event.player, -event.price);
         move(event.owner, event.price);
+        break;
+      case "DealAccepted":
+        move(event.proposer, event.take.cash - event.give.cash);
+        move(event.recipient, event.give.cash - event.take.cash);
         break;
       case "RentPaid": {
         const paid = Math.min(event.amount, cash[event.player] ?? 0);

@@ -6,6 +6,7 @@ import { rejection, type Rejection } from "#rejections.ts";
 import { turnDeadlineFrom } from "#constants.ts";
 import { doublerIntents } from "#rules/doubler.ts";
 import { erasmusIntents } from "#rules/erasmus-travel.ts";
+import { dealIntents } from "#rules/deal.ts";
 import { museumIntents } from "#rules/museums.ts";
 import { quarantineChoiceIntents } from "#rules/quarantine-choice.ts";
 import { saleIntents } from "#rules/sale.ts";
@@ -30,6 +31,7 @@ const HANDLERS: IntentHandlers = {
   ...erasmusIntents,
   ...quarantineChoiceIntents,
   ...saleIntents,
+  ...dealIntents,
 };
 
 export type Applied = { state: GameState; events: GameEvent[]; reveals: Reveal[] };

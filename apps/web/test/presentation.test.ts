@@ -41,6 +41,22 @@ const SAMPLES = {
   TimedOut: { type: "TimedOut", player: "p1" },
   TimeoutPenaltyPaid: { type: "TimeoutPenaltyPaid", player: "p1", amount: 50_000 },
   DoublerPlaced: { type: "DoublerPlaced", player: "p1", field: 16, count: 1 },
+  DealProposed: {
+    type: "DealProposed",
+    proposer: "p1",
+    recipient: "p2",
+    give: { fields: [3], cash: 100_000 },
+    take: { fields: [], cash: 0 },
+  },
+  DealAccepted: {
+    type: "DealAccepted",
+    proposer: "p1",
+    recipient: "p2",
+    give: { fields: [3], cash: 100_000 },
+    take: { fields: [], cash: 0 },
+  },
+  DealDeclined: { type: "DealDeclined", proposer: "p1", recipient: "p2" },
+  DealExpired: { type: "DealExpired", proposer: "p1", recipient: "p2" },
   GameEnded: { type: "GameEnded", winner: "p1", reason: "lastPlayer" },
   TurnPassed: { type: "TurnPassed", player: "p2", turn: 2 },
 } satisfies Record<GameEvent["type"], GameEvent>;
@@ -75,6 +91,10 @@ const SHOWN: Record<GameEvent["type"], { overlay: Overlay; tone: Tone }> = {
   TimedOut: { overlay: "toast", tone: "routine" },
   TimeoutPenaltyPaid: { overlay: "toast", tone: "routine" },
   DoublerPlaced: { overlay: "none", tone: "routine" },
+  DealProposed: { overlay: "toast", tone: "notice" },
+  DealAccepted: { overlay: "toast", tone: "routine" },
+  DealDeclined: { overlay: "toast", tone: "routine" },
+  DealExpired: { overlay: "toast", tone: "routine" },
   GameEnded: { overlay: "toast", tone: "notice" },
   TurnPassed: { overlay: "none", tone: "routine" },
 };

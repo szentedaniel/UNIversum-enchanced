@@ -13,7 +13,7 @@
  * the previous line up through it. Every `toast` row has a `text` and every
  * event the rules give no length is hidden (`presentation.test.ts` pins both).
  */
-import type { EventOf, GameEvent, PublicView } from "@universum/rules";
+import type { DealSide, EventOf, GameEvent, PublicView } from "@universum/rules";
 import { FIELDS } from "@universum/rules/board";
 import { chanceCardText, fieldName, formatMoney, m, playerName } from "#text.ts";
 
@@ -39,6 +39,12 @@ function nameOf(view: PublicView, id: string): string {
 
 /** A Field's name from its id on the Board. */
 const fieldOf = (field: number): string => fieldName(FIELDS[field]?.key ?? "");
+
+/** One side of a Deal: its Fields' names and its cash, or "nothing" when it puts in neither. */
+function sideText(side: DealSide): string {
+  const parts = [...side.fields.map(fieldOf), ...(side.cash > 0 ? [formatMoney(side.cash)] : [])];
+  return parts.length > 0 ? parts.join(", ") : m.deal_nothing();
+}
 
 /** The table's shape: one row per event type, its `text` typed for that event. */
 export type PresentationTable = { [T in GameEvent["type"]]: Presentation<T> };
@@ -200,6 +206,44 @@ export const EVENT_PRESENTATION: PresentationTable = {
       }),
   },
   DoublerPlaced: { overlay: "none", tone: "routine" },
+  DealProposed: {
+    overlay: "toast",
+    tone: "notice",
+    text: (event, view) =>
+      m.event_deal_proposed({
+        name: nameOf(view, event.proposer),
+        recipient: nameOf(view, event.recipient),
+        give: sideText(event.give),
+        take: sideText(event.take),
+      }),
+  },
+  DealAccepted: {
+    overlay: "toast",
+    tone: "routine",
+    text: (event, view) =>
+      m.event_deal_accepted({
+        name: nameOf(view, event.proposer),
+        recipient: nameOf(view, event.recipient),
+      }),
+  },
+  DealDeclined: {
+    overlay: "toast",
+    tone: "routine",
+    text: (event, view) =>
+      m.event_deal_declined({
+        recipient: nameOf(view, event.recipient),
+        proposer: nameOf(view, event.proposer),
+      }),
+  },
+  DealExpired: {
+    overlay: "toast",
+    tone: "routine",
+    text: (event, view) =>
+      m.event_deal_expired({
+        recipient: nameOf(view, event.recipient),
+        proposer: nameOf(view, event.proposer),
+      }),
+  },
   GameEnded: {
     overlay: "toast",
     tone: "notice",

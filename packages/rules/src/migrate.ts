@@ -50,6 +50,10 @@ const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> 
     stateVersion: 4,
     players: playersOf(state).map((player) => Object.assign({}, player, { bot: false })),
   }),
+  // Version 5 adds the pending Deal (spec #172). A game stored before Deals
+  // existed has none: its current decision is the Player's own, and no Deal
+  // was proposed this Turn.
+  4: (state) => ({ ...state, stateVersion: 5, deal: null }),
 };
 
 /**

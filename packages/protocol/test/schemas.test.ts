@@ -29,6 +29,26 @@ describe("intentSchema", () => {
     [{ type: "AutoSell", turn: 3 }],
     [{ type: "PlaceDoubler", turn: 3, field: 2 }],
     [{ type: "TravelErasmus", turn: 3, field: 21 }],
+    [
+      {
+        type: "ProposeDeal",
+        turn: 3,
+        recipient: "p2",
+        give: { fields: [13], cash: 100_000 },
+        take: { fields: [21], cash: 0 },
+      },
+    ],
+    [
+      {
+        type: "ProposeDeal",
+        turn: 3,
+        recipient: "p2",
+        give: { fields: [], cash: 100_000 },
+        take: { fields: [], cash: 0 },
+      },
+    ],
+    [{ type: "AcceptDeal", turn: 3 }],
+    [{ type: "DeclineDeal", turn: 3 }],
   ])("accepts %j", (message) => {
     expect(intentSchema.safeParse(message)).toEqual({ success: true, data: message });
   });
@@ -72,6 +92,81 @@ describe("intentSchema", () => {
     ["a Doubler placement by name", { type: "PlaceDoubler", turn: 1, field: "budapest" }],
     ["an Erasmus travel without a Field", { type: "TravelErasmus", turn: 1 }],
     ["an Erasmus travel off the Board", { type: "TravelErasmus", turn: 1, field: -1 }],
+    ["a Deal without a recipient", { type: "ProposeDeal", turn: 1, give: {}, take: {} }],
+    ["a Deal without its terms", { type: "ProposeDeal", turn: 1, recipient: "p2" }],
+    [
+      "a Deal whose recipient is empty",
+      {
+        type: "ProposeDeal",
+        turn: 1,
+        recipient: "",
+        give: { fields: [], cash: 0 },
+        take: { fields: [], cash: 0 },
+      },
+    ],
+    [
+      "a Deal with negative cash",
+      {
+        type: "ProposeDeal",
+        turn: 1,
+        recipient: "p2",
+        give: { fields: [], cash: -1 },
+        take: { fields: [], cash: 0 },
+      },
+    ],
+    [
+      "a Deal with cash that is not an integer",
+      {
+        type: "ProposeDeal",
+        turn: 1,
+        recipient: "p2",
+        give: { fields: [], cash: 1.5 },
+        take: { fields: [], cash: 0 },
+      },
+    ],
+    [
+      "a Deal of a Field off the Board",
+      {
+        type: "ProposeDeal",
+        turn: 1,
+        recipient: "p2",
+        give: { fields: [32], cash: 0 },
+        take: { fields: [], cash: 0 },
+      },
+    ],
+    [
+      "a Deal of a Field by name",
+      {
+        type: "ProposeDeal",
+        turn: 1,
+        recipient: "p2",
+        give: { fields: ["vienna"], cash: 0 },
+        take: { fields: [], cash: 0 },
+      },
+    ],
+    [
+      "a Deal side with an extra key",
+      {
+        type: "ProposeDeal",
+        turn: 1,
+        recipient: "p2",
+        give: { fields: [], cash: 0, level: 1 },
+        take: { fields: [], cash: 0 },
+      },
+    ],
+    [
+      "a Deal with an extra key",
+      {
+        type: "ProposeDeal",
+        turn: 1,
+        recipient: "p2",
+        give: { fields: [], cash: 0 },
+        take: { fields: [], cash: 0 },
+        price: 1,
+      },
+    ],
+    ["an accepted Deal naming a Field", { type: "AcceptDeal", turn: 1, field: 3 }],
+    ["a declined Deal naming a Field", { type: "DeclineDeal", turn: 1, field: 3 }],
   ])("refuses %s", (_, message) => {
     expect(intentSchema.safeParse(message).success).toBe(false);
   });

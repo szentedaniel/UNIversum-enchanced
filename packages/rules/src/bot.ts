@@ -170,6 +170,9 @@ export function botIntent(view: PublicView): PlayerIntent | null {
       return doublerIntent(view, view.phase);
     case "choosingErasmus":
       return erasmusIntent(view, view.phase);
+    // Bots answer Deals in a later ticket (#200); until then they turn every one down.
+    case "dealAnswer":
+      return { type: "DeclineDeal", turn };
     case "gameOver":
       return null;
     default: {

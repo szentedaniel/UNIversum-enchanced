@@ -63,7 +63,7 @@ export const playersWithCash = (
 ): PlayerView[] => [player("p1", 0, positions.p1, cash.p1), player("p2", 1, positions.p2, cash.p2)];
 
 const BASE_VIEW: PublicView = {
-  stateVersion: 2,
+  stateVersion: 3,
   version: 1,
   turn: 2,
   currentPlayer: "p1",
@@ -77,6 +77,7 @@ const BASE_VIEW: PublicView = {
   fields: [],
   doubler: null,
   lastChanceCard: null,
+  deal: null,
   autoSell: null,
   pickOptions: null,
   standings: null,

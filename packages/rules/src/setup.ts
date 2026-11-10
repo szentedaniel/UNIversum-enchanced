@@ -59,6 +59,7 @@ export function setupGame({
     fields: FIELDS.map(() => ({ owner: null, level: 0 })),
     doubler: null,
     lastChanceCard: null,
+    deal: null,
     rng: rngFromSeed(seed),
   };
 }

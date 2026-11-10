@@ -14,6 +14,7 @@ import stateV1 from "./fixtures/state-v1.json" with { type: "json" };
 import stateV2 from "./fixtures/state-v2.json" with { type: "json" };
 import stateV3 from "./fixtures/state-v3.json" with { type: "json" };
 import stateV4 from "./fixtures/state-v4.json" with { type: "json" };
+import stateV5 from "./fixtures/state-v5.json" with { type: "json" };
 import { deadlineOf, newGame, roll } from "./helpers.ts";
 
 /**
@@ -31,6 +32,7 @@ const fixtures: { version: number; state: unknown }[] = [
   { version: 2, state: stateV2 },
   { version: 3, state: stateV3 },
   { version: 4, state: stateV4 },
+  { version: 5, state: stateV5 },
 ];
 
 /** The keys of an object, and of its first array item or nested object, as paths. */
@@ -107,6 +109,10 @@ describe("state migrations", () => {
     const migrated = migrate(stateV2);
 
     expect(migrated.players.map((p) => p.bot)).toEqual(migrated.players.map(() => false));
+  });
+
+  it("spec #172: a version-2 state has no pending Deal, so its Deal slot starts empty", () => {
+    expect(migrate(stateV2).deal).toBeNull();
   });
 
   it("a state at the current version comes back unchanged", () => {

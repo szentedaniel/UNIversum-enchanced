@@ -26,6 +26,22 @@ import {
 
 const turn = z.int().nonnegative();
 
+/** A Player id: what the server hands out (`newPlayerId`), never a Guest token. */
+const playerId = z.string().min(1).max(64);
+
+/** One side of a Deal: Fields on the Board, and whole forints of cash. */
+const dealSide = z.strictObject({
+  fields: z
+    .array(
+      z
+        .int()
+        .min(0)
+        .max(FIELD_COUNT - 1),
+    )
+    .max(FIELD_COUNT),
+  cash: z.int().nonnegative(),
+});
+
 const PLAYER_INTENT_SCHEMAS = [
   z.strictObject({ type: z.literal("Roll"), turn }),
   z.strictObject({ type: z.literal("BuyLevel"), turn, level: z.int().min(1).max(MAX_LEVEL) }),
@@ -65,6 +81,15 @@ const PLAYER_INTENT_SCHEMAS = [
       .min(0)
       .max(FIELD_COUNT - 1),
   }),
+  z.strictObject({
+    type: z.literal("ProposeDeal"),
+    turn,
+    recipient: playerId,
+    give: dealSide,
+    take: dealSide,
+  }),
+  z.strictObject({ type: z.literal("AcceptDeal"), turn }),
+  z.strictObject({ type: z.literal("DeclineDeal"), turn }),
 ] as const;
 
 const ROOM_INTENT_SCHEMAS = [

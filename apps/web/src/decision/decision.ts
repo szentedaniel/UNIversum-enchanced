@@ -95,6 +95,9 @@ export function openDecision(
         const pick = singlePickFor(frame.view, me);
         return pick === null ? null : { owner: "me", kind: "pick", pick, busy: inFlight };
       }
+      // The answer panel is the Deal UI ticket (#194); until then it shows no controls.
+      case "dealAnswer":
+        return null;
     }
   }
   // Another Player's Sale or pick is a waiting line; their Roll, Offer and

@@ -36,6 +36,7 @@ function viewWith(field: FieldView): PublicView {
     ),
     doubler: null,
     lastChanceCard: null,
+    deal: null,
     autoSell: null,
     pickOptions: null,
     standings: null,
