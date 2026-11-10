@@ -12,6 +12,8 @@ import {
 describe("intentSchema", () => {
   it.each([
     [{ type: "Start" }],
+    [{ type: "AddBot" }],
+    [{ type: "RemoveBot", playerId: "abc123" }],
     [{ type: "Roll", turn: 1 }],
     [{ type: "Roll", turn: 42 }],
     [{ type: "BuyLevel", turn: 3, level: 1 }],
@@ -41,6 +43,11 @@ describe("intentSchema", () => {
     ["a negative turn", { type: "Roll", turn: -1 }],
     ["extra keys", { type: "Roll", turn: 1, dice: [6, 6] }],
     ["a system intent", { type: "TurnTimedOut", turn: 1 }],
+    ["an AddBot naming a Seat", { type: "AddBot", seat: 1 }],
+    ["a RemoveBot without a Player", { type: "RemoveBot" }],
+    ["a RemoveBot with an empty Player id", { type: "RemoveBot", playerId: "" }],
+    ["a RemoveBot with a numeric Player id", { type: "RemoveBot", playerId: 7 }],
+    ["a RemoveBot with extra keys", { type: "RemoveBot", playerId: "p1", seat: 1 }],
     ["a BuyLevel without a level", { type: "BuyLevel", turn: 1 }],
     ["Level 0", { type: "BuyLevel", turn: 1, level: 0 }],
     ["Level 5", { type: "BuyLevel", turn: 1, level: 5 }],

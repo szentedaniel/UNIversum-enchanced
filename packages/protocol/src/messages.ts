@@ -49,10 +49,13 @@ export const MESSAGE = {
 // ---------------------------------------------------------------- intents
 
 /** Intents the Room handles itself, outside the rules engine. */
-export type RoomIntent = {
+export type RoomIntent =
   /** Start the game; any Player may, once every Seat is taken (R5). */
-  type: "Start";
-};
+  | { type: "Start" }
+  /** A Bot on the next empty Seat; any seated Player may (ticket #196). */
+  | { type: "AddBot" }
+  /** Take a Bot off its Seat; any seated Player may (ticket #196). */
+  | { type: "RemoveBot"; playerId: PlayerId };
 
 /** Everything a client may send as an `intent` message. */
 export type ClientIntent = RoomIntent | PlayerIntent;
@@ -64,7 +67,12 @@ export type WelcomeMessage = {
   playerId: PlayerId;
 };
 
-export type LobbySeat = { playerId: PlayerId; name: PlayerName };
+export type LobbySeat = {
+  playerId: PlayerId;
+  name: PlayerName;
+  /** True for a Bot (ticket #196); absent on a Guest's Seat. */
+  bot?: boolean;
+};
 
 /**
  * A Lobby Seat as the Lobby shows it. `heldUntil`: its Player dropped, and the
