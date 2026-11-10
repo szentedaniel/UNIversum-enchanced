@@ -17,6 +17,7 @@ import {
   PLAYBACK_MS,
   playbackOf,
   type ChanceCardId,
+  type Deal,
   type GameEvent,
   type PhaseOf,
   type PublicView,
@@ -255,13 +256,15 @@ export type DecisionResult =
     }
   | { kind: "decline" }
   | { kind: "pick" }
-  | { kind: "roll" };
+  | { kind: "roll" }
+  | { kind: "deal"; accepted: boolean };
 
 /**
  * Resolves the decision the view is at through the controls it offers: a Roll
  * (or a Quarantine's Roll for 12), an offer (choosing through `chooseOffer`), a
- * Doubler or Erasmus pick, or a Sale. A `gameOver` view has no decision left
- * and throws. Returns once the controls were used; the caller waits for the
+ * Doubler or Erasmus pick, a Sale, or a Deal answer (declined unless
+ * `chooseDeal` says otherwise). A `gameOver` view has no decision left and
+ * throws. Returns once the controls were used; the caller waits for the
  * server's answer. Every control appears only once its Playback ends
  * (ADR-0004), so Playwright's auto-wait is what waits it out.
  */
@@ -269,6 +272,7 @@ export async function resolveDecision(
   actor: Interactor,
   view: PublicView,
   chooseOffer: (phase: OfferPhase) => OfferChoice,
+  chooseDeal: (deal: Deal) => "accept" | "decline" = () => "decline",
 ): Promise<DecisionResult> {
   const { phase } = view;
   switch (phase.kind) {
@@ -337,8 +341,18 @@ export async function resolveDecision(
     case "quarantineChoice":
       await press(actor, actor.page.getByRole("button", { name: "Roll for 12", exact: true }));
       return { kind: "roll" };
-    case "dealAnswer":
-      throw new Error("the Deal answer panel is not built yet (#194)");
+    case "dealAnswer": {
+      const deal = view.deal;
+      if (deal === null) throw new Error("the view has a Deal answer without a Deal");
+      const panel = actor.page.getByTestId("deal-answer");
+      await expect(panel).toBeVisible();
+      const accepted = chooseDeal(deal) === "accept";
+      await press(
+        actor,
+        panel.getByRole("button", { name: accepted ? "Accept" : "Decline", exact: true }),
+      );
+      return { kind: "deal", accepted };
+    }
     case "gameOver":
       throw new Error("the game is over");
     default: {
