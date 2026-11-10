@@ -1,74 +1,51 @@
 /**
- * The factory's merge gate: reads one pull request's facts — the CI runs on
- * its head, the review comment, the labels, the changed files and the
- * package.json diffs — then merges it, waits for a run still in flight, queues
- * the re-review a push needs, sends the fix loop after main, or hands the
- * reasons to the owner. `DRY_RUN=1` prints what it would do and writes nothing.
+ * The factory's merge gate: `mergeGate` reads the pull request and leaves a
+ * closed, fork or human pull alone before `readMergeFacts` reads anything
+ * else; `mergeStep` decides, and `performStep` merges it, waits for a run
+ * still in flight, queues the re-review a push needs, sends the fix loop after
+ * main, or hands the reasons to the owner. `DRY_RUN=1` prints what it would do
+ * and writes nothing.
  *
  * Env: PR_NUMBER, GH_REPO, GH_TOKEN (the PAT, in the workflow), DRY_RUN.
  */
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  dependencyMap,
-  isFactoryPull,
-  mergeStep,
-  mergeSubjectOf,
-  type CiRun,
-  type DependencyChange,
-  type MergeFacts,
-} from "#merge/gates.ts";
-import { escalationComment } from "#merge/comment.ts";
-import { closingIssue } from "#shared/closing-pr.ts";
+import { readMergeFacts, type CompareView, type MergeReader, type PullView } from "#merge/facts.ts";
+import { isFactoryPull, mergeStep, type CiRun } from "#merge/gates.ts";
+import { performStep, type MergeActions } from "#merge/perform.ts";
 import { fail, required, sh, shellArg } from "#shared/common.ts";
 import { issueComments, parseJson } from "#shared/github.ts";
 
-/** The fields of `gh pr view` the gate reads, as the jq object below. */
-interface PullView {
-  number: number;
-  state: string;
-  title: string;
-  body: string | null;
-  headRefName: string;
-  headRefOid: string;
-  mergeStateStatus: string;
-  labels: string[];
-  closing: number[];
-  headCommittedAt: string;
-  /** The REST login: `dependabot[bot]` for a dependency bump. */
-  author: string;
-}
-
-/** What `repos/…/compare/<head>...main` says about the base branch. */
-interface CompareView {
-  mergeBase: string;
-  /** `ahead_by` for `<head>...main`: how far main is ahead of the pull request. */
-  mainAheadBy: number;
-  files: string[];
-}
-
 const PULL_FIELDS =
   "number,state,title,body,headRefName,headRefOid,mergeStateStatus,labels,closingIssuesReferences,commits,author";
-
-/**
- * GitHub computes mergeability lazily: the first read after main moves says
- * UNKNOWN. Deciding on that once merged a conflicting pull request, so the
- * read waits for an answer, about half a minute at most.
- */
-const pullOf = (repo: string, pr: string): PullView => {
-  for (let attempt = 1; ; attempt++) {
-    const pull = readPull(repo, pr);
-    if (pull.mergeStateStatus.toLowerCase() !== "unknown" || attempt === 6) return pull;
-    sh("sleep 5");
-  }
-};
 
 const readPull = (repo: string, pr: string): PullView => {
   const raw = sh(
     `gh pr view ${pr} --repo "${repo}" --json ${PULL_FIELDS} --jq '{number, state, title, body, headRefName, headRefOid, mergeStateStatus: (.mergeStateStatus // "unknown"), labels: [.labels[].name], closing: [.closingIssuesReferences[].number], headCommittedAt: (.commits | last | .committedDate // ""), author: (.author.login // "")}'`,
   );
   return parseJson<PullView>(raw);
+};
+
+/** GitHub answers `UNKNOWN` for a few reads after main moves. */
+const MERGEABILITY_READS = 6;
+
+/** GitHub computes mergeability lazily: the first read after main moves says
+ * UNKNOWN. Deciding on that once merged a conflicting pull request, so the
+ * read waits for an answer, about half a minute at most. The pause is a seam
+ * so the retry is testable without sleeping.
+ */
+export const waitForMergeability = (
+  read: () => PullView,
+  pause: () => void = () => sh("sleep 5"),
+): PullView => {
+  for (let attempt = 1; ; attempt++) {
+    const pull = read();
+    if (pull.mergeStateStatus.toLowerCase() !== "unknown" || attempt === MERGEABILITY_READS) {
+      return pull;
+    }
+    pause();
+  }
 };
 
 /** Every file the pull request changes, as the files API sees them. */
@@ -105,45 +82,68 @@ const contentAt = (repo: string, path: string, ref: string): string | undefined 
   }
 };
 
-const dependenciesAt = (repo: string, file: string, ref: string): unknown => {
-  const content = contentAt(repo, file, ref);
-  if (content === undefined) return undefined;
-  try {
-    return parseJson<unknown>(content);
-  } catch {
-    return fail(`${file} at ${ref} is not valid JSON.`);
-  }
-};
-
-/** The dependency maps of every package.json the pull request changes. */
-const dependencyChanges = (
-  repo: string,
-  files: readonly string[],
-  mergeBase: string,
-  headSha: string,
-): DependencyChange[] =>
-  files
-    .filter((file) => file.endsWith("package.json"))
-    .flatMap((file) => {
-      const before = dependenciesAt(repo, file, mergeBase);
-      const after = dependenciesAt(repo, file, headSha);
-      if (before === undefined || after === undefined) return [];
-      return [{ file, before: dependencyMap(before), after: dependencyMap(after) }];
-    });
-
 const writeTemp = (name: string, content: string): string => {
   const file = join(mkdtempSync(join(tmpdir(), "factory-merge-")), name);
   writeFileSync(file, `${content}\n`);
   return file;
 };
 
-const main = (): void => {
-  const repo = required("GH_REPO");
-  const pr = required("PR_NUMBER");
-  if (!/^\d+$/u.test(pr)) fail(`PR_NUMBER must be a pull request number, got '${pr}'.`);
-  const dryRun = process.env["DRY_RUN"] === "1";
+/** The gate's `gh` reads, as `readMergeFacts` consumes them. */
+const ghReader: MergeReader = {
+  pullOf: (repo, pr) => waitForMergeability(() => readPull(repo, pr)),
+  changedFiles,
+  ciRuns,
+  compareOf,
+  contentAt,
+  issueComments,
+};
 
-  const pull = pullOf(repo, pr);
+/** The gate's `gh` writes, bound to one pull request. */
+const ghActions = (repo: string, pr: string): MergeActions => ({
+  label: (name) => {
+    sh(`gh pr edit ${pr} --repo "${repo}" --add-label ${shellArg(name)}`);
+  },
+  comment: (body) => {
+    sh(`gh pr comment ${pr} --repo "${repo}" --body-file "${writeTemp("merge-comment.md", body)}"`);
+  },
+  dispatchFix: (reason) => {
+    sh(`gh workflow run factory-fix.yml -f pr=${pr} -f reason=${reason}`);
+  },
+  merge: (subject) => {
+    sh(`gh pr merge ${pr} --repo "${repo}" --merge --subject ${shellArg(subject)}`);
+    return sh(
+      `gh pr view ${pr} --repo "${repo}" --json mergeCommit --jq '.mergeCommit.oid'`,
+    ).trim();
+  },
+  commentOnIssue: (issue, body) => {
+    sh(
+      `gh issue comment ${String(issue)} --repo "${repo}" --body-file "${writeTemp("merge-done.md", body)}"`,
+    );
+  },
+  closeIssue: (issue) => {
+    try {
+      sh(`gh issue close ${String(issue)} --repo "${repo}"`);
+    } catch {
+      // The pull request's `Closes #…` already closed it on merge.
+    }
+  },
+  ticketTitle: (issue) =>
+    sh(`gh issue view ${String(issue)} --repo "${repo}" --json title --jq .title`),
+});
+
+/**
+ * The gate's flow for one pull request: the pull read and the open/factory
+ * guard first, because a pull request the gate leaves alone must not cost
+ * further reads (a closed pull's CI, a fork's files, a human's compare).
+ */
+export const mergeGate = (
+  repo: string,
+  pr: string,
+  reader: MergeReader,
+  actions: MergeActions,
+  dryRun: boolean,
+): void => {
+  const pull = reader.pullOf(repo, pr);
   if (pull.state !== "OPEN") {
     console.log(`Pull request #${pr} is ${pull.state}; nothing to merge.`);
     return;
@@ -153,90 +153,22 @@ const main = (): void => {
     return;
   }
 
-  const files = changedFiles(repo, pr);
-  const base = compareOf(repo, pull.headRefOid);
-  const facts: MergeFacts = {
-    headSha: pull.headRefOid,
-    headCommittedAt: pull.headCommittedAt,
-    labels: pull.labels,
-    ciRuns: ciRuns(repo, pull.headRefName),
-    comments: issueComments(repo, pr),
-    files,
-    dependencyChanges: dependencyChanges(repo, files, base.mergeBase, pull.headRefOid),
-    mergeState: pull.mergeStateStatus.toLowerCase(),
-    mainAheadBy: base.mainAheadBy,
-    mainFiles: base.files,
-  };
-
-  const step = mergeStep(facts);
-  if (step.kind === "wait") {
-    console.log(`Waiting: ${step.reason}`);
-    return;
-  }
-  if (step.kind === "requeue-review") {
-    console.log("The head moved after the review: queueing it for a new one.");
-    if (!dryRun) sh(`gh pr edit ${pr} --repo "${repo}" --add-label "agent:review"`);
-    return;
-  }
-  if (step.kind === "fix") {
-    console.log(`Dispatching the fix loop: ${step.reason}.`);
-    if (!dryRun) {
-      sh(`gh workflow run factory-fix.yml -f pr=${pr} -f reason=${step.reason}`);
-    }
-    return;
-  }
-  if (step.kind === "escalate") {
-    console.log(`Handing to a human:\n${step.reasons.map((reason) => `- ${reason}`).join("\n")}`);
-    if (dryRun) return;
-    const body = escalationComment(step.reasons);
-    sh(`gh pr comment ${pr} --repo "${repo}" --body-file "${writeTemp("merge-comment.md", body)}"`);
-    sh(`gh pr edit ${pr} --repo "${repo}" --add-label "ready-for-human"`);
-    return;
-  }
-
-  const issue = pull.closing[0] ?? closingIssue(pull.body);
-  // The ticket's title, not the pull request's (`Implement #N: …`), as the
-  // hand merges have always named it. A dependency bump closes no ticket and
-  // names its own pull request instead.
-  const ticket =
-    issue === undefined
-      ? undefined
-      : {
-          number: issue,
-          title:
-            sh(`gh issue view ${String(issue)} --repo "${repo}" --json title --jq .title`).trim() ||
-            pull.title,
-        };
-  const subject =
-    mergeSubjectOf({
-      number: pull.number,
-      title: pull.title,
-      ticket,
-      headRefName: pull.headRefName,
-      author: pull.author,
-    }) ?? fail(`Pull request #${pr} closes no issue; cannot name the merge commit.`);
-  console.log(`Merging #${pr} as "${subject}".`);
-  if (dryRun) return;
-  sh(`gh pr merge ${pr} --repo "${repo}" --merge --subject ${shellArg(subject)}`);
-  const commit = sh(
-    `gh pr view ${pr} --repo "${repo}" --json mergeCommit --jq '.mergeCommit.oid'`,
-  ).trim();
-  if (commit === "" || commit === "null") {
-    fail(`Pull request #${pr} merged but reported no merge commit.`);
-  }
-  sh(
-    `gh issue comment ${String(issue)} --repo "${repo}" --body-file "${writeTemp("merge-done.md", `Merged in ${commit}.`)}"`,
-  );
-  try {
-    sh(`gh issue close ${String(issue)} --repo "${repo}"`);
-  } catch {
-    // The pull request's `Closes #…` already closed it on merge.
-  }
-  console.log(`Merged in ${commit}. The push to main starts the dispatcher itself.`);
+  performStep(mergeStep(readMergeFacts(repo, pr, pull, reader)), pull, { actions, dryRun });
 };
 
-try {
-  main();
-} catch (error) {
-  fail(error instanceof Error ? error.message : String(error));
+const main = (): void => {
+  const repo = required("GH_REPO");
+  const pr = required("PR_NUMBER");
+  if (!/^\d+$/u.test(pr)) fail(`PR_NUMBER must be a pull request number, got '${pr}'.`);
+  const dryRun = process.env["DRY_RUN"] === "1";
+
+  mergeGate(repo, pr, ghReader, ghActions(repo, pr), dryRun);
+};
+
+if (import.meta.main) {
+  try {
+    main();
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
 }
