@@ -111,8 +111,10 @@ const reasonToSkip = (
  * The open pull request a ticket overlaps: one that changes a file the ticket
  * names, or whose branch slug carries the module's path.
  */
-const overlappingPull = (issue: IssueFacts, pulls: readonly OpenPull[]): OpenPull | undefined => {
-  const paths = targetPathsIn(issue.body ?? "");
+const overlappingPull = (
+  paths: readonly string[],
+  pulls: readonly OpenPull[],
+): OpenPull | undefined => {
   if (paths.length === 0) return undefined;
   return pulls.find(
     (pull) =>
@@ -150,7 +152,7 @@ export const frontierOf = (
       skipped.push({ issue, reason });
       continue;
     }
-    const pull = overlappingPull(issue, pulls);
+    const pull = overlappingPull(targetPathsOf(issue), pulls);
     if (pull !== undefined) {
       skipped.push({
         issue,
