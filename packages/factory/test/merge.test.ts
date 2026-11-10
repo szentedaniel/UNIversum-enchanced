@@ -6,6 +6,7 @@ import { performStep, type MergeActions } from "#merge/perform.ts";
 import { escalationComment } from "#merge/comment.ts";
 import { mergeStep, type MergeStep } from "#merge/gates.ts";
 import { summaryComment } from "#review/summary.ts";
+import { RATE_LIMIT_WAITS_MS } from "#shared/github.ts";
 
 const HEAD_SHA = "head-sha";
 
@@ -33,6 +34,15 @@ const reader = (overrides: Partial<MergeReader> = {}): MergeReader => ({
   issueComments: () => [],
   ...overrides,
 });
+
+/** A `gh` refusal as execSync throws it: the reason on stderr, the command in its message. */
+const rateLimited = (): Error =>
+  Object.assign(
+    new Error(
+      "Command failed: gh api repos/owner/repo/pulls/132/files\ngh: API rate limit exceeded for 1.2.3.4. (HTTP 403)\n",
+    ),
+    { stdout: "", stderr: "gh: API rate limit exceeded for 1.2.3.4. (HTTP 403)\n" },
+  );
 
 describe("readMergeFacts", () => {
   it("assembles the facts the gate decides on", () => {
@@ -485,5 +495,86 @@ describe("the gate's flow", () => {
       { kind: "commentOnIssue", issue: 132, body: "Merged in abc1234." },
       { kind: "closeIssue", issue: 132 },
     ]);
+  });
+
+  it("retries a rate-limited read and decides normally", () => {
+    const { adapter, writes } = actions();
+    const pauses: number[] = [];
+    let reads = 0;
+
+    const outcome = mergeGate(
+      "owner/repo",
+      "132",
+      reader({
+        changedFiles: () => {
+          reads += 1;
+          if (reads <= 2) throw rateLimited();
+          return [];
+        },
+        ciRuns: () => ciSuccess,
+        issueComments: () => reviewPass,
+      }),
+      adapter,
+      false,
+      { pause: (ms) => pauses.push(ms) },
+    );
+
+    expect(outcome).toBe("decided");
+    expect(pauses).toEqual([RATE_LIMIT_WAITS_MS[0], RATE_LIMIT_WAITS_MS[1]]);
+    expect(writes).toEqual([
+      { kind: "merge", subject: "chore(merge): #132 Deepen the merge gate's script" },
+      { kind: "commentOnIssue", issue: 132, body: "Merged in abc1234." },
+      { kind: "closeIssue", issue: 132 },
+    ]);
+  });
+
+  it("leaves a persistently rate-limited pull request for a later run", () => {
+    const { adapter, writes } = actions();
+    const pauses: number[] = [];
+
+    const outcome = mergeGate(
+      "owner/repo",
+      "132",
+      reader({
+        changedFiles: () => {
+          throw rateLimited();
+        },
+        ciRuns: () => ciSuccess,
+        issueComments: () => reviewPass,
+      }),
+      adapter,
+      false,
+      { pause: (ms) => pauses.push(ms) },
+    );
+
+    expect(outcome).toBe("rate-limited");
+    expect(pauses).toHaveLength(RATE_LIMIT_WAITS_MS.length);
+    expect(writes).toEqual([]);
+  });
+
+  it("fails the step on an error that is no rate limit", () => {
+    const { adapter, writes } = actions();
+    const pauses: number[] = [];
+
+    expect(() =>
+      mergeGate(
+        "owner/repo",
+        "132",
+        reader({
+          changedFiles: () => {
+            throw new Error(
+              "Command failed: gh api repos/owner/repo/pulls/132/files\ngh: Not Found (HTTP 404)\n",
+            );
+          },
+          ciRuns: () => ciSuccess,
+          issueComments: () => reviewPass,
+        }),
+        adapter,
+        false,
+        { pause: (ms) => pauses.push(ms) },
+      ),
+    ).toThrow("Not Found");
+    expect(pauses).toEqual([]);
+    expect(writes).toEqual([]);
   });
 });

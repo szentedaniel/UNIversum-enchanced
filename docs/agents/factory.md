@@ -260,6 +260,14 @@ pull request changes too (handoff notes aside), sends it to the fix loop first (
 request that is only _waiting_ — CI still running, the review not posted yet, `agent:review` queued —
 exits quietly: the next trigger decides.
 
+A `gh` call GitHub refuses for a rate limit — HTTP 403 or 429 saying "rate limit", as when many pull
+requests merge at once — is waited out and retried instead of escalating. The wait the refusal names
+(`retry-after`, or the `x-ratelimit-reset` instant) wins; otherwise the retries take 30 s, 2 min and
+5 min. The whole run shares one 10-minute wait budget (the job times out at 15): when a wait would
+pass it, the step exits green and comments nothing, so the pull request waits for the next merge-gate
+run instead of the owner reading "could not decide". Every other failure still fails the step and
+reaches that escalation.
+
 A dry run prints the decision and writes nothing:
 
 ```bash

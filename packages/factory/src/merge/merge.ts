@@ -3,8 +3,10 @@
  * closed, fork or human pull alone before `readMergeFacts` reads anything
  * else; `mergeStep` decides, and `performStep` merges it, waits for a run
  * still in flight, queues the re-review a push needs, sends the fix loop after
- * main, or hands the reasons to the owner. `DRY_RUN=1` prints what it would do
- * and writes nothing.
+ * main, or hands the reasons to the owner. A `gh` call GitHub refuses for a
+ * rate limit is waited out and retried; one the run's budget cannot outlast
+ * exits green, without an escalation, for a later run to decide. `DRY_RUN=1`
+ * prints what it would do and writes nothing.
  *
  * Env: PR_NUMBER, GH_REPO, GH_TOKEN (the PAT, in the workflow), DRY_RUN.
  */
@@ -15,7 +17,14 @@ import { readMergeFacts, type CompareView, type MergeReader, type PullView } fro
 import { isFactoryPull, mergeStep, type CiRun } from "#merge/gates.ts";
 import { performStep, type MergeActions } from "#merge/perform.ts";
 import { fail, required, sh, shellArg } from "#shared/common.ts";
-import { issueComments, parseJson } from "#shared/github.ts";
+import {
+  isNotFound,
+  issueComments,
+  parseJson,
+  RateLimitExhausted,
+  retryOnRateLimit,
+  type RetryOptions,
+} from "#shared/github.ts";
 
 const PULL_FIELDS =
   "number,state,title,body,headRefName,headRefOid,mergeStateStatus,labels,closingIssuesReferences,commits,author";
@@ -76,8 +85,10 @@ const contentAt = (repo: string, path: string, ref: string): string | undefined 
     return sh(
       `gh api "repos/${repo}/contents/${path}?ref=${ref}" -H "Accept: application/vnd.github.raw"`,
     );
-  } catch {
-    // A package.json the pull request adds or removes has no other side.
+  } catch (error) {
+    // A package.json the pull request adds or removes has no other side; a
+    // rate limit must reach the retry rather than read as a missing file.
+    if (!isNotFound(error)) throw error;
     return undefined;
   }
 };
@@ -131,10 +142,18 @@ const ghActions = (repo: string, pr: string): MergeActions => ({
     sh(`gh issue view ${String(issue)} --repo "${repo}" --json title --jq .title`),
 });
 
+/** "decided": the step ran through; "rate-limited": GitHub refused every attempt, so a later run must. */
+export type MergeGateOutcome = "decided" | "rate-limited";
+
 /**
  * The gate's flow for one pull request: the pull read and the open/factory
  * guard first, because a pull request the gate leaves alone must not cost
  * further reads (a closed pull's CI, a fork's files, a human's compare).
+ *
+ * Every `gh` call the two seams make retries a rate-limit refusal, waiting
+ * from one budget the whole run shares; a spent budget leaves the pull request
+ * untouched so a later run decides, rather than telling the owner the gate
+ * could not decide a transient refusal.
  */
 export const mergeGate = (
   repo: string,
@@ -142,18 +161,54 @@ export const mergeGate = (
   reader: MergeReader,
   actions: MergeActions,
   dryRun: boolean,
-): void => {
-  const pull = reader.pullOf(repo, pr);
-  if (pull.state !== "OPEN") {
-    console.log(`Pull request #${pr} is ${pull.state}; nothing to merge.`);
-    return;
-  }
-  if (!isFactoryPull(pull.headRefName, pull.labels, pull.author)) {
-    console.log(`Pull request #${pr} is not a factory branch or label; leaving it alone.`);
-    return;
-  }
+  retry: RetryOptions = {},
+): MergeGateOutcome => {
+  const options: RetryOptions = { ...retry, budget: { spentMs: 0 } };
+  const reads: MergeReader = {
+    pullOf: (repository, pull) => retryOnRateLimit(() => reader.pullOf(repository, pull), options),
+    changedFiles: (repository, pull) =>
+      retryOnRateLimit(() => reader.changedFiles(repository, pull), options),
+    ciRuns: (repository, branch) =>
+      retryOnRateLimit(() => reader.ciRuns(repository, branch), options),
+    compareOf: (repository, headSha) =>
+      retryOnRateLimit(() => reader.compareOf(repository, headSha), options),
+    contentAt: (repository, path, ref) =>
+      retryOnRateLimit(() => reader.contentAt(repository, path, ref), options),
+    issueComments: (repository, pull) =>
+      retryOnRateLimit(() => reader.issueComments(repository, pull), options),
+  };
+  const writes: MergeActions = {
+    label: (name) => retryOnRateLimit(() => actions.label(name), options),
+    comment: (body) => retryOnRateLimit(() => actions.comment(body), options),
+    dispatchFix: (reason) => retryOnRateLimit(() => actions.dispatchFix(reason), options),
+    merge: (subject) => retryOnRateLimit(() => actions.merge(subject), options),
+    commentOnIssue: (issue, body) =>
+      retryOnRateLimit(() => actions.commentOnIssue(issue, body), options),
+    closeIssue: (issue) => retryOnRateLimit(() => actions.closeIssue(issue), options),
+    ticketTitle: (issue) => retryOnRateLimit(() => actions.ticketTitle(issue), options),
+  };
 
-  performStep(mergeStep(readMergeFacts(repo, pr, pull, reader)), pull, { actions, dryRun });
+  try {
+    const pull = reads.pullOf(repo, pr);
+    if (pull.state !== "OPEN") {
+      console.log(`Pull request #${pr} is ${pull.state}; nothing to merge.`);
+      return "decided";
+    }
+    if (!isFactoryPull(pull.headRefName, pull.labels, pull.author)) {
+      console.log(`Pull request #${pr} is not a factory branch or label; leaving it alone.`);
+      return "decided";
+    }
+
+    performStep(mergeStep(readMergeFacts(repo, pr, pull, reads)), pull, {
+      actions: writes,
+      dryRun,
+    });
+    return "decided";
+  } catch (error) {
+    if (!(error instanceof RateLimitExhausted)) throw error;
+    console.log(`::warning::${error.message}`);
+    return "rate-limited";
+  }
 };
 
 const main = (): void => {
