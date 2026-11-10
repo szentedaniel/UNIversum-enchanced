@@ -8,7 +8,7 @@
 import type { ChanceCardId, FieldId } from "#board.ts";
 
 /** The version of the state's shape (not the per-intent `version`). */
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 /** A Player's public id: what every client sees instead of a Guest token. */
 export type PlayerId = string;
@@ -57,6 +57,23 @@ export type FieldState = {
 };
 
 export type DoublerState = { field: FieldId; count: number };
+
+/** One side of a Deal: the Fields it puts in, and the cash. */
+export type DealSide = {
+  /** Fields at their current Level; the Doubler stays where it stands. */
+  fields: FieldId[];
+  cash: number;
+};
+
+/** A Deal between two Players: what each side puts in (spec #172). */
+export type Deal = {
+  proposer: PlayerId;
+  recipient: PlayerId;
+  /** What the proposer gives. */
+  give: DealSide;
+  /** What the proposer asks for. */
+  take: DealSide;
+};
 
 /**
  * Phases, by `kind`. The map is open: each rule area adds its own phases with
@@ -113,6 +130,8 @@ export type GameState = {
   doubler: DoublerState | null;
   /** The last Chance card drawn, which the next draw skips; `null` until the first draw (R32, F17). */
   lastChanceCard: ChanceCardId | null;
+  /** The Deal waiting for its recipient's answer; `null` outside one (spec #172). */
+  deal: Deal | null;
   /** The PRNG state. Never sent to clients (see `publicView`). */
   rng: number[];
 };

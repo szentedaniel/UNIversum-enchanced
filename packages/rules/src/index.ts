@@ -27,6 +27,8 @@ export { migrate, type StoredState } from "#migrate.ts";
 export { setupGame, type SetupInput } from "#setup.ts";
 export {
   STATE_VERSION,
+  type Deal,
+  type DealSide,
   type DoublerState,
   type FieldState,
   type GameState,

@@ -32,6 +32,10 @@ const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> 
         typeof deadline === "number" ? deadline - TURN_LIMIT_MS - TURN_SLACK_MS : state["endsAt"],
     };
   },
+  // Version 3 adds the pending Deal (spec #172). A game stored before Deals
+  // existed has none: its current decision is the Player's own, and no Deal
+  // was proposed this Turn.
+  2: (state) => ({ ...state, stateVersion: 3, deal: null }),
 };
 
 /**
