@@ -3,9 +3,14 @@ import { botIntent, publicView, type FieldId, type GameState, type PlayerState }
 import { newGame, playTurn, rollOnto, withField, withPlayer } from "./helpers.ts";
 
 const VESZPREM = 1;
+const BUDAPEST = 2;
+const DEBRECEN = 3;
+const MUSEUM_1 = 4;
+const ZURICH = 5;
+const DOUBLER = 16;
 const SEATTLE = 17;
 const NEW_HAVEN = 19;
-const MUSEUM_1 = 4;
+const ERASMUS = 24;
 
 /** `state` with `owner` holding each Field at Level 1 (a Museum stays Level 0). */
 function owning(state: GameState, owner: string, fields: readonly FieldId[]): GameState {
@@ -136,10 +141,8 @@ function openSale(cash: number, fields: Record<FieldId, number>): GameState {
 }
 
 describe("Sale", () => {
-  const ZURICH = 5;
   const PARIS = 6;
   const EDINBURGH = 7;
-  const CHICAGO = 9;
   const AUSTIN = 10;
   const PRINCETON = 11;
 
@@ -190,6 +193,46 @@ describe("Sale", () => {
       type: "SellFields",
       turn: state.turn,
       fields: [AUSTIN, PRINCETON, VIENNA],
+    });
+  });
+});
+
+describe("Doubler pick", () => {
+  it("places the token where the Rent grows most", () => {
+    const state = owning(newGame({ players: 2 }), "p1", [VESZPREM, ZURICH]);
+    const landed = rollOnto(state, DOUBLER).state;
+
+    expect(landed.phase.kind).toBe("placingDoubler");
+    expect(botIntent(publicView(landed))).toEqual({
+      type: "PlaceDoubler",
+      turn: landed.turn,
+      field: ZURICH,
+    });
+  });
+
+  it("stacks the token where the stack out-earns another Field", () => {
+    const owned = owning(newGame({ players: 2 }), "p1", [VESZPREM, ZURICH]);
+    const state: GameState = { ...owned, doubler: { field: VESZPREM, count: 1 } };
+    const landed = rollOnto(state, DOUBLER).state;
+
+    expect(botIntent(publicView(landed))).toEqual({
+      type: "PlaceDoubler",
+      turn: landed.turn,
+      field: VESZPREM,
+    });
+  });
+});
+
+describe("Erasmus pick", () => {
+  it("travels to the Field that completes its Monopoly", () => {
+    const state = owning(newGame({ players: 2 }), "p1", [VESZPREM, BUDAPEST]);
+    const landed = rollOnto(state, ERASMUS).state;
+
+    expect(landed.phase.kind).toBe("choosingErasmus");
+    expect(botIntent(publicView(landed))).toEqual({
+      type: "TravelErasmus",
+      turn: landed.turn,
+      field: DEBRECEN,
     });
   });
 });

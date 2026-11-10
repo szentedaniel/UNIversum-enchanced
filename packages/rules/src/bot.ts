@@ -7,7 +7,7 @@
  * data is the rules' constant, not hidden state. The Room server submits the
  * intent like any Guest's, and the engine validates it (ADR-0001, ADR-0003).
  */
-import { FIELDS, type FieldId, type GroupId } from "#board.ts";
+import { FIELDS, MAX_LEVEL, MUSEUM_VALUE, type FieldId, type GroupId } from "#board.ts";
 import type { PlayerIntent } from "#intents.ts";
 import type { PhaseOf, PlayerId } from "#state.ts";
 import type { PublicView } from "#view.ts";
@@ -21,9 +21,12 @@ function playerOf(view: PublicView, playerId: PlayerId) {
   return player;
 }
 
-/** How many Universities of `field`'s Group the Player already owns. */
-function groupProgress(view: PublicView, playerId: PlayerId, field: FieldId): number {
-  const group: GroupId | null | undefined = FIELDS[field]?.group;
+/** How many Universities of `group` the Player already owns. */
+function groupOwned(
+  view: PublicView,
+  playerId: PlayerId,
+  group: GroupId | null | undefined,
+): number {
   if (group === null || group === undefined) return 0;
   return FIELDS.filter((f) => f.group === group && view.fields[f.id]?.owner === playerId).length;
 }
@@ -47,7 +50,7 @@ function offerIntent(view: PublicView, phase: PhaseOf<"offer">): PlayerIntent {
       : { type: "DeclineOffer", turn };
   }
   if (phase.buyout !== undefined) {
-    const buildsMonopoly = groupProgress(view, view.currentPlayer, phase.field) > 0;
+    const buildsMonopoly = groupOwned(view, view.currentPlayer, FIELDS[phase.field]?.group) > 0;
     return buildsMonopoly && keepsReserve(view, phase.buyout)
       ? { type: "Buyout", turn }
       : { type: "DeclineOffer", turn };
@@ -107,6 +110,55 @@ function saleIntent(view: PublicView, phase: PhaseOf<"selling">): PlayerIntent {
 }
 
 /**
+ * The Doubler pick (R59–R61): the view's `rentAfter` already prices the stack
+ * a placement would leave, so take the highest. A tie keeps the phase's
+ * Field order.
+ */
+function doublerIntent(view: PublicView, phase: PhaseOf<"placingDoubler">): PlayerIntent {
+  let best: { field: FieldId; rentAfter: number } | undefined;
+  for (const option of view.pickOptions ?? []) {
+    if (option.kind !== "doubler") continue;
+    if (best === undefined || option.rentAfter > best.rentAfter) {
+      best = { field: option.field, rentAfter: option.rentAfter };
+    }
+  }
+  const field = best?.field ?? phase.fields[0];
+  if (field === undefined) throw new Error("the Doubler pick offers no Field");
+  return { type: "PlaceDoubler", turn: view.turn, field };
+}
+
+/**
+ * The Erasmus pick (R64, R65): travel to the offered Field that best builds
+ * the Bot's position — a Field that completes a Monopoly first, then one that
+ * extends a Group it holds, then the most valuable landing, plus the Round
+ * bonus the view lists for passing Start.
+ */
+function erasmusIntent(view: PublicView, phase: PhaseOf<"choosingErasmus">): PlayerIntent {
+  const me = view.currentPlayer;
+  let best: { field: FieldId; score: number } | undefined;
+  for (const option of view.pickOptions ?? []) {
+    if (option.kind !== "erasmus") continue;
+    const info = FIELDS[option.field];
+    const group = info?.group;
+    const owned = groupOwned(view, me, group);
+    const size =
+      group === null || group === undefined
+        ? 0
+        : FIELDS.filter((f) => f.group === group).length;
+    const target = view.fields[option.field];
+    const completes = target?.owner === null && size > 0 && owned === size - 1;
+    let value = info?.values?.[1] ?? MUSEUM_VALUE;
+    if (target?.owner === me) value = target.level >= MAX_LEVEL ? 0 : target.value + target.rent;
+    const score =
+      (completes ? 1_000_000_000 : 0) + owned * 1_000_000 + (option.bonus ?? 0) + value;
+    if (best === undefined || score > best.score) best = { field: option.field, score };
+  }
+  const field = best?.field ?? phase.fields[0];
+  if (field === undefined) throw new Error("the Erasmus pick offers no Field");
+  return { type: "TravelErasmus", turn: view.turn, field };
+}
+
+/**
  * The intent a Bot submits for the open Decision, or `null` once the game is
  * over. The switch is exhaustive: a new phase fails to compile until the
  * policy covers it.
@@ -122,6 +174,10 @@ export function botIntent(view: PublicView): PlayerIntent | null {
       return quarantineIntent(view, view.phase);
     case "selling":
       return saleIntent(view, view.phase);
+    case "placingDoubler":
+      return doublerIntent(view, view.phase);
+    case "choosingErasmus":
+      return erasmusIntent(view, view.phase);
     case "gameOver":
       return null;
     default: {
