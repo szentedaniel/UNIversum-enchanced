@@ -15,9 +15,11 @@ import * as sandcastle from "@ai-hero/sandcastle";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import {
   architectureRun,
+  issueWork,
   newProposals,
   proposalIssueBody,
   proposalLabel,
+  pullWork,
   trackedBy,
   type Proposal,
   type TrackedWork,
@@ -25,15 +27,6 @@ import {
 import { claudeAgent } from "#shared/agents.ts";
 import { safeSh, fail, required, sh, shellArg } from "#shared/common.ts";
 import { parseJson } from "#shared/github.ts";
-import { targetPathsIn } from "#shared/targets.ts";
-
-/** The work labels that make an issue a ticket or a proposal, not a spec. */
-const WORK_LABELS: Record<string, true> = {
-  "ready-for-agent": true,
-  "agent:in-progress": true,
-  "agent:blocked": true,
-  "ready-for-human": true,
-};
 
 /** How far back a closed issue still counts as recently filed work. */
 const RECENT_CLOSED_DAYS = 30;
@@ -60,29 +53,28 @@ const trackedIssues = (repo: string, state: "open" | "closed", search?: string):
       `gh issue list --repo "${repo}" --state ${state}${searchArg} --limit 200 --json number,title,body,labels,subIssues`,
     ),
   ).flatMap((issue) => {
-    if (issue.subIssues.length > 0) return [];
-    if (!issue.labels.some((label) => WORK_LABELS[label.name] === true)) return [];
-    return [
-      {
-        number: issue.number,
-        title: issue.title,
-        paths: targetPathsIn(`${issue.title}\n${issue.body ?? ""}`),
-      },
-    ];
+    const work = issueWork({
+      number: issue.number,
+      title: issue.title,
+      body: issue.body,
+      labels: issue.labels.map((label) => label.name),
+      subIssues: issue.subIssues.length,
+    });
+    return work === undefined ? [] : [work];
   });
 };
 
 const trackedPulls = (repo: string): TrackedWork[] =>
   parseJson<ListedPull[]>(
     sh(`gh pr list --repo "${repo}" --state open --limit 100 --json number,title,body,files`),
-  ).map((pull) => ({
-    number: pull.number,
-    title: pull.title,
-    paths: [
-      ...targetPathsIn(`${pull.title}\n${pull.body ?? ""}`),
-      ...pull.files.map((file) => file.path),
-    ],
-  }));
+  ).map((pull) =>
+    pullWork({
+      number: pull.number,
+      title: pull.title,
+      body: pull.body,
+      files: pull.files.map((file) => file.path),
+    }),
+  );
 
 /**
  * The open and recently closed work a proposal must not repeat: the open

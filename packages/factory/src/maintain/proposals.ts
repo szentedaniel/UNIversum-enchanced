@@ -6,7 +6,7 @@
  * issue the script opens, and keeps the dedupe pure.
  */
 import { z } from "zod";
-import { shareModule } from "#shared/targets.ts";
+import { shareModule, targetPathsIn } from "#shared/targets.ts";
 
 /** The weekly cap: a weekly issue stream nobody reads is worse than none. */
 export const DEFAULT_MAX_PROPOSALS = 2;
@@ -117,6 +117,56 @@ export interface TrackedWork {
   readonly title: string;
   readonly paths: readonly string[];
 }
+
+/** The work labels that make an issue a ticket, not a spec or a report. */
+const WORK_LABELS: Record<string, true> = {
+  "ready-for-agent": true,
+  "agent:in-progress": true,
+  "agent:blocked": true,
+  "ready-for-human": true,
+};
+
+/** The REST fields the tracked-issue mapping reads. */
+export interface TrackedIssue {
+  readonly number: number;
+  readonly title: string;
+  readonly body: string | null;
+  readonly labels: readonly string[];
+  readonly subIssues: number;
+}
+
+/** The REST fields the tracked-pull mapping reads. */
+export interface TrackedPull {
+  readonly number: number;
+  readonly title: string;
+  readonly body: string | null;
+  readonly files: readonly string[];
+}
+
+const pathsIn = (title: string, body: string | null): readonly string[] =>
+  targetPathsIn(`${title}\n${body ?? ""}`);
+
+/**
+ * The work an open or recently closed issue carries, or nothing when it is a
+ * spec or a report: those name a whole area, not a module another ticket could
+ * repeat.
+ */
+export const issueWork = (issue: TrackedIssue): TrackedWork | undefined => {
+  if (issue.subIssues > 0) return undefined;
+  if (!issue.labels.some((label) => WORK_LABELS[label] === true)) return undefined;
+  return {
+    number: issue.number,
+    title: issue.title,
+    paths: pathsIn(issue.title, issue.body),
+  };
+};
+
+/** The work an open pull request carries: its body's paths and changed files. */
+export const pullWork = (pull: TrackedPull): TrackedWork => ({
+  number: pull.number,
+  title: pull.title,
+  paths: [...pathsIn(pull.title, pull.body), ...pull.files],
+});
 
 const titleKey = (title: string): string => title.trim().toLowerCase();
 

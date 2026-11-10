@@ -3,9 +3,11 @@ import {
   ARCHITECTURE_MARKER,
   architectureRun,
   DEFAULT_MAX_PROPOSALS,
+  issueWork,
   newProposals,
   proposalIssueBody,
   proposalLabel,
+  pullWork,
   type Proposal,
 } from "#maintain/proposals.ts";
 
@@ -65,9 +67,20 @@ describe("newProposals", () => {
 
   it("drops a proposal whose module an open issue or pull request already names", () => {
     const trackedWork = [
-      tracked(112, "Deepen the run-log reader", ["packages/factory/src/shared/runs.ts"]),
-      tracked(135, "Implement #112", ["packages/factory/src/shared/runs.ts"]),
-    ];
+      issueWork({
+        number: 112,
+        title: "Deepen the run-log reader",
+        body: "## Files\n\n- `packages/factory/src/shared/runs.ts`",
+        labels: ["ready-for-agent"],
+        subIssues: 0,
+      }),
+      pullWork({
+        number: 154,
+        title: "Implement #129",
+        body: "Closes #129",
+        files: ["packages/factory/src/shared/runs.ts"],
+      }),
+    ].flatMap((work) => (work === undefined ? [] : [work]));
     const repeat = { ...twoWayDoor, files: ["packages/factory/src/shared/runs.ts"] };
 
     expect(newProposals([repeat, oneWayDoor], trackedWork)).toEqual([oneWayDoor]);
@@ -86,6 +99,55 @@ describe("newProposals", () => {
     expect(
       newProposals([twoWayDoor, oneWayDoor], [tracked(141, "Red main: CI failed on 0b9af87")]),
     ).toEqual([twoWayDoor, oneWayDoor]);
+  });
+});
+
+describe("issueWork", () => {
+  it("reads the paths an open ticket names, and keeps its title for the title dedupe", () => {
+    expect(
+      issueWork({
+        number: 129,
+        title: "Deepen the run-log reader in shared/runs.ts",
+        body: "The callers are fix/decide.ts and maintain/run-red-main.ts.",
+        labels: ["ready-for-agent"],
+        subIssues: 0,
+      }),
+    ).toEqual({
+      number: 129,
+      title: "Deepen the run-log reader in shared/runs.ts",
+      paths: ["shared/runs.ts", "fix/decide.ts", "maintain/run-red-main.ts"],
+    });
+  });
+
+  it("ignores a spec, a report and an unlabelled issue", () => {
+    const base = {
+      number: 85,
+      title: "AI software factory",
+      body: "`packages/factory/src/shared/runs.ts`",
+      labels: ["ready-for-agent"],
+      subIssues: 0,
+    };
+
+    expect(issueWork({ ...base, subIssues: 8 })).toBeUndefined();
+    expect(issueWork({ ...base, labels: ["factory:report"] })).toBeUndefined();
+    expect(issueWork({ ...base, labels: [] })).toBeUndefined();
+  });
+});
+
+describe("pullWork", () => {
+  it("carries the changed files as targets", () => {
+    expect(
+      pullWork({
+        number: 154,
+        title: "Implement #129: deepen the run-log reader",
+        body: "Closes #129",
+        files: ["packages/factory/src/shared/runs.ts", "packages/factory/src/fix/decide.ts"],
+      }),
+    ).toEqual({
+      number: 154,
+      title: "Implement #129: deepen the run-log reader",
+      paths: ["packages/factory/src/shared/runs.ts", "packages/factory/src/fix/decide.ts"],
+    });
   });
 });
 
