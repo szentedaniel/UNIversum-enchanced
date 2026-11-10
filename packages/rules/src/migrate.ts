@@ -37,7 +37,7 @@ const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> 
   2: (state) => ({
     ...state,
     stateVersion: 3,
-    players: playersOf(state).map((player) => ({ ...player, bot: false })),
+    players: playersOf(state).map((player) => Object.assign({}, player, { bot: false })),
   }),
 };
 
