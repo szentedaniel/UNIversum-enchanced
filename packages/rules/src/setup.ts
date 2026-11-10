@@ -38,11 +38,12 @@ export function setupGame({
     currentPlayer: first.playerId,
     phase: awaitingRoll(),
     actsAfter: now,
-    turnDeadline: turnDeadlineFrom(now, turnLimitMs),
+    turnDeadline: turnDeadlineFrom(now, turnLimitMs ?? settings.turnLimitMs),
     settings: {
       maxPlayers: settings.maxPlayers,
       minuteLimit: settings.minuteLimit,
       startingCash: settings.startingCash,
+      turnLimitMs: settings.turnLimitMs,
     },
     endsAt: now + settings.minuteLimit * minuteMs,
     players: seats.map((seat, index) => ({

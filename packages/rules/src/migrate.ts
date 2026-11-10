@@ -54,6 +54,17 @@ const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> 
   // existed has none: its current decision is the Player's own, and no Deal
   // was proposed this Turn.
   4: (state) => ({ ...state, stateVersion: 5, deal: null }),
+  // Version 6 adds the Turn timer length to the Room settings (ticket #187).
+  // A stored game's deadlines were counted with today's 20 s limit, so that
+  // is its true value: the setting only decides the next decisions' deadlines.
+  5: (state) => {
+    const settings = state["settings"];
+    return {
+      ...state,
+      stateVersion: 6,
+      settings: { ...(isObject(settings) ? settings : {}), turnLimitMs: TURN_LIMIT_MS },
+    };
+  },
 };
 
 /**

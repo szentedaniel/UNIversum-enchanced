@@ -1,5 +1,5 @@
 import type { FieldId } from "#board.ts";
-import { TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
+import { TURN_SLACK_MS } from "#constants.ts";
 import { autoSellPicks } from "#rules/charge.ts";
 import { doublerPlacement } from "#rules/doubler.ts";
 import { erasmusRoute } from "#rules/erasmus.ts";
@@ -83,7 +83,7 @@ export function publicView(state: GameState, timing: ViewTiming = {}): PublicVie
         ? null
         : {
             endsAt: state.turnDeadline - TURN_SLACK_MS,
-            limitMs: timing.turnLimitMs ?? TURN_LIMIT_MS,
+            limitMs: timing.turnLimitMs ?? state.settings.turnLimitMs,
           },
     settings: state.settings,
     endsAt: state.endsAt,
