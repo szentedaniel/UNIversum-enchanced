@@ -139,6 +139,18 @@ const CHANCE_CARD_TEXTS: Record<ChanceCardId, { title: Message; text: Message }>
     title: m.chance_failed_exams_title,
     text: () => m.chance_failed_exams_text({ amount: formatMoney(-CHANCE_CARD_MONEY.failedExams) }),
   },
+  textbookFair: {
+    title: m.chance_textbook_fair_title,
+    text: () =>
+      m.chance_textbook_fair_text({ amount: formatMoney(-CHANCE_CARD_MONEY.textbookFair) }),
+  },
+  teachingAssistantJob: {
+    title: m.chance_teaching_assistant_job_title,
+    text: () =>
+      m.chance_teaching_assistant_job_text({
+        amount: formatMoney(CHANCE_CARD_MONEY.teachingAssistantJob),
+      }),
+  },
 };
 
 /** A Chance card's title and text in the active language. */

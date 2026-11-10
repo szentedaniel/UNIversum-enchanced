@@ -57,31 +57,37 @@ function counts(n: number, last: ChanceCardId | null): Record<ChanceCardId, numb
 const totalCash = (state: GameState) => state.players.reduce((sum, p) => sum + p.cash, 0);
 
 describe("the Chance draw", () => {
-  it("R32: there are 3 cards: the PCR test, +200,000 and −200,000", () => {
-    expect(CHANCE_CARDS).toEqual(["pcrTest", "scholarship", "failedExams"]);
+  it("R32: there are 5 cards: the PCR test, +200,000, −200,000, −150,000 and +300,000", () => {
+    expect(CHANCE_CARDS).toEqual([
+      "pcrTest",
+      "scholarship",
+      "failedExams",
+      "textbookFair",
+      "teachingAssistantJob",
+    ]);
   });
 
   it("F17: a game starts with no last card", () => {
     expect(newGame().lastChanceCard).toBeNull();
   });
 
-  it("R32, F17: the first draw of a game is uniform over all 3 cards, the PCR card included", () => {
+  it("R32, F17: the first draw of a game is uniform over all five cards, the PCR card included", () => {
     const tally = counts(900, null);
 
     for (const card of CHANCE_CARDS) {
-      expect(tally[card]).toBeGreaterThan(240);
-      expect(tally[card]).toBeLessThan(360);
+      expect(tally[card]).toBeGreaterThan(144);
+      expect(tally[card]).toBeLessThan(216);
     }
   });
 
-  it("R32: a draw never repeats the last card, and is uniform over the other two", () => {
+  it("R32: a draw never repeats the last card, and is uniform over the other four", () => {
     for (const last of CHANCE_CARDS) {
       const tally = counts(600, last);
 
       expect(tally[last]).toBe(0);
       for (const card of CHANCE_CARDS.filter((c) => c !== last)) {
-        expect(tally[card]).toBeGreaterThan(240);
-        expect(tally[card]).toBeLessThan(360);
+        expect(tally[card]).toBeGreaterThan(120);
+        expect(tally[card]).toBeLessThan(180);
       }
     }
   });
@@ -184,5 +190,56 @@ describe("money cards", () => {
       shortfall: 150_000,
       resume: { kind: "chanceCard", amount: 200_000 },
     });
+  });
+});
+
+describe("the Textbook fair card", () => {
+  it("R34: charges 150,000 to the Bank", () => {
+    const { state, events } = draw(seedDrawing("textbookFair"));
+
+    expect(events).toContainEqual({ type: "ChanceChargePaid", player: "p1", amount: 150_000 });
+    expect(events).not.toContainEqual(expect.objectContaining({ type: "ChanceMoneyReceived" }));
+    expect(player(state, "p1").cash).toBe(START_CASH - 150_000);
+    expect(totalCash(state)).toBe(totalCash(newGame()) - 150_000);
+  });
+
+  it("R34, F6: a Player who can cover it only by selling goes into a Sale for the Shortfall", () => {
+    const seed = seedDrawing("textbookFair");
+    let start = withPlayer(newGame({ seed }), "p1", { cash: 50_000 });
+    start = withField(start, 1, { owner: "p1", level: 1 }); // Veszprém, sale 180,000
+
+    const { state } = draw(seed, null, start);
+
+    expect(state.phase).toEqual({
+      kind: "selling",
+      shortfall: 100_000,
+      resume: { kind: "chanceCard", amount: 150_000 },
+    });
+  });
+
+  it("R34, R70: a Player who can't cover it with cash or Fields pays what they have and is Bankrupt", () => {
+    const seed = seedDrawing("textbookFair");
+    const start = withPlayer(newGame({ seed }), "p1", { cash: 50_000 });
+
+    const { state, events } = draw(seed, null, start);
+
+    expect(events).toContainEqual({ type: "ChanceChargePaid", player: "p1", amount: 50_000 });
+    expect(events).toContainEqual({ type: "WentBankrupt", player: "p1", fields: [] });
+    expect(player(state, "p1")).toMatchObject({ cash: 0, bankrupt: true });
+  });
+});
+
+describe("the Teaching assistant job card", () => {
+  it("R34: the Bank pays 300,000", () => {
+    const { state, events } = draw(seedDrawing("teachingAssistantJob"));
+
+    expect(events).toContainEqual({
+      type: "ChanceMoneyReceived",
+      player: "p1",
+      amount: 300_000,
+    });
+    expect(events).not.toContainEqual(expect.objectContaining({ type: "ChanceChargePaid" }));
+    expect(player(state, "p1").cash).toBe(START_CASH + 300_000);
+    expect(totalCash(state)).toBe(totalCash(newGame()) + 300_000);
   });
 });
