@@ -6,7 +6,7 @@ import { chanceCardText, formatMoney } from "#text.ts";
 const LOCALES: Locale[] = ["hu", "en", "de"];
 const inLanguage = (locale: Locale) => overwriteGetLocale(() => locale);
 // Intl separates groups and units with no-break spaces; compare with plain ones.
-const plain = (text: string) => text.replaceAll(/[  ]/g, " ");
+const plain = (text: string) => text.replaceAll(/[\u00a0\u202f]/g, " ");
 
 afterEach(() => {
   inLanguage(baseLocale);
