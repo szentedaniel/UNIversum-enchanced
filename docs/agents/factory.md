@@ -137,7 +137,8 @@ turns. Each dispatch is `gh workflow run factory-implement.yml -f issue=<n>` wit
 
 Minutes come from the jobs API: every job of every `factory-*.yml` run created this calendar month
 (UTC), rounded up per job the way GitHub bills. `FACTORY_MONTHLY_MINUTES` (default 1400) caps them; the repository is public, so the repo variable is
-set to 100000 and the cap only catches a runaway.
+`off`: no cap, and no counting either (counting costs one API call per factory run of the month on every
+dispatch, which exhausted the token's hourly rate limit).
 When they are spent the dispatcher posts one comment — deduped by a hidden marker — on the newest open
 `factory:report` issue, opening one when there is none, and dispatches nothing until the month rolls
 over. Both limits are repository variables of the same names; unset or misspelt values keep the

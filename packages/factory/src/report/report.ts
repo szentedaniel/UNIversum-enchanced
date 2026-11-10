@@ -15,7 +15,7 @@
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_MONTHLY_MINUTES, minutesUsed, monthStart } from "#dispatch/budget.ts";
+import { budgetLimit, minutesUsed, monthStart } from "#dispatch/budget.ts";
 import {
   autoMergeOf,
   fixRoundsOf,
@@ -37,7 +37,7 @@ import { reportBody } from "#report/render.ts";
 import { inWindow, REPORT_HOUR, scheduleSlot, type WeekWindow, weekWindow } from "#report/week.ts";
 import { api, issueComments } from "#shared/github.ts";
 import { closingIssues } from "#shared/closing-pr.ts";
-import { fail, positiveInt, required, safeSh, sh } from "#shared/common.ts";
+import { fail, required, safeSh, sh } from "#shared/common.ts";
 import { factoryRuns, type FactoryRun } from "#shared/runs.ts";
 import { budapestHour } from "#review/window.ts";
 
@@ -294,7 +294,8 @@ const main = (): void => {
         runs.filter((run) => inWindow(run.createdAt, week)).flatMap((run) => run.jobs),
         now,
       ),
-      limit: positiveInt(process.env["FACTORY_MONTHLY_MINUTES"], DEFAULT_MONTHLY_MINUTES),
+      // `off` (a public repository) reads as 0: no budget warning.
+      limit: budgetLimit(process.env["FACTORY_MONTHLY_MINUTES"]) ?? 0,
     },
     retroLines: retroLines(week),
   });

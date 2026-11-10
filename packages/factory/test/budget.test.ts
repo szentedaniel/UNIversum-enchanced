@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  budgetLimit,
   budgetNotice,
   isFactoryWorkflow,
   jobMinutes,
@@ -74,5 +75,15 @@ describe("isFactoryWorkflow", () => {
     expect(isFactoryWorkflow(".github/workflows/ci.yml")).toBe(false);
     expect(isFactoryWorkflow(".github/workflows/factory.md")).toBe(false);
     expect(isFactoryWorkflow("apps/factory-implement.yml")).toBe(false);
+  });
+});
+
+describe("budgetLimit", () => {
+  it("reads a cap, falls back to the default, and turns off for a public repository", () => {
+    expect(budgetLimit("2000")).toBe(2000);
+    expect(budgetLimit(undefined)).toBe(1400);
+    expect(budgetLimit("nonsense")).toBe(1400);
+    expect(budgetLimit("off")).toBeUndefined();
+    expect(budgetLimit(" OFF ")).toBeUndefined();
   });
 });

@@ -7,6 +7,18 @@
 /** The factory's share of the plan's minutes, unless the repo overrides it. */
 export const DEFAULT_MONTHLY_MINUTES = 1400;
 
+/**
+ * The month's cap from `FACTORY_MONTHLY_MINUTES`, or `undefined` for `off`.
+ * A public repository's minutes are free, and counting them costs one API
+ * call per factory run of the month on every dispatch: enough to exhaust the
+ * token's hourly rate limit.
+ */
+export const budgetLimit = (raw: string | undefined): number | undefined => {
+  if (raw?.trim().toLowerCase() === "off") return undefined;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_MONTHLY_MINUTES;
+};
+
 /** The timing fields of a jobs-API entry. */
 export interface JobTiming {
   startedAt: string | null;
