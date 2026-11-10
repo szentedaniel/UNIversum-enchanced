@@ -137,7 +137,7 @@ describe("splitCandidates", () => {
 });
 
 describe("intakeAllowed", () => {
-  it("lets the night cron run inside the Budapest night window", () => {
+  it("lets a scheduled night run inside the Budapest night window", () => {
     // 01:15 UTC is 02:15 CET.
     expect(intakeAllowed({ eventName: "schedule", at: new Date("2026-01-15T01:15:00Z") })).toBe(
       true,
@@ -145,7 +145,7 @@ describe("intakeAllowed", () => {
   });
 
   it("skips a scheduled run that starts after the window closed", () => {
-    // 06:30 UTC is 07:30 CET: a delayed cron must not spend daytime Pro usage.
+    // 06:30 UTC is 07:30 CET: a delayed start must not spend daytime Pro usage.
     expect(intakeAllowed({ eventName: "schedule", at: new Date("2026-01-15T06:30:00Z") })).toBe(
       false,
     );

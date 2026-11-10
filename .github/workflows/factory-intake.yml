@@ -25,14 +25,6 @@ on:
         description: Print the decisions and the writes without performing them
         type: boolean
         default: false
-  schedule:
-    # 01:15 UTC is 02:15 CET or 03:15 CEST: inside the 01:00–07:00 Budapest
-    # window in both halves of the year. The scripts re-check the window, so a
-    # delayed start does not spend daytime Pro usage.
-    # Off the busy top of the hour, plus a backup slot: GitHub delays or drops
-    # scheduled runs, and a second run finds nothing left to triage.
-    - cron: "7 0 * * *"
-    - cron: "47 2 * * *"
 
 # The job's own token stays read-only; every write goes through AGENT_PAT, so
 # the labels and the new issues can trigger the dispatcher.

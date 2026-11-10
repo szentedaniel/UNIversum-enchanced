@@ -1,19 +1,13 @@
-# The factory's weekly health report: every Monday at 06:00 Europe/Budapest,
+# The factory's weekly health report: every Monday at 06:09 Europe/Budapest,
 # open the week's `factory:report` issue with the numbers, the budget warning
 # and the owner's queue, and close last week's. `packages/factory/src/report/`
 # holds the numbers and the body; this file only starts the script.
 #
-# GitHub's cron is UTC, so both hours that land at 06:xx Budapest are
-# scheduled — 04:09 UTC in summer (CEST), 05:09 UTC in winter (CET), off the
-# busy top of the hour — and the script skips a run before 06:00 Budapest.
-# GitHub often starts scheduled runs late; a late or second run edits the
+# The nightly tick dispatches it; a repeat dispatch in the same week edits the
 # week's issue. A manual dispatch always runs.
 name: Factory Report
 
 on:
-  schedule:
-    - cron: "9 4 * * 1"
-    - cron: "9 5 * * 1"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -29,8 +23,8 @@ permissions:
   pull-requests: read
   actions: read
 
-# Two cron slots on a Monday must not both post; the second waits and then
-# sees the first's issue.
+# A tick's dispatch and a manual one must not both post; the second waits and
+# then sees the first's issue.
 concurrency:
   group: factory-report
   cancel-in-progress: false
@@ -42,7 +36,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      # The script skips a scheduled run that is not the 06:00 Budapest one.
+      # The script's 06:00 Budapest gate only applies to a `schedule` event; the
+      # tick dispatches with `workflow_dispatch`, which always runs.
       EVENT_NAME: ${{ github.event_name }}
       DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
       FACTORY_MONTHLY_MINUTES: ${{ vars.FACTORY_MONTHLY_MINUTES }}

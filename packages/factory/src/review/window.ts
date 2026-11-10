@@ -51,7 +51,7 @@ export type GateDecision =
 /**
  * Whether this run may review now: always inside the night window, and in
  * the day only while fewer than `dayQuota` daytime reviews already ran. A
- * queued run leaves `agent:review` in place for the night cron.
+ * queued run leaves `agent:review` in place for the nightly queue dispatch.
  */
 export const reviewDecision = ({
   at,

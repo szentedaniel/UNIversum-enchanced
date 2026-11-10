@@ -6,9 +6,8 @@
  * written before last week's is closed: the dispatcher comments its budget
  * notice on the newest open report issue. `DRY_RUN=1` prints the body.
  *
- * A scheduled run only acts at 06:00 Budapest; the workflow schedules both
- * UTC hours that land there, one per side of the DST switch. `workflow_dispatch`
- * always runs.
+ * A `schedule` event only acts from 06:00 Budapest on; the tick dispatches
+ * with `workflow_dispatch`, which always runs.
  *
  * Env: GH_REPO, EVENT_NAME, FACTORY_MONTHLY_MINUTES, DRY_RUN.
  */

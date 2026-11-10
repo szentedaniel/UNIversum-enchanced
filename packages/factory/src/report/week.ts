@@ -37,10 +37,9 @@ export const weekWindow = (now: Date): WeekWindow => {
 };
 
 /**
- * Whether a scheduled run may post: from 06:00 Budapest on. GitHub's cron is
- * UTC, so the workflow schedules a slot an hour apart on Monday; the early one
- * is 05:xx in winter and skips. GitHub often starts a scheduled run hours
- * late, so a late slot posts too; a second run that day edits the same issue.
+ * Whether a `schedule` event may post: from 06:00 Budapest on. The tick
+ * dispatches with `workflow_dispatch`, which always runs; the guard stays for
+ * a scheduled trigger that would land before the slot.
  */
 export const scheduleSlot = (at: Date): boolean => budapestHour(at) >= REPORT_HOUR;
 

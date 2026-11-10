@@ -4,7 +4,7 @@
 #
 # Dependabot labels its own pull requests `agent:review`. A run Dependabot
 # triggers gets no Actions secrets, so factory-review.yml skips that label
-# event and its night cron dispatches the review instead (as the owner, with
+# event and the nightly tick dispatches the review instead (as the owner, with
 # secrets). Then the normal path: CI, merge gate, and the fix loop when red.
 version: 2
 updates:

@@ -45,7 +45,7 @@ jobs:
   merge:
     # Only a CI success can merge, a failed run is the fix loop's; a push to
     # main runs CI too but has no pull request. A review run dispatched by the
-    # night cron is a workflow_dispatch, so it is let in and the resolve step
+    # nightly tick is a workflow_dispatch, so it is let in and the resolve step
     # reads the number from its run-name.
     if: |
       github.event_name == 'workflow_dispatch' ||
@@ -71,7 +71,7 @@ jobs:
             pr=$(jq -r '.workflow_run.pull_requests[0].number // empty' "$GITHUB_EVENT_PATH")
           fi
           if [ -z "$pr" ]; then
-            # `/night queue` carries no number: the cron's own run has nothing
+            # `/night queue` carries no number: the queue dispatch has nothing
             # to merge, the review runs it dispatched do.
             pr=$(jq -r '.workflow_run.display_title // ""' "$GITHUB_EVENT_PATH" \
               | grep -oE '#[0-9]+' | head -n 1 | tr -d '#' || true)

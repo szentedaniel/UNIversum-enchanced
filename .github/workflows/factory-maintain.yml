@@ -10,20 +10,12 @@
 #    `ready-for-human` issue.
 #
 # `workflow_dispatch` with dry_run prints what each step would open and writes
-# nothing. The gate code and the scripts always run main's copy.
+# nothing. The scripts always run main's copy.
 name: Factory Maintain
 
-run-name: Factory maintain ${{ inputs.dry_run && '(dry run)' || (github.event_name == 'schedule' && '(scheduled)' || '(manual)') }}
+run-name: Factory maintain ${{ inputs.dry_run && '(dry run)' || '(weekly)' }}
 
 on:
-  schedule:
-    # Sunday 02:19 UTC is 03:19 or 04:19 in Budapest: inside the 01:00–07:00
-    # night window all year, so the Claude run spends no daytime quota.
-    # GitHub delays or drops scheduled runs at busy times (the top of the
-    # hour most of all), so the pass has an off-peak slot and a backup slot;
-    # the `weekly` job lets only the first scheduled run of the week through.
-    - cron: "19 2 * * 0"
-    - cron: "49 4 * * 0"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -42,40 +34,9 @@ on:
 # The jobs' own token stays read-only; every write goes through AGENT_PAT.
 permissions:
   contents: read
-  actions: read
 
 jobs:
-  # A manual run always proceeds; a scheduled one only when no scheduled run
-  # of this week already succeeded (the backup slot after a run that landed).
-  weekly:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      proceed: ${{ steps.check.outputs.proceed }}
-    steps:
-      - id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          SCHEDULED: ${{ github.event_name == 'schedule' }}
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          if [ "$SCHEDULED" != "true" ]; then echo "proceed=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          since=$(date -u -d '3 days ago' +%Y-%m-%dT%H:%M:%SZ)
-          done=$(gh run list --workflow factory-maintain.yml --status success --created ">=$since" \
-            --json databaseId,displayTitle \
-            --jq "[.[] | select(.databaseId != $RUN_ID and .displayTitle == \"Factory maintain (scheduled)\")] | length")
-          if [ "$done" -gt 0 ]; then
-            echo "::notice::This week's scheduled pass already ran; the backup slot has nothing to do."
-            echo "proceed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "proceed=true" >> "$GITHUB_OUTPUT"
-          fi
-
   architecture:
-    needs: weekly
-    if: needs.weekly.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -132,8 +93,6 @@ jobs:
         run: node packages/factory/src/maintain/run-architecture.ts
 
   flaky-tests:
-    needs: weekly
-    if: needs.weekly.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -154,8 +113,6 @@ jobs:
         run: node packages/factory/src/maintain/run-flaky-tests.ts
 
   handoff-hygiene:
-    needs: weekly
-    if: needs.weekly.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
