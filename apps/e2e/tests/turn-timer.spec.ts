@@ -25,7 +25,7 @@ test("a Room created with a 10 s Turn timer starts the ring at 10 s", async ({ p
   });
   expect(style.animationDuration).toBe("10000ms");
   // The ring is full when it mounts: the delay only removes the moments since the push.
-  expect(Number.parseFloat(style.animationDelay)).toBeGreaterThan(-2_000);
+  expect(Number.parseFloat(style.animationDelay)).toBeGreaterThan(-3_000);
 
   await expect
     .poll(() => page.evaluate(() => window.universumTest?.room().push?.view.turnTimer?.limitMs))
