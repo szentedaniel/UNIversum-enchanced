@@ -1,10 +1,17 @@
 /**
  * The factory's nightly and weekly schedule, in Budapest wall time so a DST
- * switch needs no second slot. Pure: the tick passes its clock and the newest
- * scheduled run it read for each workflow in.
+ * switch needs no second slot. Pure: the tick passes its clock and a lookup of
+ * the newest run it read for each workflow in.
  */
 import { NIGHT_END_HOUR } from "#review/window.ts";
-import { budapestAt, budapestDay, mondayIndex, shiftDay, type Weekday } from "#shared/budapest.ts";
+import {
+  budapestAt,
+  budapestDay,
+  mondayIndex,
+  shiftDay,
+  WEEKDAYS,
+  type Weekday,
+} from "#shared/budapest.ts";
 
 /** A Budapest wall-clock time, parsed once in the schedule rather than per call. */
 export interface Clock {
@@ -29,8 +36,6 @@ export interface Job {
   readonly days: readonly Weekday[];
 }
 
-const EVERY_DAY: readonly Weekday[] = [0, 1, 2, 3, 4, 5, 6];
-
 /** The night window's end is the Claude jobs' latest start. */
 const NIGHT_END: Clock = { hour: NIGHT_END_HOUR, minute: 0 };
 
@@ -38,8 +43,9 @@ const NIGHT_END: Clock = { hour: NIGHT_END_HOUR, minute: 0 };
 const DAY_END: Clock = { hour: 23, minute: 59 };
 
 /**
- * The tick's whole schedule. The latest starts keep the Claude jobs inside the
- * 01:00–07:00 night window; the report may run all Monday.
+ * The tick's whole schedule, in chronological order. The latest starts keep
+ * the Claude jobs inside the 01:00–07:00 night window; the report may run all
+ * Monday.
  */
 export const JOBS: readonly Job[] = [
   {
@@ -47,21 +53,14 @@ export const JOBS: readonly Job[] = [
     workflow: "factory-intake.yml",
     due: { hour: 1, minute: 7 },
     latestStart: NIGHT_END,
-    days: EVERY_DAY,
+    days: WEEKDAYS,
   },
   {
     name: "review",
     workflow: "factory-review.yml",
     due: { hour: 2, minute: 23 },
     latestStart: NIGHT_END,
-    days: EVERY_DAY,
-  },
-  {
-    name: "retro",
-    workflow: "factory-retro.yml",
-    due: { hour: 4, minute: 41 },
-    latestStart: NIGHT_END,
-    days: EVERY_DAY,
+    days: WEEKDAYS,
   },
   {
     name: "maintain",
@@ -69,6 +68,13 @@ export const JOBS: readonly Job[] = [
     due: { hour: 3, minute: 19 },
     latestStart: NIGHT_END,
     days: [6],
+  },
+  {
+    name: "retro",
+    workflow: "factory-retro.yml",
+    due: { hour: 4, minute: 41 },
+    latestStart: NIGHT_END,
+    days: WEEKDAYS,
   },
   {
     name: "report",
@@ -81,11 +87,16 @@ export const JOBS: readonly Job[] = [
 
 const DAYS_IN_WEEK = 7;
 
+interface Occurrence {
+  readonly at: Date;
+  readonly day: string;
+}
+
 /**
  * The most recent due occurrence at or before `now`, with the Budapest day it
  * falls on. Every job is due at least once a week, so the seven-day walk finds one.
  */
-const occurrenceOf = (job: Job, now: Date): { at: Date; day: string } | undefined => {
+const occurrenceOf = (job: Job, now: Date): Occurrence | undefined => {
   const today = budapestDay(now);
   for (let back = 0; back < DAYS_IN_WEEK; back++) {
     const day = shiftDay(today, -back);
@@ -97,28 +108,21 @@ const occurrenceOf = (job: Job, now: Date): { at: Date; day: string } | undefine
 };
 
 /**
- * The instant of `job`'s most recent due time: what the tick reads the
- * workflow's runs since. Throws only if a job's schedule has no weekday.
- */
-export const lastDueAt = (job: Job, now: Date): Date => {
-  const occurrence = occurrenceOf(job, now);
-  if (occurrence === undefined) throw new Error(`${job.name} has no weekday in its schedule`);
-  return occurrence.at;
-};
-
-/**
  * The jobs to dispatch now: the due time has passed, its latest start has not,
- * and no scheduled run was created at or after it. The caller counts only the
- * tick's own dispatch, so a manual, dry or per-workflow run never suppresses
- * the scheduled one; a failed dispatch still counts, so it is not retried in a
- * loop.
+ * and no run was created at or after it. Any run counts, whatever its event or
+ * conclusion, so a failed job is not retried in a loop. `lastRunAt` gets the
+ * workflow and its due instant, so the caller reads its runs since exactly
+ * that time.
  */
-export const dueJobs = (now: Date, lastRunAt: (workflow: string) => Date | undefined): Job[] =>
+export const dueJobs = (
+  now: Date,
+  lastRunAt: (workflow: string, dueAt: Date) => Date | undefined,
+): Job[] =>
   JOBS.filter((job) => {
     const occurrence = occurrenceOf(job, now);
     if (occurrence === undefined) return false;
     const deadline = budapestAt(occurrence.day, job.latestStart.hour, job.latestStart.minute);
     if (now.getTime() >= deadline.getTime()) return false;
-    const lastRun = lastRunAt(job.workflow);
+    const lastRun = lastRunAt(job.workflow, occurrence.at);
     return lastRun === undefined || lastRun.getTime() < occurrence.at.getTime();
   });

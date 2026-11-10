@@ -1,62 +1,47 @@
 /**
  * The factory's tick: dispatches every nightly or weekly job that is due and
- * has no tick dispatch since it fell due, so a late or dropped GitHub schedule
- * is caught up by the next one. `due.ts` holds the schedule and the rule; this
+ * has not run since it fell due, so a late or dropped GitHub schedule is
+ * caught up by the next one. `due.ts` holds the schedule and the rule; this
  * script only reads the runs and starts the workflows.
  *
- * Only the tick's own dispatch counts. It dispatches with `scheduled=true` and
- * every workflow puts the `(factory tick)` marker in its run name, which the
- * runs API exposes as `display_title`; a manual, dry or per-pull-request run
- * therefore never suppresses the scheduled one.
+ * Any run of the workflow created at or after the due time counts, whatever
+ * its event or conclusion: a manual or per-pull-request run after the due time
+ * already did the work, and a failed run is not retried in a loop.
  *
  * A failed run read or dispatch is collected and the other due jobs still go
- * out; the tick then fails so the error is visible. A dispatch that did land
- * counts even if its job fails, so a broken job is not retried in a loop.
+ * out; the tick then fails so the error is visible.
  *
  * Env: GH_REPO, GH_TOKEN (the PAT, in the workflow), DRY_RUN.
  */
-import { dueJobs, JOBS, lastDueAt } from "#schedule/due.ts";
+import { dueJobs, JOBS } from "#schedule/due.ts";
 import { fail, required, sh } from "#shared/common.ts";
 
-/** The run-name suffix every tick dispatch carries; see the five workflows. */
-export const TICK_MARKER = "(factory tick)";
+/** The job names keyed by workflow file, for the tick's error lines. */
+const JOB_NAMES = new Map(JOBS.map((job) => [job.workflow, job.name]));
 
-/** The REST run fields the tick reads. */
-interface ApiRun {
-  readonly created_at?: string;
-  readonly display_title?: string;
-}
-
-const messageOf = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
-
-/** The newest tick dispatch in `runs`, if the page holds one with a readable time. */
-export const newestTickRun = (runs: readonly ApiRun[]): Date | undefined => {
-  const times = runs
-    .filter((run) => run.display_title?.includes(TICK_MARKER) === true)
-    .map((run) => Date.parse(run.created_at ?? ""))
-    .filter((time) => Number.isFinite(time));
-  return times.length === 0 ? undefined : new Date(Math.max(...times));
+/** The time in a run's `created_at` string, if GitHub returned a readable one. */
+export const runCreatedAt = (created: string): Date | undefined => {
+  const trimmed = created.trim();
+  if (trimmed === "") return undefined;
+  const at = new Date(trimmed);
+  return Number.isNaN(at.getTime()) ? undefined : at;
 };
 
-/** The newest tick dispatch of `workflow` created at or after `since`. */
-const tickRunSince = (repo: string, workflow: string, since: Date): Date | undefined => {
-  const runs: unknown = JSON.parse(
+/** The newest run of `workflow` created at or after `since`, if GitHub holds one. */
+const newestRun = (repo: string, workflow: string, since: Date): Date | undefined =>
+  runCreatedAt(
     sh(
-      `gh api "repos/${repo}/actions/workflows/${workflow}/runs?event=workflow_dispatch&created=${encodeURIComponent(
+      `gh api "repos/${repo}/actions/workflows/${workflow}/runs?created=${encodeURIComponent(
         `>=${since.toISOString()}`,
-      )}&per_page=100" --jq '.workflow_runs'`,
+      )}&per_page=1" --jq '.workflow_runs[0].created_at // empty'`,
     ),
   );
-  if (!Array.isArray(runs)) throw new Error(`The runs page for ${workflow} is not an array.`);
-  return newestTickRun(runs as readonly ApiRun[]);
-};
 
 export interface TickDeps {
   readonly now: Date;
   readonly dryRun: boolean;
-  /** The newest run that counts as the job's scheduled run; only the tick's own dispatch does. */
-  readonly lastTickRun: (workflow: string, since: Date) => Date | undefined;
+  /** The newest run of `workflow` created at or after `dueAt`. */
+  readonly lastRun: (workflow: string, dueAt: Date) => Date | undefined;
   readonly dispatch: (workflow: string) => void;
   readonly log: (line: string) => void;
 }
@@ -69,30 +54,31 @@ export interface TickOutcome {
   readonly errors: readonly string[];
 }
 
-/** One tick: read every job's runs, dispatch the due ones, and keep a failed call from blocking the rest. */
-export const runTick = ({ now, dryRun, lastTickRun, dispatch, log }: TickDeps): TickOutcome => {
+/** One tick: read the due jobs' runs, dispatch them, and keep a failed call from blocking the rest. */
+export const runTick = ({ now, dryRun, lastRun, dispatch, log }: TickDeps): TickOutcome => {
   const dueAt = new Map<string, Date>();
-  const lastRunAt = new Map<string, Date | undefined>();
+  const unreadable = new Set<string>();
   const errors: string[] = [];
 
-  for (const job of JOBS) {
+  const due = dueJobs(now, (workflow, occurrence) => {
+    dueAt.set(workflow, occurrence);
     try {
-      const occurrence = lastDueAt(job, now);
-      dueAt.set(job.workflow, occurrence);
-      lastRunAt.set(job.workflow, lastTickRun(job.workflow, occurrence));
+      return lastRun(workflow, occurrence);
     } catch (error) {
-      errors.push(`${job.name}: could not read its runs: ${messageOf(error)}`);
+      // Without its runs the tick must not dispatch and risk a second run.
+      unreadable.add(workflow);
+      errors.push(
+        `${JOB_NAMES.get(workflow) ?? workflow}: could not read its runs: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return undefined;
     }
-  }
+  }).filter((job) => !unreadable.has(job.workflow));
 
-  const due: string[] = [];
   const dispatched: string[] = [];
-  for (const job of dueJobs(now, (workflow) => lastRunAt.get(workflow))) {
+  for (const job of due) {
     const occurrence = dueAt.get(job.workflow);
-    // A failed read leaves no entry: without its runs the tick must not
-    // dispatch and risk a second run.
-    if (occurrence === undefined || !lastRunAt.has(job.workflow)) continue;
-    due.push(job.workflow);
+    // `dueJobs` only returns a job after its callback recorded the occurrence.
+    if (occurrence === undefined) continue;
     if (dryRun) {
       log(`Dry run: would dispatch ${job.workflow}; due ${occurrence.toISOString()}.`);
       continue;
@@ -102,11 +88,13 @@ export const runTick = ({ now, dryRun, lastTickRun, dispatch, log }: TickDeps): 
       dispatched.push(job.workflow);
       log(`Dispatched ${job.workflow}; due ${occurrence.toISOString()}.`);
     } catch (error) {
-      errors.push(`${job.name}: could not dispatch: ${messageOf(error)}`);
+      errors.push(
+        `${job.name}: could not dispatch: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
-  return { due, dispatched, errors };
+  return { due: due.map((job) => job.workflow), dispatched, errors };
 };
 
 const main = (): void => {
@@ -118,9 +106,9 @@ const main = (): void => {
   const outcome = runTick({
     now,
     dryRun,
-    lastTickRun: (workflow, since) => tickRunSince(repo, workflow, since),
+    lastRun: (workflow, since) => newestRun(repo, workflow, since),
     dispatch: (workflow) => {
-      sh(`gh workflow run ${workflow} --ref main -f scheduled=true`);
+      sh(`gh workflow run ${workflow} --ref main`);
     },
     log: console.log,
   });
@@ -139,6 +127,6 @@ if (import.meta.main) {
   try {
     main();
   } catch (error) {
-    fail(messageOf(error));
+    fail(error instanceof Error ? error.message : String(error));
   }
 }

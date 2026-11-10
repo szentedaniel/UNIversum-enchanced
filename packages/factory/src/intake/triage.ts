@@ -6,7 +6,7 @@
  *
  * Env: GH_REPO, CLAUDE_CODE_OAUTH_TOKEN (and GH_TOKEN for `gh`), OUTPUT_DIR,
  * FACTORY_INTAKE_MAX, ISSUE_NUMBER (optional, a dispatch's issue), DRY_RUN,
- * SCHEDULED (a tick dispatch must be inside the night window).
+ * GITHUB_EVENT_NAME (a scheduled run must be inside the night window).
  */
 import { join } from "node:path";
 import * as sandcastle from "@ai-hero/sandcastle";
@@ -73,8 +73,8 @@ const triageOne = async (issue: IntakeIssue, dryRun: boolean): Promise<boolean> 
 
 const main = async (): Promise<void> => {
   const repo = required("GH_REPO");
-  if (!intakeAllowed({ scheduled: process.env["SCHEDULED"] === "true", at: new Date() })) {
-    console.log("Outside the Budapest night window: a tick-dispatched intake run does nothing.");
+  if (!intakeAllowed({ eventName: process.env["GITHUB_EVENT_NAME"] ?? "", at: new Date() })) {
+    console.log("Outside the Budapest night window: a scheduled intake run does nothing.");
     return;
   }
 

@@ -1,37 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { newestTickRun, runTick } from "#schedule/tick.ts";
+import { runCreatedAt, runTick } from "#schedule/tick.ts";
 
 const at = (iso: string): Date => new Date(iso);
 
-describe("newestTickRun", () => {
-  it("counts the tick's own dispatch, not a manual, dry or per-pull-request run", () => {
-    expect(
-      newestTickRun([
-        { created_at: "2026-11-10T02:24:00Z", display_title: "Factory review (factory tick)" },
-        { created_at: "2026-11-10T02:30:00Z", display_title: "Factory review #97" },
-        { created_at: "2026-11-10T02:40:00Z", display_title: "Factory review night queue" },
-        { created_at: "2026-11-10T02:50:00Z", display_title: "Factory review (manual)" },
-      ]),
-    ).toEqual(at("2026-11-10T02:24:00Z"));
+describe("runCreatedAt", () => {
+  it("reads the runs API's created_at time", () => {
+    expect(runCreatedAt("2026-11-10T02:24:00Z")).toEqual(at("2026-11-10T02:24:00Z"));
   });
 
-  it("takes the newest tick dispatch and ignores an unreadable time", () => {
-    expect(
-      newestTickRun([
-        { created_at: "2026-11-10T02:24:00Z", display_title: "Factory review (factory tick)" },
-        { created_at: "not a time", display_title: "Factory review (factory tick)" },
-        { created_at: "2026-11-10T02:34:00Z", display_title: "Factory review (factory tick)" },
-      ]),
-    ).toEqual(at("2026-11-10T02:34:00Z"));
-  });
-
-  it("finds no tick dispatch in a page of manual runs", () => {
-    expect(
-      newestTickRun([
-        { created_at: "2026-11-10T02:24:00Z", display_title: "Factory intake #93" },
-        { created_at: "2026-11-10T02:34:00Z", display_title: "Factory intake manual run" },
-      ]),
-    ).toBeUndefined();
+  it("treats an empty or unreadable time as no run", () => {
+    expect(runCreatedAt("")).toBeUndefined();
+    expect(runCreatedAt("not a time")).toBeUndefined();
   });
 });
 
@@ -41,7 +20,7 @@ describe("runTick", () => {
     const outcome = runTick({
       now: at("2026-11-10T04:00:00Z"), // Tuesday 05:00 CET: intake, review and retro are due.
       dryRun: false,
-      lastTickRun: (workflow) => {
+      lastRun: (workflow) => {
         if (workflow === "factory-retro.yml") throw new Error("the runs API is down");
         return undefined;
       },
@@ -65,7 +44,7 @@ describe("runTick", () => {
     const outcome = runTick({
       now: at("2026-11-10T04:00:00Z"),
       dryRun: true,
-      lastTickRun: () => undefined,
+      lastRun: () => undefined,
       dispatch: () => {
         throw new Error("a dry run must not dispatch");
       },
@@ -77,13 +56,13 @@ describe("runTick", () => {
     expect(logs).toHaveLength(3);
   });
 
-  it("leaves a job alone when the tick already dispatched it since its due time", () => {
+  it("leaves a job alone when any run exists at or after its due time", () => {
     const dispatched: string[] = [];
     const outcome = runTick({
       now: at("2026-11-10T04:00:00Z"),
       dryRun: false,
-      lastTickRun: (workflow) =>
-        workflow === "factory-intake.yml" ? at("2026-11-10T00:08:00Z") : undefined,
+      lastRun: (workflow) =>
+        workflow === "factory-intake.yml" ? at("2026-11-10T00:07:00Z") : undefined,
       dispatch: (workflow) => dispatched.push(workflow),
       log: () => undefined,
     });

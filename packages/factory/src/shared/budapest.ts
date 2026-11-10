@@ -8,10 +8,11 @@ export const TIME_ZONE = "Europe/Budapest";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** A weekday, Monday 0 … Sunday 6. */
-export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+/** The week's days, Monday 0 … Sunday 6. */
+export const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
 
-const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
+/** A weekday, Monday 0 … Sunday 6. */
+export type Weekday = (typeof WEEKDAYS)[number];
 
 const PARTS = new Intl.DateTimeFormat("en-GB", {
   timeZone: TIME_ZONE,

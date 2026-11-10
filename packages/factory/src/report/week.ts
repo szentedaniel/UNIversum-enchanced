@@ -1,8 +1,12 @@
 /**
- * The report's calendar: the Budapest week that just ended. Pure — the report
- * script passes the run's clock in.
+ * The report's calendar: the Budapest week that just ended, and the Monday
+ * 06:00 slot the report is due at. Pure — the report script passes the run's
+ * clock in.
  */
-import { budapestAt, budapestDay, mondayIndex, shiftDay } from "#shared/budapest.ts";
+import { budapestAt, budapestDay, budapestHour, mondayIndex, shiftDay } from "#shared/budapest.ts";
+
+/** The hour the weekly report runs, Budapest time. */
+export const REPORT_HOUR = 6;
 
 export interface WeekWindow {
   /** `YYYY-MM-DD` of the Monday that started the reported week. */
@@ -31,6 +35,13 @@ export const weekWindow = (now: Date): WeekWindow => {
     end: budapestAt(endOf, 0),
   };
 };
+
+/**
+ * Whether a `schedule` event may post: from 06:00 Budapest on. The tick
+ * dispatches with `workflow_dispatch`, which always runs; the guard stays for
+ * a scheduled trigger that would land before the slot.
+ */
+export const scheduleSlot = (at: Date): boolean => budapestHour(at) >= REPORT_HOUR;
 
 /** Whether `at` falls in `[start, end)`; an unreadable or missing time does not. */
 export const inWindow = (at: string | null | undefined, week: WeekWindow): boolean => {

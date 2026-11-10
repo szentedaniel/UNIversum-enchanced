@@ -9,15 +9,9 @@
 # branch runs CI and the log's push lands on main.
 name: Factory Retro
 
-run-name: Factory retro ${{ inputs.scheduled && '(factory tick)' || (inputs.dry_run && '(dry run)' || '(manual)') }}
-
 on:
   workflow_dispatch:
     inputs:
-      scheduled:
-        description: "Set by the factory tick: this run is the scheduled occurrence"
-        type: boolean
-        default: false
       dry_run:
         description: Print the retro's answer and the writes it would make, without writing
         type: boolean

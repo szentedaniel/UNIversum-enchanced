@@ -31,23 +31,22 @@ runs every ten minutes, off the top of the hour, and dispatches every nightly or
 and has not run since it fell due (`packages/factory/src/schedule/due.ts`). The schedule is Budapest
 wall time, so a DST switch needs no second slot:
 
-| Job          | Workflow                                            | Due          | Latest start |
-| ------------ | --------------------------------------------------- | ------------ | ------------ |
-| intake       | `factory-intake.yml`                                | daily 01:07  | 07:00        |
-| review queue | `factory-review.yml` (empty `pr`: drains the queue) | daily 02:23  | 07:00        |
-| retro        | `factory-retro.yml`                                 | daily 04:41  | 07:00        |
-| maintain     | `factory-maintain.yml`                              | Sunday 03:19 | Sunday 07:00 |
-| report       | `factory-report.yml`                                | Monday 06:09 | Monday 23:59 |
+| Job          | Workflow                                           | Due          | Latest start |
+| ------------ | -------------------------------------------------- | ------------ | ------------ |
+| intake       | `factory-intake.yml`                               | daily 01:07  | 07:00        |
+| review queue | `factory-review.yml` (no inputs: drains the queue) | daily 02:23  | 07:00        |
+| retro        | `factory-retro.yml`                                | daily 04:41  | 07:00        |
+| maintain     | `factory-maintain.yml`                             | Sunday 03:19 | Sunday 07:00 |
+| report       | `factory-report.yml`                               | Monday 06:09 | Monday 23:59 |
 
 The latest start keeps the Claude jobs inside the 01:00–07:00 night window: a tick at or after it does
-not start a missed job; the next day's due time does, so a missed night waits for the next one. The
-tick dispatches with `scheduled=true` and each workflow's run name carries `(factory tick)`; only those
-runs mark a job as done, so a manual, dry or per-pull-request run never suppresses the scheduled one,
-while a failed tick dispatch still counts and is not retried in a loop (failures stay visible in
-Actions and the weekly report). A second run must still be harmless: intake and the review queue find
-nothing left, the dispatcher skips issues a run holds, the retro stops at the day's log entry, and the
-report edits the week's issue. A run can always be started by hand (`gh workflow run <file>`), and
-`factory-dispatch.yml` keeps its own hourly cron as a backstop for a dropped event.
+not start a missed job; the next day's due time does, so a missed night waits for the next one. Any run
+created at or after the due time counts, whatever its event or conclusion, so a failed job is not
+retried in a loop (failures stay visible in Actions and the weekly report). A second run must still be
+harmless: intake and the review queue find nothing left, the dispatcher skips issues a run holds, the
+retro stops at the day's log entry, and the report edits the week's issue. A run can always be started
+by hand (`gh workflow run <file>`), and `factory-dispatch.yml` keeps its own hourly cron as a backstop
+for a dropped event.
 
 ## Labels
 
@@ -93,9 +92,9 @@ gh workflow run factory-intake.yml -f issue=93                       # one issue
 gh workflow run factory-intake.yml -f dry_run=true                   # print the decisions and writes
 ```
 
-The tick only dispatches it inside the night window, and a tick-dispatched run that starts after the
-window does nothing (the script re-checks it), so a delayed start spends no daytime Pro usage. One run
-handles at most `FACTORY_INTAKE_MAX` issues per step (repository variable; default 3), oldest first.
+The tick only dispatches it before the latest start (07:00 Budapest); a tick after that does not start
+a missed night, so it waits for the next one. One run handles at most `FACTORY_INTAKE_MAX` issues per
+step (repository variable; default 3), oldest first.
 
 **Triage** classifies each issue into exactly one outcome, with one comment and a label:
 

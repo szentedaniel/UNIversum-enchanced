@@ -6,9 +6,10 @@
  * written before last week's is closed: the dispatcher comments its budget
  * notice on the newest open report issue. `DRY_RUN=1` prints the body.
  *
- * The tick dispatches it on Monday; a manual dispatch runs at any time.
+ * A `schedule` event only acts from 06:00 Budapest on; the tick dispatches
+ * with `workflow_dispatch`, which always runs.
  *
- * Env: GH_REPO, FACTORY_MONTHLY_MINUTES, DRY_RUN.
+ * Env: GH_REPO, EVENT_NAME, FACTORY_MONTHLY_MINUTES, DRY_RUN.
  */
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -32,11 +33,12 @@ import {
   type ReportPlan,
 } from "#report/issue.ts";
 import { reportBody } from "#report/render.ts";
-import { inWindow, type WeekWindow, weekWindow } from "#report/week.ts";
+import { inWindow, REPORT_HOUR, scheduleSlot, type WeekWindow, weekWindow } from "#report/week.ts";
 import { api, issueComments } from "#shared/github.ts";
 import { closingIssues } from "#shared/closing-pr.ts";
 import { fail, required, safeSh, sh } from "#shared/common.ts";
 import { factoryRuns, type FactoryRun } from "#shared/runs.ts";
+import { budapestHour } from "#shared/budapest.ts";
 
 /**
  * The workflow files whose runs are Claude Code's judgement work. Keyed by
@@ -254,6 +256,13 @@ const writeReport = (title: string, bodyText: string, plan: ReportPlan, dryRun: 
 
 const main = (): void => {
   const now = new Date();
+  if (process.env["EVENT_NAME"] === "schedule" && !scheduleSlot(now)) {
+    console.log(
+      `Skipping: the Budapest hour is ${String(budapestHour(now))}; the report runs at ${String(REPORT_HOUR)}:00.`,
+    );
+    return;
+  }
+
   const repo = required("GH_REPO");
   const week = weekWindow(now);
   const month = monthStart(now);
