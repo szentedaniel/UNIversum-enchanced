@@ -143,6 +143,7 @@ describe("restore on boot", () => {
       maxPlayers: 3,
       minuteLimit: 15,
       startingCash: 2_500_000,
+      turnLimitMs: 20_000,
     });
     // Held for their Guests, who have not taken them back yet (#35).
     expect(restored.seats.slice(0, 2)).toEqual(
@@ -151,7 +152,7 @@ describe("restore on boot", () => {
     expect(restored.seats).toHaveLength(3);
   });
 
-  it("a Lobby stored before the starting cash setting comes back with the default", async () => {
+  it("a Lobby stored before the new Room settings comes back with the defaults", async () => {
     const before = await start();
     const alice = await before.create({ maxPlayers: 2 });
     await alice.next("lobby");
@@ -174,6 +175,7 @@ describe("restore on boot", () => {
       maxPlayers: 2,
       minuteLimit: 50,
       startingCash: DEFAULT_SETTINGS.startingCash,
+      turnLimitMs: DEFAULT_SETTINGS.turnLimitMs,
     });
   });
 
@@ -220,7 +222,7 @@ describe("restore on boot", () => {
     before.store.save(
       {
         code,
-        settings: { maxPlayers: 4, minuteLimit: 50, startingCash: 2_500_000 },
+        settings: { maxPlayers: 4, minuteLimit: 50, startingCash: 2_500_000, turnLimitMs: 20_000 },
         roomName: null,
         creatorId: null,
         password: null,
@@ -236,12 +238,12 @@ describe("restore on boot", () => {
 
     expect(after.restored).toBe(1);
     const game = after.room(code)?.game;
-    // Migrated on boot: the deadline it had, no wait before acting, and the default starting cash.
+    // Migrated on boot: the deadline it had, no wait before acting, and the default settings.
     expect(game).toMatchObject({
       stateVersion: STATE_VERSION,
       turn: 2,
       actsAfter: stateV1.turnDeadline - DEADLINE_AFTER,
-      settings: { startingCash: 2_500_000 },
+      settings: { startingCash: 2_500_000, turnLimitMs: 20_000 },
     });
     expect(game?.turnDeadline).toBe(stateV1.turnDeadline);
 

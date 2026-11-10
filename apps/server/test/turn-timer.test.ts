@@ -1,3 +1,4 @@
+import { TURN_SLACK_MS } from "@universum/rules";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startTestServer, withDeadline, type TestServer } from "./helpers.ts";
 
@@ -43,6 +44,21 @@ describe("the Turn deadline", () => {
       limitMs: TURN_LIMIT_MS,
     });
     expect(message.view.endsAt).toBe(startedAt + message.view.settings.minuteLimit * MINUTE_MS);
+  });
+
+  it("the override wins over a Room's longer Turn timer", async () => {
+    const startedAt = server.scheduler.now();
+    const alice = await server.create({ maxPlayers: 2, turnLimitMs: 30_000 });
+    const bob = await server.join(alice.code);
+    alice.send({ type: "Start" });
+
+    const message = await bob.next("game");
+
+    expect(message.view.turnDeadline).toBe(startedAt + DEADLINE_AFTER);
+    expect(message.view.turnTimer).toEqual({
+      endsAt: startedAt + TURN_LIMIT_MS,
+      limitMs: TURN_LIMIT_MS,
+    });
   });
 
   it("R18/R19: an absent Player's Turn times out exactly once: the penalty, then the Turn passes", async () => {
@@ -103,5 +119,43 @@ describe("the Turn deadline", () => {
 
     expect(timedOut.events[0]).toEqual({ type: "TimedOut", player: ids[0] });
     expect(timedOut.view.turnDeadline).toBe(timedOut.view.actsAfter + DEADLINE_AFTER);
+  });
+});
+
+describe("a Room's Turn timer setting", () => {
+  let roomServer: TestServer;
+
+  beforeAll(async () => {
+    roomServer = await startTestServer();
+  });
+
+  afterAll(async () => {
+    await roomServer.stop();
+  });
+
+  it("R17/R18: a 10 s Room's deadline, ring and Timeout penalty follow the setting", async () => {
+    const startedAt = roomServer.scheduler.now();
+    const alice = await roomServer.create({ maxPlayers: 2, turnLimitMs: 10_000 });
+    const bob = await roomServer.join(alice.code);
+    alice.send({ type: "Start" });
+
+    const message = await bob.next("game");
+    const view = withDeadline(message);
+    const ids = await Promise.all(
+      [alice, bob].map(async (client) => (await client.next("welcome")).playerId),
+    );
+    expect(view.turnDeadline).toBe(startedAt + 10_000 + TURN_SLACK_MS);
+    expect(view.turnTimer).toEqual({ endsAt: startedAt + 10_000, limitMs: 10_000 });
+
+    roomServer.scheduler.advanceTo(view.turnDeadline - 1);
+    roomServer.scheduler.advanceTo(view.turnDeadline);
+    const timedOut = await bob.next("game");
+
+    expect(timedOut.events).toEqual([
+      { type: "TimedOut", player: ids[0] },
+      { type: "TimeoutPenaltyPaid", player: ids[0], amount: 250_000 },
+      { type: "TurnPassed", player: ids[1], turn: 2 },
+    ]);
+    expect(timedOut.view.turnDeadline).toBe(timedOut.view.actsAfter + 10_000 + TURN_SLACK_MS);
   });
 });
