@@ -54,6 +54,10 @@ const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> 
   // existed has none: its current decision is the Player's own, and no Deal
   // was proposed this Turn.
   4: (state) => ({ ...state, stateVersion: 5, deal: null }),
+  // Version 6 adds the per-Turn Deal guard (ticket #193). A state stored with
+  // a pending Deal has used this Turn's Deal; one stored without keeps none,
+  // as the old rules had no guard.
+  5: (state) => ({ ...state, stateVersion: 6, dealUsed: state["deal"] !== null }),
 };
 
 /**

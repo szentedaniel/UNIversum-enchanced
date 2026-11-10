@@ -217,6 +217,7 @@
   "rejection_deal_field_repeated": "Ein Feld darf in einem Deal nur einmal vorkommen.",
   "rejection_deal_empty": "Ein Deal muss mindestens ein Feld oder Geld bewegen.",
   "rejection_deal_cash_not_covered": "Das Geld keiner Seite darf für den Deal zu knapp sein.",
+  "rejection_deal_already_proposed": "Du kannst pro Zug nur einen Deal anbieten.",
   "event_fields_sold": "{name} verkauft Felder an die Bank für {amount}",
   "event_auto_sold": "Auto-Verkauf: {name} verkauft Felder an die Bank für {amount}",
   "event_went_bankrupt": "{name} ist bankrott!",

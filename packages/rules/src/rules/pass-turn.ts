@@ -41,6 +41,8 @@ export function passTurn(tx: Tx): void {
     }
   }
   tx.state.turn += 1;
+  // A new Turn may propose again; the decision `reopenProposer` reopens inside a Turn may not.
+  tx.state.dealUsed = false;
   emit(tx, { type: "TurnPassed", player: tx.state.currentPlayer, turn: tx.state.turn });
   beginTurn(tx);
 }

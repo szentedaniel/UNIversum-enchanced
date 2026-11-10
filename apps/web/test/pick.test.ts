@@ -53,6 +53,7 @@ function viewWith(phase: Phase, pickOptions: PickOption[] | null): PublicView {
     doubler: null,
     lastChanceCard: null,
     deal: null,
+    dealUsed: false,
     autoSell: null,
     pickOptions,
     standings: null,

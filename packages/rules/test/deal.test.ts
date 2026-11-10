@@ -152,6 +152,46 @@ describe("proposing a Deal", () => {
     });
   });
 
+  it("a second Deal in the same Turn is refused", () => {
+    const declined = answer(propose(twoPlayerGame()).state, "DeclineDeal");
+    expect(declined.state).toMatchObject({ currentPlayer: PROPOSER, dealUsed: true });
+    expect(publicView(declined.state).dealUsed).toBe(true);
+    expect(reject(declined.state, proposal(declined.state), PROPOSER)).toEqual({
+      code: "DEAL_ALREADY_PROPOSED",
+    });
+
+    const accepted = answer(propose(twoPlayerGame()).state, "AcceptDeal");
+    expect(
+      reject(
+        accepted.state,
+        proposal(accepted.state, {
+          give: { fields: [LONDON], cash: 0 },
+          take: { fields: [VIENNA], cash: 0 },
+        }),
+        PROPOSER,
+      ),
+    ).toEqual({ code: "DEAL_ALREADY_PROPOSED" });
+
+    const expired = timeOut(propose(twoPlayerGame()).state);
+    expect(reject(expired.state, proposal(expired.state), PROPOSER)).toEqual({
+      code: "DEAL_ALREADY_PROPOSED",
+    });
+  });
+
+  it("the next Turn may propose a Deal again", () => {
+    const declined = answer(propose(twoPlayerGame()).state, "DeclineDeal");
+    const nextTurn = timeOut(declined.state).state;
+
+    expect(nextTurn).toMatchObject({ currentPlayer: RECIPIENT, dealUsed: false });
+    expect(publicView(nextTurn).dealUsed).toBe(false);
+    const proposed = propose(nextTurn, {
+      recipient: PROPOSER,
+      give: { fields: [LONDON], cash: 0 },
+      take: { fields: [VIENNA], cash: 0 },
+    });
+    expect(proposed.state.deal).toMatchObject({ proposer: RECIPIENT, recipient: PROPOSER });
+  });
+
   it("the recipient must be another, active Player", () => {
     const state = twoPlayerGame();
 
@@ -270,6 +310,34 @@ describe("answering a Deal", () => {
       bank: 0,
       cash: { p1: 2_450_000, p2: 2_550_000 },
     });
+  });
+
+  it("acceptance refuses a Deal whose Fields changed hands meanwhile", () => {
+    const proposed = propose(twoPlayerGame());
+    const offeredGone = withField(proposed.state, VIENNA, { owner: RECIPIENT });
+
+    expect(reject(offeredGone, { type: "AcceptDeal", turn: offeredGone.turn }, RECIPIENT)).toEqual({
+      code: "DEAL_FIELD_NOT_OWNED",
+    });
+
+    const askedGone = withField(proposed.state, LONDON, { owner: PROPOSER });
+    expect(reject(askedGone, { type: "AcceptDeal", turn: askedGone.turn }, RECIPIENT)).toEqual({
+      code: "DEAL_FIELD_NOT_OWNED",
+    });
+  });
+
+  it("acceptance refuses a Deal whose cash is no longer covered", () => {
+    const proposed = propose(twoPlayerGame());
+    const poorRecipient = withPlayer(proposed.state, RECIPIENT, { cash: TAKE.cash - 1 });
+
+    expect(
+      reject(poorRecipient, { type: "AcceptDeal", turn: poorRecipient.turn }, RECIPIENT),
+    ).toEqual({ code: "DEAL_CASH_NOT_COVERED" });
+
+    const poorProposer = withPlayer(proposed.state, PROPOSER, { cash: GIVE.cash - 1 });
+    expect(
+      reject(poorProposer, { type: "AcceptDeal", turn: poorProposer.turn }, RECIPIENT),
+    ).toEqual({ code: "DEAL_CASH_NOT_COVERED" });
   });
 
   it("the proposer's Roll reopens with a fresh deadline after the answer", () => {

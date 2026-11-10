@@ -8,7 +8,7 @@
 import type { ChanceCardId, FieldId } from "#board.ts";
 
 /** The version of the state's shape (not the per-intent `version`). */
-export const STATE_VERSION = 5;
+export const STATE_VERSION = 6;
 
 /** A Player's public id: what every client sees instead of a Guest token. */
 export type PlayerId = string;
@@ -141,6 +141,11 @@ export type GameState = {
   lastChanceCard: ChanceCardId | null;
   /** The Deal waiting for its recipient's answer; `null` outside one (spec #172). */
   deal: Deal | null;
+  /**
+   * True once this Turn's Deal was proposed, so no second one starts (spec
+   * #172); reset when the Turn passes.
+   */
+  dealUsed: boolean;
   /** The PRNG state. Never sent to clients (see `publicView`). */
   rng: number[];
 };

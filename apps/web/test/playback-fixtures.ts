@@ -78,6 +78,7 @@ const BASE_VIEW: PublicView = {
   doubler: null,
   lastChanceCard: null,
   deal: null,
+  dealUsed: false,
   autoSell: null,
   pickOptions: null,
   standings: null,

@@ -60,6 +60,7 @@ export function setupGame({
     doubler: null,
     lastChanceCard: null,
     deal: null,
+    dealUsed: false,
     rng: rngFromSeed(seed),
   };
 }

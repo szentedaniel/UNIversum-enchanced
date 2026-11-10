@@ -217,6 +217,7 @@
   "rejection_deal_field_repeated": "Egy mező csak egyszer szerepelhet egy Dealben.",
   "rejection_deal_empty": "A Dealnek legalább egy mezőt vagy pénzt mozgatnia kell.",
   "rejection_deal_cash_not_covered": "Egyik fél pénze sem lehet kevesebb, mint amit a Deal kér tőle.",
+  "rejection_deal_already_proposed": "Turnenként csak egy Deal-t ajánlhatsz.",
   "event_fields_sold": "{name} mezőket adott el a banknak: {amount}",
   "event_auto_sold": "Automatikus eladás: {name} mezőket adott el a banknak: {amount}",
   "event_went_bankrupt": "{name} csődbe ment!",
