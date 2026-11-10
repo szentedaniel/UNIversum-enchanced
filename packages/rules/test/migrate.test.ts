@@ -4,6 +4,7 @@ import {
   isRejection,
   migrate,
   publicView,
+  START_CASH,
   STATE_VERSION,
   SYSTEM,
   TURN_LIMIT_MS,
@@ -11,6 +12,7 @@ import {
 } from "#index.ts";
 import stateV1 from "./fixtures/state-v1.json" with { type: "json" };
 import stateV2 from "./fixtures/state-v2.json" with { type: "json" };
+import stateV3 from "./fixtures/state-v3.json" with { type: "json" };
 import { deadlineOf, newGame, roll } from "./helpers.ts";
 
 /**
@@ -26,6 +28,7 @@ import { deadlineOf, newGame, roll } from "./helpers.ts";
 const fixtures: { version: number; state: unknown }[] = [
   { version: 1, state: stateV1 },
   { version: 2, state: stateV2 },
+  { version: 3, state: stateV3 },
 ];
 
 /** The keys of an object, and of its first array item or nested object, as paths. */
@@ -67,6 +70,12 @@ describe("state migrations", () => {
       { actor: SYSTEM, now: deadlineOf(migrated) },
     );
     expect(isRejection(timedOut)).toBe(false);
+  });
+
+  it("a state stored before the starting cash setting loads with 2,500,000 (story 14)", () => {
+    for (const { state } of fixtures.filter((f) => f.version < STATE_VERSION)) {
+      expect(migrate(state).settings.startingCash).toBe(START_CASH);
+    }
   });
 
   it("ADR-0004: a version-1 state keeps its deadline and needs no wait", () => {

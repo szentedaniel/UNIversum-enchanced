@@ -33,6 +33,21 @@ describe("game setup", () => {
     }
   });
 
+  it.each([1_500_000, 2_500_000, 4_000_000] as const)(
+    "R7: every Player starts with the Room's starting cash (%i)",
+    (startingCash) => {
+      const state = newGame({ settings: { startingCash } });
+
+      expect(state.settings.startingCash).toBe(startingCash);
+      expect(state.players.map((p) => p.cash)).toEqual([
+        startingCash,
+        startingCash,
+        startingCash,
+        startingCash,
+      ]);
+    },
+  );
+
   it("R7: the server-made Player name is kept with the Seat", () => {
     const state = newGame({ players: 2 });
 

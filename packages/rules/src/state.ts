@@ -8,7 +8,7 @@
 import type { ChanceCardId, FieldId } from "#board.ts";
 
 /** The version of the state's shape (not the per-intent `version`). */
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 /** A Player's public id: what every client sees instead of a Guest token. */
 export type PlayerId = string;
@@ -27,6 +27,8 @@ export type Settings = {
   maxPlayers: 2 | 3 | 4;
   /** Minutes. */
   minuteLimit: 15 | 30 | 50;
+  /** The cash every Player starts with (R7). */
+  startingCash: 1_500_000 | 2_500_000 | 4_000_000;
 };
 
 /** The four 32-bit words of the PRNG state (pure-rand `xoroshiro128plus`). */

@@ -71,28 +71,50 @@ describe("intentSchema", () => {
 });
 
 describe("Room options", () => {
-  it("creates a Room with 4 Players and a 50-minute Minute limit by default", () => {
-    expect(createOptionsSchema.parse({})).toEqual({ maxPlayers: 4, minuteLimit: 50 });
+  it("creates a Room with 4 Players, a 50-minute Minute limit and 2,500,000 starting cash by default", () => {
+    expect(createOptionsSchema.parse({})).toEqual({
+      maxPlayers: 4,
+      minuteLimit: 50,
+      startingCash: 2_500_000,
+    });
   });
 
   it("takes 2, 3 or 4 Players and a 15, 30 or 50-minute Minute limit", () => {
     expect(createOptionsSchema.parse({ maxPlayers: 2, minuteLimit: 15 })).toEqual({
       maxPlayers: 2,
       minuteLimit: 15,
+      startingCash: 2_500_000,
     });
   });
 
-  it.each([{ maxPlayers: 5 }, { maxPlayers: 1 }, { minuteLimit: 20 }, { maxPlayers: "4" }])(
-    "refuses create options %j",
+  it.each([{ startingCash: 1_500_000 }, { startingCash: 2_500_000 }, { startingCash: 4_000_000 }])(
+    "takes a starting cash of %j",
     (options) => {
-      expect(createOptionsSchema.safeParse(options).success).toBe(false);
+      expect(createOptionsSchema.parse(options).startingCash).toBe(options.startingCash);
     },
   );
+
+  it.each([
+    { maxPlayers: 5 },
+    { maxPlayers: 1 },
+    { minuteLimit: 20 },
+    { maxPlayers: "4" },
+    { startingCash: 3_000_000 },
+    { startingCash: "2500000" },
+  ])("refuses create options %j", (options) => {
+    expect(createOptionsSchema.safeParse(options).success).toBe(false);
+  });
 
   it("takes a raw Room name and a password (the server checks the name itself)", () => {
     expect(
       createOptionsSchema.parse({ roomName: "  Friday  ", password: "secret", maxPlayers: 2 }),
-    ).toEqual({ roomName: "  Friday  ", password: "secret", maxPlayers: 2, minuteLimit: 50 });
+    ).toEqual({
+      roomName: "  Friday  ",
+      password: "secret",
+      maxPlayers: 2,
+      minuteLimit: 50,
+      startingCash: 2_500_000,
+    });
   });
 
   it("takes a password of up to 64 bytes", () => {
