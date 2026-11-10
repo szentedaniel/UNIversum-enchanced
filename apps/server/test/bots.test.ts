@@ -1,6 +1,7 @@
 import { PLAYER_NAME_ADJECTIVES, PLAYER_NAME_NOUNS } from "@universum/protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { startTestServer, type TestClient, type TestServer } from "./helpers.ts";
+import { BOT_DELAY_MS } from "#room/game-driver.ts";
+import { startTestServer, withDeadline, type TestClient, type TestServer } from "./helpers.ts";
 
 let server: TestServer;
 
@@ -126,6 +127,50 @@ describe("Bots in the Lobby", () => {
 
     alice.send({ type: "RemoveBot", playerId: withBot.seats[1]!.playerId });
     await list.until((l) => l.get(alice.code)?.players === 1);
+  });
+
+  it("starts a game with one Guest and a Bot, and the Bot plays its Turn after the gate", async () => {
+    const alice = await server.create({ maxPlayers: 2 });
+    const aliceId = (await alice.next("welcome")).playerId;
+    await alice.next("lobby");
+    alice.send({ type: "AddBot" });
+    const lobby = await alice.until("lobby", (message) => message.seats.length === 2);
+    const bot = lobby.seats[1]!;
+
+    alice.send({ type: "Start" });
+    const started = withDeadline(await alice.next("game"));
+    // A game with a single Guest: the Bots fill the rest (spec: Bots, story 1).
+    expect(started.players.map(({ id, bot: isBot }) => ({ id, isBot }))).toEqual([
+      { id: aliceId, isBot: false },
+      { id: bot.playerId, isBot: true },
+    ]);
+
+    // The Guest's Turn: roll, and turn down the offer a landing stops at.
+    server.scheduler.advanceTo(started.actsAfter);
+    alice.send({ type: "Roll", turn: started.turn });
+    let push = await alice.next("game");
+    if (push.view.phase.kind === "offer") {
+      server.scheduler.advanceTo(push.view.actsAfter);
+      alice.send({ type: "DeclineOffer", turn: push.view.turn });
+      push = await alice.next("game");
+    }
+    const botTurn = push.view;
+    expect(botTurn.currentPlayer).toBe(bot.playerId);
+    expect(botTurn.phase.kind).toBe("awaitingRoll");
+    // Well inside the Turn timer: the Bot's pause is a second and a half.
+    expect(botTurn.turnDeadline! - botTurn.actsAfter).toBeGreaterThan(BOT_DELAY_MS);
+
+    // Nothing before the pause: the clock never moves by itself.
+    server.scheduler.advanceTo(botTurn.actsAfter + BOT_DELAY_MS - 1);
+    expect(alice.pending("game")).toEqual([]);
+
+    // At the pause the Room plays the Bot's Roll, through the rules engine.
+    server.scheduler.advanceTo(botTurn.actsAfter + BOT_DELAY_MS);
+    const botPush = await alice.next("game");
+    expect(botPush.events[0]).toMatchObject({ type: "DiceRolled", player: bot.playerId });
+    expect(botPush.events.some((event) => event.type === "TimedOut")).toBe(false);
+    expect(botPush.view.version).toBe(botTurn.version + 1);
+    expect(botPush.view.players.find((p) => p.id === bot.playerId)?.position).toBeGreaterThan(0);
   });
 
   it("refuses a RemoveBot naming no Seat", async () => {

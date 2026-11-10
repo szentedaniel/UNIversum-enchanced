@@ -1,5 +1,6 @@
 import type { GameMessage, LobbySeat, RejectionCode } from "@universum/protocol";
 import {
+  botIntent,
   isRejection,
   publicView,
   type Actor,
@@ -47,6 +48,13 @@ export type Outcome = { rejected: RejectionCode } | { committed: GameState };
 
 /** Why a state was committed: a Player intent type, a Turn timeout, or the first Start. */
 export type CommitReason = Intent["type"] | "Start";
+
+/**
+ * How long a Bot waits after its Decision gate before the Room plays its
+ * intent: about 1–2 s, so the table can follow the action, and well inside the
+ * Turn timer (spec: Bots, story 10).
+ */
+export const BOT_DELAY_MS = 1_500;
 
 export type GameDriverOptions = {
   /** The rules engine's `apply` (tests pass one that throws). */
@@ -102,6 +110,8 @@ export class GameDriver {
   readonly #clock: TurnClock;
   /** Cancels the retention deletion once the game ended (its own wake-up, not the Turn's). */
   #cancelDeletion: (() => void) | null = null;
+  /** Cancels the pending Bot action, if any: a new commit or the game's end replaces it. */
+  #cancelBot: (() => void) | null = null;
 
   constructor(options: GameDriverOptions) {
     this.#scheduler = options.scheduler;
@@ -147,7 +157,10 @@ export class GameDriver {
   /** Arms a restored game's deadline without writing or publishing anything. */
   resume(game: GameState): void {
     if (game.phase.kind === "gameOver") this.#end(game);
-    else if (this.#readState().endedAt === null) this.#clock.arm(game);
+    else if (this.#readState().endedAt === null) {
+      this.#clock.arm(game);
+      this.#scheduleBot(game);
+    }
   }
 
   /**
@@ -194,11 +207,50 @@ export class GameDriver {
     this.#reporter.report(error, { roomCode: this.#roomCode, ...context });
   }
 
-  /** Cancels the Turn clock and the retention deletion: the Room is disposing. */
+  /** Cancels the Turn clock, the Bot's wake-up and the retention deletion: the Room is disposing. */
   dispose(): void {
     this.#clock.cancel();
+    this.#cancelBot?.();
+    this.#cancelBot = null;
     this.#cancelDeletion?.();
     this.#cancelDeletion = null;
+  }
+
+  /**
+   * Arms the Bot's one wake-up for the state's open Decision (spec: Bots):
+   * about a second and a half after the Playback ends, well inside the Turn
+   * timer. A Guest's Seat has none; a new commit replaces an older one.
+   */
+  #scheduleBot(state: GameState): void {
+    this.#cancelBot?.();
+    this.#cancelBot = null;
+    if (state.phase.kind === "gameOver") return;
+    const player = state.players.find((p) => p.id === state.currentPlayer);
+    if (player?.bot !== true) return;
+    // The gate may already be open (a restore): the pause counts from now then.
+    const at = Math.max(state.actsAfter, this.now()) + BOT_DELAY_MS;
+    const version = state.version;
+    this.#cancelBot = this.#scheduler.at(at, () => this.#playBot(version));
+  }
+
+  /**
+   * The Bot's pause is over: the policy answers the open Decision and the
+   * intent goes through the rules engine as any Player's would. A stale
+   * wake-up (the version moved on) changes nothing. A policy bug shows up as a
+   * refused intent in the log; the Turn timer still moves the game along.
+   */
+  #playBot(version: number): void {
+    this.#cancelBot = null;
+    const { game, endedAt } = this.#readState();
+    if (game === null || endedAt !== null || game.version !== version) return;
+    const player = game.players.find((p) => p.id === game.currentPlayer);
+    if (player?.bot !== true) return;
+    const intent = botIntent(publicView(game, this.#timing));
+    if (intent === null) return;
+    const outcome = this.submit(game, intent, player.id);
+    if ("rejected" in outcome) {
+      this.#log.error({ code: outcome.rejected, intent: intent.type }, "Bot intent refused");
+    }
   }
 
   /** Accepts a new game state, in this order: store it with its events, publish it, arm its wake-up. */
@@ -219,7 +271,10 @@ export class GameDriver {
       now: this.now(),
     });
     if (state.phase.kind === "gameOver") this.#end(state);
-    else this.#clock.arm(state);
+    else {
+      this.#clock.arm(state);
+      this.#scheduleBot(state);
+    }
     return { committed: state };
   }
 
@@ -255,6 +310,8 @@ export class GameDriver {
     if (current !== null) return;
     const endedAt = this.now();
     this.#clock.cancel();
+    this.#cancelBot?.();
+    this.#cancelBot = null;
     try {
       this.#save(game, [], seats, endedAt);
     } catch (error) {
