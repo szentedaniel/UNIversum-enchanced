@@ -132,11 +132,12 @@ implementers (default 2) run at once. An issue whose run is already queued count
 before its `agent:in-progress` label lands.
 
 It runs when an implementation run finishes (a slot frees), on every push to `main` (a merge unblocks
-dependants) and every 6 hours as a backstop; `concurrency: factory-dispatch` makes two triggers take
+dependants) and hourly as a backstop (the repository is public, so Actions minutes are free); `concurrency: factory-dispatch` makes two triggers take
 turns. Each dispatch is `gh workflow run factory-implement.yml -f issue=<n>` with `AGENT_PAT`.
 
 Minutes come from the jobs API: every job of every `factory-*.yml` run created this calendar month
-(UTC), rounded up per job the way GitHub bills. `FACTORY_MONTHLY_MINUTES` (default 1400) caps them.
+(UTC), rounded up per job the way GitHub bills. `FACTORY_MONTHLY_MINUTES` (default 1400) caps them; the repository is public, so the repo variable is
+set to 100000 and the cap only catches a runaway.
 When they are spent the dispatcher posts one comment — deduped by a hidden marker — on the newest open
 `factory:report` issue, opening one when there is none, and dispatches nothing until the month rolls
 over. Both limits are repository variables of the same names; unset or misspelt values keep the

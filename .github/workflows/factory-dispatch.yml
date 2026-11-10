@@ -4,9 +4,9 @@
 # minutes budget. `packages/factory/src/dispatch/` holds the rules; this file
 # only starts the script.
 #
-# A 2-hourly cron would bill ~360 minutes a month for nothing, so the work
-# comes from events: a finished implementation run frees a slot, a push to
-# `main` unblocks dependants, and a 6-hourly run is the backstop.
+# The work comes from events: a finished implementation run frees a slot, and
+# a push to `main` unblocks dependants. The repository is public, so Actions
+# minutes are free and an hourly run is a cheap backstop for a dropped event.
 name: Factory Dispatch
 
 on:
@@ -25,7 +25,7 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: "13 */6 * * *"
+    - cron: "13 * * * *"
 
 # Two triggers close together must never dispatch the same issue: a queued
 # dispatch waits for the running one, which has already seen the new run.
