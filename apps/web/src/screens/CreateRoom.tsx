@@ -4,6 +4,7 @@ import {
   PASSWORD_MAX_BYTES,
   PLAYER_COUNTS,
   STARTING_CASHES,
+  TURN_LIMITS,
   utf8Length,
   type RejectionCode,
   type RoomSettings,
@@ -32,6 +33,9 @@ export function CreateRoom() {
   const [startingCash, setStartingCash] = useState<RoomSettings["startingCash"]>(
     DEFAULT_SETTINGS.startingCash,
   );
+  const [turnLimitMs, setTurnLimitMs] = useState<RoomSettings["turnLimitMs"]>(
+    DEFAULT_SETTINGS.turnLimitMs,
+  );
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<RejectionCode | null>(null);
@@ -55,6 +59,7 @@ export function CreateRoom() {
         maxPlayers,
         minuteLimit,
         startingCash,
+        turnLimitMs,
         ...(password && { password }),
       });
       await navigate(`/room/${code}`);
@@ -122,6 +127,18 @@ export function CreateRoom() {
                 </Segment>
               ))}
             </Segments>
+            <Segments legend={m.create_turn_timer()}>
+              {TURN_LIMITS.map((limitMs) => (
+                <Segment
+                  key={limitMs}
+                  name="turn-timer"
+                  checked={turnLimitMs === limitMs}
+                  onChange={() => setTurnLimitMs(limitMs)}
+                >
+                  {m.create_turn_seconds({ seconds: limitMs / 1_000 })}
+                </Segment>
+              ))}
+            </Segments>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="room-password">{m.create_password()}</Label>
               <Input
@@ -145,7 +162,7 @@ export function CreateRoom() {
   );
 }
 
-/** A row of chunky single-choice segments (Players 2/3/4, Minute limit 15/30/50). */
+/** A row of chunky single-choice segments (Players, Minute limit, starting cash, Turn timer). */
 function Segments({ legend, children }: { legend: string; children: ReactNode }) {
   return (
     <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">

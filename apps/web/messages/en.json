@@ -182,6 +182,8 @@
   "create_players": "Players",
   "create_minute_limit": "Minute limit",
   "create_starting_cash": "Starting cash",
+  "create_turn_timer": "Turn timer",
+  "create_turn_seconds": "{seconds} s",
   "create_password": "Password (optional)",
   "lobby_has_password": "Password-protected",
   "lobby_no_password": "No password",

@@ -182,6 +182,8 @@
   "create_players": "Spieler",
   "create_minute_limit": "Zeitlimit",
   "create_starting_cash": "Startkapital",
+  "create_turn_timer": "Zugzeit",
+  "create_turn_seconds": "{seconds} s",
   "create_password": "Passwort (optional)",
   "lobby_has_password": "Passwortgeschützt",
   "lobby_no_password": "Kein Passwort",

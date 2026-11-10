@@ -182,6 +182,8 @@
   "create_players": "Játékosok",
   "create_minute_limit": "Időkorlát",
   "create_starting_cash": "Kezdőtőke",
+  "create_turn_timer": "Kör időzítője",
+  "create_turn_seconds": "{seconds} mp",
   "create_password": "Jelszó (nem kötelező)",
   "lobby_has_password": "Jelszóval védett",
   "lobby_no_password": "Nincs jelszó",

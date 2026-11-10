@@ -12,7 +12,7 @@ export type SetupInput = {
   seed: Seed;
   /** The server's clock when the game starts. */
   now: number;
-  /** A shorter Turn limit (ms), set by the server for e2e runs. */
+  /** A shorter Turn limit (ms), set by the server for e2e runs; wins over the Room's setting. */
   turnLimitMs?: number;
   /** A shorter "minute" (ms) for the Minute limit, set by the server for e2e runs. */
   minuteMs?: number;

@@ -15,7 +15,7 @@ import type { GameState } from "#state.ts";
  */
 export type TurnTimer = { endsAt: number; limitMs: number };
 
-/** The server's clock overrides for the view (e2e runs); production leaves both out. */
+/** The server's Turn limit override for the view (e2e runs); production leaves it out. */
 export type ViewTiming = { turnLimitMs?: number };
 
 /**

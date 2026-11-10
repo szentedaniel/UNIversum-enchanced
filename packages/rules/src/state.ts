@@ -124,10 +124,10 @@ export type GameState = {
    */
   actsAfter: number;
   /**
-   * When the current decision times out (epoch ms): `actsAfter + TURN_LIMIT_MS
-   * + TURN_SLACK_MS`, fixed at the end of the intent (R17, F22). The Room
-   * server wakes up then and sends `TurnTimedOut`. `null` once the game is
-   * over: nothing can time out any more.
+   * When the current decision times out (epoch ms): `actsAfter` plus the
+   * Room's Turn timer and `TURN_SLACK_MS`, fixed at the end of the intent
+   * (R17, F22). The Room server wakes up then and sends `TurnTimedOut`.
+   * `null` once the game is over: nothing can time out any more.
    */
   turnDeadline: number | null;
   settings: Settings;

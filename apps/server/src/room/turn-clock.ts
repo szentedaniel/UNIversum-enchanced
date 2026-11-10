@@ -27,7 +27,7 @@ export type TurnClockOptions = {
   scheduler: Scheduler;
   /** The rules engine's `apply`; a Room's injected one included. */
   engine: typeof apply;
-  /** Shorter Turn limits for e2e runs; the rules constants when empty. */
+  /** Shorter Turn limits for e2e runs; the Room's setting when empty. */
   timing: TurnClockTiming;
   /** Where the third engine throw in a row is logged at `fatal`. */
   log: Logger;
