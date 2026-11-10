@@ -86,10 +86,7 @@ describe("intentSchema", () => {
     ["an Erasmus travel without a Field", { type: "TravelErasmus", turn: 1 }],
     ["an Erasmus travel off the Board", { type: "TravelErasmus", turn: 1, field: -1 }],
     ["a Deal without a recipient", { type: "ProposeDeal", turn: 1, give: {}, take: {} }],
-    [
-      "a Deal without its terms",
-      { type: "ProposeDeal", turn: 1, recipient: "p2" },
-    ],
+    ["a Deal without its terms", { type: "ProposeDeal", turn: 1, recipient: "p2" }],
     [
       "a Deal whose recipient is empty",
       {

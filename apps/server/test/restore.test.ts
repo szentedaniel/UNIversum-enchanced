@@ -1,6 +1,6 @@
 import { MatchMakeError } from "@colyseus/sdk";
 import { matchmakeRejection, type RejectionCode } from "@universum/protocol";
-import { migrate, type GameState } from "@universum/rules";
+import { migrate, STATE_VERSION, type GameState } from "@universum/rules";
 import stateV1 from "../../../packages/rules/test/fixtures/state-v1.json" with { type: "json" };
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -203,7 +203,7 @@ describe("restore on boot", () => {
     const game = after.room(code)?.game;
     // Migrated on boot: the deadline it had, and no wait before acting.
     expect(game).toMatchObject({
-      stateVersion: 2,
+      stateVersion: STATE_VERSION,
       turn: 2,
       actsAfter: stateV1.turnDeadline - DEADLINE_AFTER,
     });

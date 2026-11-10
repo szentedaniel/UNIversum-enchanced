@@ -108,7 +108,10 @@ describe("proposing a Deal", () => {
       { type: "DealProposed", proposer: PROPOSER, recipient: RECIPIENT, give: GIVE, take: TAKE },
     ]);
     // The recipient decides now; the proposer's own Roll waits behind the answer.
-    expect(proposed.state).toMatchObject({ currentPlayer: RECIPIENT, phase: { kind: "dealAnswer" } });
+    expect(proposed.state).toMatchObject({
+      currentPlayer: RECIPIENT,
+      phase: { kind: "dealAnswer" },
+    });
     expect(proposed.state.turnDeadline).toBe(freshDeadline(proposed.state));
     expect(proposed.state.turnDeadline).toBeGreaterThan(deadlineOf(before));
     // Nothing moves until the recipient answers.
@@ -143,7 +146,10 @@ describe("proposing a Deal", () => {
       give: { fields: [LONDON], cash: 0 },
       take: { fields: [VIENNA], cash: 0 },
     });
-    expect(proposed.state).toMatchObject({ currentPlayer: PROPOSER, phase: { kind: "dealAnswer" } });
+    expect(proposed.state).toMatchObject({
+      currentPlayer: PROPOSER,
+      phase: { kind: "dealAnswer" },
+    });
   });
 
   it("the recipient must be another, active Player", () => {
@@ -219,10 +225,18 @@ describe("proposing a Deal", () => {
     const nothing = { fields: [], cash: 0 };
 
     expect(
-      reject(state, proposal(state, { give: { fields: [], cash: 2_500_001 }, take: nothing }), "p1"),
+      reject(
+        state,
+        proposal(state, { give: { fields: [], cash: 2_500_001 }, take: nothing }),
+        "p1",
+      ),
     ).toEqual({ code: "DEAL_CASH_NOT_COVERED" });
     expect(
-      reject(state, proposal(state, { give: nothing, take: { fields: [], cash: 2_500_001 } }), "p1"),
+      reject(
+        state,
+        proposal(state, { give: nothing, take: { fields: [], cash: 2_500_001 } }),
+        "p1",
+      ),
     ).toEqual({ code: "DEAL_CASH_NOT_COVERED" });
 
     const exact = withPlayer(state, PROPOSER, { cash: 100_000 });
@@ -263,7 +277,10 @@ describe("answering a Deal", () => {
 
     const accepted = answer(proposed.state, "AcceptDeal");
 
-    expect(accepted.state).toMatchObject({ currentPlayer: PROPOSER, phase: { kind: "awaitingRoll" } });
+    expect(accepted.state).toMatchObject({
+      currentPlayer: PROPOSER,
+      phase: { kind: "awaitingRoll" },
+    });
     expect(accepted.state.deal).toBeNull();
     expect(accepted.state.turnDeadline).toBe(freshDeadline(accepted.state));
     expect(publicView(accepted.state).deal).toBeNull();
@@ -350,9 +367,9 @@ describe("answering a Deal", () => {
       deal: null,
     });
     expect(expired.state.turnDeadline).toBe(freshDeadline(expired.state));
-    expect(reject(expired.state, { type: "AcceptDeal", turn: expired.state.turn }, "p1")).toEqual(
-      { code: "NOT_OFFERED" },
-    );
+    expect(reject(expired.state, { type: "AcceptDeal", turn: expired.state.turn }, "p1")).toEqual({
+      code: "NOT_OFFERED",
+    });
   });
 
   it("the Playback shows the proposal and the answer with the board each event left", () => {

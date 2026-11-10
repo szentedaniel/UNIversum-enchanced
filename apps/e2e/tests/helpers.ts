@@ -337,6 +337,8 @@ export async function resolveDecision(
     case "quarantineChoice":
       await press(actor, actor.page.getByRole("button", { name: "Roll for 12", exact: true }));
       return { kind: "roll" };
+    case "dealAnswer":
+      throw new Error("the Deal answer panel is not built yet (#194)");
     case "gameOver":
       throw new Error("the game is over");
     default: {
