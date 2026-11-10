@@ -33,7 +33,7 @@ const MINUTE_MS = 1_000;
 const HOUR_MS = 60 * 60 * 1_000;
 const RETENTION_MS = 24 * HOUR_MS;
 const SEED: Seed = [1, 2, 3, 4];
-const SETTINGS: RoomSettings = { maxPlayers: 2, minuteLimit: 15 };
+const SETTINGS: RoomSettings = { maxPlayers: 2, minuteLimit: 15, startingCash: 2_500_000 };
 
 const SEATS: SeatRecord[] = [
   {

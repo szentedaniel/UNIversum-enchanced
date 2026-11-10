@@ -70,7 +70,7 @@ const BASE_VIEW: PublicView = {
   actsAfter: 0,
   turnDeadline: null,
   turnTimer: null,
-  settings: { maxPlayers: 2, minuteLimit: 15 },
+  settings: { maxPlayers: 2, minuteLimit: 15, startingCash: 2_500_000 },
   endsAt: 0,
   players: [],
   fields: [],

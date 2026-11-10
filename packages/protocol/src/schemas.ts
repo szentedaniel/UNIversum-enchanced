@@ -15,6 +15,7 @@ import {
   MINUTE_LIMITS,
   PASSWORD_MAX_BYTES,
   PLAYER_COUNTS,
+  STARTING_CASHES,
   utf8Length,
   type Assert,
   type ClientIntent,
@@ -99,6 +100,7 @@ const guestToken = z.string().regex(GUEST_TOKEN_PATTERN);
 export const createOptionsSchema = z.object({
   maxPlayers: z.literal(PLAYER_COUNTS).default(DEFAULT_SETTINGS.maxPlayers),
   minuteLimit: z.literal(MINUTE_LIMITS).default(DEFAULT_SETTINGS.minuteLimit),
+  startingCash: z.literal(STARTING_CASHES).default(DEFAULT_SETTINGS.startingCash),
   roomName: z.string().max(ROOM_NAME_MAX_RAW_LENGTH).optional(),
   password: password.optional(),
   guestToken: guestToken.optional(),

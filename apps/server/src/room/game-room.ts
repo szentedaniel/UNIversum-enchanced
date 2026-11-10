@@ -11,6 +11,7 @@ import {
 import {
   CLOSE_CODE,
   createOptionsSchema,
+  DEFAULT_SETTINGS,
   intentSchema,
   joinOptionsSchema,
   MESSAGE,
@@ -292,10 +293,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     } else {
       const parsed = createOptionsSchema.safeParse(options);
       if (!parsed.success) throw refuse("MALFORMED");
-      const { roomName, password, maxPlayers, minuteLimit } = parsed.data;
+      const { roomName, password, maxPlayers, minuteLimit, startingCash } = parsed.data;
       const name = checkRoomName(roomName ?? "");
       if (!name.ok) throw refuse(name.code);
-      this.settings = { maxPlayers, minuteLimit };
+      this.settings = { maxPlayers, minuteLimit, startingCash };
       this.displayName = name.name;
       this.password = password ? await hashPassword(password) : null;
       this.roomId = reserveRoomCode((code) => this.store.isCodeInUse(code));
@@ -357,7 +358,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   private restore(stored: StoredRoom): void {
     this.roomId = stored.code;
     claimRoomCode(stored.code);
-    this.settings = stored.settings;
+    this.settings = { ...DEFAULT_SETTINGS, ...stored.settings };
     this.displayName = stored.roomName;
     this.creatorId = stored.creatorId;
     this.password = stored.password && decodePassword(stored.password);
