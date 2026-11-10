@@ -3,8 +3,7 @@
  * run is free; daytime reviews are capped so the owner keeps the Pro
  * subscription for their own session.
  */
-
-export const TIME_ZONE = "Europe/Budapest";
+import { budapestDay, budapestHour } from "#shared/budapest.ts";
 
 /** The night window is [01:00, 07:00) Budapest time. */
 export const NIGHT_START_HOUR = 1;
@@ -25,38 +24,11 @@ export interface IssueComment {
   readonly createdAt: string;
 }
 
-const BUDAPEST_PARTS = new Intl.DateTimeFormat("en-GB", {
-  timeZone: TIME_ZONE,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  hourCycle: "h23",
-});
-
-const budapest = (at: Date): { day: string; hour: number } => {
-  const parts = new Map(
-    BUDAPEST_PARTS.formatToParts(at)
-      .filter((part) => part.type !== "literal")
-      .map((part) => [part.type, part.value]),
-  );
-  return {
-    day: `${parts.get("year") ?? ""}-${parts.get("month") ?? ""}-${parts.get("day") ?? ""}`,
-    hour: Number(parts.get("hour")),
-  };
-};
-
 /** True from 01:00 up to (not including) 07:00 on the Budapest clock. */
 export const isNightWindow = (at: Date): boolean => {
-  const { hour } = budapest(at);
+  const hour = budapestHour(at);
   return hour >= NIGHT_START_HOUR && hour < NIGHT_END_HOUR;
 };
-
-/** The Budapest calendar day, `YYYY-MM-DD`, for grouping the quota. */
-export const budapestDay = (at: Date): string => budapest(at).day;
-
-/** The Budapest clock hour, 0–23, for the weekly report's 06:00 slot. */
-export const budapestHour = (at: Date): number => budapest(at).hour;
 
 /**
  * How many daytime review slots today's summary comments already spent. A

@@ -6,7 +6,7 @@ import type { NeedsYouItem, ReportMetrics } from "#report/metrics.ts";
 import { budgetWarning } from "#report/metrics.ts";
 import { reportMarker } from "#report/issue.ts";
 import type { WeekWindow } from "#report/week.ts";
-import { TIME_ZONE } from "#review/window.ts";
+import { TIME_ZONE } from "#shared/budapest.ts";
 
 export interface ReportInput {
   readonly week: WeekWindow;

@@ -39,7 +39,7 @@ import { api, issueComments } from "#shared/github.ts";
 import { closingIssues } from "#shared/closing-pr.ts";
 import { fail, required, safeSh, sh } from "#shared/common.ts";
 import { factoryRuns, type FactoryRun } from "#shared/runs.ts";
-import { budapestHour } from "#review/window.ts";
+import { budapestHour } from "#shared/budapest.ts";
 
 /**
  * The workflow files whose runs are Claude Code's judgement work. Keyed by
