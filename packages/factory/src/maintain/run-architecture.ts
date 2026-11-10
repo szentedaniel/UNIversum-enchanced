@@ -18,16 +18,86 @@ import {
   newProposals,
   proposalIssueBody,
   proposalLabel,
+  trackedBy,
   type Proposal,
+  type TrackedWork,
 } from "#maintain/proposals.ts";
 import { claudeAgent } from "#shared/agents.ts";
 import { safeSh, fail, required, sh, shellArg } from "#shared/common.ts";
 import { parseJson } from "#shared/github.ts";
+import { targetPathsIn } from "#shared/targets.ts";
 
-const openTitles = (repo: string): string[] =>
-  parseJson<{ title: string }[]>(
-    sh(`gh issue list --repo "${repo}" --state open --limit 200 --json title`),
-  ).map((issue) => issue.title);
+/** The work labels that make an issue a ticket or a proposal, not a spec. */
+const WORK_LABELS: Record<string, true> = {
+  "ready-for-agent": true,
+  "agent:in-progress": true,
+  "agent:blocked": true,
+  "ready-for-human": true,
+};
+
+/** How far back a closed issue still counts as recently filed work. */
+const RECENT_CLOSED_DAYS = 30;
+
+interface ListedIssue {
+  number: number;
+  title: string;
+  body: string | null;
+  labels: { name: string }[];
+  subIssues: unknown[];
+}
+
+interface ListedPull {
+  number: number;
+  title: string;
+  body: string | null;
+  files: { path: string }[];
+}
+
+const trackedIssues = (repo: string, state: "open" | "closed", search?: string): TrackedWork[] => {
+  const searchArg = search === undefined ? "" : ` --search ${shellArg(search)}`;
+  return parseJson<ListedIssue[]>(
+    sh(
+      `gh issue list --repo "${repo}" --state ${state}${searchArg} --limit 200 --json number,title,body,labels,subIssues`,
+    ),
+  ).flatMap((issue) => {
+    if (issue.subIssues.length > 0) return [];
+    if (!issue.labels.some((label) => WORK_LABELS[label.name] === true)) return [];
+    return [
+      {
+        number: issue.number,
+        title: issue.title,
+        paths: targetPathsIn(`${issue.title}\n${issue.body ?? ""}`),
+      },
+    ];
+  });
+};
+
+const trackedPulls = (repo: string): TrackedWork[] =>
+  parseJson<ListedPull[]>(
+    sh(`gh pr list --repo "${repo}" --state open --limit 100 --json number,title,body,files`),
+  ).map((pull) => ({
+    number: pull.number,
+    title: pull.title,
+    paths: [
+      ...targetPathsIn(`${pull.title}\n${pull.body ?? ""}`),
+      ...pull.files.map((file) => file.path),
+    ],
+  }));
+
+/**
+ * The open and recently closed work a proposal must not repeat: the open
+ * issues, the closed issues of the last month, and the open pull requests.
+ */
+const trackedWork = (repo: string, now: Date): TrackedWork[] => {
+  const since = new Date(now.getTime() - RECENT_CLOSED_DAYS * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  return [
+    ...trackedIssues(repo, "open"),
+    ...trackedIssues(repo, "closed", `closed:>=${since} sort:updated-desc`),
+    ...trackedPulls(repo),
+  ];
+};
 
 const writeTemp = (proposal: Proposal): string => {
   const file = join(mkdtempSync(join(tmpdir(), "factory-architecture-")), "issue.md");
@@ -41,9 +111,10 @@ const describe = (proposal: Proposal): string =>
 const main = async (): Promise<void> => {
   const repo = required("GH_REPO");
   const dryRun = process.env["DRY_RUN"] === "1";
+  const now = new Date();
   const { focus, schema, promptArgs } = architectureRun(
     { MAX_PROPOSALS: process.env["MAX_PROPOSALS"], FOCUS: process.env["FOCUS"] },
-    new Date(),
+    now,
   );
 
   const result = await sandcastle.run({
@@ -72,9 +143,16 @@ const main = async (): Promise<void> => {
   }
   for (const proposal of proposals) console.log(`Proposed: ${describe(proposal)}`);
 
-  const fresh = newProposals(proposals, openTitles(repo));
+  const tracked = trackedWork(repo, now);
+  const fresh = newProposals(proposals, tracked);
   for (const proposal of proposals) {
-    if (!fresh.includes(proposal)) console.log(`Already open: "${proposal.title}".`);
+    if (fresh.includes(proposal)) continue;
+    const work = trackedBy(proposal, tracked);
+    console.log(
+      work === undefined
+        ? `Already tracked: "${proposal.title}".`
+        : `Already tracked: "${proposal.title}" overlaps #${String(work.number)} ${work.title}.`,
+    );
   }
 
   for (const proposal of fresh) {

@@ -51,17 +51,41 @@ describe("proposalIssueBody", () => {
 });
 
 describe("newProposals", () => {
+  const tracked = (number: number, title: string, paths: string[] = []) => ({
+    number,
+    title,
+    paths,
+  });
+
   it("drops a proposal an open issue already carries, ignoring case and spacing", () => {
-    const open = ["  deepen the DISPATCHER's frontier "];
+    const open = [tracked(120, "  deepen the DISPATCHER's frontier ")];
 
     expect(newProposals([twoWayDoor, oneWayDoor], open)).toEqual([oneWayDoor]);
   });
 
+  it("drops a proposal whose module an open issue or pull request already names", () => {
+    const trackedWork = [
+      tracked(112, "Deepen the run-log reader", ["packages/factory/src/shared/runs.ts"]),
+      tracked(135, "Implement #112", ["packages/factory/src/shared/runs.ts"]),
+    ];
+    const repeat = { ...twoWayDoor, files: ["packages/factory/src/shared/runs.ts"] };
+
+    expect(newProposals([repeat, oneWayDoor], trackedWork)).toEqual([oneWayDoor]);
+  });
+
+  it("keeps a proposal whose modules none of the tracked work names", () => {
+    const unrelated = [
+      tracked(160, "GameRoom crash", ["apps/server/src/room/game-room.ts"]),
+      tracked(164, "Implement #160", ["apps/server/src/room/game-room.ts"]),
+    ];
+
+    expect(newProposals([twoWayDoor, oneWayDoor], unrelated)).toEqual([twoWayDoor, oneWayDoor]);
+  });
+
   it("keeps both when neither is tracked", () => {
-    expect(newProposals([twoWayDoor, oneWayDoor], ["Red main: CI failed on 0b9af87"])).toEqual([
-      twoWayDoor,
-      oneWayDoor,
-    ]);
+    expect(
+      newProposals([twoWayDoor, oneWayDoor], [tracked(141, "Red main: CI failed on 0b9af87")]),
+    ).toEqual([twoWayDoor, oneWayDoor]);
   });
 });
 

@@ -6,6 +6,7 @@
  * issue the script opens, and keeps the dedupe pure.
  */
 import { z } from "zod";
+import { shareModule } from "#shared/targets.ts";
 
 /** The weekly cap: a weekly issue stream nobody reads is worse than none. */
 export const DEFAULT_MAX_PROPOSALS = 2;
@@ -108,6 +109,28 @@ export type Proposal = z.infer<ReturnType<typeof proposalsSchemaOf>>["proposals"
 export const ARCHITECTURE_MARKER = "<!-- factory:architecture -->";
 
 /**
+ * One open or recently closed issue, or one open pull request: the title the
+ * proposal must not repeat and the module paths the work already names.
+ */
+export interface TrackedWork {
+  readonly number: number;
+  readonly title: string;
+  readonly paths: readonly string[];
+}
+
+const titleKey = (title: string): string => title.trim().toLowerCase();
+
+/** The tracked work that already carries the proposal, by title or module. */
+export const trackedBy = (
+  proposal: Proposal,
+  tracked: readonly TrackedWork[],
+): TrackedWork | undefined =>
+  tracked.find(
+    (work) =>
+      titleKey(work.title) === titleKey(proposal.title) || shareModule(proposal.files, work.paths),
+  );
+
+/**
  * The label the door picks: a two-way door is an agent's issue, a one-way
  * door is the owner's (the merge gate would send it to them anyway).
  */
@@ -139,13 +162,11 @@ export const proposalIssueBody = (proposal: Proposal): string =>
   ].join("\n");
 
 /**
- * The proposals no open issue carries yet, deduped on the title: the pass
- * must not re-open last week's issue because the wording drifted a little.
+ * The proposals no tracked work carries yet, deduped on the title and on the
+ * target files: the pass must not re-open last week's issue because the wording
+ * drifted a little, nor file a second ticket for a module already in flight.
  */
 export const newProposals = (
   proposals: readonly Proposal[],
-  openTitles: readonly string[],
-): Proposal[] => {
-  const tracked = new Set(openTitles.map((title) => title.trim().toLowerCase()));
-  return proposals.filter((proposal) => !tracked.has(proposal.title.trim().toLowerCase()));
-};
+  tracked: readonly TrackedWork[],
+): Proposal[] => proposals.filter((proposal) => trackedBy(proposal, tracked) === undefined);
