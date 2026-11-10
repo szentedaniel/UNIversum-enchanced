@@ -3,7 +3,7 @@
  * every accepted intent; after a deploy that changes the state's shape it runs
  * every stored state through `migrate` on boot, before restoring the Room.
  */
-import { START_CASH, TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
+import { ROUND_BONUS, START_CASH, TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
 import { STATE_VERSION, type GameState } from "#state.ts";
 
 /** A stored state as JSON, before it is known to have the current shape. */
@@ -54,6 +54,17 @@ const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> 
   // existed has none: its current decision is the Player's own, and no Deal
   // was proposed this Turn.
   4: (state) => ({ ...state, stateVersion: 5, deal: null }),
+  // Version 6 adds the Round bonus to the Room settings. A running game keeps
+  // the money its Players already hold: the setting only decides a new game's
+  // payments, so today's value is the true default.
+  5: (state) => {
+    const settings = state["settings"];
+    return {
+      ...state,
+      stateVersion: 6,
+      settings: { ...(isObject(settings) ? settings : {}), roundBonus: ROUND_BONUS },
+    };
+  },
 };
 
 /**

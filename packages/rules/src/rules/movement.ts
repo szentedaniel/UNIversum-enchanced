@@ -4,7 +4,6 @@
  * and Erasmus travel (#31).
  */
 import { FIELD_COUNT, type FieldId } from "#board.ts";
-import { ROUND_BONUS } from "#constants.ts";
 import type { PlayerId } from "#state.ts";
 import { emit, playerById, type Tx } from "#tx.ts";
 
@@ -23,7 +22,8 @@ export function moveForward(tx: Tx, playerId: PlayerId, steps: number): void {
   player.position = to;
   emit(tx, { type: "Moved", player: playerId, from, to, steps });
   if (from + steps >= FIELD_COUNT) {
-    player.cash += ROUND_BONUS;
-    emit(tx, { type: "RoundBonusPaid", player: playerId, amount: ROUND_BONUS });
+    const amount = tx.state.settings.roundBonus;
+    player.cash += amount;
+    emit(tx, { type: "RoundBonusPaid", player: playerId, amount });
   }
 }
