@@ -83,6 +83,7 @@ export function Game() {
   const players: PlayerSummary[] = view.players.map((p) => ({
     seat: p.seat,
     name: playerName(p.name),
+    bot: p.bot,
     cash: formatMoney(p.cash),
     fields: view.fields.filter((field) => field.owner === p.id).length,
     current: p.id === view.currentPlayer,

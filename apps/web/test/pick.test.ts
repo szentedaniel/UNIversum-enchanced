@@ -20,6 +20,7 @@ const playerState = (id: string, seat: number) => ({
   bankrupt: false,
   quarantineRounds: null,
   hasPcrTest: false,
+  bot: false,
 });
 
 const fieldView = (owner: string | null, rent = 0): FieldView => ({

@@ -158,6 +158,12 @@ export function Lobby() {
               you={seat.playerId === me}
               // The creator's Seat, wherever it is after frees and re-joins.
               creator={seat.playerId === lobby.creatorId}
+              bot={seat.bot === true}
+              onRemoveBot={
+                seat.bot === true
+                  ? () => sendIntent({ type: "RemoveBot", playerId: seat.playerId })
+                  : undefined
+              }
               held={
                 seat.heldUntil === undefined ? undefined : (
                   <HeldCountdown until={seat.heldUntil} clockOffset={clockOffset} />
@@ -166,7 +172,12 @@ export function Lobby() {
             />
           ))}
           {open.map((i) => (
-            <SeatCard key={`open-${i}`} open />
+            // A Bot takes the next empty Seat, so only the first open card offers it.
+            <SeatCard
+              key={`open-${i}`}
+              open
+              onAddBot={i === 0 ? () => sendIntent({ type: "AddBot" }) : undefined}
+            />
           ))}
         </ul>
         <ul className="sticker m-0 mt-8 grid list-none grid-cols-1 gap-4 rounded-ui bg-card p-4 text-card-foreground sm:grid-cols-3">

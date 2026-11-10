@@ -29,6 +29,7 @@ const playerState = (id: string, seat: number): PlayerState => ({
   bankrupt: false,
   quarantineRounds: null,
   hasPcrTest: false,
+  bot: false,
 });
 
 const SELLING: Phase = {

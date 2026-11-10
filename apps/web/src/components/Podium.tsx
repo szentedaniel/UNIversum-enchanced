@@ -5,6 +5,7 @@
  */
 import type { GameEndReason, PhaseOf, PublicView } from "@universum/rules";
 import { Link } from "react-router";
+import { BotMark } from "#components/BotMark.tsx";
 import { PlayerFigure, PlayerToken } from "#components/PlayerToken.tsx";
 import { buttonVariants } from "#components/ui/button.tsx";
 import { cn } from "#lib/utils.ts";
@@ -86,6 +87,7 @@ export function Podium({ view, phase }: { view: PublicView; phase: PhaseOf<"game
             >
               <PlayerFigure seat={entry.player.seat} size={24} />
               <span className="max-w-40 truncate">{playerName(entry.player.name)}</span>
+              {entry.player.bot && <BotMark />}
               <span className="tnum text-[#ffbb6c]">{formatMoney(entry.player.wealth)}</span>
               {entry.player.bankrupt && <span>{m.game_bankrupt()}</span>}
             </li>
@@ -116,6 +118,7 @@ function PodiumPlace({ entry, height }: { entry: PodiumEntry; height: string }) 
           {playerName(player.name)}
         </span>
       </div>
+      {player.bot && <BotMark className="mt-0.5" />}
       <div
         className="tnum text-base font-black text-[#ffbb6c]"
         aria-label={m.podium_wealth({ amount: formatMoney(player.wealth) })}
