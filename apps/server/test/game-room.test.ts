@@ -88,12 +88,9 @@ describe("creating and joining a Room", () => {
     { minuteLimit: 20 },
     { startingCash: 3_000_000 },
     { turnLimitMs: 5_000 },
-  ])(
-    "refuses create options %j",
-    async (options) => {
-      await expect(server.sdk.create("game", options)).rejects.toBeInstanceOf(MatchMakeError);
-    },
-  );
+  ])("refuses create options %j", async (options) => {
+    await expect(server.sdk.create("game", options)).rejects.toBeInstanceOf(MatchMakeError);
+  });
 
   it("seats the creator with a public Player id and a Player name from the word lists", async () => {
     const alice = await server.create();

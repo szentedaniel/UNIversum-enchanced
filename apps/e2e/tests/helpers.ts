@@ -90,9 +90,7 @@ export async function createAndJoin(
   await creator.goto("/create");
   await creator.getByLabel("2", { exact: true }).check();
   if (choices.turnLimitMs !== undefined) {
-    await creator
-      .getByLabel(`${String(choices.turnLimitMs / 1_000)} s`, { exact: true })
-      .check();
+    await creator.getByLabel(`${String(choices.turnLimitMs / 1_000)} s`, { exact: true }).check();
   }
   await creator.getByRole("button", { name: "Create Room" }).click();
   await expect(creator).toHaveURL(/\/room\/[1-9]\d{5}$/);

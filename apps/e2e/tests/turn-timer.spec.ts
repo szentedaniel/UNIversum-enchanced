@@ -20,7 +20,7 @@ test("a Room created with a 10 s Turn timer starts the ring at 10 s", async ({ p
   const ring = page.locator('[aria-current="true"] .turn-ring-left');
   await expect(ring).toHaveCount(1);
   const style = await ring.evaluate((element) => {
-    const { animationDuration, animationDelay } = (element as HTMLElement).style;
+    const { animationDuration, animationDelay } = element.style;
     return { animationDuration, animationDelay };
   });
   expect(style.animationDuration).toBe("10000ms");
