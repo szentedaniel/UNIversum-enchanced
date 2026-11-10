@@ -147,6 +147,13 @@ describe("bot decisions", () => {
     ]);
   });
 
+  it("accepts or declines a Deal put to it", () => {
+    expect(types(offeredIntents(view({ kind: "dealAnswer" }), "p0"))).toEqual([
+      "AcceptDeal",
+      "DeclineDeal",
+    ]);
+  });
+
   it("leaves a phase it does not know to the Turn timer", () => {
     expect(offeredIntents(view(unknownPhase("someFuturePhase")), "p0")).toEqual([]);
   });
