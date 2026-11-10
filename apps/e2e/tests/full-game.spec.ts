@@ -24,10 +24,10 @@ import {
  * one of them drops and rejoins mid-game, and every screen ends on the same
  * single-winner podium.
  *
- * The Room server gets short Turns and short "minutes" through
- * GAME_TURN_LIMIT_MS / GAME_MINUTE_MS (playwright.config.ts), so a 15-minute
- * Room ends after two minutes of play. At least one Turn is left to time out
- * while one Guest is away.
+ * The Room server gets short "minutes" through GAME_MINUTE_MS
+ * (playwright.config.ts), and the Room's own 10 s Turn timer keeps a decision
+ * short, so a 15-minute Room ends after two minutes of play. At least one Turn
+ * is left to time out while one Guest is away.
  */
 
 test.use({ locale: "en-US" });
@@ -192,10 +192,11 @@ test("four Guests play a whole game to the podium, with a buy, a Rent, a tray pi
     for (const guest of guests) registerPage(guest.name, guest.page);
     const [creator, ...joiners] = guests;
 
-    // The creator opens a full 4-Player, 15-minute Room (shortened by env).
+    // The creator opens a full 4-Player, 15-minute Room with the shortest Turn timer.
     await creator!.page.goto("/create");
     await creator!.page.getByLabel("4", { exact: true }).check();
     await creator!.page.getByLabel("15 minutes", { exact: true }).check();
+    await creator!.page.getByLabel("10 s", { exact: true }).check();
     await creator!.page.getByRole("button", { name: "Create Room" }).click();
     await expect(creator!.page).toHaveURL(/\/room\/[1-9]\d{5}$/);
     const code = new URL(creator!.page.url()).pathname.split("/").at(-1) ?? "";
