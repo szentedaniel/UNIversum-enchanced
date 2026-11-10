@@ -27,3 +27,15 @@ export function moveForward(tx: Tx, playerId: PlayerId, steps: number): void {
     emit(tx, { type: "RoundBonusPaid", player: playerId, amount: ROUND_BONUS });
   }
 }
+
+/**
+ * Moves a Player `steps` Fields forward without the Round bonus, even when the
+ * walk passes Start: the Exam period card's way into Quarantine (#190).
+ */
+export function moveForwardWithoutRoundBonus(tx: Tx, playerId: PlayerId, steps: number): void {
+  const player = playerById(tx, playerId);
+  const from = player.position;
+  const to = (from + steps) % FIELD_COUNT;
+  player.position = to;
+  emit(tx, { type: "Moved", player: playerId, from, to, steps });
+}

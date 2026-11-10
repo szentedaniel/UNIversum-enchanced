@@ -3,10 +3,20 @@
  * from the game's PRNG, never the last card drawn, and the card takes effect
  * at once with no confirmation (R33).
  */
-import { CHANCE_CARD_MONEY, CHANCE_CARDS, type ChanceCardId } from "#board.ts";
+import {
+  CHANCE_CARD_MONEY,
+  CHANCE_CARDS,
+  FIELD_COUNT,
+  QUARANTINE_FIELD,
+  START_FIELD,
+  type ChanceCardId,
+  type FieldId,
+} from "#board.ts";
 import { randomInt } from "#rng.ts";
 import { charge } from "#rules/charge.ts";
 import type { Landing } from "#rules/landing.ts";
+import { moveForward, moveForwardWithoutRoundBonus } from "#rules/movement.ts";
+import { enterQuarantine } from "#rules/quarantine.ts";
 import type { PlayerId } from "#state.ts";
 import { emit, playerById, type Tx } from "#tx.ts";
 
@@ -45,8 +55,13 @@ function bankCharges(tx: Tx, playerId: PlayerId, amount: number): void {
   charge(tx, playerId, { kind: "chanceCard", amount });
 }
 
+/** The Fields from the Player's current Field forward to `field`. */
+function stepsTo(tx: Tx, playerId: PlayerId, field: FieldId): number {
+  return (field - playerById(tx, playerId).position + FIELD_COUNT) % FIELD_COUNT;
+}
+
 /** What each card does to the Player who drew it. */
-const EFFECTS: Record<ChanceCardId, (tx: Tx, player: PlayerId) => void> = {
+const EFFECTS: Record<ChanceCardId, (tx: Tx, playerId: PlayerId) => void> = {
   // A flag, not a count: a second card is wasted (F23).
   pcrTest: (tx, playerId) => {
     playerById(tx, playerId).hasPcrTest = true;
@@ -56,6 +71,15 @@ const EFFECTS: Record<ChanceCardId, (tx: Tx, player: PlayerId) => void> = {
   textbookFair: (tx, playerId) => bankCharges(tx, playerId, -CHANCE_CARD_MONEY.textbookFair),
   teachingAssistantJob: (tx, playerId) =>
     bankPays(tx, playerId, CHANCE_CARD_MONEY.teachingAssistantJob),
+  // The walk shows, but passing Start pays nothing: the card is a setback (R34, R39).
+  examPeriod: (tx, playerId) => {
+    moveForwardWithoutRoundBonus(tx, playerId, stepsTo(tx, playerId, QUARANTINE_FIELD));
+    enterQuarantine(tx, playerId);
+  },
+  // The same payment as passing Start, so a Room's Round bonus setting applies (R34, R73).
+  scholarshipTransfer: (tx, playerId) => {
+    moveForward(tx, playerId, stepsTo(tx, playerId, START_FIELD));
+  },
 };
 
 /** Landing on Chance: draw, show, apply (R32, R33). */

@@ -107,6 +107,9 @@ export const FIELDS: readonly FieldInfo[] = [
 /** The Start Field, where the Round bonus is paid. */
 export const START_FIELD: FieldId = 0;
 
+/** The Quarantine Field, where the Exam period card sends the Player. */
+export const QUARANTINE_FIELD: FieldId = 8;
+
 /**
  * The Chance cards, in v1's order first (R32): a PCR test, a +200,000
  * scholarship and a −200,000 fee for failing every exam, then the university
@@ -118,6 +121,8 @@ export const CHANCE_CARDS = [
   "failedExams",
   "textbookFair",
   "teachingAssistantJob",
+  "examPeriod",
+  "scholarshipTransfer",
 ] as const;
 
 export type ChanceCardId = (typeof CHANCE_CARDS)[number];
@@ -129,4 +134,7 @@ export const CHANCE_CARD_MONEY: Readonly<Record<ChanceCardId, number>> = {
   failedExams: -200_000,
   textbookFair: -150_000,
   teachingAssistantJob: 300_000,
+  // Movement cards: no fixed amount (the Round bonus comes from the Room's settings).
+  examPeriod: 0,
+  scholarshipTransfer: 0,
 };

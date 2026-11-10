@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   CHANCE_CARDS,
   publicView,
+  ROUND_BONUS,
   START_CASH,
   type Applied,
   type ChanceCardId,
   type GameState,
   type Seed,
 } from "#index.ts";
-import { newGame, player, playerOf, rollOnto, withField, withPlayer } from "./helpers.ts";
+import { newGame, player, playerOf, playTurn, rollOnto, withField, withPlayer } from "./helpers.ts";
 
 const CHANCE = 14;
 
@@ -57,13 +58,15 @@ function counts(n: number, last: ChanceCardId | null): Record<ChanceCardId, numb
 const totalCash = (state: GameState) => state.players.reduce((sum, p) => sum + p.cash, 0);
 
 describe("the Chance draw", () => {
-  it("R32: there are 5 cards: the PCR test, +200,000, −200,000, −150,000 and +300,000", () => {
+  it("R32: there are 7 cards: the PCR test, four money cards and the two movement cards", () => {
     expect(CHANCE_CARDS).toEqual([
       "pcrTest",
       "scholarship",
       "failedExams",
       "textbookFair",
       "teachingAssistantJob",
+      "examPeriod",
+      "scholarshipTransfer",
     ]);
   });
 
@@ -71,23 +74,23 @@ describe("the Chance draw", () => {
     expect(newGame().lastChanceCard).toBeNull();
   });
 
-  it("R32, F17: the first draw of a game is uniform over all five cards, the PCR card included", () => {
+  it("R32, F17: the first draw of a game is uniform over all seven cards, the PCR card included", () => {
     const tally = counts(900, null);
 
     for (const card of CHANCE_CARDS) {
-      expect(tally[card]).toBeGreaterThan(144);
-      expect(tally[card]).toBeLessThan(216);
+      expect(tally[card]).toBeGreaterThan(96);
+      expect(tally[card]).toBeLessThan(161);
     }
   });
 
-  it("R32: a draw never repeats the last card, and is uniform over the other four", () => {
+  it("R32: a draw never repeats the last card, and is uniform over the other six", () => {
     for (const last of CHANCE_CARDS) {
       const tally = counts(600, last);
 
       expect(tally[last]).toBe(0);
       for (const card of CHANCE_CARDS.filter((c) => c !== last)) {
-        expect(tally[card]).toBeGreaterThan(120);
-        expect(tally[card]).toBeLessThan(180);
+        expect(tally[card]).toBeGreaterThan(79);
+        expect(tally[card]).toBeLessThan(121);
       }
     }
   });
@@ -241,5 +244,62 @@ describe("the Teaching assistant job card", () => {
     expect(events).not.toContainEqual(expect.objectContaining({ type: "ChanceChargePaid" }));
     expect(player(state, "p1").cash).toBe(START_CASH + 300_000);
     expect(totalCash(state)).toBe(totalCash(newGame()) + 300_000);
+  });
+});
+
+describe("the Exam period card", () => {
+  it("R34, R39: sends the Player to the Quarantine Field for 3 rounds, with no Round bonus", () => {
+    const applied = draw(seedDrawing("examPeriod"));
+    const drawn = applied.events.findIndex((event) => event.type === "CardDrawn");
+    const before = applied.reveals[drawn];
+    if (!before) throw new Error("the draw's reveal is missing");
+
+    expect(applied.events.slice(drawn + 1)).toEqual([
+      { type: "Moved", player: "p1", from: CHANCE, to: 8, steps: 26 },
+      { type: "QuarantineEntered", player: "p1", rounds: 3 },
+      { type: "TurnPassed", player: "p2", turn: 2 },
+    ]);
+    expect(player(applied.state, "p1")).toMatchObject({
+      position: 8,
+      quarantineRounds: 3,
+      cash: playerOf(before, "p1").cash,
+    });
+  });
+
+  it("R34, R41: the usual Quarantine rules follow, a held PCR test included", () => {
+    const seed = seedDrawing("examPeriod");
+    const start = withPlayer(newGame({ seed, players: 2 }), "p1", { hasPcrTest: true });
+
+    const applied = draw(seed, null, start);
+    const next = playTurn(applied.state);
+
+    // p2's Turn passes; p1's starts in Quarantine, with the usual choice.
+    expect(next.state.currentPlayer).toBe("p1");
+    expect(next.state.phase).toEqual({
+      kind: "quarantineChoice",
+      canBuyPcrTest: true,
+      canUsePcrTest: true,
+      pcrTestPrice: 200_000,
+    });
+  });
+});
+
+describe("the Scholarship transfer card", () => {
+  it("R34, R73: moves the Player to Start and pays the Round bonus", () => {
+    const applied = draw(seedDrawing("scholarshipTransfer"));
+    const drawn = applied.events.findIndex((event) => event.type === "CardDrawn");
+    const before = applied.reveals[drawn];
+    if (!before) throw new Error("the draw's reveal is missing");
+    const beforeCash = playerOf(before, "p1").cash;
+
+    expect(applied.events.slice(drawn + 1)).toEqual([
+      { type: "Moved", player: "p1", from: CHANCE, to: 0, steps: 18 },
+      { type: "RoundBonusPaid", player: "p1", amount: ROUND_BONUS },
+      { type: "TurnPassed", player: "p2", turn: 2 },
+    ]);
+    expect(player(applied.state, "p1")).toMatchObject({
+      position: 0,
+      cash: beforeCash + ROUND_BONUS,
+    });
   });
 });
