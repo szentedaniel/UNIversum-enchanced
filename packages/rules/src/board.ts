@@ -108,11 +108,17 @@ export const FIELDS: readonly FieldInfo[] = [
 export const START_FIELD: FieldId = 0;
 
 /**
- * The 3 Chance cards, in v1's order (R32): a PCR test, a +200,000 scholarship
- * and a −200,000 fee for failing every exam. The web app maps each id to its
- * Paraglide title and text.
+ * The Chance cards, in v1's order first (R32): a PCR test, a +200,000
+ * scholarship and a −200,000 fee for failing every exam, then the university
+ * cards. The web app maps each id to its Paraglide title and text.
  */
-export const CHANCE_CARDS = ["pcrTest", "scholarship", "failedExams"] as const;
+export const CHANCE_CARDS = [
+  "pcrTest",
+  "scholarship",
+  "failedExams",
+  "textbookFair",
+  "teachingAssistantJob",
+] as const;
 
 export type ChanceCardId = (typeof CHANCE_CARDS)[number];
 
@@ -121,4 +127,6 @@ export const CHANCE_CARD_MONEY: Readonly<Record<ChanceCardId, number>> = {
   pcrTest: 0,
   scholarship: 200_000,
   failedExams: -200_000,
+  textbookFair: -150_000,
+  teachingAssistantJob: 300_000,
 };

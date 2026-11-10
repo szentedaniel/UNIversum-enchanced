@@ -1,7 +1,7 @@
 /**
- * Chance (R32–R35, F17, F23, F6): landing on a Chance Field draws one of the
- * 3 cards from the game's PRNG, never the last card drawn, and the card takes
- * effect at once with no confirmation (R33).
+ * Chance (R32–R35, F17, F23, F6): landing on a Chance Field draws one card
+ * from the game's PRNG, never the last card drawn, and the card takes effect
+ * at once with no confirmation (R33).
  */
 import { CHANCE_CARD_MONEY, CHANCE_CARDS, type ChanceCardId } from "#board.ts";
 import { randomInt } from "#rng.ts";
@@ -34,21 +34,28 @@ function drawCard(tx: Tx): ChanceCardId {
   return card;
 }
 
+/** The Bank pays the drawer `amount` (the scholarship and the teaching assistant job). */
+function bankPays(tx: Tx, playerId: PlayerId, amount: number): void {
+  playerById(tx, playerId).cash += amount;
+  emit(tx, { type: "ChanceMoneyReceived", player: playerId, amount });
+}
+
+/** A Charge to the Bank like any other (F6: v1 never took this money). */
+function bankCharges(tx: Tx, playerId: PlayerId, amount: number): void {
+  charge(tx, playerId, { kind: "chanceCard", amount });
+}
+
 /** What each card does to the Player who drew it. */
 const EFFECTS: Record<ChanceCardId, (tx: Tx, player: PlayerId) => void> = {
   // A flag, not a count: a second card is wasted (F23).
   pcrTest: (tx, playerId) => {
     playerById(tx, playerId).hasPcrTest = true;
   },
-  scholarship: (tx, playerId) => {
-    const amount = CHANCE_CARD_MONEY.scholarship;
-    playerById(tx, playerId).cash += amount;
-    emit(tx, { type: "ChanceMoneyReceived", player: playerId, amount });
-  },
-  // A Charge like any other (F6: v1 never took this money).
-  failedExams: (tx, playerId) => {
-    charge(tx, playerId, { kind: "chanceCard", amount: -CHANCE_CARD_MONEY.failedExams });
-  },
+  scholarship: (tx, playerId) => bankPays(tx, playerId, CHANCE_CARD_MONEY.scholarship),
+  failedExams: (tx, playerId) => bankCharges(tx, playerId, -CHANCE_CARD_MONEY.failedExams),
+  textbookFair: (tx, playerId) => bankCharges(tx, playerId, -CHANCE_CARD_MONEY.textbookFair),
+  teachingAssistantJob: (tx, playerId) =>
+    bankPays(tx, playerId, CHANCE_CARD_MONEY.teachingAssistantJob),
 };
 
 /** Landing on Chance: draw, show, apply (R32, R33). */
