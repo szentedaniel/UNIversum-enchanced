@@ -28,6 +28,7 @@ function showGameOver(page: Page) {
         bankrupt: false,
         quarantineRounds: null,
         hasPcrTest: false,
+        bot: false,
       },
       {
         id: "p2",
@@ -39,6 +40,7 @@ function showGameOver(page: Page) {
         bankrupt: false,
         quarantineRounds: null,
         hasPcrTest: false,
+        bot: false,
       },
       {
         id: "p3",
@@ -50,6 +52,7 @@ function showGameOver(page: Page) {
         bankrupt: true,
         quarantineRounds: null,
         hasPcrTest: false,
+        bot: false,
       },
       {
         id: "p4",
@@ -61,6 +64,7 @@ function showGameOver(page: Page) {
         bankrupt: false,
         quarantineRounds: null,
         hasPcrTest: false,
+        bot: true,
       },
     ];
     view.fields = view.fields.map(() => ({ owner: null, level: 0, value: 0, rent: 0, sale: 0 }));
@@ -110,6 +114,9 @@ test("the result screen: a 2-1-3 podium in Player colours, the Bankrupt Player g
     await expect(first).toContainText("4,100,000");
     await expect(podium).toContainText("Calm Wolf");
     await expect(podium).toContainText("Brave Bear");
+
+    // The winner's name line carries the Bot mark (spec: Bots, story 17).
+    await expect(first.getByTestId("bot-mark")).toHaveText("BOT");
 
     // F28: the winner's block is in the winner's own colour (yellow, Seat 3).
     const block = first.getByTestId("podium-block");
