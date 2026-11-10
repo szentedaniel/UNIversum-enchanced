@@ -235,7 +235,12 @@ export class GameDriver {
         {
           code: this.#roomCode,
           ...this.#readRoom(),
-          seats: seats.map(({ playerId, name, tokenHash }) => ({ playerId, name, tokenHash })),
+          seats: seats.map(({ playerId, name, tokenHash, bot }) => ({
+            playerId,
+            name,
+            tokenHash,
+            ...(bot === true && { bot: true }),
+          })),
           game,
           endedAt,
         },

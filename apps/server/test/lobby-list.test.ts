@@ -58,17 +58,20 @@ describe("the Lobby list", () => {
     expect(list.get(alice.code)).toMatchObject({ players: 1, maxPlayers: 2, roomName: null });
   });
 
-  it("updates the Players as Guests join and leave, and shows a full Lobby", async () => {
+  it("updates the Players as Guests join, and a Lobby with no empty Seat leaves the list", async () => {
     const list = await server.watchLobbyList();
     const alice = await server.create({ maxPlayers: 2 });
     await list.until((l) => l.get(alice.code)?.players === 1);
 
     const bob = await server.join(alice.code);
-    await list.until((l) => l.get(alice.code)?.players === 2);
-    expect(list.get(alice.code)).toMatchObject({ players: 2, maxPlayers: 2 });
+    // Ticket #196: no empty Seat means nobody can join, so it is not listed.
+    await list.until((l) => l.get(alice.code) === undefined);
+    expect(list.get(alice.code)).toBeUndefined();
 
+    // A Seat opens again: the Lobby is back on the list.
     await bob.leave();
     await list.until((l) => l.get(alice.code)?.players === 1);
+    expect(list.get(alice.code)).toMatchObject({ players: 1, maxPlayers: 2 });
   });
 
   it("names the creator's Seat by Player id, and keeps the crown there when Seats shift", async () => {
@@ -101,16 +104,16 @@ describe("the Lobby list", () => {
     expect(list.get(alice.code)).toBeUndefined();
   });
 
-  it("unlists a Room when its game starts, also for Guests who open the list later", async () => {
+  it("leaves the list when its last Seat is taken, and stays off it when started, also for Guests who open the list later", async () => {
     const list = await server.watchLobbyList();
     const alice = await server.create({ maxPlayers: 2 });
     await fill(alice, 2);
-    await list.until((l) => l.get(alice.code)?.players === 2);
+    await list.until((l) => l.get(alice.code) === undefined);
 
     alice.send({ type: "Start" });
     await alice.next("game");
+    expect(list.get(alice.code)).toBeUndefined();
 
-    await list.until((l) => l.get(alice.code) === undefined);
     const later = await server.watchLobbyList();
     // A Lobby created after the start reaches the late list, so it has caught up.
     const carol = await server.create();

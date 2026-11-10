@@ -140,11 +140,13 @@ type RoomIntentHandler<K extends RoomIntent["type"]> = (
 ) => RejectionCode | void;
 
 /**
- * Intents the Room handles itself, outside the rules engine (Start; later
- * Lobby actions). Every other intent goes to the rules engine.
+ * Intents the Room handles itself, outside the rules engine (Start, the
+ * Lobby's Bots). Every other intent goes to the rules engine.
  */
 const ROOM_INTENTS: { [K in RoomIntent["type"]]: RoomIntentHandler<K> } = {
   Start: (room) => room.startGame(),
+  AddBot: (room) => room.addBot(),
+  RemoveBot: (room, _seat, intent) => room.removeBot(intent.playerId),
 };
 
 const isRoomIntent = (intent: ClientIntent): intent is RoomIntent => intent.type in ROOM_INTENTS;
@@ -222,6 +224,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   guard!: AbuseGuard;
   /** Intent flood control, per connected client. */
   readonly #flood = new Map<string, FloodMeter>();
+  /** Whether this Lobby is on the Lobby list; a full one is not (ticket #196). */
+  #listed = true;
 
   /** The commit pipeline; `onCreate` creates it once every dependency is set. */
   private get driver(): GameDriver {
@@ -341,6 +345,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       // A running game re-arms its deadline; one a crash left game-over (the
       // final save landed, `endedAt` did not) is finished now, so retention applies.
       if (this.game) this.driver.resume(this.game);
+      // A restored Lobby with every Seat taken is not listed (ticket #196).
+      this.syncListing();
     } else {
       this.log.info({ ...this.settings, hasPassword: this.password !== null }, "Room created");
     }
@@ -361,11 +367,12 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.displayName = stored.roomName;
     this.creatorId = stored.creatorId;
     this.password = stored.password && decodePassword(stored.password);
-    this.seats = stored.seats.map(({ playerId, name, tokenHash = null }) => ({
+    this.seats = stored.seats.map(({ playerId, name, tokenHash = null, bot }) => ({
       playerId,
       name,
       sessionId: null,
       tokenHash,
+      ...(bot === true && { bot: true }),
     }));
     this.game = stored.game;
     // Nobody is connected yet: the Room waits for its Players instead of disposing.
@@ -375,8 +382,9 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       // until it ends; `onCreate` arms its deadline once the driver exists.
       this.unlist();
     } else {
-      // A Lobby holds each Seat for its 60 s, as if its Player had just dropped.
-      for (const seat of this.seats) this.hold(seat, null);
+      // A Lobby holds each Guest's Seat for its 60 s, as if its Player had just
+      // dropped; a Bot has nobody to come back, so its Seat needs no hold.
+      for (const seat of this.seats) if (seat.bot !== true) this.hold(seat, null);
     }
   }
 
@@ -617,11 +625,40 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     return this.scheduler.now();
   }
 
+  /**
+   * A Bot on the next empty Seat (ticket #196): any seated Player may, while
+   * the Room is a Lobby. Bots get a generated Player name like a Guest.
+   */
+  addBot(): RejectionCode | void {
+    if (this.game) return "NOT_OFFERED";
+    if (this.seats.length >= this.settings.maxPlayers) return "ROOM_FULL";
+    const seat: SeatRecord = {
+      playerId: newPlayerId(),
+      name: newPlayerName(this.seats.map((s) => s.name)),
+      sessionId: null,
+      tokenHash: null,
+      bot: true,
+    };
+    this.driver.saveSeats([...this.seats, seat]);
+    this.seats.push(seat);
+    this.log.info({ playerId: seat.playerId }, "Bot seated");
+    this.broadcastLobby();
+  }
+
+  /** Takes a Bot off its Seat (ticket #196); a Guest's Seat is refused. */
+  removeBot(playerId: PlayerId): RejectionCode | void {
+    if (this.game) return "NOT_OFFERED";
+    const seat = this.seats.find((s) => s.playerId === playerId);
+    if (seat?.bot !== true) return "NOT_OFFERED";
+    this.log.info({ playerId }, "Bot removed");
+    this.freeSeat(playerId);
+  }
+
   /** Start (R5): any Player, once every Seat is taken. */
   startGame(): RejectionCode | void {
     if (this.game || this.seats.length < this.settings.maxPlayers) return "NOT_OFFERED";
     const game = setupGame({
-      seats: this.seats.map(({ playerId, name }) => ({ playerId, name })),
+      seats: this.seats.map(({ playerId, name, bot }) => ({ playerId, name, bot })),
       settings: this.settings,
       seed: this.timing.seed ?? newSeed(),
       now: this.now(),
@@ -658,8 +695,34 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    */
   private unlist(): void {
     this.guard.lobbyClosed(this.roomId);
+    this.hideFromList();
+  }
+
+  /**
+   * Keeps the Lobby list in step with the Seats (ticket #196): a Lobby with no
+   * empty Seat leaves the list, so strangers do not try to join it, and comes
+   * back once a Seat opens. Only a Lobby is listed.
+   */
+  private syncListing(): void {
+    if (this.game) return;
+    if (this.seats.length >= this.settings.maxPlayers) this.hideFromList();
+    else this.listAgain();
+  }
+
+  /** Removes the Lobby's entry from the Lobby list, if it is on it. */
+  private hideFromList(): void {
+    if (!this.#listed) return;
+    this.#listed = false;
     updateLobby(this, true);
     void this.setMatchmaking({ unlisted: true });
+  }
+
+  /** Puts the Lobby back on the Lobby list once a Seat has opened. */
+  private listAgain(): void {
+    if (this.#listed) return;
+    this.#listed = true;
+    // `unlisted` first: the LobbyRoom reads the Room's listing when it sees the add.
+    void this.setMatchmaking({ unlisted: false }).then(() => updateLobby(this));
   }
 
   /**
@@ -722,16 +785,16 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
 
   /**
    * The Room's numbers for the `rooms`, `players_connected` and
-   * `seats_held_disconnected` gauges. Held: every Seat with no live client
-   * (dropped and held, or restored and not yet taken back), until the game ends.
+   * `seats_held_disconnected` gauges. Held: every Guest Seat with no live
+   * client (dropped and held, or restored and not yet taken back), until the
+   * game ends; a Bot's Seat is neither connected nor held.
    */
   gauges(): RoomGauges {
     const live = new Set(this.clients.map((c) => c.sessionId));
-    const connected = this.seats.filter(
-      (s) => s.sessionId !== null && live.has(s.sessionId),
-    ).length;
+    const guests = this.seats.filter((s) => s.bot !== true);
+    const connected = guests.filter((s) => s.sessionId !== null && live.has(s.sessionId)).length;
     const state = this.game === null ? "lobby" : this.endedAt === null ? "playing" : null;
-    return { state, connected, held: state === null ? 0 : this.seats.length - connected };
+    return { state, connected, held: state === null ? 0 : guests.length - connected };
   }
 
   /** Runs a Player intent through the commit pipeline. */
@@ -765,6 +828,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   /** Sends the Seats to the Room, and the Players count to the Lobby list. */
   private broadcastLobby(): void {
     void this.setMetadata(this.listing());
+    this.syncListing();
     const lobby: LobbyMessage = {
       code: this.roomId,
       roomName: this.displayName,
@@ -772,9 +836,14 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       hasPassword: this.password !== null,
       settings: this.settings,
       // Public Player ids and names only: never a session id or token hash.
-      seats: this.seats.map(({ playerId, name }) => {
+      seats: this.seats.map(({ playerId, name, bot }) => {
         const heldUntil = this.#holds.get(playerId)?.until;
-        return typeof heldUntil === "number" ? { playerId, name, heldUntil } : { playerId, name };
+        return {
+          playerId,
+          name,
+          ...(bot === true && { bot: true }),
+          ...(typeof heldUntil === "number" && { heldUntil }),
+        };
       }),
       now: this.now(),
     };
