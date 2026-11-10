@@ -128,7 +128,7 @@ describe("Bots in the Lobby", () => {
 
     alice.send({ type: "RemoveBot", playerId: withBot.seats[1]!.playerId });
     await list.until((l) => l.get(alice.code)?.players === 1);
-    expect(list.get(alice.code)).toMatchObject({ players: 1, maxPlayers: 2 });
+    expect(list.get(alice.code)).toMatchObject({ players: 1, settings: { maxPlayers: 2 } });
   });
 
   it("starts a game with one Guest and a Bot, and the Bot plays its Turn after the gate", async () => {

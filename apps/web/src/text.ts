@@ -4,7 +4,11 @@
  * go through typed maps of message functions, so each message stays
  * tree-shakeable and a missing one fails to compile.
  */
-import type { RejectionCode } from "@universum/protocol/messages";
+import {
+  DEFAULT_SETTINGS,
+  type RejectionCode,
+  type RoomSettings,
+} from "@universum/protocol/messages";
 import type { PlayerName } from "@universum/rules";
 import { CHANCE_CARD_MONEY, type ChanceCardId, type FieldKind } from "@universum/rules/board";
 import { m } from "#paraglide/messages.js";
@@ -167,6 +171,22 @@ export const chanceCardText = (card: ChanceCardId): { title: string; text: strin
 /** A Room name; `null` (left empty by its creator) gets one made from the Room code. */
 export const roomNameText = (name: string | null, code: string): string =>
   name ?? m.room_name_generated({ code });
+
+/** One line per Room setting the Lobby list marks when a Lobby is off its default (#188). */
+const CUSTOM_SETTING_LINES: Record<keyof RoomSettings, (settings: RoomSettings) => string> = {
+  maxPlayers: (settings) => m.rooms_setting_players({ max: settings.maxPlayers }),
+  minuteLimit: (settings) => m.lobby_minute_limit({ minutes: settings.minuteLimit }),
+  startingCash: (settings) => m.lobby_starting_cash({ amount: formatMoney(settings.startingCash) }),
+};
+
+const isRoomSetting = (key: string): key is keyof RoomSettings => key in DEFAULT_SETTINGS;
+
+/** The differing Room settings of a Lobby, as the Lobby list shows them (#188). */
+export const customSettingsText = (settings: RoomSettings): string[] =>
+  Object.keys(CUSTOM_SETTING_LINES)
+    .filter(isRoomSetting)
+    .filter((key) => settings[key] !== DEFAULT_SETTINGS[key])
+    .map((key) => CUSTOM_SETTING_LINES[key](settings));
 
 /** Money in full, in the active language's number format. */
 export const formatMoney = (amount: number): string =>

@@ -234,8 +234,8 @@ export type LobbyListingMetadata = {
   roomName: string | null;
   /** Taken Seats. */
   players: number;
-  maxPlayers: RoomSettings["maxPlayers"];
-  minuteLimit: RoomSettings["minuteLimit"];
+  /** The Room's settings, so the list can mark the ones a Lobby is not on the defaults of (#188). */
+  settings: RoomSettings;
   hasPassword: boolean;
 };
 

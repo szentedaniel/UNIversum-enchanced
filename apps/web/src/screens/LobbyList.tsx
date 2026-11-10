@@ -1,5 +1,5 @@
 import type { LobbyListing } from "@universum/protocol/messages";
-import { Lock, Plus, Timer, Users } from "lucide-react";
+import { Lock, Plus, SlidersHorizontal, Timer, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { ScreenHeader } from "#components/ScreenHeader.tsx";
@@ -7,7 +7,7 @@ import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { Card } from "#components/ui/card.tsx";
 import { leaveRoom, watchLobbyList } from "#connection.ts";
 import { JoinByCode, PasswordForm, RejectionText, useJoin, waitLabel } from "#screens/join.tsx";
-import { m, roomNameText } from "#text.ts";
+import { customSettingsText, m, roomNameText } from "#text.ts";
 
 /** `/rooms`: every open Lobby, live; a started game leaves the list. */
 export function LobbyList() {
@@ -40,7 +40,8 @@ export function LobbyList() {
         {lobbies && lobbies.length > 0 && (
           <ul className="m-0 grid w-full list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
             {lobbies.map((lobby) => {
-              const full = lobby.players >= lobby.maxPlayers;
+              const full = lobby.players >= lobby.settings.maxPlayers;
+              const custom = customSettingsText(lobby.settings);
               const current = tried === lobby.code;
               return (
                 <li key={lobby.code} data-testid={`lobby-${lobby.code}`}>
@@ -62,13 +63,23 @@ export function LobbyList() {
                     <p className="m-0 flex flex-wrap items-center gap-x-3 gap-y-1 font-bold">
                       <span className="inline-flex items-center gap-1">
                         <Users size={18} strokeWidth={2.5} aria-hidden />
-                        {m.lobby_players({ count: lobby.players, max: lobby.maxPlayers })}
+                        {m.lobby_players({ count: lobby.players, max: lobby.settings.maxPlayers })}
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Timer size={18} strokeWidth={2.5} aria-hidden />
-                        {m.lobby_minute_limit({ minutes: lobby.minuteLimit })}
+                        {m.lobby_minute_limit({ minutes: lobby.settings.minuteLimit })}
                       </span>
                     </p>
+                    {custom.length > 0 && (
+                      <p
+                        data-testid="custom-settings"
+                        className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-extrabold text-ink/70"
+                      >
+                        <SlidersHorizontal size={16} strokeWidth={3} aria-hidden />
+                        {m.rooms_custom_settings()}
+                        <span>{custom.join(" · ")}</span>
+                      </p>
+                    )}
                     {full ? (
                       <p className="m-0 font-display text-lg text-ink/70">{m.rooms_full()}</p>
                     ) : (
