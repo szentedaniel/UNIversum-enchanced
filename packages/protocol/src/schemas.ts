@@ -67,7 +67,12 @@ const PLAYER_INTENT_SCHEMAS = [
   }),
 ] as const;
 
-const ROOM_INTENT_SCHEMAS = [z.strictObject({ type: z.literal("Start") })] as const;
+const ROOM_INTENT_SCHEMAS = [
+  z.strictObject({ type: z.literal("Start") }),
+  z.strictObject({ type: z.literal("AddBot") }),
+  // The public Player id a Room made: bounded, but the Room looks it up in its own Seats.
+  z.strictObject({ type: z.literal("RemoveBot"), playerId: z.string().min(1).max(64) }),
+] as const;
 
 export const playerIntentSchema = z.discriminatedUnion("type", [...PLAYER_INTENT_SCHEMAS]);
 

@@ -15,6 +15,7 @@ const owner: PlayerState = {
   bankrupt: false,
   quarantineRounds: null,
   hasPcrTest: false,
+  bot: false,
 };
 
 function viewWith(field: FieldView): PublicView {

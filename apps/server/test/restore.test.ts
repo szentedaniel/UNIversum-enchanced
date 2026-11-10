@@ -5,7 +5,7 @@ import {
   type RejectionCode,
   type RoomSettings,
 } from "@universum/protocol";
-import { migrate, type GameState } from "@universum/rules";
+import { migrate, STATE_VERSION, type GameState } from "@universum/rules";
 import stateV1 from "../../../packages/rules/test/fixtures/state-v1.json" with { type: "json" };
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -238,7 +238,7 @@ describe("restore on boot", () => {
     const game = after.room(code)?.game;
     // Migrated on boot: the deadline it had, no wait before acting, and the default starting cash.
     expect(game).toMatchObject({
-      stateVersion: 3,
+      stateVersion: STATE_VERSION,
       turn: 2,
       actsAfter: stateV1.turnDeadline - DEADLINE_AFTER,
       settings: { startingCash: 2_500_000 },
@@ -248,6 +248,23 @@ describe("restore on boot", () => {
     // It plays on: the Turn times out at the deadline it kept.
     after.scheduler.advanceTo(stateV1.turnDeadline);
     expect(after.room(code)?.game).toMatchObject({ version: 3, turn: 3 });
+  });
+
+  it("a stored full Lobby restores with its Bots", async () => {
+    const before = await start();
+    const alice = await before.create({ maxPlayers: 2 });
+    alice.send({ type: "AddBot" });
+    const lobby = await alice.until("lobby", (message) => message.seats.length === 2);
+    const botSeat = lobby.seats[1]!;
+    const code = alice.code;
+
+    const after = await restart(before, T0 + 5_000);
+
+    expect(after.restored).toBe(1);
+    expect(after.room(code)?.seats.map(({ playerId, bot }) => ({ playerId, bot }))).toEqual([
+      { playerId: lobby.seats[0]?.playerId, bot: undefined },
+      { playerId: botSeat.playerId, bot: true },
+    ]);
   });
 
   it("a stored game the server can't migrate stays stored and is not restored", async () => {

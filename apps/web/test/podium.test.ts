@@ -16,6 +16,7 @@ function player(id: string, seat: number): PlayerView {
     bankrupt: false,
     quarantineRounds: null,
     hasPcrTest: false,
+    bot: false,
   };
 }
 

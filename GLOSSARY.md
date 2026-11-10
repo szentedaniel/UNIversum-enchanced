@@ -31,7 +31,7 @@ A Player's place in a Room, kept for them while they are disconnected so they ca
 _Avoid_: Slot
 
 **Lobby list**:
-The public list of Lobbies a Guest can join; Rooms whose game has started are not on it.
+The public list of Lobbies a Guest can join; a Room whose game has started, or whose Seats are all taken, is not on it.
 _Avoid_: Room list, server browser
 
 **Room code**:

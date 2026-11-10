@@ -52,6 +52,7 @@ const player = (id: string, seat: number, position: number, cash = 100_000) => (
   bankrupt: false,
   quarantineRounds: null,
   hasPcrTest: false,
+  bot: false,
   wealth: cash,
 });
 
