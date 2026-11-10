@@ -52,16 +52,15 @@ const trackedIssues = (repo: string, state: "open" | "closed", search?: string):
     sh(
       `gh issue list --repo "${repo}" --state ${state}${searchArg} --limit 200 --json number,title,body,labels,subIssues`,
     ),
-  ).flatMap((issue) => {
-    const work = issueWork({
+  ).map((issue) =>
+    issueWork({
       number: issue.number,
       title: issue.title,
       body: issue.body,
       labels: issue.labels.map((label) => label.name),
       subIssues: issue.subIssues.length,
-    });
-    return work === undefined ? [] : [work];
-  });
+    }),
+  );
 };
 
 const trackedPulls = (repo: string): TrackedWork[] =>

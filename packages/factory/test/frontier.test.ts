@@ -205,7 +205,7 @@ describe("frontierOf", () => {
 
 describe("overlapNote", () => {
   it("names the blocking pull request number and dedupes per pull", () => {
-    const pull = {
+    const blocking = {
       number: 154,
       url: "https://example.test/pull/154",
       body: "",
@@ -213,7 +213,7 @@ describe("overlapNote", () => {
       files: ["packages/factory/src/shared/runs.ts"],
     };
 
-    const note = overlapNote(pull);
+    const note = overlapNote(blocking);
 
     expect(note.marker).toBe("<!-- factory-overlap:#154 -->");
     expect(note.body).toContain("open pull request #154");

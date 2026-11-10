@@ -147,17 +147,17 @@ const pathsIn = (title: string, body: string | null): readonly string[] =>
   targetPathsIn(`${title}\n${body ?? ""}`);
 
 /**
- * The work an open or recently closed issue carries, or nothing when it is a
- * spec or a report: those name a whole area, not a module another ticket could
- * repeat.
+ * The work an open or recently closed issue carries: always its title (the
+ * pass must not re-open the same wording), and its module paths only when it is
+ * a ticket. A spec or a report names a whole area, not a module to claim.
  */
-export const issueWork = (issue: TrackedIssue): TrackedWork | undefined => {
-  if (issue.subIssues > 0) return undefined;
-  if (!issue.labels.some((label) => WORK_LABELS[label] === true)) return undefined;
+export const issueWork = (issue: TrackedIssue): TrackedWork => {
+  const isTicket =
+    issue.subIssues === 0 && issue.labels.some((label) => WORK_LABELS[label] === true);
   return {
     number: issue.number,
     title: issue.title,
-    paths: pathsIn(issue.title, issue.body),
+    paths: isTicket ? pathsIn(issue.title, issue.body) : [],
   };
 };
 

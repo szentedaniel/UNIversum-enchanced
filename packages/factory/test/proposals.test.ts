@@ -52,13 +52,13 @@ describe("proposalIssueBody", () => {
   });
 });
 
-describe("newProposals", () => {
-  const tracked = (number: number, title: string, paths: string[] = []) => ({
-    number,
-    title,
-    paths,
-  });
+const tracked = (number: number, title: string, paths: string[] = []) => ({
+  number,
+  title,
+  paths,
+});
 
+describe("newProposals", () => {
   it("drops a proposal an open issue already carries, ignoring case and spacing", () => {
     const open = [tracked(120, "  deepen the DISPATCHER's frontier ")];
 
@@ -80,7 +80,7 @@ describe("newProposals", () => {
         body: "Closes #129",
         files: ["packages/factory/src/shared/runs.ts"],
       }),
-    ].flatMap((work) => (work === undefined ? [] : [work]));
+    ];
     const repeat = { ...twoWayDoor, files: ["packages/factory/src/shared/runs.ts"] };
 
     expect(newProposals([repeat, oneWayDoor], trackedWork)).toEqual([oneWayDoor]);
@@ -119,7 +119,7 @@ describe("issueWork", () => {
     });
   });
 
-  it("ignores a spec, a report and an unlabelled issue", () => {
+  it("keeps a spec, a report and an unlabelled issue's title, but not its modules", () => {
     const base = {
       number: 85,
       title: "AI software factory",
@@ -128,9 +128,13 @@ describe("issueWork", () => {
       subIssues: 0,
     };
 
-    expect(issueWork({ ...base, subIssues: 8 })).toBeUndefined();
-    expect(issueWork({ ...base, labels: ["factory:report"] })).toBeUndefined();
-    expect(issueWork({ ...base, labels: [] })).toBeUndefined();
+    for (const issue of [
+      { ...base, subIssues: 8 },
+      { ...base, labels: ["factory:report"] },
+      { ...base, labels: [] },
+    ]) {
+      expect(issueWork(issue)).toEqual({ number: 85, title: "AI software factory", paths: [] });
+    }
   });
 });
 

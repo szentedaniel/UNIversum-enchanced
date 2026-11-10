@@ -83,12 +83,13 @@ const modulePathOf = (raw: string): ModulePath | undefined => {
 
 const sameModulePath = (a: ModulePath, b: ModulePath): boolean => {
   if (a.segments.length >= 2 && b.segments.length >= 2) {
-    const isSuffix = (short: string, long: string): boolean =>
-      long === short || long.endsWith(`/${short}`);
-    if (isSuffix(a.key, b.key) || isSuffix(b.key, a.key)) return true;
-    const isDirectoryPrefix = (short: ModulePath, long: ModulePath): boolean =>
-      short.directory && short.segments.length >= 2 && long.key.startsWith(`${short.key}/`);
-    return isDirectoryPrefix(a, b) || isDirectoryPrefix(b, a);
+    return (
+      a.key === b.key ||
+      a.key.endsWith(`/${b.key}`) ||
+      b.key.endsWith(`/${a.key}`) ||
+      (a.directory && b.key.startsWith(`${a.key}/`)) ||
+      (b.directory && a.key.startsWith(`${b.key}/`))
+    );
   }
   const aIsDistinct = a.bare && a.stem !== "" && !GENERIC_STEMS[a.stem.toLowerCase()];
   const bIsDistinct = b.bare && b.stem !== "" && !GENERIC_STEMS[b.stem.toLowerCase()];
