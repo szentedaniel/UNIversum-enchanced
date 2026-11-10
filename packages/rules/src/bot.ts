@@ -61,6 +61,52 @@ function offerIntent(view: PublicView, phase: PhaseOf<"offer">): PlayerIntent {
 }
 
 /**
+ * The Quarantine choice (R41–R46): spend a held test, buy one to leave early
+ * while another round would be wasted, else roll for 12. A 12 is the only
+ * free escape, and on the last round a failed roll releases the Player next
+ * Turn anyway, so the test's price buys nothing there.
+ */
+function quarantineIntent(
+  view: PublicView,
+  phase: PhaseOf<"quarantineChoice">,
+): PlayerIntent {
+  const turn = view.turn;
+  if (phase.canUsePcrTest) return { type: "UsePcrTest", turn };
+  const rounds = playerOf(view, view.currentPlayer).quarantineRounds ?? 0;
+  if (phase.canBuyPcrTest && rounds > 1) return { type: "BuyPcrTest", turn };
+  return { type: "RollForTwelve", turn };
+}
+
+/**
+ * The Sale (R66–R69): cover the Shortfall with the Fields the Bot can spare.
+ * Whole Monopolies and the Doubler's Field go last, then the cheapest first,
+ * so a shortfall costs the least Rent and never breaks a Monopoly needlessly.
+ */
+function saleIntent(view: PublicView, phase: PhaseOf<"selling">): PlayerIntent {
+  const me = view.currentPlayer;
+  const candidates = view.fields.flatMap((field, id) => {
+    if (field.owner !== me) return [];
+    const group = FIELDS[id]?.group;
+    const monopoly =
+      group !== null &&
+      group !== undefined &&
+      FIELDS.every((f) => f.group !== group || view.fields[f.id]?.owner === me);
+    const keep = (monopoly ? 2 : 0) + (view.doubler?.field === id ? 1 : 0);
+    return [{ id, sale: field.sale, keep }];
+  });
+  candidates.sort((a, b) => a.keep - b.keep || a.sale - b.sale || a.id - b.id);
+
+  const fields: FieldId[] = [];
+  let proceeds = 0;
+  for (const candidate of candidates) {
+    if (proceeds >= phase.shortfall) break;
+    fields.push(candidate.id);
+    proceeds += candidate.sale;
+  }
+  return { type: "SellFields", turn: view.turn, fields };
+}
+
+/**
  * The intent a Bot submits for the open Decision, or `null` once the game is
  * over. The switch is exhaustive: a new phase fails to compile until the
  * policy covers it.
@@ -72,6 +118,10 @@ export function botIntent(view: PublicView): PlayerIntent | null {
       return { type: "Roll", turn };
     case "offer":
       return offerIntent(view, view.phase);
+    case "quarantineChoice":
+      return quarantineIntent(view, view.phase);
+    case "selling":
+      return saleIntent(view, view.phase);
     case "gameOver":
       return null;
     default: {

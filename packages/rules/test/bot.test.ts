@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { botIntent, publicView, type FieldId, type GameState } from "#index.ts";
-import { newGame, rollOnto, withField, withPlayer } from "./helpers.ts";
+import { botIntent, publicView, type FieldId, type GameState, type PlayerState } from "#index.ts";
+import { newGame, playTurn, rollOnto, withField, withPlayer } from "./helpers.ts";
 
 const VESZPREM = 1;
 const SEATTLE = 17;
@@ -86,6 +86,110 @@ describe("Bot policy", () => {
         type: "DeclineOffer",
         turn: landed.turn,
       });
+    });
+  });
+});
+
+/** The second Seat's Quarantine choice: the first Seat's Turn passes to it. */
+function quarantineChoice(patch: Partial<PlayerState> = {}): GameState {
+  const state = withPlayer(newGame({ players: 2 }), "p2", { quarantineRounds: 2, ...patch });
+  const opened = playTurn(state).state;
+  expect(opened.phase.kind).toBe("quarantineChoice");
+  return opened;
+}
+
+describe("Quarantine choice", () => {
+  it("uses a held PCR test", () => {
+    const state = quarantineChoice({ hasPcrTest: true });
+
+    expect(botIntent(publicView(state))).toEqual({ type: "UsePcrTest", turn: state.turn });
+  });
+
+  it("buys a PCR test to leave early", () => {
+    const state = quarantineChoice({ quarantineRounds: 3 });
+
+    expect(botIntent(publicView(state))).toEqual({ type: "BuyPcrTest", turn: state.turn });
+  });
+
+  it("rolls for 12 on its last round", () => {
+    const state = quarantineChoice({ quarantineRounds: 1 });
+
+    expect(botIntent(publicView(state))).toEqual({ type: "RollForTwelve", turn: state.turn });
+  });
+
+  it("rolls for 12 when it cannot afford a test", () => {
+    const state = quarantineChoice({ quarantineRounds: 3, cash: 150_000 });
+
+    expect(botIntent(publicView(state))).toEqual({ type: "RollForTwelve", turn: state.turn });
+  });
+});
+
+/** The second Seat's Sale: Rent on Seattle leaves `cash` short of its Level-4 Rent. */
+function openSale(cash: number, fields: Record<FieldId, number>): GameState {
+  let state = Object.entries(fields).reduce(
+    (next, [field, level]) => withField(next, Number(field), { owner: "p2", level }),
+    newGame(),
+  );
+  state = withField(state, SEATTLE, { owner: "p1", level: 4 });
+  state = withPlayer(state, "p2", { cash });
+  return rollOnto({ ...state, currentPlayer: "p2" }, SEATTLE).state;
+}
+
+describe("Sale", () => {
+  const ZURICH = 5;
+  const PARIS = 6;
+  const EDINBURGH = 7;
+  const CHICAGO = 9;
+  const AUSTIN = 10;
+  const PRINCETON = 11;
+
+  it("sells a Field outside its Monopoly first", () => {
+    const state = openSale(900_000, {
+      [ZURICH]: 1,
+      [PARIS]: 1,
+      [EDINBURGH]: 1,
+      [AUSTIN]: 1,
+    });
+
+    expect(state.phase.kind).toBe("selling");
+    expect(botIntent(publicView(state))).toEqual({
+      type: "SellFields",
+      turn: state.turn,
+      fields: [AUSTIN],
+    });
+  });
+
+  it("keeps the Doubler's Field for last", () => {
+    const sale = openSale(900_000, {
+      [ZURICH]: 1,
+      [PARIS]: 1,
+      [EDINBURGH]: 1,
+      [AUSTIN]: 1,
+      [PRINCETON]: 1,
+    });
+    const state: GameState = { ...sale, doubler: { field: AUSTIN, count: 1 } };
+
+    expect(botIntent(publicView(state))).toEqual({
+      type: "SellFields",
+      turn: state.turn,
+      fields: [PRINCETON],
+    });
+  });
+
+  it("sells enough cheapest Fields to cover the Shortfall", () => {
+    const VIENNA = 13;
+    const BERLIN = 15;
+    const state = openSale(100_000, {
+      [AUSTIN]: 1,
+      [PRINCETON]: 1,
+      [VIENNA]: 1,
+      [BERLIN]: 1,
+    });
+
+    expect(botIntent(publicView(state))).toEqual({
+      type: "SellFields",
+      turn: state.turn,
+      fields: [AUSTIN, PRINCETON, VIENNA],
     });
   });
 });
