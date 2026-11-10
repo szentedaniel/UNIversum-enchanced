@@ -21,18 +21,20 @@ Branch `agent/issue-115-turn-deadline-module-one-place-for-the-wake-up-its`, fro
 - The constants `ENGINE_THROWS_FATAL`, `DEADLINE_RETRY_MS`, `DEADLINE_RETRY_MAX_MS` now live in
   `turn-clock.ts`, not `game-room.ts`.
 
-## GameRoom wiring
+## Wiring
 
-- The clock is created in `onCreate` **after** `this.log = this.log.child({ roomCode })`: a
-  Colyseus Room subclass initialises `scheduler`/`engine`/`timing`/`log` after `super()`, so a field
-  initializer would capture the defaults, and the fatal line must carry `roomCode`.
-- A restored running game arms in `onCreate` (`else if (this.game) this.#clock.arm(this.game)`),
-  not in `restore`, for the same reason. A stored game-over state still goes through `endGame`.
-- `commit` calls `turnClock.arm(state)` unless the phase is `gameOver`; `endGame` and `onDispose`
-  call `turnClock.cancel()`. Player intents call `turnClock.run`.
-- The retention deletion has its own handle (`#cancelDeletion`), no longer sharing the Turn's.
-- Do not name a getter `clock` on `GameRoom`: `Room` already has a `clock` member; the private
-  accessor is `turnClock`.
+- After #117 the `TurnClock` lives inside `GameDriver`, which creates it in its constructor. The
+  driver itself is created in `GameRoom.onCreate` **after** `this.log = this.log.child({ roomCode
+  })`: a Colyseus Room subclass initialises `scheduler`/`engine`/`timing`/`log` after `super()`, so
+  a field initializer would capture the defaults, and the fatal line must carry `roomCode`.
+- A restored running game arms in `onCreate` through `driver.resume(game)`, not in `restore`, for
+  the same reason. A stored game-over state still goes through `endGame`.
+- The driver's `commit` calls `clock.arm(state)` unless the phase is `gameOver`; `#end` and
+  `dispose` call `clock.cancel()`. Player intents call `clock.run`.
+- The retention deletion has its own handle (`GameDriver.#cancelDeletion`), no longer sharing the
+  Turn's.
+- Do not name a getter `clock` on `GameRoom`: `Room` already has a `clock` member; the driver keeps
+  the clock private.
 
 ## Tests
 
@@ -44,6 +46,6 @@ Branch `agent/issue-115-turn-deadline-module-one-place-for-the-wake-up-its`, fro
 
 ## For #117 (commit pipeline)
 
-The clock is ready to move beside the pipeline: `run` is the engine seam, `onTimeout` is the
-commit it drives, `onError` is `GameRoom.failed`. Keep `arm`/`cancel` calls at the same points
-(after a successful write/broadcast, on game over, on dispose).
+Landed: `GameDriver` composes the clock. `run` is the engine seam, `onTimeout` drives the driver's
+commit, `onError` is the driver's `failed`. `arm`/`cancel` stay at the same points (after a
+successful write and broadcast, on game over, on dispose).

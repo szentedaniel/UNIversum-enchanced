@@ -19,7 +19,6 @@ import {
   type GameMessage,
   type LobbyListingMetadata,
   type LobbyMessage,
-  type LobbySeat,
   type Refusal,
   type RejectionCode,
   type RejectionMessage,
@@ -29,24 +28,16 @@ import {
 } from "@universum/protocol";
 import {
   apply,
-  isRejection,
   publicView,
   setupGame,
-  type Applied,
-  type GameEvent,
   type GameState,
   type PlayerId,
   type PlayerIntent,
-  type Seed,
 } from "@universum/rules";
 import { FloodMeter } from "#abuse/flood.ts";
 import { REQUEST_ID_HEADER, type AbuseGuard } from "#abuse/guard.ts";
 import { ipBucket } from "#abuse/ip.ts";
-import {
-  noReporter,
-  type ErrorContext,
-  type ErrorReporter,
-} from "#observability/error-reporting.ts";
+import { noReporter, type ErrorReporter } from "#observability/error-reporting.ts";
 import { silentLogger, type Logger } from "#observability/logger.ts";
 import type { GameMetrics, RoomGauges } from "#observability/metrics.ts";
 import { guestTokenIn, hashGuestToken } from "#room/guest-token.ts";
@@ -61,17 +52,11 @@ import {
 } from "#room/password.ts";
 import { claimRoomCode, releaseRoomCode, reserveRoomCode } from "#room/room-code.ts";
 import { checkRoomName } from "#room/room-name.ts";
+import { GameDriver, type GameTiming, type SeatRecord } from "#room/game-driver.ts";
 import { systemScheduler, type Scheduler } from "#room/scheduler.ts";
-import { TurnClock } from "#room/turn-clock.ts";
-import { deleteAfterRetention } from "#store/retention.ts";
 import type { RoomStore, StoredRoom } from "#store/room-store.ts";
 
-/**
- * A taken Seat; `sessionId` is `null` while nobody is connected to it (e.g.
- * after a restore). `tokenHash`: the hash of its Guest's token, `null` if the
- * Guest sent none (then only the reconnection token brings them back).
- */
-export type SeatRecord = LobbySeat & { sessionId: string | null; tokenHash: string | null };
+export type { GameTiming, SeatRecord } from "#room/game-driver.ts";
 
 /** How long a Lobby Seat is held for a Player who dropped (spec: Seat hold). */
 export const LOBBY_SEAT_HOLD_MS = 60_000;
@@ -178,13 +163,6 @@ export class RestoreRoom {
 /** Server-side create options for a restore: `matchMaker.createRoom(GAME_ROOM, restoreOptions(room))`. */
 export const restoreOptions = (stored: StoredRoom) => ({ restore: new RestoreRoom(stored) });
 
-/**
- * Test-only overrides (`GAME_TURN_LIMIT_MS`, `GAME_MINUTE_MS`, `GAME_SEED`),
- * so a full game fits an e2e run and its dice and cards are the same on every
- * run. Empty in production, which uses the rules constants and a fresh seed.
- */
-export type GameTiming = { turnLimitMs?: number; minuteMs?: number; seed?: Seed };
-
 function restoreFrom(options: unknown): StoredRoom | null {
   if (typeof options !== "object" || options === null || !("restore" in options)) return null;
   return options.restore instanceof RestoreRoom ? options.restore.stored : null;
@@ -234,10 +212,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   engine: typeof apply = apply;
   /** Shorter Turns and minutes for e2e runs; empty in production. */
   timing: GameTiming = {};
-  /** The Turn deadline's one wake-up, retry back-off and engine-throw count; `onCreate` creates it. */
-  #clock: TurnClock | null = null;
-  /** Cancels the retention deletion once the game ended (its own wake-up, not the Turn's). */
-  #cancelDeletion: (() => void) | null = null;
+  /** The commit pipeline: the engine, the store, the broadcast and the one wake-up; `onCreate` creates it. */
+  #driver: GameDriver | null = null;
   /** Set when the process shuts down: Seats and the stored Room must then stay as they are. */
   #shuttingDown = false;
   /** Seats held for absent Players, by public Player id (spec: Seat hold). */
@@ -246,6 +222,12 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   guard!: AbuseGuard;
   /** Intent flood control, per connected client. */
   readonly #flood = new Map<string, FloodMeter>();
+
+  /** The commit pipeline; `onCreate` creates it once every dependency is set. */
+  private get driver(): GameDriver {
+    if (this.#driver === null) throw new Error("the driver is created in onCreate");
+    return this.#driver;
+  }
 
   /**
    * Static `onAuth` (bound to the server's guard by `createGameServer`): runs
@@ -325,22 +307,40 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (!this.game) this.guard.lobbyOpened(this.roomId);
     this.metadata = this.listing();
     this.log = this.log.child({ roomCode: this.roomId });
-    this.#clock = new TurnClock({
-      scheduler: this.scheduler,
+    this.#driver = new GameDriver({
       engine: this.engine,
-      timing: this.timing,
+      scheduler: this.scheduler,
+      store: this.store,
+      metrics: this.metrics,
       log: this.log,
-      onError: (error, intent) => this.failed(error, "Engine threw", intent),
-      onTimeout: (result) => this.commit(result, "TurnTimedOut"),
+      reporter: this.reporter,
+      timing: this.timing,
+      roomCode: this.roomId,
+      readRoom: () => ({
+        settings: this.settings,
+        roomName: this.displayName,
+        creatorId: this.creatorId,
+        password: this.password && encodePassword(this.password),
+      }),
+      readState: () => ({ game: this.game, seats: this.seats, endedAt: this.endedAt }),
+      publish: (state, message) => {
+        this.game = state;
+        this.broadcast(MESSAGE.game, message);
+      },
+      onEnded: (endedAt) => {
+        this.endedAt = endedAt;
+        this.releaseHolds();
+      },
+      onRetention: () => {
+        void this.disconnect();
+      },
     });
     this.metrics.trackRoom(this);
     if (restored) {
       this.log.info({ playing: this.game !== null, seats: this.seats.length }, "Room restored");
-      // A crash between the final save and `endGame` can leave a game-over
-      // state stored as unfinished: finish it now, so retention applies.
-      if (this.game?.phase.kind === "gameOver") this.endGame();
-      // A deadline that passed while the server was down fires at once.
-      else if (this.game) this.#clock.arm(this.game);
+      // A running game re-arms its deadline; one a crash left game-over (the
+      // final save landed, `endedAt` did not) is finished now, so retention applies.
+      if (this.game) this.driver.resume(this.game);
     } else {
       this.log.info({ ...this.settings, hasPassword: this.password !== null }, "Room created");
     }
@@ -372,7 +372,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.autoDispose = false;
     if (this.game) {
       // A running game lives on with nobody connected (its Turns time out),
-      // until it ends; `onCreate` arms its deadline once the clock exists.
+      // until it ends; `onCreate` arms its deadline once the driver exists.
       this.unlist();
     } else {
       // A Lobby holds each Seat for its 60 s, as if its Player had just dropped.
@@ -405,7 +405,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     };
     if (auth?.creates && this.seats.length === 0) this.creatorId = seat.playerId;
     // Saved first: a Seat the store doesn't have isn't taken (the join fails).
-    this.save([...this.seats, seat], this.game, []);
+    this.driver.saveSeats([...this.seats, seat]);
     this.seats.push(seat);
     this.log.info({ playerId: seat.playerId }, "Seat taken");
     client.send(MESSAGE.welcome, { playerId: seat.playerId } satisfies WelcomeMessage);
@@ -602,8 +602,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.guard.lobbyClosed(this.roomId);
     this.metrics.untrackRoom(this);
     this.log.info("Room closed");
-    this.#clock?.cancel();
-    this.#cancelDeletion?.();
+    this.#driver?.dispose();
     // Colyseus gives up the held reconnections itself; only the 60 s wake-ups are left.
     for (const hold of this.#holds.values()) hold.cancel();
     this.#holds.clear();
@@ -629,8 +628,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       turnLimitMs: this.timing.turnLimitMs,
       minuteMs: this.timing.minuteMs,
     });
-    const refused = this.commit({ state: game, events: [], reveals: [] });
-    if (refused) return refused;
+    const outcome = this.driver.start(game);
+    if ("rejected" in outcome) return outcome.rejected;
     this.log.info("Room started");
     // The game outlives its connections: Seats are held until it ends.
     this.autoDispose = false;
@@ -642,32 +641,13 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /**
-   * The game is over (`commit` calls this when the game-over phase arrives):
-   * the Room records when, stops waking up for Turns, and is deleted with its
-   * events 24 h later (spec: Retention).
+   * The game is over (the driver's commit calls this when the game-over phase
+   * arrives, and a restore finishes a game-over state a crash left unfinished):
+   * the driver records when, swaps the Turn deadline for the retention
+   * wake-up and tells this Room to release its Seats (spec: Retention, Seat hold).
    */
   endGame(): void {
-    if (!this.game || this.endedAt !== null) return;
-    this.endedAt = this.now();
-    try {
-      this.save(this.seats, this.game, []);
-    } catch (error) {
-      // The final state is already stored; a restore finishes the Room (see `restore`).
-      this.log.error({ err: error }, "Room end not saved");
-    }
-    this.log.info("Room ended");
-    // Seats were held until the game ends (spec: Seat hold).
-    this.releaseHolds();
-    this.#clock?.cancel();
-    this.#cancelDeletion = deleteAfterRetention(
-      this.store,
-      this.scheduler,
-      this.roomId,
-      this.endedAt,
-      () => {
-        void this.disconnect();
-      },
-    );
+    this.driver.endGame();
   }
 
   /**
@@ -717,7 +697,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
           : this.play(seat, intent);
       } catch (error) {
         // A bug outside the engine's own call (say, in game setup): same as an engine throw.
-        this.failed(error, "Intent failed", intent.type);
+        this.driver.failed(error, "Intent failed", intent.type);
         refused = "INTERNAL";
       }
     }
@@ -754,85 +734,17 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     return { state, connected, held: state === null ? 0 : this.seats.length - connected };
   }
 
-  /** Runs a Player intent through the rules engine. */
+  /** Runs a Player intent through the commit pipeline. */
   private play(seat: SeatRecord, intent: PlayerIntent): RejectionCode | void {
     if (!this.game) return "NOT_OFFERED";
-    const result = this.turnClock.run(this.game, intent, seat.playerId);
-    if (result === null) return "INTERNAL";
-    if (isRejection(result)) return result.code;
-    return this.commit(result, intent.type);
-  }
-
-  /** The Turn deadline's one wake-up; `onCreate` creates it. */
-  private get turnClock(): TurnClock {
-    if (this.#clock === null) throw new Error("the Turn clock is created in onCreate");
-    return this.#clock;
-  }
-
-  /**
-   * Logs an error at `error` and reports it, with the Room code, the game's
-   * `version` and `phase`, and the intent type: never the snapshot or payload.
-   */
-  private failed(error: unknown, message: string, intent: string): void {
-    const context: ErrorContext = { intent };
-    if (this.game) {
-      context.version = this.game.version;
-      context.phase = this.game.phase.kind;
-    }
-    this.log.error({ err: error, ...context }, message);
-    this.reporter.report(error, { roomCode: this.roomId, ...context });
-  }
-
-  /**
-   * Accepts a new game state, in this order: store it with its events, push
-   * the view, events and their reveals to everyone, and wake up at its Turn
-   * deadline. The store keeps the events only, never the reveals (ADR-0003).
-   * A failed write changes nothing and tells no one (the sender gets INTERNAL).
-   */
-  private commit(applied: Applied, intent = "Start"): RejectionCode | void {
-    const { state, events, reveals } = applied;
-    try {
-      this.save(this.seats, state, events);
-    } catch (error) {
-      // The Room keeps its last good state.
-      this.failed(error, "Room not saved", intent);
-      return "INTERNAL";
-    }
-    this.game = state;
-    const message: GameMessage = {
-      view: publicView(state, this.timing),
-      events,
-      reveals,
-      now: this.now(),
-    };
-    this.broadcast(MESSAGE.game, message);
-    if (state.phase.kind === "gameOver") this.endGame();
-    else this.turnClock.arm(state);
-  }
-
-  /** Writes the Room's snapshot (and an intent's events) to the store; throws if the write fails. */
-  private save(seats: SeatRecord[], game: GameState | null, events: GameEvent[]): void {
-    this.metrics.timeStoreWrite(() =>
-      this.store.save(
-        {
-          code: this.roomId,
-          settings: this.settings,
-          roomName: this.displayName,
-          creatorId: this.creatorId,
-          password: this.password && encodePassword(this.password),
-          seats: seats.map(({ playerId, name, tokenHash }) => ({ playerId, name, tokenHash })),
-          game,
-          endedAt: this.endedAt,
-        },
-        events,
-      ),
-    );
+    const outcome = this.driver.submit(this.game, intent, seat.playerId);
+    return "rejected" in outcome ? outcome.rejected : undefined;
   }
 
   /** A Lobby change nobody can refuse (a Guest left): a failed write is caught up by the next one. */
   private trySave(): void {
     try {
-      this.save(this.seats, this.game, []);
+      this.driver.saveSeats(this.seats);
     } catch (error) {
       // The next successful save writes the current Seats.
       this.log.error({ err: error }, "Seats not saved");
