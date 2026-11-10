@@ -13,7 +13,7 @@
 # nothing. The gate code and the scripts always run main's copy.
 name: Factory Maintain
 
-run-name: Factory maintain ${{ inputs.dry_run && '(dry run)' || '(weekly)' }}
+run-name: Factory maintain ${{ inputs.dry_run && '(dry run)' || (github.event_name == 'schedule' && '(scheduled)' || '(manual)') }}
 
 on:
   schedule:
@@ -57,14 +57,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          EVENT: ${{ github.event_name }}
+          SCHEDULED: ${{ github.event_name == 'schedule' }}
           RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          if [ "$EVENT" != "schedule" ]; then echo "proceed=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "$SCHEDULED" != "true" ]; then echo "proceed=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           since=$(date -u -d '3 days ago' +%Y-%m-%dT%H:%M:%SZ)
-          done=$(gh run list --workflow factory-maintain.yml --event schedule --status success \
-            --created ">=$since" --json databaseId --jq "[.[] | select(.databaseId != $RUN_ID)] | length")
+          done=$(gh run list --workflow factory-maintain.yml --status success --created ">=$since" \
+            --json databaseId,displayTitle \
+            --jq "[.[] | select(.databaseId != $RUN_ID and .displayTitle == \"Factory maintain (scheduled)\")] | length")
           if [ "$done" -gt 0 ]; then
             echo "::notice::This week's scheduled pass already ran; the backup slot has nothing to do."
             echo "proceed=false" >> "$GITHUB_OUTPUT"
