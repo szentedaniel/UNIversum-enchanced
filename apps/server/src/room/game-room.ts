@@ -316,10 +316,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     } else {
       const parsed = createOptionsSchema.safeParse(options);
       if (!parsed.success) throw refuse("MALFORMED");
-      const { roomName, password, maxPlayers, minuteLimit, startingCash } = parsed.data;
+      const { roomName, password, maxPlayers, minuteLimit, startingCash, roundBonus } = parsed.data;
       const name = checkRoomName(roomName ?? "");
       if (!name.ok) throw refuse(name.code);
-      this.settings = { maxPlayers, minuteLimit, startingCash };
+      this.settings = { maxPlayers, minuteLimit, startingCash, roundBonus };
       this.displayName = name.name;
       this.password = password ? await hashPassword(password) : null;
       this.roomId = reserveRoomCode((code) => this.store.isCodeInUse(code));
