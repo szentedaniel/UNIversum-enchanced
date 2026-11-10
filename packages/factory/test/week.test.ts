@@ -45,12 +45,12 @@ describe("weekWindow", () => {
 });
 
 describe("scheduleSlot", () => {
-  it("runs from 06:00 Budapest in either season, whichever cron slot hits it", () => {
-    // Winter: the 05:09 UTC cron is 06:09 CET; the 04:09 UTC one is 05:09.
+  it("runs from 06:00 Budapest in either season", () => {
+    // Winter: 05:09 UTC is 06:09 CET; 04:09 UTC is 05:09.
     expect(scheduleSlot(at("2026-11-09T05:09:00Z"))).toBe(true);
     expect(scheduleSlot(at("2026-11-09T04:09:00Z"))).toBe(false);
 
-    // Summer: the 04:09 UTC cron is 06:09 CEST.
+    // Summer: 04:09 UTC is 06:09 CEST.
     expect(scheduleSlot(at("2026-06-01T04:09:00Z"))).toBe(true);
   });
 
