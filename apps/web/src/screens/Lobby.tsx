@@ -1,5 +1,5 @@
 import { serverNow, type RejectionCode } from "@universum/protocol/messages";
-import { Check, Copy, Lock, LockOpen, Timer, Users, Wallet } from "lucide-react";
+import { Banknote, Check, Copy, Lock, LockOpen, Timer, Users, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useStore } from "zustand";
@@ -134,7 +134,7 @@ export function Lobby() {
     );
   }
 
-  const { maxPlayers, minuteLimit, startingCash } = lobby.settings;
+  const { maxPlayers, minuteLimit, startingCash, roundBonus } = lobby.settings;
   const full = lobby.seats.length === maxPlayers;
   const open = Array.from({ length: maxPlayers - lobby.seats.length }, (_, i) => i);
 
@@ -180,7 +180,7 @@ export function Lobby() {
             />
           ))}
         </ul>
-        <ul className="sticker m-0 mt-8 grid list-none grid-cols-1 gap-4 rounded-ui bg-card p-4 text-card-foreground sm:grid-cols-2 lg:grid-cols-4">
+        <ul className="sticker m-0 mt-8 grid list-none grid-cols-1 gap-4 rounded-ui bg-card p-4 text-card-foreground sm:grid-cols-2 lg:grid-cols-3">
           <li className="flex items-center gap-2">
             <Users size={22} strokeWidth={2.5} aria-hidden />
             <span className="text-lg font-black">
@@ -197,6 +197,12 @@ export function Lobby() {
             <Wallet size={22} strokeWidth={2.5} aria-hidden />
             <span className="text-lg font-black">
               {m.lobby_starting_cash({ amount: formatMoney(startingCash) })}
+            </span>
+          </li>
+          <li className="flex items-center gap-2">
+            <Banknote size={22} strokeWidth={2.5} aria-hidden />
+            <span className="text-lg font-black">
+              {m.lobby_round_bonus({ amount: formatMoney(roundBonus) })}
             </span>
           </li>
           <li className="flex items-center gap-2">
