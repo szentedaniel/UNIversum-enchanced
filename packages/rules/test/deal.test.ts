@@ -284,6 +284,14 @@ describe("answering a Deal", () => {
     expect(accepted.state.deal).toBeNull();
     expect(accepted.state.turnDeadline).toBe(freshDeadline(accepted.state));
     expect(publicView(accepted.state).deal).toBeNull();
+    // The Turn carries on: the proposer may roll at once.
+    const rolled = accept(
+      accepted.state,
+      { type: "Roll", turn: accepted.state.turn },
+      PROPOSER,
+      accepted.state.actsAfter,
+    );
+    expect(rolled.events.some((event) => event.type === "DiceRolled")).toBe(true);
   });
 
   it("declining moves nothing and reopens the proposer's Roll with a fresh deadline", () => {
