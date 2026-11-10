@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { frontierOf, PRIORITY_LABELS, type IssueFacts } from "#dispatch/frontier.ts";
-import type { PullFacts } from "#shared/closing-pr.ts";
+import {
+  frontierOf,
+  overlapNote,
+  PRIORITY_LABELS,
+  type IssueFacts,
+  type OpenPull,
+} from "#dispatch/frontier.ts";
 
 /** The REST fields the dispatcher hands the frontier; only what a test reads. */
 const issue = (number: number, overrides: Partial<IssueFacts> = {}): IssueFacts => ({
@@ -11,10 +16,18 @@ const issue = (number: number, overrides: Partial<IssueFacts> = {}): IssueFacts 
   blockedBy: 0,
   openBlockers: [],
   subIssues: 0,
+  body: "",
   ...overrides,
 });
 
-const pull = (url: string, body: string): PullFacts => ({ url, body });
+const pull = (number: number, overrides: Partial<OpenPull> = {}): OpenPull => ({
+  number,
+  url: `https://example.test/${String(number)}`,
+  body: "",
+  branch: `agent/issue-${String(number)}-work`,
+  files: [],
+  ...overrides,
+});
 
 describe("frontierOf", () => {
   it("takes the unblocked tickets and skips the blocked one", () => {
@@ -72,8 +85,8 @@ describe("frontierOf", () => {
 
   it("skips an issue an open pull request already closes", () => {
     const pulls = [
-      pull("https://example.test/1", "Mentions spec #101, closes nothing."),
-      pull("https://example.test/2", "Closes #101"),
+      pull(1, { body: "Mentions spec #101, closes nothing." }),
+      pull(2, { body: "Closes #101" }),
     ];
 
     const frontier = frontierOf([issue(101)], pulls, new Set());
@@ -106,6 +119,75 @@ describe("frontierOf", () => {
     expect(frontier.skipped.map((entry) => entry.issue.number)).toEqual([102]);
   });
 
+  it("skips a ticket whose named file an open pull request changes, naming the pull", () => {
+    const ticket = issue(101, {
+      body: "## Files\n\n- `packages/factory/src/shared/runs.ts`",
+    });
+    const other = issue(102, { body: "`packages/factory/src/maintain/flaky.ts`" });
+    const blocking = pull(154, {
+      url: "https://example.test/pull/154",
+      files: ["packages/factory/src/shared/runs.ts"],
+    });
+
+    const frontier = frontierOf([ticket, other], [blocking], new Set());
+
+    expect(frontier.eligible.map((entry) => entry.number)).toEqual([102]);
+    expect(frontier.skipped[0]?.reason).toBe(
+      "overlaps open pull request #154 (https://example.test/pull/154)",
+    );
+    expect(frontier.skipped[0]?.blockingPull?.number).toBe(154);
+  });
+
+  it("skips a ticket whose module a pull request's branch names", () => {
+    const ticket = issue(101, {
+      body: "`apps/server/src/room/turn-clock.ts`",
+    });
+    const blocking = pull(140, {
+      branch: "agent/issue-140-room-turn-clock-extract-the-clock",
+    });
+
+    const frontier = frontierOf([ticket], [blocking], new Set());
+
+    expect(frontier.eligible).toEqual([]);
+    expect(frontier.skipped[0]?.reason).toContain("#140");
+  });
+
+  it("starts only one of two tickets that name the same module", () => {
+    const body = "## Files\n\n- `packages/factory/src/dispatch/frontier.ts`";
+    const first = issue(101, { body });
+    const duplicate = issue(102, { body });
+
+    const frontier = frontierOf([first, duplicate], [], new Set());
+
+    expect(frontier.eligible.map((entry) => entry.number)).toEqual([101]);
+    expect(frontier.skipped).toEqual([
+      { issue: duplicate, reason: "overlaps #101 (same target module)" },
+    ]);
+  });
+
+  it("lets tickets that name different modules run in parallel", () => {
+    const first = issue(101, { body: "`packages/factory/src/dispatch/frontier.ts`" });
+    const second = issue(102, { body: "`apps/server/src/room/turn-clock.ts`" });
+
+    const frontier = frontierOf([first, second], [], new Set());
+
+    expect(frontier.eligible.map((entry) => entry.number)).toEqual([101, 102]);
+    expect(frontier.skipped).toEqual([]);
+  });
+
+  it("lets a newer ticket wait for an open work item that already holds the module", () => {
+    const running = issue(100, {
+      labels: ["agent:in-progress"],
+      body: "`packages/factory/src/dispatch/frontier.ts`",
+    });
+    const waiting = issue(101, { body: "`packages/factory/src/dispatch/frontier.ts`" });
+
+    const frontier = frontierOf([waiting], [], new Set(), [running, waiting]);
+
+    expect(frontier.eligible).toEqual([]);
+    expect(frontier.skipped[0]?.reason).toBe("overlaps #100 (same target module)");
+  });
+
   it("picks a priority:top issue before an older one: red main goes first", () => {
     const old = issue(101, { createdAt: "2026-11-01T00:00:00Z" });
     const redMain = issue(102, {
@@ -118,5 +200,24 @@ describe("frontierOf", () => {
 
     expect(frontier.eligible.map((entry) => entry.number)).toEqual([102, 101]);
     expect(PRIORITY_LABELS).toEqual(["priority:top"]);
+  });
+});
+
+describe("overlapNote", () => {
+  it("names the blocking pull request number and dedupes per pull", () => {
+    const pull = {
+      number: 154,
+      url: "https://example.test/pull/154",
+      body: "",
+      branch: "agent/issue-129-shared-runs",
+      files: ["packages/factory/src/shared/runs.ts"],
+    };
+
+    const note = overlapNote(pull);
+
+    expect(note.marker).toBe("<!-- factory-overlap:#154 -->");
+    expect(note.body).toContain("open pull request #154");
+    expect(note.body).toContain("https://example.test/pull/154");
+    expect(note.body).toContain("once the pull request merges or closes");
   });
 });
