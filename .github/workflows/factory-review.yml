@@ -44,7 +44,7 @@ jobs:
   # The cron only dispatches; each dispatched run checks the gate and reviews.
   # One review per pull request still labelled `agent:review`.
   dispatch-queued:
-    # The external scheduler (cron-job.org) dispatches with no `pr`: same job.
+    # A dispatch with no `pr` drains the queue the same way.
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.pr == '')
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -13,7 +13,7 @@
 # nothing. The gate code and the scripts always run main's copy.
 name: Factory Maintain
 
-run-name: Factory maintain ${{ inputs.dry_run && '(dry run)' || ((github.event_name == 'schedule' || inputs.scheduled) && '(scheduled)' || '(manual)') }}
+run-name: Factory maintain ${{ inputs.dry_run && '(dry run)' || (github.event_name == 'schedule' && '(scheduled)' || '(manual)') }}
 
 on:
   schedule:
@@ -28,10 +28,6 @@ on:
     inputs:
       dry_run:
         description: Print what would be opened, without writing
-        type: boolean
-        default: false
-      scheduled:
-        description: The external scheduler's weekly run (once a week, like the cron)
         type: boolean
         default: false
       max_proposals:
@@ -49,9 +45,8 @@ permissions:
   actions: read
 
 jobs:
-  # A manual run always proceeds; a scheduled one (GitHub's cron or the
-  # external scheduler's `scheduled` dispatch) only when no scheduled run of
-  # this week already succeeded.
+  # A manual run always proceeds; a scheduled one only when no scheduled run
+  # of this week already succeeded (the backup slot after a run that landed).
   weekly:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -62,7 +57,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          SCHEDULED: ${{ github.event_name == 'schedule' || inputs.scheduled }}
+          SCHEDULED: ${{ github.event_name == 'schedule' }}
           RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
