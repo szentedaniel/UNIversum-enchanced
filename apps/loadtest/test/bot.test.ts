@@ -26,6 +26,7 @@ const view = (phase: View["phase"], extra: Partial<View> = {}): View => ({
       bankrupt: false,
       quarantineRounds: null,
       hasPcrTest: false,
+      bot: false,
     },
   ],
   fields: [],
