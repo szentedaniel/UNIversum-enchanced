@@ -85,7 +85,7 @@ function transfer(tx: Tx, fields: readonly FieldId[], owner: PlayerId): void {
 }
 
 /** Ends the pending Deal: the proposer's Roll or Quarantine choice reopens. */
-function reopen(tx: Tx, deal: Deal): void {
+function reopenProposer(tx: Tx, deal: Deal): void {
   tx.state.deal = null;
   tx.state.currentPlayer = deal.proposer;
   beginTurn(tx);
@@ -124,7 +124,7 @@ export const dealIntents = {
       playerById(tx, deal.proposer).cash += deal.take.cash - deal.give.cash;
       playerById(tx, deal.recipient).cash += deal.give.cash - deal.take.cash;
       emit(tx, { type: "DealAccepted", ...deal });
-      reopen(tx, deal);
+      reopenProposer(tx, deal);
       return undefined;
     },
   },
@@ -135,7 +135,7 @@ export const dealIntents = {
       const deal = tx.state.deal;
       if (!deal) return rejection("NOT_OFFERED");
       emit(tx, { type: "DealDeclined", proposer: deal.proposer, recipient: deal.recipient });
-      reopen(tx, deal);
+      reopenProposer(tx, deal);
       return undefined;
     },
   },
@@ -149,5 +149,5 @@ export function dealAnswerTimeout(tx: Tx): void {
   const deal = tx.state.deal;
   if (!deal) return;
   emit(tx, { type: "DealExpired", proposer: deal.proposer, recipient: deal.recipient });
-  reopen(tx, deal);
+  reopenProposer(tx, deal);
 }

@@ -343,6 +343,10 @@ describe("answering a Deal", () => {
     expect(
       reject(proposed.state, { type: "DeclineDeal", turn: proposed.state.turn }, "p1"),
     ).toEqual({ code: "NOT_YOUR_TURN" });
+    // The proposer's own Roll waits behind the answer.
+    expect(reject(proposed.state, { type: "Roll", turn: proposed.state.turn }, "p1")).toEqual({
+      code: "NOT_YOUR_TURN",
+    });
 
     const accepted = answer(proposed.state, "AcceptDeal");
     expect(reject(accepted.state, { type: "AcceptDeal", turn: accepted.state.turn }, "p1")).toEqual(
