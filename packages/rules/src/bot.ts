@@ -58,9 +58,7 @@ function offerIntent(view: PublicView, phase: PhaseOf<"offer">): PlayerIntent {
   const level = phase.levels
     .filter((offer) => keepsReserve(view, offer.price))
     .toSorted((a, b) => b.level - a.level)[0];
-  return level
-    ? { type: "BuyLevel", turn, level: level.level }
-    : { type: "DeclineOffer", turn };
+  return level ? { type: "BuyLevel", turn, level: level.level } : { type: "DeclineOffer", turn };
 }
 
 /**
@@ -69,10 +67,7 @@ function offerIntent(view: PublicView, phase: PhaseOf<"offer">): PlayerIntent {
  * free escape, and on the last round a failed roll releases the Player next
  * Turn anyway, so the test's price buys nothing there.
  */
-function quarantineIntent(
-  view: PublicView,
-  phase: PhaseOf<"quarantineChoice">,
-): PlayerIntent {
+function quarantineIntent(view: PublicView, phase: PhaseOf<"quarantineChoice">): PlayerIntent {
   const turn = view.turn;
   if (phase.canUsePcrTest) return { type: "UsePcrTest", turn };
   const rounds = playerOf(view, view.currentPlayer).quarantineRounds ?? 0;
@@ -142,15 +137,12 @@ function erasmusIntent(view: PublicView, phase: PhaseOf<"choosingErasmus">): Pla
     const group = info?.group;
     const owned = groupOwned(view, me, group);
     const size =
-      group === null || group === undefined
-        ? 0
-        : FIELDS.filter((f) => f.group === group).length;
+      group === null || group === undefined ? 0 : FIELDS.filter((f) => f.group === group).length;
     const target = view.fields[option.field];
     const completes = target?.owner === null && size > 0 && owned === size - 1;
     let value = info?.values?.[1] ?? MUSEUM_VALUE;
     if (target?.owner === me) value = target.level >= MAX_LEVEL ? 0 : target.value + target.rent;
-    const score =
-      (completes ? 1_000_000_000 : 0) + owned * 1_000_000 + (option.bonus ?? 0) + value;
+    const score = (completes ? 1_000_000_000 : 0) + owned * 1_000_000 + (option.bonus ?? 0) + value;
     if (best === undefined || score > best.score) best = { field: option.field, score };
   }
   const field = best?.field ?? phase.fields[0];
