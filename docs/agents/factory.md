@@ -32,11 +32,6 @@ nothing left, the dispatcher skips issues a run holds, the retro stops at the da
 maintenance pass's `weekly` job stops after a scheduled pass that succeeded this week, and the report
 edits the week's issue. A run can always be started by hand (`gh workflow run <file>`).
 
-An external scheduler fires the same jobs on time: `packages/factory/scripts/cron-job-org.sh` creates
-one cron-job.org job per workflow, each a `workflow_dispatch` call with a fine-grained token that can
-only run this repository's Actions. The review queue takes a dispatch with no `pr`, and the maintenance
-pass takes `scheduled=true`, so both behave as their cron does; GitHub's own crons stay as the backup.
-
 ## Labels
 
 | Label                   | Means                                                                         |
