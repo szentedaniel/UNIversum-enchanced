@@ -15,22 +15,36 @@ import { join } from "node:path";
 import * as sandcastle from "@ai-hero/sandcastle";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import { hasActivity, type RetroFacts } from "#retro/collect.ts";
-import { appendLog, DEFAULT_MAX_WRITES, LOG_FILE, logSection, planWrites } from "#retro/plan.ts";
+import {
+  appendLog,
+  DEFAULT_MAX_WRITES,
+  hasLogFor,
+  LOG_FILE,
+  logSection,
+  planWrites,
+} from "#retro/plan.ts";
 import { retroSchema } from "#retro/schema.ts";
 import { applyWrites, shellIo } from "#retro/writes.ts";
 import { claudeAgent } from "#shared/agents.ts";
 import { fail, outputDir, positiveInt, required, sh, shellArg } from "#shared/common.ts";
 import { parseJson } from "#shared/github.ts";
 
+const readLog = (): string | undefined =>
+  existsSync(LOG_FILE) ? readFileSync(LOG_FILE, "utf8") : undefined;
+
 const main = async (): Promise<void> => {
   const repo = required("GH_REPO");
+  const date = new Date().toISOString().slice(0, 10);
+  if (process.env["DRY_RUN"] !== "1" && hasLogFor(readLog(), date)) {
+    console.log(`The retro already ran for ${date}; this run has nothing to add.`);
+    return;
+  }
   const facts = parseJson<RetroFacts>(readFileSync(join(outputDir(), "facts.json"), "utf8"));
   if (!hasActivity(facts)) {
     console.log("No factory activity in the last day; there is nothing to retro.");
     return;
   }
 
-  const date = new Date().toISOString().slice(0, 10);
   const maxWrites = positiveInt(process.env["FACTORY_RETRO_MAX"], DEFAULT_MAX_WRITES);
   const { openIssues, openPulls, ...day } = facts;
   const treeBefore = sh("git status --porcelain").trim();
@@ -85,7 +99,7 @@ const main = async (): Promise<void> => {
   // The push to main is the last write: main may have moved while Claude read.
   sh("git fetch origin main");
   sh("git merge --ff-only origin/main");
-  const existingLog = existsSync(LOG_FILE) ? readFileSync(LOG_FILE, "utf8") : undefined;
+  const existingLog = readLog();
   const bullets = [
     ...result.output.logEntry,
     ...opened,

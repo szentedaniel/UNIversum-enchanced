@@ -86,11 +86,12 @@ export const weekWindow = (now: Date): WeekWindow => {
 };
 
 /**
- * Whether the current run is the 06:00 Budapest one. GitHub's cron is UTC, so
- * the workflow schedules 04:00 and 05:00 UTC on Monday and the report runs
- * whichever lands at 06:00 that side of the DST switch.
+ * Whether a scheduled run may post: from 06:00 Budapest on. GitHub's cron is
+ * UTC, so the workflow schedules a slot an hour apart on Monday; the early one
+ * is 05:xx in winter and skips. GitHub often starts a scheduled run hours
+ * late, so a late slot posts too; a second run that day edits the same issue.
  */
-export const scheduleSlot = (at: Date): boolean => budapestHour(at) === REPORT_HOUR;
+export const scheduleSlot = (at: Date): boolean => budapestHour(at) >= REPORT_HOUR;
 
 /** Whether `at` falls in `[start, end)`; an unreadable or missing time does not. */
 export const inWindow = (at: string | null | undefined, week: WeekWindow): boolean => {

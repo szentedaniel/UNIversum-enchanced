@@ -25,7 +25,7 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: "13 */6 * * *"
 
 # Two triggers close together must never dispatch the same issue: a queued
 # dispatch waits for the running one, which has already seen the new run.

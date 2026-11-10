@@ -45,14 +45,17 @@ describe("weekWindow", () => {
 });
 
 describe("scheduleSlot", () => {
-  it("runs at 06:00 Budapest in either season, whichever cron slot hits it", () => {
-    // Winter: the 05:00 UTC cron is 06:00 CET; the 04:00 UTC one is 05:00.
-    expect(scheduleSlot(at("2026-11-09T05:00:00Z"))).toBe(true);
-    expect(scheduleSlot(at("2026-11-09T04:00:00Z"))).toBe(false);
+  it("runs from 06:00 Budapest in either season, whichever cron slot hits it", () => {
+    // Winter: the 05:09 UTC cron is 06:09 CET; the 04:09 UTC one is 05:09.
+    expect(scheduleSlot(at("2026-11-09T05:09:00Z"))).toBe(true);
+    expect(scheduleSlot(at("2026-11-09T04:09:00Z"))).toBe(false);
 
-    // Summer: the 04:00 UTC cron is 06:00 CEST; the 05:00 UTC one is 07:00.
-    expect(scheduleSlot(at("2026-06-01T04:00:00Z"))).toBe(true);
-    expect(scheduleSlot(at("2026-06-01T05:00:00Z"))).toBe(false);
+    // Summer: the 04:09 UTC cron is 06:09 CEST.
+    expect(scheduleSlot(at("2026-06-01T04:09:00Z"))).toBe(true);
+  });
+
+  it("still posts when GitHub starts the scheduled run hours late", () => {
+    expect(scheduleSlot(at("2026-11-09T12:37:00Z"))).toBe(true);
   });
 });
 

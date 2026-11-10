@@ -3,15 +3,17 @@
 # and the owner's queue, and close last week's. `packages/factory/src/report/`
 # holds the numbers and the body; this file only starts the script.
 #
-# GitHub's cron is UTC, so both hours that land at 06:00 Budapest are
-# scheduled — 04:00 UTC in summer (CEST), 05:00 UTC in winter (CET) — and the
-# script skips the one that is not 06:00. A manual dispatch always runs.
+# GitHub's cron is UTC, so both hours that land at 06:xx Budapest are
+# scheduled — 04:09 UTC in summer (CEST), 05:09 UTC in winter (CET), off the
+# busy top of the hour — and the script skips a run before 06:00 Budapest.
+# GitHub often starts scheduled runs late; a late or second run edits the
+# week's issue. A manual dispatch always runs.
 name: Factory Report
 
 on:
   schedule:
-    - cron: "0 4 * * 1"
-    - cron: "0 5 * * 1"
+    - cron: "9 4 * * 1"
+    - cron: "9 5 * * 1"
   workflow_dispatch:
     inputs:
       dry_run:

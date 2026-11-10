@@ -17,8 +17,11 @@ on:
         type: boolean
         default: false
   schedule:
-    # 03:30 UTC is 04:30 CET or 05:30 CEST: after the 01:30 review cron, inside the night window.
-    - cron: "30 3 * * *"
+    # 03:41 UTC is 04:41 CET or 05:41 CEST: after the 01:23 review cron, inside the night window.
+    - cron: "41 3 * * *"
+    # A backup slot, still inside the window: GitHub delays or drops scheduled
+    # runs, and the second run of a day stops at the day's log entry.
+    - cron: "11 4 * * *"
 
 # The job's own token stays read-only; every write goes through AGENT_PAT.
 permissions:

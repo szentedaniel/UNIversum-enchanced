@@ -21,10 +21,13 @@ on:
         required: true
         type: string
   schedule:
-    # 01:30 UTC is 02:30 CET or 03:30 CEST: inside the 01:00–07:00 Budapest
+    # 01:23 UTC is 02:23 CET or 03:23 CEST: inside the 01:00–07:00 Budapest
     # window in both halves of the year. The gate decides per run, so a
     # dispatch outside the window queues instead.
-    - cron: "30 1 * * *"
+    # Off the busy top of the hour, plus a backup slot: GitHub delays or drops
+    # scheduled runs, and a second run finds the queue already drained.
+    - cron: "23 1 * * *"
+    - cron: "53 3 * * *"
 
 # The job's own token stays read-only; every write goes through AGENT_PAT,
 # which is what makes CI run on the reviewer's push and label chains fire.

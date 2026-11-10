@@ -23,6 +23,15 @@ lint, typecheck, vitest. Playwright and `docker compose build` run once, in CI, 
   in it belongs in `packages/factory` with a vitest test.
 - The agents run with `noSandbox()`: the runner is already an ephemeral VM.
 
+## Schedules
+
+GitHub starts scheduled runs late on this repository, by an hour to nine hours, and sometimes drops a
+run altogether, worst at the top of the hour. So every cron sits on an odd minute, and each nightly job
+has a backup slot later in the night. A second run must be harmless: intake and the review queue find
+nothing left, the dispatcher skips issues a run holds, the retro stops at the day's log entry, the
+maintenance pass's `weekly` job stops after a scheduled pass that succeeded this week, and the report
+edits the week's issue. A run can always be started by hand (`gh workflow run <file>`).
+
 ## Labels
 
 | Label                   | Means                                                                         |
@@ -58,7 +67,7 @@ failing pull request back to omp at most twice. The weekly `factory:report` issu
 ## Intake
 
 The owner files a one-line idea as an issue; intake turns it into work the factory can start.
-`factory-intake.yml` runs every night at 01:15 UTC (02:15 CET / 03:15 CEST, inside the Budapest
+`factory-intake.yml` runs every night at 00:07 UTC, with a backup slot at 02:47 UTC (both inside the Budapest
 window) and can be dispatched by hand at any time — outside the window too:
 
 ```bash
@@ -182,11 +191,11 @@ them and the owner merges those pull requests.
 ## Reviewing a pull request
 
 `factory-review.yml` runs when a pull request gets `agent:review`, when the owner dispatches it by
-hand (`gh workflow run factory-review.yml -f pr=95`), and every night at 01:30 UTC.
+hand (`gh workflow run factory-review.yml -f pr=95`), and every night at 01:23 UTC (backup slot 03:53 UTC).
 
 1. **Queues** instead of reviewing when the Budapest clock is outside 01:00–07:00 and
    `FACTORY_DAY_REVIEWS` (a repository variable, default 2) daytime reviews already ran today. The
-   run exits 0 and leaves `agent:review` in place; the 01:30 UTC cron dispatches one review per pull
+   run exits 0 and leaves `agent:review` in place; the night cron dispatches one review per pull
    request still carrying the label, so a queued review happens at night. The count comes from the
    summary comments themselves — they open with `<!-- factory-review -->` — per Budapest calendar
    day, and night reviews do not spend the daytime quota.
@@ -280,7 +289,8 @@ gh workflow run factory-fix.yml -f pr=95 -f reason=review      # ci | review | m
 
 ## The nightly retro
 
-`factory-retro.yml` runs at 03:30 UTC (inside the night window, after the review cron) and by hand.
+`factory-retro.yml` runs at 03:41 UTC (inside the night window, after the review cron), again at 04:11 UTC
+as a backup that stops at the day's log entry (`hasLogFor`), and by hand.
 It reads the last 24 hours of the factory's own trail — the reviewer's summaries and the fixes it
 committed, fix rounds and escalations, merge escalations, merged and blocked pull requests, red `CI`
 runs with their failed jobs, and the owner's own comments on factory issues and pull requests — then
@@ -316,9 +326,9 @@ packages/factory/src/retro/collect.ts` prints the shaped facts to stderr and wri
 ## The weekly report
 
 `factory-report.yml` opens the owner's weekly glance, a `factory:report` issue, every Monday at 06:00
-Europe/Budapest. GitHub's cron is UTC, so it schedules 04:00 and 05:00 UTC;
-`packages/factory/src/report/week.ts` lets through only the run whose Budapest hour is 6 (one slot per
-side of the DST switch). A manual dispatch always runs, and its `dry_run` input only prints the body.
+Europe/Budapest. GitHub's cron is UTC, so it schedules 04:09 and 05:09 UTC;
+`packages/factory/src/report/week.ts` lets through a run from 06:00 Budapest on, so a late start still
+posts and a second run edits the same issue. A manual dispatch always runs, and its `dry_run` input only prints the body.
 
 The issue is titled `Factory report: week of YYYY-MM-DD` (the Monday that started the reported week)
 and opens with `<!-- factory-report:YYYY-MM-DD -->`, so a re-run in the same week edits it instead of
@@ -385,7 +395,8 @@ ticket.
 
 ### Weekly (`factory-maintain.yml`)
 
-Sunday 02:00 UTC (03:00 or 04:00 in Budapest, inside the night window), or by hand with `dry_run`.
+Sunday 02:19 UTC (03:19 or 04:19 in Budapest, inside the night window), with a backup slot at 04:49 UTC
+that the `weekly` job stops when this week's scheduled pass already succeeded, or by hand with `dry_run`.
 Three independent jobs:
 
 - **Architecture**: Claude Code reads the hot spots (`git log`), `GLOSSARY.md`, `docs/adr/` and

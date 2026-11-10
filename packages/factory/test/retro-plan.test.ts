@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   appendLog,
+  hasLogFor,
   branchOf,
   commitSubjectOf,
   duplicateOf,
@@ -305,5 +306,14 @@ describe("the log", () => {
     const second = appendLog(first, "2026-11-10", ["Two."]);
     expect(second.indexOf("## 2026-11-10")).toBeGreaterThan(second.indexOf("## 2026-11-09"));
     expect(second).toContain("- Two.");
+  });
+});
+
+describe("hasLogFor", () => {
+  it("finds the day's entry, and only that day's", () => {
+    const log = appendLog(undefined, "2026-11-09", ["One."]);
+    expect(hasLogFor(log, "2026-11-09")).toBe(true);
+    expect(hasLogFor(log, "2026-11-10")).toBe(false);
+    expect(hasLogFor(undefined, "2026-11-09")).toBe(false);
   });
 });

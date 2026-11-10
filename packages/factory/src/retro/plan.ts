@@ -231,6 +231,13 @@ export const logSection = (date: string, bullets: readonly string[]): string =>
     "",
   ].join("\n");
 
+/**
+ * Whether the log already has this day's entry: the retro has a backup cron
+ * slot, and the second run of a day must neither ask Claude nor append twice.
+ */
+export const hasLogFor = (existing: string | undefined, date: string): boolean =>
+  existing !== undefined && existing.split("\n").some((line) => line.trimEnd() === `## ${date}`);
+
 export const appendLog = (
   existing: string | undefined,
   date: string,
