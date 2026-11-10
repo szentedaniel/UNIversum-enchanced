@@ -1,3 +1,8 @@
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { FixReason } from "#fix/reasons.ts";
 import { readMergeFacts, type MergeReader, type PullView } from "#merge/facts.ts";
@@ -6,6 +11,7 @@ import { performStep, type MergeActions } from "#merge/perform.ts";
 import { escalationComment } from "#merge/comment.ts";
 import { mergeStep, type MergeStep } from "#merge/gates.ts";
 import { summaryComment } from "#review/summary.ts";
+import { RATE_LIMIT_WAITS_MS } from "#shared/github.ts";
 
 const HEAD_SHA = "head-sha";
 
@@ -33,6 +39,24 @@ const reader = (overrides: Partial<MergeReader> = {}): MergeReader => ({
   issueComments: () => [],
   ...overrides,
 });
+
+/** A `gh` refusal as execSync throws it: the reason on stderr, the command in its message. */
+const rateLimited = (): Error =>
+  Object.assign(
+    new Error(
+      "Command failed: gh api repos/owner/repo/pulls/132/files\ngh: API rate limit exceeded for 1.2.3.4. (HTTP 403)\n",
+    ),
+    { stdout: "", stderr: "gh: API rate limit exceeded for 1.2.3.4. (HTTP 403)\n" },
+  );
+
+/** The GraphQL shape (`gh pr view`): the refusal names no HTTP status. */
+const graphqlRateLimited = (): Error =>
+  Object.assign(
+    new Error(
+      "Command failed: gh pr view 132 --repo owner/repo\nGraphQL: API rate limit exceeded for user ID 1.\n",
+    ),
+    { stdout: "", stderr: "GraphQL: API rate limit exceeded for user ID 1.\n" },
+  );
 
 describe("readMergeFacts", () => {
   it("assembles the facts the gate decides on", () => {
@@ -485,5 +509,183 @@ describe("the gate's flow", () => {
       { kind: "commentOnIssue", issue: 132, body: "Merged in abc1234." },
       { kind: "closeIssue", issue: 132 },
     ]);
+  });
+
+  it("retries a rate-limited read and decides normally", () => {
+    const { adapter, writes } = actions();
+    const pauses: number[] = [];
+    let reads = 0;
+
+    const outcome = mergeGate(
+      "owner/repo",
+      "132",
+      reader({
+        changedFiles: () => {
+          reads += 1;
+          if (reads <= 2) throw rateLimited();
+          return [];
+        },
+        ciRuns: () => ciSuccess,
+        issueComments: () => reviewPass,
+      }),
+      adapter,
+      false,
+      { pause: (ms) => pauses.push(ms) },
+    );
+
+    expect(outcome).toBe("decided");
+    expect(pauses).toEqual([RATE_LIMIT_WAITS_MS[0], RATE_LIMIT_WAITS_MS[1]]);
+    expect(writes).toEqual([
+      { kind: "merge", subject: "chore(merge): #132 Deepen the merge gate's script" },
+      { kind: "commentOnIssue", issue: 132, body: "Merged in abc1234." },
+      { kind: "closeIssue", issue: 132 },
+    ]);
+  });
+
+  it("retries a GraphQL refusal that names no HTTP status", () => {
+    const { adapter, writes } = actions();
+    const pauses: number[] = [];
+    let reads = 0;
+
+    const outcome = mergeGate(
+      "owner/repo",
+      "132",
+      reader({
+        pullOf: () => {
+          reads += 1;
+          if (reads === 1) throw graphqlRateLimited();
+          return pull();
+        },
+        changedFiles: () => [],
+        ciRuns: () => ciSuccess,
+        issueComments: () => reviewPass,
+      }),
+      adapter,
+      false,
+      { pause: (ms) => pauses.push(ms) },
+    );
+
+    expect(outcome).toBe("decided");
+    expect(reads).toBe(2);
+    expect(pauses).toEqual([RATE_LIMIT_WAITS_MS[0]]);
+    expect(writes).toEqual([
+      { kind: "merge", subject: "chore(merge): #132 Deepen the merge gate's script" },
+      { kind: "commentOnIssue", issue: 132, body: "Merged in abc1234." },
+      { kind: "closeIssue", issue: 132 },
+    ]);
+  });
+
+  it("leaves a rate-limited write for a later run instead of retrying it", () => {
+    const { adapter, writes } = actions();
+    const pauses: number[] = [];
+    let merges = 0;
+
+    const outcome = mergeGate(
+      "owner/repo",
+      "132",
+      reader({ ciRuns: () => ciSuccess, issueComments: () => reviewPass }),
+      {
+        ...adapter,
+        merge: () => {
+          merges += 1;
+          throw rateLimited();
+        },
+      },
+      false,
+      { pause: (ms) => pauses.push(ms) },
+    );
+
+    expect(outcome).toBe("rate-limited");
+    expect(merges).toBe(1);
+    expect(pauses).toEqual([]);
+    expect(writes).toEqual([]);
+  });
+
+  it("leaves a persistently rate-limited pull request for a later run", () => {
+    const { adapter, writes } = actions();
+    const pauses: number[] = [];
+
+    const outcome = mergeGate(
+      "owner/repo",
+      "132",
+      reader({
+        changedFiles: () => {
+          throw rateLimited();
+        },
+        ciRuns: () => ciSuccess,
+        issueComments: () => reviewPass,
+      }),
+      adapter,
+      false,
+      { pause: (ms) => pauses.push(ms) },
+    );
+
+    expect(outcome).toBe("rate-limited");
+    expect(pauses).toHaveLength(RATE_LIMIT_WAITS_MS.length);
+    expect(writes).toEqual([]);
+  });
+
+  it("fails the step on an error that is no rate limit", () => {
+    const { adapter, writes } = actions();
+    const pauses: number[] = [];
+
+    expect(() =>
+      mergeGate(
+        "owner/repo",
+        "132",
+        reader({
+          changedFiles: () => {
+            throw new Error(
+              "Command failed: gh api repos/owner/repo/pulls/132/files\ngh: Not Found (HTTP 404)\n",
+            );
+          },
+          ciRuns: () => ciSuccess,
+          issueComments: () => reviewPass,
+        }),
+        adapter,
+        false,
+        { pause: (ms) => pauses.push(ms) },
+      ),
+    ).toThrow("Not Found");
+    expect(pauses).toEqual([]);
+    expect(writes).toEqual([]);
+  });
+});
+
+describe("the gate's entry", () => {
+  it("exits green when the run cannot outlast the refusal, so no escalation runs", () => {
+    const dir = mkdtempSync(join(tmpdir(), "factory-merge-entry-"));
+    const calls = join(dir, "gh-calls.log");
+    writeFileSync(
+      join(dir, "gh"),
+      `#!/bin/sh\necho "$*" >> "${calls}"\necho "gh: API rate limit exceeded for 1.2.3.4. (HTTP 403)" >&2\nexit 1\n`,
+    );
+    chmodSync(join(dir, "gh"), 0o755);
+    // The waits are real seconds; a no-op sleep keeps this test fast.
+    writeFileSync(join(dir, "sleep"), "#!/bin/sh\nexit 0\n");
+    chmodSync(join(dir, "sleep"), 0o755);
+
+    const result = spawnSync(
+      process.execPath,
+      [fileURLToPath(new URL("../src/merge/merge.ts", import.meta.url))],
+      {
+        encoding: "utf8",
+        timeout: 60_000,
+        env: {
+          ...process.env,
+          PATH: `${dir}:${process.env["PATH"] ?? ""}`,
+          GH_REPO: "owner/repo",
+          PR_NUMBER: "132",
+          DRY_RUN: "",
+        },
+      },
+    );
+
+    expect(result.stdout).toContain("::warning::");
+    expect(result.status).toBe(0);
+    // Every attempt was refused and retried; the fourth found the schedule spent.
+    expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(
+      RATE_LIMIT_WAITS_MS.length + 1,
+    );
   });
 });
