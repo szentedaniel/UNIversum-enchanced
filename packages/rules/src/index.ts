@@ -7,6 +7,7 @@
  */
 export * from "#board.ts";
 export { apply, isRejection, type Applied } from "#apply.ts";
+export { botIntent } from "#bot.ts";
 export { START_CASH, ROUND_BONUS, TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
 export { PLAYBACK_MS, playbackOf, playbackOfEvent } from "#playback.ts";
 export type { EventMap, EventOf, EventType, GameEvent } from "#events.ts";
