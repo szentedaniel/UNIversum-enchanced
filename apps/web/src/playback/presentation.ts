@@ -13,9 +13,9 @@
  * the previous line up through it. Every `toast` row has a `text` and every
  * event the rules give no length is hidden (`presentation.test.ts` pins both).
  */
-import type { DealSide, EventOf, GameEvent, PublicView } from "@universum/rules";
+import type { EventOf, GameEvent, PublicView } from "@universum/rules";
 import { FIELDS } from "@universum/rules/board";
-import { chanceCardText, fieldName, formatMoney, m, playerName } from "#text.ts";
+import { chanceCardText, dealSideText, fieldName, formatMoney, m, playerName } from "#text.ts";
 
 /** What the DOM shows for an event (`none` = only the Board, if anything). */
 export type Overlay = "dice" | "card" | "toast" | "none";
@@ -39,12 +39,6 @@ function nameOf(view: PublicView, id: string): string {
 
 /** A Field's name from its id on the Board. */
 const fieldOf = (field: number): string => fieldName(FIELDS[field]?.key ?? "");
-
-/** One side of a Deal: its Fields' names and its cash, or "nothing" when it puts in neither. */
-function sideText(side: DealSide): string {
-  const parts = [...side.fields.map(fieldOf), ...(side.cash > 0 ? [formatMoney(side.cash)] : [])];
-  return parts.length > 0 ? parts.join(", ") : m.deal_nothing();
-}
 
 /** The table's shape: one row per event type, its `text` typed for that event. */
 export type PresentationTable = { [T in GameEvent["type"]]: Presentation<T> };
@@ -213,8 +207,8 @@ export const EVENT_PRESENTATION: PresentationTable = {
       m.event_deal_proposed({
         name: nameOf(view, event.proposer),
         recipient: nameOf(view, event.recipient),
-        give: sideText(event.give),
-        take: sideText(event.take),
+        give: dealSideText(event.give),
+        take: dealSideText(event.take),
       }),
   },
   DealAccepted: {
