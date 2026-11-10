@@ -10,12 +10,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  budgetNotice,
-  DEFAULT_MONTHLY_MINUTES,
-  minutesUsed,
-  monthStart,
-} from "#dispatch/budget.ts";
+import { budgetNotice, budgetLimit, minutesUsed, monthStart } from "#dispatch/budget.ts";
 import { frontierOf, type IssueFacts } from "#dispatch/frontier.ts";
 import { DEFAULT_MAX_PARALLEL, noDispatchReason, planOf } from "#dispatch/plan.ts";
 import { api } from "#shared/github.ts";
@@ -140,21 +135,28 @@ const main = (): void => {
   const repo = required("GH_REPO");
   const now = new Date();
   const dryRun = process.env["DRY_RUN"] === "1";
-  const limit = positiveInt(process.env["FACTORY_MONTHLY_MINUTES"], DEFAULT_MONTHLY_MINUTES);
+  const limit = budgetLimit(process.env["FACTORY_MONTHLY_MINUTES"]);
   const maxParallel = positiveInt(process.env["FACTORY_MAX_PARALLEL"], DEFAULT_MAX_PARALLEL);
 
   const month = monthStart(now);
-  const used = minutesUsed(
-    factoryRuns(repo, month).flatMap((run) => run.jobs),
-    now,
-  );
+  const used =
+    limit === undefined
+      ? 0
+      : minutesUsed(
+          factoryRuns(repo, month).flatMap((run) => run.jobs),
+          now,
+        );
   const running = runningImplementers(repo);
   const frontier = frontierOf(candidates(repo), openPulls(repo), issuesOfRuns(running));
   const plan = planOf(frontier.eligible, running.length, maxParallel);
-  const spent = used >= limit;
+  const spent = limit !== undefined && used >= limit;
 
   console.log(`Factory dispatch — ${now.toISOString()}`);
-  console.log(`Budget: ${String(used)} of ${String(limit)} minutes since ${month}`);
+  console.log(
+    limit === undefined
+      ? "Budget: off (FACTORY_MONTHLY_MINUTES=off)"
+      : `Budget: ${String(used)} of ${String(limit)} minutes since ${month}`,
+  );
   console.log(
     `Implementers: ${String(running.length)} of ${String(maxParallel)} queued or running`,
   );
@@ -169,7 +171,7 @@ const main = (): void => {
 
   if (spent) {
     console.log(`Dispatch: none — the ${month.slice(0, 7)} budget is spent.`);
-    if (!dryRun) announceBudget(repo, used, limit, month);
+    if (!dryRun && limit !== undefined) announceBudget(repo, used, limit, month);
     return;
   }
   if (plan.dispatch.length === 0) {
