@@ -1,7 +1,8 @@
 # One review run of the factory: Claude Code reviews a pull request with Matt
 # Pocock's `code-review` skill, commits the fixes it is sure of, and rates the
 # merge danger. The owner dispatches it by hand when they want a review now;
-# the night cron drains whatever stayed queued.
+# the nightly tick dispatches a run with no `pr`, which drains whatever stayed
+# queued.
 #
 # Labels: `agent:review` is the queue (a queued run leaves it in place); a run
 # swaps it for `risk:low` or `risk:high`. A changes-requested review dispatches
@@ -9,25 +10,21 @@
 # (`factory-merge.yml`) to decide.
 name: Factory Review
 
-run-name: Factory review ${{ format('#{0}', inputs.pr || github.event.pull_request.number || 'night queue') }}
+run-name: Factory review ${{ inputs.pr && format('#{0}', inputs.pr) || inputs.scheduled && '(factory tick)' || format('#{0}', github.event.pull_request.number || 'night queue') }}
 
 on:
   pull_request:
     types: [labeled]
   workflow_dispatch:
     inputs:
+      scheduled:
+        description: "Set by the factory tick: this run is the scheduled queue drain"
+        type: boolean
+        default: false
       pr:
-        description: "The pull request number to review (empty: drain the night queue, as the cron does)"
+        description: "The pull request number to review (empty: drain the queue of every agent:review pull request)"
         required: false
         type: string
-  schedule:
-    # 01:23 UTC is 02:23 CET or 03:23 CEST: inside the 01:00–07:00 Budapest
-    # window in both halves of the year. The gate decides per run, so a
-    # dispatch outside the window queues instead.
-    # Off the busy top of the hour, plus a backup slot: GitHub delays or drops
-    # scheduled runs, and a second run finds the queue already drained.
-    - cron: "23 1 * * *"
-    - cron: "53 3 * * *"
 
 # The job's own token stays read-only; every write goes through AGENT_PAT,
 # which is what makes CI run on the reviewer's push and label chains fire.
@@ -41,11 +38,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # The cron only dispatches; each dispatched run checks the gate and reviews.
-  # One review per pull request still labelled `agent:review`.
+  # The tick's dispatch has no `pr`; it starts one review per pull request still
+  # labelled `agent:review`, and each dispatched run checks the gate and reviews.
   dispatch-queued:
-    # A dispatch with no `pr` drains the queue the same way.
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.pr == '')
+    if: github.event_name == 'workflow_dispatch' && inputs.pr == ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -66,9 +62,9 @@ jobs:
           done
 
   review:
-    # Dependabot's own label event runs without secrets; the night cron
+    # Dependabot's own label event runs without secrets; the nightly tick
     # dispatches its review instead.
-    if: github.event_name != 'schedule' && !(github.event_name == 'workflow_dispatch' && inputs.pr == '') && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.label.name == 'agent:review')
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.pr == '') && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.label.name == 'agent:review') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -130,7 +126,7 @@ jobs:
           node-version-file: .node-version
 
       # Outside the Budapest night window, only the day's quota may review; a
-      # queued run leaves `agent:review` in place for the night cron.
+      # queued run leaves `agent:review` in place for the nightly queue dispatch.
       - name: Check the night window and the daytime quota
         id: gate
         if: steps.preflight.outputs.proceed == 'true'

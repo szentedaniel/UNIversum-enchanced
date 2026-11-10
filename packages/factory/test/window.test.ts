@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { budapestDay } from "#shared/budapest.ts";
 import {
   DEFAULT_DAY_REVIEWS,
-  budapestDay,
   daytimeReviewsToday,
   isNightWindow,
   reviewDecision,

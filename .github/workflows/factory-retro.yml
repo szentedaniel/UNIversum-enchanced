@@ -9,19 +9,19 @@
 # branch runs CI and the log's push lands on main.
 name: Factory Retro
 
+run-name: Factory retro ${{ inputs.scheduled && '(factory tick)' || (inputs.dry_run && '(dry run)' || '(manual)') }}
+
 on:
   workflow_dispatch:
     inputs:
+      scheduled:
+        description: "Set by the factory tick: this run is the scheduled occurrence"
+        type: boolean
+        default: false
       dry_run:
         description: Print the retro's answer and the writes it would make, without writing
         type: boolean
         default: false
-  schedule:
-    # 03:41 UTC is 04:41 CET or 05:41 CEST: after the 01:23 review cron, inside the night window.
-    - cron: "41 3 * * *"
-    # A backup slot, still inside the window: GitHub delays or drops scheduled
-    # runs, and the second run of a day stops at the day's log entry.
-    - cron: "11 4 * * *"
 
 # The job's own token stays read-only; every write goes through AGENT_PAT.
 permissions:

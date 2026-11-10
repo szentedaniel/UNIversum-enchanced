@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inWindow, scheduleSlot, weekWindow } from "#report/week.ts";
+import { inWindow, weekWindow } from "#report/week.ts";
 
 const at = (iso: string): Date => new Date(iso);
 
@@ -41,21 +41,6 @@ describe("weekWindow", () => {
 
     expect(week.weekOf).toBe("2026-11-02");
     expect(week.end.toISOString()).toBe("2026-11-08T23:00:00.000Z");
-  });
-});
-
-describe("scheduleSlot", () => {
-  it("runs from 06:00 Budapest in either season, whichever cron slot hits it", () => {
-    // Winter: the 05:09 UTC cron is 06:09 CET; the 04:09 UTC one is 05:09.
-    expect(scheduleSlot(at("2026-11-09T05:09:00Z"))).toBe(true);
-    expect(scheduleSlot(at("2026-11-09T04:09:00Z"))).toBe(false);
-
-    // Summer: the 04:09 UTC cron is 06:09 CEST.
-    expect(scheduleSlot(at("2026-06-01T04:09:00Z"))).toBe(true);
-  });
-
-  it("still posts when GitHub starts the scheduled run hours late", () => {
-    expect(scheduleSlot(at("2026-11-09T12:37:00Z"))).toBe(true);
   });
 });
 
