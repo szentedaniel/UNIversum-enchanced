@@ -18,7 +18,7 @@ catalog:
   "@colyseus/ws-transport": 0.18.4
   "@fontsource-variable/nunito": 5.3.0
   "@fontsource/sigmar-one": 5.3.0
-  "@inlang/paraglide-js": 2.29.0
+  "@inlang/paraglide-js": 3.2.1
   "@inlang/plugin-message-format": 4.5.4
   "@playwright/test": 1.64.1
   "@prometheus-io/client": 0.16.1
