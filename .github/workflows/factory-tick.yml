@@ -1,0 +1,55 @@
+# The factory's tick: every ten minutes, dispatch each nightly or weekly job
+# that is due and has not run since it fell due. GitHub starts this repo's
+# scheduled runs hours late and drops some, so the tick is the scheduler and
+# `packages/factory/src/schedule/due.ts` decides what a tick may start. The
+# five scheduled workflows no longer carry a cron of their own.
+name: Factory Tick
+
+on:
+  schedule:
+    # Off the busy top of the hour: every ten minutes from :03.
+    - cron: "3-59/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print the due jobs without dispatching
+        type: boolean
+        default: false
+
+# The job's own token stays read-only; every write goes through AGENT_PAT.
+permissions:
+  contents: read
+
+# A tick that is still reading runs must finish before the next one starts;
+# the second then sees the first tick's runs and dispatches nothing twice.
+concurrency:
+  group: factory-tick
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Tick
+        run: node packages/factory/src/schedule/tick.ts
