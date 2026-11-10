@@ -1,6 +1,8 @@
+import { assert, constantFrom, integer, property, record, tuple } from "fast-check";
 import { describe, expect, it } from "vitest";
 import { botIntent, publicView, type FieldId, type GameState, type PlayerState } from "#index.ts";
 import { newGame, playTurn, rollOnto, withField, withPlayer } from "./helpers.ts";
+import { playBotGame } from "./simulation.ts";
 
 const VESZPREM = 1;
 const BUDAPEST = 2;
@@ -234,5 +236,48 @@ describe("Erasmus pick", () => {
       turn: landed.turn,
       field: DEBRECEN,
     });
+  });
+});
+
+describe("games driven only by the policy", () => {
+  const seedArb = tuple(
+    integer({ min: -(2 ** 31), max: 2 ** 31 - 1 }),
+    integer({ min: -(2 ** 31), max: 2 ** 31 - 1 }),
+    integer({ min: -(2 ** 31), max: 2 ** 31 - 1 }),
+    integer({ min: -(2 ** 31), max: 2 ** 31 - 1 }),
+  ).map((words) => (words.every((word) => word === 0) ? ([1, 0, 0, 0] as const) : words));
+  const gameArb = record({
+    seed: seedArb,
+    players: constantFrom<2 | 3 | 4>(2, 3, 4),
+    settings: record({ minuteLimit: constantFrom<15 | 30 | 50>(15, 30, 50) }),
+  });
+
+  it("the engine accepts every intent and every game ends", () => {
+    assert(
+      property(gameArb, (game) => {
+        const run = playBotGame(game);
+
+        expect(run.ended).toBe(true);
+        expect(run.state.phase.kind).toBe("gameOver");
+        expect(run.steps.length).toBeGreaterThan(0);
+      }),
+      { seed: 20261110, numRuns: 20 },
+    );
+  });
+
+  it("the same seed replays the same game, so the policy has no randomness", () => {
+    const options = {
+      seed: [1, 2, 3, 4] as const,
+      players: 4 as const,
+      settings: { minuteLimit: 30 as const },
+    };
+
+    const first = playBotGame(options);
+    const second = playBotGame(options);
+
+    expect(second.steps.map((step) => [step.intent, step.now])).toEqual(
+      first.steps.map((step) => [step.intent, step.now]),
+    );
+    expect(second.state).toEqual(first.state);
   });
 });

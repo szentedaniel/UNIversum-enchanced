@@ -9,6 +9,7 @@
  */
 import {
   apply,
+  botIntent,
   isRejection,
   publicView,
   SYSTEM,
@@ -151,6 +152,49 @@ export function nextMove(state: GameState, pick: Pick, timeoutEvery = 8): Move |
       throw new Error(`the driver has no move for phase ${JSON.stringify(unhandled)}`);
     }
   }
+}
+
+export type BotGameOptions = GameOptions & {
+  /** A hard cap on accepted intents, so a broken game cannot loop forever. */
+  steps?: number;
+};
+
+/**
+ * Plays one seeded game with every Decision answered by the Bot policy, with
+ * no Turn timeout: the policy must cover every Decision on its own.
+ */
+export function playBotGame(options: BotGameOptions = {}): Simulation {
+  const maxSteps = options.steps ?? 5_000;
+
+  let state = newGame({
+    players: options.players,
+    settings: options.settings,
+    seed: options.seed,
+    now: options.now ?? T0,
+  });
+  const steps: Step[] = [];
+
+  while (state.phase.kind !== "gameOver" && steps.length < maxSteps) {
+    const intent = botIntent(publicView(state));
+    if (!intent) break;
+    const now = state.actsAfter;
+    const result = apply(state, intent, { actor: state.currentPlayer, now });
+    if (isRejection(result)) {
+      throw new Error(
+        `${intent.type} on Turn ${state.turn} (${state.phase.kind}) was refused: ${result.code}`,
+      );
+    }
+    steps.push({
+      before: state,
+      after: result.state,
+      intent,
+      now,
+      events: result.events,
+    });
+    state = result.state;
+  }
+
+  return { state, steps, ended: state.phase.kind === "gameOver" };
 }
 
 /** Plays one seeded game, choosing only legal options, until it ends. */
