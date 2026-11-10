@@ -1,7 +1,13 @@
 import { PLAYER_NAME_ADJECTIVES, PLAYER_NAME_NOUNS } from "@universum/protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BOT_DELAY_MS } from "#room/game-driver.ts";
-import { startTestServer, withDeadline, type TestClient, type TestServer } from "./helpers.ts";
+import {
+  eventually,
+  startTestServer,
+  withDeadline,
+  type TestClient,
+  type TestServer,
+} from "./helpers.ts";
 
 let server: TestServer;
 
@@ -181,5 +187,86 @@ describe("Bots in the Lobby", () => {
     alice.send({ type: "RemoveBot", playerId: "nobody" });
 
     expect(await alice.next("rejected")).toEqual({ code: "NOT_OFFERED" });
+  });
+});
+
+/**
+ * A started 2-Guest game: the creator's first Decision is open, and both have
+ * taken the first view (its `actsAfter` is the open Decision's gate).
+ */
+async function startedGame() {
+  const alice = await server.create({ maxPlayers: 2 });
+  const bob = await server.join(alice.code);
+  const aliceId = (await alice.next("welcome")).playerId;
+  alice.send({ type: "Start" });
+  const [first] = await Promise.all([alice.next("game"), bob.next("game")]);
+  return { alice, bob, aliceId, code: alice.code, first };
+}
+
+/** Waits until the Room counts the dropped Seat as held (its client is gone). */
+async function dropped(code: string): Promise<void> {
+  await eventually(() => expect(server.room(code)?.gauges().held).toBe(1));
+}
+
+describe("a Bot stands in for a dropped Guest", () => {
+  it("plays the dropped Guest's Decision without a Timeout penalty", async () => {
+    const { alice, bob, aliceId, code, first } = await startedGame();
+    await alice.drop();
+    await dropped(code);
+
+    // Her open Decision is answered at the Bot's pause, well inside the Turn
+    // timer: no TimedOut, so no penalty for a Player who was not there.
+    server.scheduler.advanceTo(first.view.actsAfter + BOT_DELAY_MS);
+    const played = await bob.next("game");
+
+    expect(played.events[0]).toMatchObject({ type: "DiceRolled", player: aliceId });
+    expect(played.events.some((event) => event.type === "TimedOut")).toBe(false);
+    expect(played.view.version).toBe(first.view.version + 1);
+  });
+
+  it("cancels the pending Bot action when the Guest reconnects, and she decides", async () => {
+    const { alice, bob, aliceId, code, first } = await startedGame();
+    await alice.drop();
+    await dropped(code);
+    const back = await server.reconnect(alice);
+    const current = await back.next("game");
+
+    // The pause passes with no action: the open Decision is the Guest's again.
+    server.scheduler.advanceTo(first.view.actsAfter + BOT_DELAY_MS);
+    expect(bob.pending("game")).toEqual([]);
+
+    back.send({ type: "Roll", turn: current.view.turn });
+    const rolled = await bob.next("game");
+
+    expect(rolled.events[0]).toMatchObject({ type: "DiceRolled", player: aliceId });
+    expect(rolled.view.version).toBe(current.view.version + 1);
+  });
+
+  it("keeps a Bot action already applied when the Guest reconnects", async () => {
+    const { alice, bob, code, first } = await startedGame();
+    await alice.drop();
+    await dropped(code);
+    server.scheduler.advanceTo(first.view.actsAfter + BOT_DELAY_MS);
+    const played = await bob.next("game");
+
+    const back = await server.reconnect(alice);
+    const current = await back.next("game");
+
+    // One answer to one Decision, never two: the applied Roll stands.
+    expect(current.events).toEqual([]);
+    expect(current.view.version).toBe(played.view.version);
+    expect(current.view.players).toEqual(played.view.players);
+  });
+
+  it("plays a Guest's Decisions after they leave the game on purpose", async () => {
+    const { alice, bob, aliceId, code, first } = await startedGame();
+    await alice.leave();
+    await dropped(code);
+
+    server.scheduler.advanceTo(first.view.actsAfter + BOT_DELAY_MS);
+    const played = await bob.next("game");
+
+    expect(played.events[0]).toMatchObject({ type: "DiceRolled", player: aliceId });
+    expect(played.events.some((event) => event.type === "TimedOut")).toBe(false);
   });
 });
