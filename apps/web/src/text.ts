@@ -173,6 +173,16 @@ export const formatCompactMoney = (amount: number): string =>
     amount,
   );
 
+/** Short money with its currency, for the Create Room segments: three choices fit one row. */
+export const formatCompactCash = (amount: number): string =>
+  new Intl.NumberFormat(getLocale(), {
+    style: "currency",
+    currency: "HUF",
+    currencyDisplay: "narrowSymbol",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(amount);
+
 const FIELD_KINDS: Record<FieldKind, Message> = {
   start: m.field_kind_start,
   university: m.field_kind_university,
