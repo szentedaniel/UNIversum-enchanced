@@ -14,7 +14,7 @@ const SEATTLE = 17;
 const NEW_HAVEN = 19;
 const ERASMUS = 24;
 
-/** `state` with `owner` holding each Field at Level 1 (a Museum stays Level 0). */
+/** `state` with `owner` holding each University at Level 1. */
 function owning(state: GameState, owner: string, fields: readonly FieldId[]): GameState {
   return fields.reduce((next, field) => withField(next, field, { owner, level: 1 }), state);
 }
