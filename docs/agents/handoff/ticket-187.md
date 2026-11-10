@@ -26,10 +26,11 @@
   criteria did not ask for a Turn timer row, and #188 owns the Lobby list's non-default marker.
   Adding the row later needs a layout change (`sm` 2 / `lg` 4 columns).
 - e2e: `GAME_TURN_LIMIT_MS` is gone from `apps/e2e/playwright.config.ts`, because the server's
-  override would hide the setting from every screen. e2e Rooms pick the shortest 10 s Turn timer on
-  the Create screen instead: `startGame(page, browser, { turnLimitMs: 10_000 })` and `full-game.spec.ts`
-  select "10 s"; `apps/e2e/tests/helpers.ts` has `RoomChoices`, the now-exported `createAndJoin` and
-  `startLobby` (the Start click both it and `startGame` use). `apps/e2e/tests/turn-timer.spec.ts`
+  override would hide the setting from every screen. The specs that need short Turns pick the
+  shortest 10 s Turn timer on the Create screen instead: `startGame(page, browser, { turnLimitMs:
+  10_000 })` and `full-game.spec.ts` select "10 s", while the rest keep the 20 s default;
+  `apps/e2e/tests/helpers.ts` has `RoomChoices`, the now-exported `createAndJoin` and `startLobby`
+  (the Start click both it and `startGame` use). `apps/e2e/tests/turn-timer.spec.ts`
   pins the ring's inline `animation-duration` to `10000ms` and the view's `turnTimer.limitMs` to
   10 000. The override itself stays covered by `apps/server/test/turn-timer.test.ts`.
 - Tests that pin the setting: `packages/protocol/test/schemas.test.ts` (default, each value,
