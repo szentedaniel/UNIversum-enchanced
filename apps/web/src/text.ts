@@ -156,6 +156,11 @@ const CHANCE_CARD_TEXTS: Record<ChanceCardId, { title: Message; text: Message }>
         amount: formatMoney(CHANCE_CARD_MONEY.teachingAssistantJob),
       }),
   },
+  examPeriod: { title: m.chance_exam_period_title, text: m.chance_exam_period_text },
+  scholarshipTransfer: {
+    title: m.chance_scholarship_transfer_title,
+    text: m.chance_scholarship_transfer_text,
+  },
 };
 
 /** A Chance card's title and text in the active language. */
