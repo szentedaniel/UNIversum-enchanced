@@ -53,7 +53,12 @@ export function appendRevealed(log: LogState, push: LogPush, revealed: number): 
   if (cursor !== null && push.seq < cursor.seq) return log;
   const from = cursor !== null && cursor.seq === push.seq ? cursor.shown : 0;
   const to = Math.min(Math.max(revealed, 0), push.events.length);
-  if (from === to && cursor !== null && cursor.seq === push.seq) return log;
+  // The same push read again, at or behind the point already read: nothing new.
+  if (from >= to) {
+    return cursor !== null && cursor.seq === push.seq
+      ? log
+      : { lines: log.lines, cursor: { seq: push.seq, shown: to } };
+  }
 
   const appended: LogLine[] = [];
   for (let index = from; index < to; index += 1) {

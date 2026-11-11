@@ -64,8 +64,12 @@ describe("the Event log's lines", () => {
     inLanguage("en");
     const first = appendRevealed(emptyLog, pushOf(ROLL()), 3);
     const again = appendRevealed(first, pushOf(ROLL()), 3);
+    // A stale frame that has reached fewer events must not rewind the cursor
+    // and make the log duplicate the lines on its next read.
+    const older = appendRevealed(first, pushOf(ROLL()), 1);
 
     expect(again).toBe(first);
+    expect(older).toBe(first);
   });
 
   it("keeps the lines of the previous pushes when a new push adds its own", () => {
