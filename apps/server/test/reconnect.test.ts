@@ -1,6 +1,7 @@
 import { MatchMakeError } from "@colyseus/sdk";
 import { CLOSE_CODE, matchmakeRejection, type RejectionCode } from "@universum/protocol";
 import { afterEach, describe, expect, it } from "vitest";
+import { BOT_DELAY_MS } from "#room/game-driver.ts";
 import {
   eventually,
   ManualScheduler,
@@ -201,24 +202,26 @@ async function halfJoinedDrop(server: TestServer) {
 }
 
 describe("a Seat in a running game while its Player is away", () => {
-  it("is held, its Turns time out with the normal penalty, and the reconnection token brings the Player back to the current state", async () => {
+  it("is held while its Player is away, its Decisions are played by the Bot, and the reconnection token brings them back to the current state", async () => {
     const server = await start();
-    const { alice, bob, view } = await startedGame(server);
+    const { alice, bob, code, view } = await startedGame(server);
     await alice.drop();
+    await eventually(() => expect(server.room(code)?.gauges().held).toBe(1));
 
-    // Alice's Turn times out while she is away.
-    server.scheduler.advanceTo(view.turnDeadline);
-    const timedOut = await bob.next("game");
-    expect(timedOut.events).toContainEqual({ type: "TimedOut", player: view.players[0]?.id });
-    expect(timedOut.view.currentPlayer).toBe(view.players[1]?.id);
+    // Her open Decision is answered by the Bot policy, a second and a half
+    // after the gate: the Turn timer never runs out, so there is no penalty.
+    server.scheduler.advanceTo(view.actsAfter + BOT_DELAY_MS);
+    const played = await bob.next("game");
+    expect(played.events[0]).toMatchObject({ type: "DiceRolled", player: view.players[0]?.id });
+    expect(played.events.some((event) => event.type === "TimedOut")).toBe(false);
 
-    // Long after any Lobby hold, the Seat is still hers.
-    server.scheduler.advanceTo(view.turnDeadline + 10 * LOBBY_HOLD);
+    // The Seat is still hers (a running game holds it), and the reconnection
+    // token brings her back to the state the Bot's action left.
     const back = await server.reconnect(alice);
     const current = await back.next("game");
     expect(current.events).toEqual([]);
-    expect(current.view.version).toBeGreaterThanOrEqual(timedOut.view.version);
-    expect(current.view.version).toBe(server.room(alice.code)?.game?.version);
+    expect(current.view.version).toBe(played.view.version);
+    expect(current.view.version).toBe(server.room(code)?.game?.version);
   });
 
   it("is taken back by Guest token from a new connection (reload, new tab), as the same Player", async () => {
