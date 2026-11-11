@@ -2,6 +2,18 @@ import { describe, expect, it } from "vitest";
 import { branchNamesTarget, shareModule, targetPathsIn } from "#shared/targets.ts";
 
 describe("targetPathsIn", () => {
+  it("ignores the implementer protocol line every ticket ends with", () => {
+    const body =
+      "Touch `shared/runs.ts`.\n\nFollow `docs/agents/implementer.md`; the nightly retro opened this ticket.";
+    expect(targetPathsIn(body)).toEqual(["shared/runs.ts"]);
+    expect(
+      shareModule(
+        targetPathsIn(body),
+        targetPathsIn("Fix a.ts.\nFollow docs/agents/implementer.md."),
+      ),
+    ).toBe(false);
+  });
+
   it("reads the file paths a ticket body names, full or package-relative", () => {
     const body = [
       "Deepen `shared/runs.ts`, and move fix/decide.ts with it.",

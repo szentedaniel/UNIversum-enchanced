@@ -140,8 +140,12 @@ const spanDirectories = (text: string): FoundPath[] => {
   return found;
 };
 
+/** Every ticket ends "Follow `docs/agents/implementer.md`": that names the protocol, not a target. */
+const PROTOCOL_LINE = /^.*\bFollow\b.*implementer\.md.*$/gimu;
+
 /** The file and directory paths the text names, once each, in textual order. */
-export const targetPathsIn = (text: string): string[] => {
+export const targetPathsIn = (rawText: string): string[] => {
+  const text = rawText.replace(PROTOCOL_LINE, (line) => " ".repeat(line.length));
   const found: FoundPath[] = [];
   for (const match of text.matchAll(FILE_PATH)) {
     found.push({ at: match.index, path: normalizePath(match[0]) });
