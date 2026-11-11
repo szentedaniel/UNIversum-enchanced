@@ -91,7 +91,7 @@ const issueFacts = (repo: string, issue: ApiIssue): IssueFacts => {
     labels,
     blockedBy: issue.issue_dependencies_summary.blocked_by,
     openBlockers:
-      !labels.includes("ready-for-agent") || issue.issue_dependencies_summary.blocked_by === 0
+      !labels.includes(READY_LABEL) || issue.issue_dependencies_summary.blocked_by === 0
         ? []
         : openBlockers(repo, issue.number),
     subIssues: issue.sub_issues_summary.total,

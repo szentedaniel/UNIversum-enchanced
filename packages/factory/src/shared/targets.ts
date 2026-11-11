@@ -59,6 +59,10 @@ const GENERIC_STEMS: ReadonlySet<string> = new Set([
   "fixtures",
   "package",
   "readme",
+  "glossary",
+  "agents",
+  "claude",
+  "tsconfig",
 ]);
 
 /**
