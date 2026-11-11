@@ -178,6 +178,15 @@ describe("proposing a Deal", () => {
     });
   });
 
+  it("a refused proposal does not spend the Turn's Deal", () => {
+    const state = twoPlayerGame();
+    expect(reject(state, proposal(state, { recipient: PROPOSER }), PROPOSER)).toEqual({
+      code: "DEAL_RECIPIENT_INVALID",
+    });
+
+    expect(propose(state).state).toMatchObject({ phase: { kind: "dealAnswer" }, dealUsed: true });
+  });
+
   it("the next Turn may propose a Deal again", () => {
     const declined = answer(propose(twoPlayerGame()).state, "DeclineDeal");
     const nextTurn = timeOut(declined.state).state;
