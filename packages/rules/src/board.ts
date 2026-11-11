@@ -134,7 +134,7 @@ export const CHANCE_CARD_MONEY: Readonly<Record<ChanceCardId, number>> = {
   failedExams: -200_000,
   textbookFair: -150_000,
   teachingAssistantJob: 300_000,
-  // Movement cards: no fixed amount (the Round bonus comes from the Room's settings).
+  // Movement cards: no fixed amount (the move itself pays the Round bonus, if any).
   examPeriod: 0,
   scholarshipTransfer: 0,
 };

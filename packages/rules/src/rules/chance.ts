@@ -76,7 +76,7 @@ const EFFECTS: Record<ChanceCardId, (tx: Tx, playerId: PlayerId) => void> = {
     moveForwardWithoutRoundBonus(tx, playerId, stepsTo(tx, playerId, QUARANTINE_FIELD));
     enterQuarantine(tx, playerId);
   },
-  // The same payment as passing Start, so a Room's Round bonus setting applies (R34, R73).
+  // The same payment as passing Start, through `moveForward` (R34, R73).
   scholarshipTransfer: (tx, playerId) => {
     moveForward(tx, playerId, stepsTo(tx, playerId, START_FIELD));
   },
