@@ -9,8 +9,13 @@ import {
   type RejectionCode,
   type RoomSettings,
 } from "@universum/protocol/messages";
-import type { PlayerName } from "@universum/rules";
-import { CHANCE_CARD_MONEY, type ChanceCardId, type FieldKind } from "@universum/rules/board";
+import type { DealSide, PlayerName } from "@universum/rules";
+import {
+  CHANCE_CARD_MONEY,
+  FIELDS,
+  type ChanceCardId,
+  type FieldKind,
+} from "@universum/rules/board";
 import { m } from "#paraglide/messages.js";
 import { getLocale } from "#paraglide/runtime.js";
 
@@ -111,6 +116,15 @@ const NOUNS: Record<string, Message> = {
 /** A Player name in the active language. */
 export const playerName = (name: PlayerName): string =>
   `${ADJECTIVES[name.adjective]?.() ?? name.adjective} ${NOUNS[name.noun]?.() ?? name.noun}`;
+
+/** One side of a Deal: its Fields' names and its cash, or "nothing" when it puts in neither. */
+export function dealSideText(side: DealSide): string {
+  const parts = [
+    ...side.fields.map((field) => fieldName(FIELDS[field]?.key ?? "")),
+    ...(side.cash > 0 ? [formatMoney(side.cash)] : []),
+  ];
+  return parts.length > 0 ? parts.join(", ") : m.deal_nothing();
+}
 
 const REJECTIONS: Record<RejectionCode, Message> = {
   STALE_TURN: m.rejection_stale_turn,

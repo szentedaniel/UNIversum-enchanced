@@ -5,7 +5,7 @@
  * timers, so both screens render from the same answer and a vitest can drive
  * every case.
  */
-import type { PhaseOf, PlayerId } from "@universum/rules";
+import type { Deal, PhaseOf, PlayerId } from "@universum/rules";
 import type { FieldId } from "@universum/rules/board";
 import { selectedPick, singleMarks, singlePickFor, type SinglePick } from "#pick/pick.ts";
 import {
@@ -21,17 +21,19 @@ import type { Frame } from "#playback/playback.ts";
 
 /**
  * The Decision this client shows: its own, with the value the tray needs, or
- * another Player's Sale or pick as a waiting line. A Roll, Offer or Quarantine
- * choice in flight is hidden (no optimistic UI); a Sale or pick stays, `busy`.
- * `owner` tells mine from another Player's without reading the payload.
+ * another Player's Sale, pick or Deal answer as a waiting line. A Roll, Offer,
+ * Quarantine choice or Deal answer in flight is hidden (no optimistic UI); a
+ * Sale or pick stays, `busy`. `owner` tells mine from another Player's without
+ * reading the payload.
  */
 export type OpenDecision =
   | { owner: "me"; kind: "roll" }
   | { owner: "me"; kind: "offer"; offer: PhaseOf<"offer"> }
   | { owner: "me"; kind: "quarantine"; choice: PhaseOf<"quarantineChoice"> }
+  | { owner: "me"; kind: "deal"; deal: Deal }
   | { owner: "me"; kind: "sale"; sale: SalePick; busy: boolean }
   | { owner: "me"; kind: "pick"; pick: SinglePick; busy: boolean }
-  | { owner: "other"; player: PlayerId; kind: "sale" | "pick" };
+  | { owner: "other"; player: PlayerId; kind: "sale" | "pick" | "deal" };
 
 /** This client's Sale or pick. */
 type MySaleOrPick = Extract<OpenDecision, { owner: "me"; kind: "sale" | "pick" }>;
@@ -66,8 +68,8 @@ export type DecisionUi = { selectedField: FieldId | null; inspect: boolean };
 
 /**
  * The open Decision: nothing while there is no frame, the gate is shut, the
- * game is over, or a one-tap Decision is in flight; another Player's Sale or
- * pick is a waiting line, and their other Decisions show nothing.
+ * game is over, or a one-tap Decision is in flight; another Player's Sale, pick
+ * or Deal answer is a waiting line, and their other Decisions show nothing.
  */
 export function openDecision(
   frame: Frame | null,
@@ -95,17 +97,20 @@ export function openDecision(
         const pick = singlePickFor(frame.view, me);
         return pick === null ? null : { owner: "me", kind: "pick", pick, busy: inFlight };
       }
-      // The answer panel is the Deal UI ticket (#194); until then it shows no controls.
+      // The Deal answer is the recipient's one-tap Decision; its panel shows the terms.
       case "dealAnswer":
-        return null;
+        return inFlight || frame.view.deal === null
+          ? null
+          : { owner: "me", kind: "deal", deal: frame.view.deal };
     }
   }
-  // Another Player's Sale or pick is a waiting line; their Roll, Offer and
-  // Quarantine choice leave this client with nothing to show.
+  // Another Player's Sale, pick or Deal answer is a waiting line; their Roll,
+  // Offer and Quarantine choice leave this client with nothing to show.
   if (phase.kind === "selling") return { owner: "other", player: currentPlayer, kind: "sale" };
   if (phase.kind === "placingDoubler" || phase.kind === "choosingErasmus") {
     return { owner: "other", player: currentPlayer, kind: "pick" };
   }
+  if (phase.kind === "dealAnswer") return { owner: "other", player: currentPlayer, kind: "deal" };
   return null;
 }
 

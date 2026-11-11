@@ -129,10 +129,17 @@ export function Game() {
   );
 
   // The Turn card at the bottom; the Field card takes its place while open.
-  const turnCard = (
-    <TurnCard view={view} decision={decision} shownTurn={shownTurn} waiting={waiting} />
-  );
   const mySeat = view.players.find((p) => p.id === me)?.seat ?? 0;
+  const turnCard = (
+    <TurnCard
+      view={view}
+      decision={decision}
+      shownTurn={shownTurn}
+      waiting={waiting}
+      clockOffset={clockOffset}
+      seat={mySeat}
+    />
+  );
   // The bottom slot in the Decision module's order (spec #72): the result
   // screen, the Field card in inspect mode during my Sale or pick (‹ › over its
   // pickable Fields only; closing it brings the tray back), the tray, the Field
