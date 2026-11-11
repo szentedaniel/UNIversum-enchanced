@@ -16,7 +16,7 @@ import { formatMoney, m, playerName, roomNameText } from "#text.ts";
 
 const COPIED_MS = 1500;
 
-/** Copies `text`, then shows "Copied" for a moment; a rejected copy (insecure origin) stays quiet. */
+/** Returns `[copied, copy]`: `copy(text)` writes to the clipboard, then `copied` is true for a moment; a rejected copy (insecure origin) stays quiet. */
 function useCopy() {
   const [copied, setCopied] = useState(false);
 
