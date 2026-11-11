@@ -9,11 +9,11 @@ or pull request already holds. Both checks are deterministic path matching, no m
 ## The matcher (`packages/factory/src/shared/targets.ts`)
 
 - `targetPathsIn(text)` reads repo paths from a title or body: every token with a source extension,
-  plus a backticked directory of at least four segments whose first segment is one of `ROOTS`
+  plus a backticked directory of at least four segments whose first segment is one of `ROOT_DIRS`
   (`apps`, `packages`, `docs`, `scripts`, `monitoring`, `patches`, `.github`). URLs, versions,
   hashes and command flags are skipped; a package root (`packages/factory`) or a broad folder
   (`.github/workflows`) is not a module, or one sentence about protected paths would claim every
-  ticket in the package. Add a top-level folder to `ROOTS` when a ticket starts naming directories
+  ticket in the package. Add a top-level folder to `ROOT_DIRS` when a ticket starts naming directories
   under it.
 - `shareModule(a, b)` compares two path lists. Two paths match when one is a segment-suffix of the
   other (`shared/runs.ts` ↔ `packages/factory/src/shared/runs.ts`), when a directory of at least
