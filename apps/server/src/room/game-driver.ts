@@ -79,6 +79,12 @@ export type GameDriverOptions = {
   onEnded: (endedAt: number) => void;
   /** The retention period has run out: the Room disconnects. */
   onRetention: () => void;
+  /**
+   * Whether that Seat's Player has a live connection right now. The Room's
+   * fact, not the snapshot's: a restored Seat's `sessionId` is stale, and a
+   * Guest who dropped keeps the one they had.
+   */
+  isSeatConnected: (seat: SeatRecord) => boolean;
 };
 
 /**
@@ -107,10 +113,11 @@ export class GameDriver {
   readonly #publish: (state: GameState, message: GameMessage) => void;
   readonly #onEnded: (endedAt: number) => void;
   readonly #onRetention: () => void;
+  readonly #isSeatConnected: (seat: SeatRecord) => boolean;
   readonly #clock: TurnClock;
   /** Cancels the retention deletion once the game ended (its own wake-up, not the Turn's). */
   #cancelDeletion: (() => void) | null = null;
-  /** Cancels the pending Bot action, if any: a new commit or the game's end replaces it. */
+  /** Cancels the pending Bot action, if any: a commit, a reconnect or the game's end replaces it. */
   #cancelBot: (() => void) | null = null;
 
   constructor(options: GameDriverOptions) {
@@ -126,6 +133,7 @@ export class GameDriver {
     this.#publish = options.publish;
     this.#onEnded = options.onEnded;
     this.#onRetention = options.onRetention;
+    this.#isSeatConnected = options.isSeatConnected;
     this.#clock = new TurnClock({
       scheduler: options.scheduler,
       engine: options.engine,
@@ -159,7 +167,12 @@ export class GameDriver {
     if (game.phase.kind === "gameOver") this.#end(game);
     else if (this.#readState().endedAt === null) {
       this.#clock.arm(game);
-      this.#scheduleBot(game);
+      // Only a seated Bot's own Decision: a restored game's Guests have had no
+      // connection to lose since this server started it, and a game with no
+      // Guest connected keeps its Seats instead of Bot play (spec: Bots). The
+      // Room's first connection change arms an absent Guest's Decision.
+      const player = game.players.find((p) => p.id === game.currentPlayer);
+      this.#armBot(game, player?.bot === true);
     }
   }
 
@@ -217,16 +230,42 @@ export class GameDriver {
   }
 
   /**
-   * Arms the Bot's one wake-up for the state's open Decision (spec: Bots):
-   * about a second and a half after the Playback ends, well inside the Turn
-   * timer. A Guest's Seat has none; a new commit replaces an older one.
+   * A Seat's connection changed (a Guest dropped or left, reconnected, or took
+   * their Seat back from another tab): the open Decision's Bot action is
+   * re-evaluated. An absent Guest's Seat gets one; a Guest who is back has any
+   * pending one cancelled, so they answer the Decision from here. A Bot action
+   * already applied stands: its commit armed the next Decision's wake-up.
    */
-  #scheduleBot(state: GameState): void {
+  refreshBot(): void {
+    const { game, endedAt } = this.#readState();
+    if (game === null || endedAt !== null) return;
+    const plays = this.#botPlays(game);
+    // The pending action is for this Decision already: another Seat's
+    // connection change must not push it later.
+    if (plays && this.#cancelBot !== null) return;
+    this.#armBot(game, plays);
+  }
+
+  /**
+   * Whether the Bot policy answers this state's open Decision: a seated Bot,
+   * or a Guest's Seat with no live connection (a drop, or a leave), so a Guest
+   * who is not there costs the table no Turn timer (spec: Bots).
+   */
+  #botPlays(state: GameState): boolean {
+    if (state.players.find((p) => p.id === state.currentPlayer)?.bot === true) return true;
+    const seat = this.#readState().seats.find((s) => s.playerId === state.currentPlayer);
+    return seat !== undefined && !this.#isSeatConnected(seat);
+  }
+
+  /**
+   * Arms the Bot's one wake-up for the state's open Decision (spec: Bots), if
+   * it plays: about a second and a half after the Playback ends, well inside
+   * the Turn timer. A new commit or a connection change replaces an older one.
+   */
+  #armBot(state: GameState, plays: boolean): void {
     this.#cancelBot?.();
     this.#cancelBot = null;
-    if (state.phase.kind === "gameOver") return;
-    const player = state.players.find((p) => p.id === state.currentPlayer);
-    if (player?.bot !== true) return;
+    if (!plays || state.phase.kind === "gameOver") return;
     // The gate may already be open (a restore): the pause counts from now then.
     const at = Math.max(state.actsAfter, this.now()) + BOT_DELAY_MS;
     const version = state.version;
@@ -243,11 +282,13 @@ export class GameDriver {
     this.#cancelBot = null;
     const { game, endedAt } = this.#readState();
     if (game === null || endedAt !== null || game.version !== version) return;
-    const player = game.players.find((p) => p.id === game.currentPlayer);
-    if (player?.bot !== true) return;
+    // A Guest's reconnect cancels the wake-up; this keeps a race from answering
+    // a Decision the Guest is back for.
+    if (!this.#botPlays(game)) return;
+    const actor = game.currentPlayer;
     const intent = botIntent(publicView(game, this.#timing));
     if (intent === null) return;
-    const outcome = this.submit(game, intent, player.id);
+    const outcome = this.submit(game, intent, actor);
     if ("rejected" in outcome) {
       this.#log.error({ code: outcome.rejected, intent: intent.type }, "Bot intent refused");
     }
@@ -273,7 +314,7 @@ export class GameDriver {
     if (state.phase.kind === "gameOver") this.#end(state);
     else {
       this.#clock.arm(state);
-      this.#scheduleBot(state);
+      this.#armBot(state, this.#botPlays(state));
     }
     return { committed: state };
   }
