@@ -239,7 +239,11 @@ export class GameDriver {
   refreshBot(): void {
     const { game, endedAt } = this.#readState();
     if (game === null || endedAt !== null) return;
-    this.#armBot(game, this.#botPlays(game));
+    const plays = this.#botPlays(game);
+    // The pending action is for this Decision already: another Seat's
+    // connection change must not push it later.
+    if (plays && this.#cancelBot !== null) return;
+    this.#armBot(game, plays);
   }
 
   /**
