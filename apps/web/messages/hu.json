@@ -278,5 +278,8 @@
   "erasmus_title": "Erasmusra mész.",
   "erasmus_prompt": "Válassz ki egy várost, ahova szeretnél menni.",
   "game_over_won": "Győzelem",
-  "game_over_congratulations": "Gratulálunk!"
+  "game_over_congratulations": "Gratulálunk!",
+  "log_title": "Eseménynapló",
+  "log_toggle": "Eseménynapló",
+  "log_empty": "Még nincs esemény."
 }

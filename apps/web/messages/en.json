@@ -278,5 +278,8 @@
   "erasmus_title": "You're going on Erasmus.",
   "erasmus_prompt": "Pick a city you want to travel to.",
   "game_over_won": "Victory",
-  "game_over_congratulations": "Congratulations!"
+  "game_over_congratulations": "Congratulations!",
+  "log_title": "Event log",
+  "log_toggle": "Event log",
+  "log_empty": "No events yet."
 }
