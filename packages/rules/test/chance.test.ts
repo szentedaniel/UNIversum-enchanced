@@ -390,6 +390,49 @@ describe("the Dorm party card", () => {
     expect(done.state.currentPlayer).toBe("p2");
   });
 
+  it("R34, R66: a second short payer opens the next Sale, and the card finishes after both", () => {
+    const seed = seedDrawing("dormParty");
+    let start = newGame({ seed });
+    start = withPlayer(start, "p2", { cash: 10_000 });
+    start = withPlayer(start, "p3", { cash: 10_000 });
+    start = withField(start, VESZPREM, { owner: "p2", level: 1 });
+    start = withField(start, 2, { owner: "p3", level: 1 }); // Budapest, sale 198,000
+
+    const firstSale = draw(seed, null, start);
+    const afterP2 = accept(
+      firstSale.state,
+      { type: "SellFields", turn: firstSale.state.turn, fields: [VESZPREM] },
+      "p2",
+    );
+
+    expect(afterP2.state.currentPlayer).toBe("p3");
+    expect(afterP2.state.phase).toEqual({
+      kind: "selling",
+      shortfall: 40_000,
+      resume: {
+        kind: "chanceTransfer",
+        amount: 50_000,
+        payee: "p1",
+        actor: "p1",
+        rest: [{ payer: "p4", payee: "p1", amount: 50_000 }],
+      },
+    });
+
+    const afterP3 = accept(
+      afterP2.state,
+      { type: "SellFields", turn: afterP2.state.turn, fields: [2] },
+      "p3",
+    );
+
+    expect(afterP3.events).toEqual([
+      { type: "FieldsSold", player: "p3", fields: [2], amount: 198_000, auto: false },
+      { type: "ChanceTransferPaid", player: "p3", payee: "p1", amount: 50_000 },
+      { type: "ChanceTransferPaid", player: "p4", payee: "p1", amount: 50_000 },
+      { type: "TurnPassed", player: "p2", turn: 2 },
+    ]);
+    expect(player(afterP3.state, "p1").cash).toBe(START_CASH + 150_000);
+  });
+
   it("R34, R68: Auto-sell covers the payer's Shortfall and the card carries on", () => {
     const seed = seedDrawing("dormParty");
     const sale = draw(seed, null, dormPartyWithShortPayer(seed));
