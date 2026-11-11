@@ -32,7 +32,7 @@ async function fill(creator: TestClient, players: number): Promise<void> {
 }
 
 describe("the Lobby list", () => {
-  it("lists a new Lobby with its Room name, Room code, Players/max, Minute limit and no lock", async () => {
+  it("lists a new Lobby with its Room name, Room code, Players, Room settings and no lock", async () => {
     const list = await server.watchLobbyList();
     const alice = await server.create({ roomName: "Friday game", maxPlayers: 3, minuteLimit: 30 });
 
@@ -42,9 +42,27 @@ describe("the Lobby list", () => {
       code: alice.code,
       roomName: "Friday game",
       players: 1,
-      maxPlayers: 3,
-      minuteLimit: 30,
+      settings: { maxPlayers: 3, minuteLimit: 30, startingCash: 2_500_000 },
       hasPassword: false,
+    });
+  });
+
+  it("carries every Room setting, so the list can mark the ones off the defaults", async () => {
+    const list = await server.watchLobbyList();
+    const standard = await server.create();
+    const custom = await server.create({ startingCash: 1_500_000 });
+
+    await list.until((l) => l.get(standard.code) !== undefined && l.get(custom.code) !== undefined);
+
+    expect(list.get(standard.code)?.settings).toEqual({
+      maxPlayers: 4,
+      minuteLimit: 50,
+      startingCash: 2_500_000,
+    });
+    expect(list.get(custom.code)?.settings).toEqual({
+      maxPlayers: 4,
+      minuteLimit: 50,
+      startingCash: 1_500_000,
     });
   });
 
@@ -55,7 +73,11 @@ describe("the Lobby list", () => {
     const list = await server.watchLobbyList();
     await list.until((l) => l.get(alice.code) !== undefined);
 
-    expect(list.get(alice.code)).toMatchObject({ players: 1, maxPlayers: 2, roomName: null });
+    expect(list.get(alice.code)).toMatchObject({
+      players: 1,
+      roomName: null,
+      settings: { maxPlayers: 2 },
+    });
   });
 
   it("updates the Players as Guests join, and a Lobby with no empty Seat leaves the list", async () => {
@@ -71,7 +93,7 @@ describe("the Lobby list", () => {
     // A Seat opens again: the Lobby is back on the list.
     await bob.leave();
     await list.until((l) => l.get(alice.code)?.players === 1);
-    expect(list.get(alice.code)).toMatchObject({ players: 1, maxPlayers: 2 });
+    expect(list.get(alice.code)).toMatchObject({ players: 1, settings: { maxPlayers: 2 } });
   });
 
   it("names the creator's Seat by Player id, and keeps the crown there when Seats shift", async () => {

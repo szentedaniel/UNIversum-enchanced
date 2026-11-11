@@ -871,8 +871,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     return {
       roomName: this.displayName,
       players: this.seats.length,
-      maxPlayers: this.settings.maxPlayers,
-      minuteLimit: this.settings.minuteLimit,
+      settings: this.settings,
       hasPassword: this.password !== null,
     };
   }

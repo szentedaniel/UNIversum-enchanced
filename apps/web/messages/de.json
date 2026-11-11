@@ -178,6 +178,8 @@
   "rooms_empty": "Gerade gibt es keine offene Lobby. Erstelle eine!",
   "rooms_full": "Voll",
   "rooms_has_password": "Passwort",
+  "rooms_custom_settings": "Eigene Einstellungen",
+  "rooms_setting_players": "{max} Spieler",
   "room_name_generated": "Raum {code}",
   "password_label": "Passwort",
   "password_prompt": "Diese Lobby hat ein Passwort.",

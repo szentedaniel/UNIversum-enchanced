@@ -178,6 +178,8 @@
   "rooms_empty": "Most nincs nyitott váróterem. Hozz létre egyet!",
   "rooms_full": "Megtelt",
   "rooms_has_password": "Jelszó",
+  "rooms_custom_settings": "Egyedi beállítások",
+  "rooms_setting_players": "{max} játékos",
   "room_name_generated": "{code} szoba",
   "password_label": "Jelszó",
   "password_prompt": "Ez a váróterem jelszóval védett.",
