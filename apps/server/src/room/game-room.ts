@@ -286,8 +286,15 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     // password asked (#35). Everyone else needs an open Lobby Seat.
     if (!room.seatOfToken(join.data.guestToken ?? null)) {
       if (room.game) throw refuse("ROOM_NOT_FOUND");
-      // Seats, not clients: held and restored Seats have no client (maxClients leaves them room).
-      if (room.seats.length >= room.settings.maxPlayers) throw refuse("ROOM_FULL");
+      // Seats, not clients: held and restored Seats have no client (maxClients
+      // leaves them room). A Bot never keeps a Guest out of a full Lobby: the
+      // joining Guest takes its Seat instead (ticket #197).
+      if (
+        room.seats.length >= room.settings.maxPlayers &&
+        !room.seats.some((seat) => seat.bot === true)
+      ) {
+        throw refuse("ROOM_FULL");
+      }
       if (room.password !== null) {
         const password = join.data.password ?? "";
         // No password yet: the client asks for one. Not a guess, so not counted.
@@ -423,7 +430,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       this.guard.lobbyCreatedBy(this.roomId, auth.bucket);
     }
     if (this.game) throw refuse("ROOM_NOT_FOUND");
-    if (this.seats.length >= this.settings.maxPlayers) {
+    // A full Lobby takes the Guest in place of a Bot, if it has one (ticket #197).
+    const full = this.seats.length >= this.settings.maxPlayers;
+    const replaced = full ? this.seats.findIndex((seat) => seat.bot === true) : -1;
+    if (full && replaced === -1) {
       throw refuse("ROOM_FULL");
     }
     const seat: SeatRecord = {
@@ -433,9 +443,12 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       tokenHash: token && hashGuestToken(token),
     };
     if (auth?.creates && this.seats.length === 0) this.creatorId = seat.playerId;
+    const seats = this.seats.slice();
+    if (replaced === -1) seats.push(seat);
+    else seats[replaced] = seat;
     // Saved first: a Seat the store doesn't have isn't taken (the join fails).
-    this.driver.saveSeats([...this.seats, seat]);
-    this.seats.push(seat);
+    this.driver.saveSeats(seats);
+    this.seats = seats;
     this.log.info({ playerId: seat.playerId }, "Seat taken");
     client.send(MESSAGE.welcome, { playerId: seat.playerId } satisfies WelcomeMessage);
     this.broadcastLobby();
