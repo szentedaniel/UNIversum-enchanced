@@ -137,6 +137,7 @@ const REJECTIONS: Record<RejectionCode, Message> = {
   DEAL_FIELD_REPEATED: m.rejection_deal_field_repeated,
   DEAL_EMPTY: m.rejection_deal_empty,
   DEAL_CASH_NOT_COVERED: m.rejection_deal_cash_not_covered,
+  DEAL_ALREADY_PROPOSED: m.rejection_deal_already_proposed,
   MALFORMED: m.rejection_malformed,
   INTERNAL: m.rejection_internal,
   ROOM_NOT_FOUND: m.rejection_room_not_found,

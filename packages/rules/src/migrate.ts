@@ -76,6 +76,10 @@ const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> 
       settings: { ...(isObject(settings) ? settings : {}), turnLimitMs: TURN_LIMIT_MS },
     };
   },
+  // Version 8 adds the per-Turn Deal guard (ticket #193). A state stored with
+  // a pending Deal has used this Turn's Deal; one stored without has used
+  // none, as the old rules had no guard.
+  7: (state) => ({ ...state, stateVersion: 8, dealUsed: state["deal"] !== null }),
 };
 
 /**
