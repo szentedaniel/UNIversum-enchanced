@@ -162,7 +162,7 @@ What a Player pays the owner on landing on a Field another Player owns.
 _Avoid_: Tuition, Tandíj
 
 **Deal**:
-An exchange of Fields and cash between two Players that one proposes before their Roll or Quarantine choice and the other accepts or declines; Fields change hands at their current Level, and neither side's cash may fall short.
+An exchange of Fields and cash between two Players that one proposes before their Roll or Quarantine choice, once per Turn, and the other accepts or declines; Fields change hands at their current Level, and neither side's cash may fall short.
 _Avoid_: Trade, Offer (an Offer is the Decision to buy)
 
 **Buyout**:
