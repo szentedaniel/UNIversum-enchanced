@@ -77,7 +77,7 @@ The moment the next decision opens, once the Playback before it has ended; the d
 _Avoid_: Playback over, unlock
 
 **Event log**:
-The list, on the Game screen, of the lines of the events the Playback has revealed so far, newest last, each line in the language active when it appeared; the client keeps it, so a reload or a reconnect starts it empty.
+The list, on the Game screen, of the lines of the events the Playback has revealed so far, newest last, each line in the language active when it appeared; the client keeps it, so a reload starts it empty.
 _Avoid_: History, chat, transcript
 
 **Turn timer**:

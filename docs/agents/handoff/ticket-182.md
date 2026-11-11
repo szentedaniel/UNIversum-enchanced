@@ -30,8 +30,9 @@ any new event line, Playback step or Game status-row touch.
   kept, the oldest dropped.
 - **Reset:** `room-store.ts`'s `reset()` calls `resetLog()`, and
   `connection.ts`'s `leaveRoom` (also reached by `attach` before a new join)
-  calls `reset()`. The log is memory only: a reload, a reconnect or a Room
-  change starts empty, and nothing fetches the server's stored events.
+  calls `reset()`. The log is memory only: a reload or a Room change starts
+  empty, and nothing fetches the server's stored events. A reconnect push
+  carries no events, so it adds no line and the lines already on screen stay.
 
 ## Gotchas
 
@@ -47,7 +48,8 @@ any new event line, Playback step or Game status-row touch.
   store. `syncLog` takes the push as an argument for this reason.
 - **The Playback store wakes a few ms past a boundary** (`+ 20`), so a fake-timer
   test advances to `boundary + 20`, as `apps/web/test/event-log.test.ts` does.
-  The pure cases (append, skip, dedupe, cap, reset) are in the same file.
+  The pure cases (append, skip, dedupe, cap) and the store's step gating and
+  reset are all in that file.
 
 ## UI
 
