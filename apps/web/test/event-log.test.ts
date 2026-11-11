@@ -16,6 +16,11 @@ import { ROLL, viewOf } from "./playback-fixtures.ts";
 
 const T0 = 1_000;
 
+/** The store wakes a few ms past a boundary; tests advance past that slack. */
+const advanceTo = (at: number): void => {
+  vi.advanceTimersByTime(at - Date.now());
+};
+
 const inLanguage = (locale: Locale) => overwriteGetLocale(() => locale);
 
 afterEach(() => {
@@ -111,12 +116,11 @@ describe("the Event log store", () => {
     vi.useRealTimers();
   });
 
-  const advanceTo = (at: number): void => {
-    vi.advanceTimersByTime(at - Date.now());
-  };
-
   it("adds each line when its Playback step starts, never ahead of the Board", () => {
-    receivePush({ view: viewOf(undefined, { actsAfter: 60_000 }), events: ROLL(), reveals: [], now: T0 }, T0);
+    receivePush(
+      { view: viewOf(undefined, { actsAfter: 60_000 }), events: ROLL(), reveals: [], now: T0 },
+      T0,
+    );
 
     expect(logStore.getState().lines.map((line) => line.index)).toEqual([0]);
 
