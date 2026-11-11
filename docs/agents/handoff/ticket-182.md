@@ -54,9 +54,10 @@ any new event line, Playback step or Game status-row touch.
 ## UI
 
 - `apps/web/src/components/EventLog.tsx` is a `Dialog` (the `GameMenu` shape)
-  mounted in `Game.tsx`'s `statusRow` beside the menu, so it never covers the
-  Board. The trigger is a labelled icon button (`data-testid="event-log"`);
-  the scrolling list is `role="log"` with `aria-relevant="additions"`
+  mounted in `Game.tsx`'s `statusRow` beside the menu, so the toggle itself
+  takes no Board space on a phone; the list opens in the modal. The trigger is
+  a labelled icon button (`data-testid="event-log"`); the scrolling list is
+  `role="log"` with `aria-relevant="additions"`
   (`data-testid="event-log-lines"`), and the empty state is a message.
 - Messages are `log_title`, `log_toggle` and `log_empty` at the end of
   `apps/web/messages/{en,hu,de}.json`; `messages.test.ts` guards parity.
