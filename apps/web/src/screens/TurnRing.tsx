@@ -10,7 +10,7 @@ type Props = {
 };
 
 /**
- * The Turn timer (R17): a ring that empties over the 20 s Turn limit and runs
+ * The Turn timer (R17): a ring that empties over the Room's Turn timer length and runs
  * out at `timer.endsAt` on the server's clock. The server's slack is never
  * shown. Mount it with a `key` per deadline so every decision restarts it.
  */

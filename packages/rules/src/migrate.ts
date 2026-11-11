@@ -65,6 +65,17 @@ const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> 
       settings: { ...(isObject(settings) ? settings : {}), roundBonus: ROUND_BONUS },
     };
   },
+  // Version 7 adds the Turn timer length to the Room settings (ticket #187).
+  // A stored game's deadlines were counted with today's 20 s limit, so that
+  // is its true value: the setting only decides the next decisions' deadlines.
+  6: (state) => {
+    const settings = state["settings"];
+    return {
+      ...state,
+      stateVersion: 7,
+      settings: { ...(isObject(settings) ? settings : {}), turnLimitMs: TURN_LIMIT_MS },
+    };
+  },
 };
 
 /**

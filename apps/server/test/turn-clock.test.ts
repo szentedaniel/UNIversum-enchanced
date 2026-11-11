@@ -17,7 +17,13 @@ const started = setupGame({
     { playerId: "p1", name: { adjective: "test", noun: "one" } },
     { playerId: "p2", name: { adjective: "test", noun: "two" } },
   ],
-  settings: { maxPlayers: 2, minuteLimit: 50, startingCash: 2_500_000, roundBonus: 250_000 },
+  settings: {
+    maxPlayers: 2,
+    minuteLimit: 50,
+    startingCash: 2_500_000,
+    roundBonus: 250_000,
+    turnLimitMs: 20_000,
+  },
   seed: [1, 2, 3, 4],
   now: 0,
 });

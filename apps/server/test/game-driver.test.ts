@@ -38,6 +38,7 @@ const SETTINGS: RoomSettings = {
   minuteLimit: 15,
   startingCash: 2_500_000,
   roundBonus: 250_000,
+  turnLimitMs: 20_000,
 };
 
 const SEATS: SeatRecord[] = [

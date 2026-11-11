@@ -8,7 +8,7 @@
 import type { ChanceCardId, FieldId } from "#board.ts";
 
 /** The version of the state's shape (not the per-intent `version`). */
-export const STATE_VERSION = 6;
+export const STATE_VERSION = 7;
 
 /** A Player's public id: what every client sees instead of a Guest token. */
 export type PlayerId = string;
@@ -36,6 +36,8 @@ export type Settings = {
   startingCash: 1_500_000 | 2_500_000 | 4_000_000;
   /** The money the Bank pays for passing or landing on Start (R10, R73). */
   roundBonus: 150_000 | 250_000 | 400_000;
+  /** How long each Decision's Turn timer runs, in ms (R17). */
+  turnLimitMs: 10_000 | 20_000 | 30_000;
 };
 
 /** The four 32-bit words of the PRNG state (pure-rand `xoroshiro128plus`). */
@@ -124,10 +126,10 @@ export type GameState = {
    */
   actsAfter: number;
   /**
-   * When the current decision times out (epoch ms): `actsAfter + TURN_LIMIT_MS
-   * + TURN_SLACK_MS`, fixed at the end of the intent (R17, F22). The Room
-   * server wakes up then and sends `TurnTimedOut`. `null` once the game is
-   * over: nothing can time out any more.
+   * When the current decision times out (epoch ms): `actsAfter` plus the
+   * Room's Turn timer and `TURN_SLACK_MS`, fixed at the end of the intent
+   * (R17, F22). The Room server wakes up then and sends `TurnTimedOut`.
+   * `null` once the game is over: nothing can time out any more.
    */
   turnDeadline: number | null;
   settings: Settings;

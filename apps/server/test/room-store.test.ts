@@ -17,6 +17,7 @@ const settings = {
   minuteLimit: 15,
   startingCash: 2_500_000,
   roundBonus: 250_000,
+  turnLimitMs: 20_000,
 } as const;
 
 const lobby = (code: string): StoredRoom => ({

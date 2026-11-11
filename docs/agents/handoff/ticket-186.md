@@ -19,9 +19,10 @@
 - #190's Scholarship transfer and any later Chance card that pays the Round bonus must go through
   `moveForward` (or read `state.settings.roundBonus`), never `ROUND_BONUS`, or a non-default Room
   pays the default.
-- `STATE_VERSION` is 6. `MIGRATIONS[5]` in `packages/rules/src/migrate.ts` adds
-  `roundBonus: ROUND_BONUS` to the settings; `packages/rules/test/fixtures/state-v6.json` is the
-  generated snapshot and the v1–v5 snapshots stay untouched. A running game keeps the money its
+- `STATE_VERSION` was 6 when #186 landed: `MIGRATIONS[5]` adds `roundBonus: ROUND_BONUS` to the
+  settings and `packages/rules/test/fixtures/state-v6.json` is that shape's generated snapshot; the
+  v1–v5 snapshots stay untouched. #187's Turn timer then made it 7 (`MIGRATIONS[6]`,
+  `state-v7.json`), so read the version from `STATE_VERSION`. A running game keeps the money its
   Players already hold: the setting decides a new game's payments.
 - `GameRoom.restore` still sets `this.settings = { ...DEFAULT_SETTINGS, ...stored.settings }`, so a
   Lobby stored before this field comes back on 250,000 with no room-store migration.

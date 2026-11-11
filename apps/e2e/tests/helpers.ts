@@ -75,20 +75,27 @@ export const ROLL_PLAYBACK_MS = playbackOf([
   { type: "RoundBonusPaid", player: "p1", amount: 0 },
 ] satisfies readonly GameEvent[]);
 
+/** Room choices a spec makes on the Create screen; the rest stay on the defaults. */
+export type RoomChoices = { turnLimitMs?: 10_000 | 20_000 | 30_000 };
+
 /**
  * Creates a 2-Player Room on `creator` and fills the second Seat with a Guest
  * in a new context. The names are the failure dump's attachment names.
  */
-async function createAndJoin(
+export async function createAndJoin(
   creator: Page,
   browser: Browser,
   names: { creator: string; guest: string },
   baseURL?: string,
+  choices: RoomChoices = {},
 ): Promise<{ code: string; context: BrowserContext; guest: Page }> {
   registerPage(names.creator, creator);
   await probeSockets(creator);
   await creator.goto("/create");
   await creator.getByLabel("2", { exact: true }).check();
+  if (choices.turnLimitMs !== undefined) {
+    await creator.getByLabel(`${String(choices.turnLimitMs / 1_000)} s`, { exact: true }).check();
+  }
   await creator.getByRole("button", { name: "Create Room" }).click();
   await expect(creator).toHaveURL(/\/room\/[1-9]\d{5}$/);
   const code = new URL(creator.url()).pathname.split("/").at(-1) ?? "";
@@ -127,18 +134,27 @@ export async function expectOneJoinSocket(page: Page, name: string): Promise<voi
   ] satisfies SocketCall[]);
 }
 
+/** Starts a full Lobby and waits for the game screen. */
+export async function startLobby(page: Page, code: string): Promise<void> {
+  await expect(page.locator("[data-testid=seat][data-open]")).toHaveCount(0);
+  await page.getByRole("button", { name: "Start" }).click();
+  await expect(page).toHaveURL(`/game/${code}`);
+}
+
 /** Creates a 2-Player Room on `page`, fills it with a second Guest and starts. */
 export async function startGame(
   page: Page,
   browser: Browser,
+  choices: RoomChoices = {},
 ): Promise<{ context: BrowserContext; guest: Page }> {
-  const { code, context, guest } = await createAndJoin(page, browser, {
-    creator: "creator",
-    guest: "guest",
-  });
-  await expect(page.locator("[data-testid=seat][data-open]")).toHaveCount(0);
-  await page.getByRole("button", { name: "Start" }).click();
-  await expect(page).toHaveURL(`/game/${code}`);
+  const { code, context, guest } = await createAndJoin(
+    page,
+    browser,
+    { creator: "creator", guest: "guest" },
+    undefined,
+    choices,
+  );
+  await startLobby(page, code);
   await Promise.all([page, guest].map(expectBoardUp));
   await Promise.all([expectOneJoinSocket(page, "creator"), expectOneJoinSocket(guest, "guest")]);
   return { context, guest };

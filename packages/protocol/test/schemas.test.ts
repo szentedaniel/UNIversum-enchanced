@@ -173,12 +173,13 @@ describe("intentSchema", () => {
 });
 
 describe("Room options", () => {
-  it("creates a Room with 4 Players, a 50-minute Minute limit, 2,500,000 starting cash and a 250,000 Round bonus by default", () => {
+  it("creates a Room with 4 Players, a 50-minute Minute limit, 2,500,000 starting cash, a 250,000 Round bonus and a 20 s Turn timer by default", () => {
     expect(createOptionsSchema.parse({})).toEqual({
       maxPlayers: 4,
       minuteLimit: 50,
       startingCash: 2_500_000,
       roundBonus: 250_000,
+      turnLimitMs: 20_000,
     });
   });
 
@@ -188,6 +189,7 @@ describe("Room options", () => {
       minuteLimit: 15,
       startingCash: 2_500_000,
       roundBonus: 250_000,
+      turnLimitMs: 20_000,
     });
   });
 
@@ -205,6 +207,13 @@ describe("Room options", () => {
     },
   );
 
+  it.each([{ turnLimitMs: 10_000 }, { turnLimitMs: 20_000 }, { turnLimitMs: 30_000 }])(
+    "takes a Turn timer of %j",
+    (options) => {
+      expect(createOptionsSchema.parse(options).turnLimitMs).toBe(options.turnLimitMs);
+    },
+  );
+
   it.each([
     { maxPlayers: 5 },
     { maxPlayers: 1 },
@@ -214,6 +223,9 @@ describe("Room options", () => {
     { startingCash: "2500000" },
     { roundBonus: 300_000 },
     { roundBonus: "250000" },
+    { turnLimitMs: 5_000 },
+    { turnLimitMs: 20 },
+    { turnLimitMs: "20000" },
   ])("refuses create options %j", (options) => {
     expect(createOptionsSchema.safeParse(options).success).toBe(false);
   });
@@ -228,6 +240,7 @@ describe("Room options", () => {
       minuteLimit: 50,
       startingCash: 2_500_000,
       roundBonus: 250_000,
+      turnLimitMs: 20_000,
     });
   });
 

@@ -86,7 +86,13 @@ describe("game setup", () => {
         { playerId: "p1", name: { adjective: "adj0", noun: "noun0" } },
         { playerId: "p2", name: { adjective: "adj1", noun: "noun1" }, bot: true },
       ],
-      settings: { maxPlayers: 2, minuteLimit: 50, startingCash: 2_500_000, roundBonus: 250_000 },
+      settings: {
+        maxPlayers: 2,
+        minuteLimit: 50,
+        startingCash: 2_500_000,
+        roundBonus: 250_000,
+        turnLimitMs: 20_000,
+      },
       seed: SEED,
       now: T0,
     });
