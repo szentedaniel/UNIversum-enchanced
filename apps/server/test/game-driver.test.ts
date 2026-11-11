@@ -157,6 +157,8 @@ function newDriver(
       ended.push(endedAt);
     },
     onRetention: () => void retained.push("ABC123"),
+    // No Room, no sockets: every Seat counts as connected unless a test says otherwise.
+    isSeatConnected: () => true,
   });
   return { driver, scheduler, logs, state, ...store, published, ended, retained };
 }

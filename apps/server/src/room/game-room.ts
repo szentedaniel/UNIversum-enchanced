@@ -366,6 +366,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       onRetention: () => {
         void this.disconnect();
       },
+      isSeatConnected: (seat) => this.isSeatConnected(seat),
     });
     this.metrics.trackRoom(this);
     if (restored) {
@@ -406,8 +407,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     // Nobody is connected yet: the Room waits for its Players instead of disposing.
     this.autoDispose = false;
     if (this.game) {
-      // A running game lives on with nobody connected (its Turns time out),
-      // until it ends; `onCreate` arms its deadline once the driver exists.
+      // A running game lives on with nobody connected: its Turn timers keep
+      // running until a Guest comes back (the Bot takes the absent Seats'
+      // Decisions from that first connection change on) or the game ends.
+      // `onCreate` arms its deadline once the driver exists.
       this.unlist();
     } else {
       // A Lobby holds each Guest's Seat for its 60 s, as if its Player had just
@@ -474,6 +477,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.hold(seat, reject ? () => reject() : null);
     this.metrics.seatDropped();
     this.log.info({ playerId: seat.playerId }, "Seat dropped");
+    // A running game's absent Guest has their Decisions played by the Bot.
+    this.driver.refreshBot();
     if (!this.game) this.broadcastLobby();
   }
 
@@ -482,23 +487,27 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     const seat = this.seatOf(client);
     if (!seat) return;
     this.unhold(seat.playerId);
+    // The Guest decides the open Decision again: any pending Bot action is cancelled.
+    this.driver.refreshBot();
     this.seatReconnected(seat);
     this.sendCurrent(client);
   }
 
   override onLeave(client: Client): void {
     this.#flood.delete(client.sessionId);
-    // In a running game the Seat stays (its Turns time out); a Lobby frees it.
-    // On shutdown nothing changes: the Room comes back as it was.
+    // In a running game the Seat stays (a Bot plays its Decisions from then);
+    // a Lobby frees it. On shutdown nothing changes: the Room comes back as it was.
     if (this.#shuttingDown) return;
     const seat = this.seatOf(client);
     if (!seat) return; // taken back from another connection, or already freed
     if (this.game) {
-      // Left a running game on purpose: the Seat stays (its Turns time out), as for a drop.
+      // Left a running game on purpose: the Seat stays (a Bot stands in), as for a drop.
       // (After a drop, `onLeave` only runs once the game has ended or the Seat was taken back.)
       if (this.endedAt === null) {
         this.metrics.seatDropped();
         this.log.info({ playerId: seat.playerId }, "Seat dropped");
+        // A Guest who left is absent too: the Bot plays their Decisions.
+        this.driver.refreshBot();
       }
       return;
     }
@@ -546,6 +555,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     // Its `onDrop` and `onLeave` find no Seat any more, so they change nothing.
     this.clients.find((c) => c.sessionId === previous)?.leave(CLOSE_CODE.seatTaken);
     client.send(MESSAGE.welcome, { playerId: seat.playerId } satisfies WelcomeMessage);
+    // The Guest is back: any pending Bot action for the open Decision is cancelled.
+    this.driver.refreshBot();
     this.seatReconnected(seat);
     this.sendCurrent(client);
   }
@@ -818,15 +829,23 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /**
+   * Whether that Seat's Player is connected right now: a live client holds its
+   * `sessionId`. A Bot's Seat has none, and a Guest who dropped keeps the stale
+   * one (the Seat is held for them).
+   */
+  private isSeatConnected(seat: SeatRecord): boolean {
+    return seat.sessionId !== null && this.clients.get(seat.sessionId) !== undefined;
+  }
+
+  /**
    * The Room's numbers for the `rooms`, `players_connected` and
    * `seats_held_disconnected` gauges. Held: every Guest Seat with no live
    * client (dropped and held, or restored and not yet taken back), until the
    * game ends; a Bot's Seat is neither connected nor held.
    */
   gauges(): RoomGauges {
-    const live = new Set(this.clients.map((c) => c.sessionId));
     const guests = this.seats.filter((s) => s.bot !== true);
-    const connected = guests.filter((s) => s.sessionId !== null && live.has(s.sessionId)).length;
+    const connected = guests.filter((seat) => this.isSeatConnected(seat)).length;
     const state = this.game === null ? "lobby" : this.endedAt === null ? "playing" : null;
     return { state, connected, held: state === null ? 0 : guests.length - connected };
   }

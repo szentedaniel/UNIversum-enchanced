@@ -61,9 +61,10 @@ describe("the Turn deadline", () => {
     });
   });
 
-  it("R18/R19: an absent Player's Turn times out exactly once: the penalty, then the Turn passes", async () => {
-    const { alice, bob, ids, view } = await startedGame();
-    await alice.leave(); // the Seat stays; nobody will roll for Alice
+  it("R18/R19: a Turn that runs out times out exactly once: the penalty, then the Turn passes", async () => {
+    const { bob, ids, view } = await startedGame();
+    // Alice stays connected and does not roll: her Turn runs out as usual. (An
+    // absent Guest's Decision is the Bot's — ticket #198.)
 
     server.scheduler.advanceTo(view.turnDeadline - 1);
     server.scheduler.advanceTo(view.turnDeadline);
