@@ -179,6 +179,15 @@ const CHANCE_CARD_TEXTS: Record<ChanceCardId, { title: Message; text: Message }>
     title: m.chance_scholarship_transfer_title,
     text: m.chance_scholarship_transfer_text,
   },
+  dormParty: {
+    title: m.chance_dorm_party_title,
+    text: () => m.chance_dorm_party_text({ amount: formatMoney(CHANCE_CARD_MONEY.dormParty) }),
+  },
+  thesisPrinting: {
+    title: m.chance_thesis_printing_title,
+    text: () =>
+      m.chance_thesis_printing_text({ amount: formatMoney(-CHANCE_CARD_MONEY.thesisPrinting) }),
+  },
 };
 
 /** A Chance card's title and text in the active language. */

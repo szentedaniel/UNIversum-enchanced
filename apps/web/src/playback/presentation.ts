@@ -131,6 +131,16 @@ export const EVENT_PRESENTATION: PresentationTable = {
         amount: formatMoney(event.amount),
       }),
   },
+  ChanceTransferPaid: {
+    overlay: "toast",
+    tone: "notice",
+    text: (event, view) =>
+      m.event_chance_transfer_paid({
+        name: nameOf(view, event.player),
+        payee: nameOf(view, event.payee),
+        amount: formatMoney(event.amount),
+      }),
+  },
   TaxPaid: {
     overlay: "toast",
     tone: "notice",

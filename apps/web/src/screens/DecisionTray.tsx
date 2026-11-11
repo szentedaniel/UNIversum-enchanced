@@ -27,6 +27,7 @@ const CHARGE_LABELS: Record<PendingCharge["kind"], (amount: string) => string> =
   rent: (amount) => m.sale_charge_rent({ amount }),
   tax: (amount) => m.sale_charge_tax({ amount }),
   chanceCard: (amount) => m.sale_charge_chance_card({ amount }),
+  chanceTransfer: (amount) => m.sale_charge_chance_card({ amount }),
   timeoutPenalty: (amount) => m.sale_charge_timeout_penalty({ amount }),
 };
 
