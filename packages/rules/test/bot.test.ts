@@ -1,7 +1,14 @@
 import { assert, constantFrom, integer, property, record, tuple } from "fast-check";
 import { describe, expect, it } from "vitest";
-import { botIntent, publicView, type FieldId, type GameState, type PlayerState } from "#index.ts";
-import { newGame, playTurn, rollOnto, withField, withPlayer } from "./helpers.ts";
+import {
+  botIntent,
+  publicView,
+  type DealSide,
+  type FieldId,
+  type GameState,
+  type PlayerState,
+} from "#index.ts";
+import { accept, newGame, playTurn, rollOnto, withField, withPlayer } from "./helpers.ts";
 import { playBotGame } from "./simulation.ts";
 
 const VESZPREM = 1;
@@ -239,6 +246,73 @@ describe("Erasmus pick", () => {
   });
 });
 
+describe("Deal answer", () => {
+  const VIENNA = 13;
+  const LONDON = 21;
+
+  /** A 2-Player game where `p1` owns Vienna and `p2` owns London. */
+  function twoPlayerGame(): GameState {
+    return withField(
+      withField(newGame({ players: 2 }), VIENNA, { owner: "p1", level: 1 }),
+      LONDON,
+      { owner: "p2", level: 1 },
+    );
+  }
+
+  /** `p1` puts `give` for `take` to `p2`; `p2` (the Bot) now answers. */
+  function proposed(give: DealSide, take: DealSide, base = twoPlayerGame()): GameState {
+    return accept(base, { type: "ProposeDeal", turn: base.turn, recipient: "p2", give, take }, "p1")
+      .state;
+  }
+
+  it("accepts a Deal that leaves it exactly a tenth ahead", () => {
+    const state = proposed({ fields: [], cash: 1_100_000 }, { fields: [], cash: 1_000_000 });
+
+    expect(botIntent(publicView(state))).toEqual({ type: "AcceptDeal", turn: state.turn });
+  });
+
+  it("declines a Deal that leaves it less than a tenth ahead", () => {
+    const state = proposed({ fields: [], cash: 1_099_999 }, { fields: [], cash: 1_000_000 });
+
+    expect(botIntent(publicView(state))).toEqual({ type: "DeclineDeal", turn: state.turn });
+  });
+
+  it("values a Field at its Value plus its Rent", () => {
+    // Veszprem at Level 4 is worth 440,000 and rents for 440,000; London at
+    // Level 1 is worth 460,000 and rents for 253,000. Value alone would decline
+    // this Deal; Value plus Rent is 880,000 against 713,000.
+    const base = withField(
+      withField(newGame({ players: 2 }), VESZPREM, { owner: "p1", level: 4 }),
+      LONDON,
+      { owner: "p2", level: 1 },
+    );
+    const state = proposed({ fields: [VESZPREM], cash: 0 }, { fields: [LONDON], cash: 0 }, base);
+
+    expect(botIntent(publicView(state))).toEqual({ type: "AcceptDeal", turn: state.turn });
+  });
+
+  it("declines a Deal that would break up its Monopoly, however far ahead it is", () => {
+    // p2 owns every University of Group 1, and the Deal offers far more cash
+    // than Veszprem is worth.
+    let base = newGame({ players: 2 });
+    for (const field of [VESZPREM, BUDAPEST, DEBRECEN]) {
+      base = withField(base, field, { owner: "p2", level: 1 });
+    }
+    const state = proposed({ fields: [], cash: 2_000_000 }, { fields: [VESZPREM], cash: 0 }, base);
+
+    expect(botIntent(publicView(state))).toEqual({ type: "DeclineDeal", turn: state.turn });
+  });
+
+  it("accepts the same Deal for a Field outside a Monopoly", () => {
+    // p2 owns only Veszprem of Group 1, so giving it away breaks nothing.
+    let base = newGame({ players: 2 });
+    base = withField(base, VESZPREM, { owner: "p2", level: 1 });
+    const state = proposed({ fields: [], cash: 2_000_000 }, { fields: [VESZPREM], cash: 0 }, base);
+
+    expect(botIntent(publicView(state))).toEqual({ type: "AcceptDeal", turn: state.turn });
+  });
+});
+
 describe("games driven only by the policy", () => {
   const seedArb = tuple(
     integer({ min: -(2 ** 31), max: 2 ** 31 - 1 }),
@@ -255,11 +329,18 @@ describe("games driven only by the policy", () => {
   it("the engine accepts every intent and every game ends", () => {
     assert(
       property(gameArb, (game) => {
-        const run = playBotGame(game);
+        // The driver puts a Deal to the current Player every Turn, so the Bot
+        // answers Deals as well as its own Decisions.
+        const run = playBotGame({ ...game, dealEvery: 1 });
 
         expect(run.ended).toBe(true);
         expect(run.state.phase.kind).toBe("gameOver");
         expect(run.steps.length).toBeGreaterThan(0);
+        expect(
+          run.steps.some(
+            (step) => step.intent.type === "AcceptDeal" || step.intent.type === "DeclineDeal",
+          ),
+        ).toBe(true);
       }),
       { seed: 20261110, numRuns: 20 },
     );
@@ -270,6 +351,7 @@ describe("games driven only by the policy", () => {
       seed: [1, 2, 3, 4] as const,
       players: 4 as const,
       settings: { minuteLimit: 30 as const },
+      dealEvery: 1,
     };
 
     const first = playBotGame(options);

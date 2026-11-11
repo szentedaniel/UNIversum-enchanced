@@ -11,7 +11,8 @@
   "settings": {
     "maxPlayers": 4,
     "minuteLimit": 50,
-    "startingCash": 2500000
+    "startingCash": 2500000,
+    "roundBonus": 250000
   },
   "endsAt": 1792414200000,
   "players": [
@@ -205,6 +206,5 @@
   "doubler": null,
   "lastChanceCard": null,
   "deal": null,
-  "dealUsed": false,
   "rng": [87508179, 634340146, -777097033, -801932180]
 }

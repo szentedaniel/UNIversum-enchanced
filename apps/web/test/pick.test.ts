@@ -41,7 +41,7 @@ function viewWith(phase: Phase, pickOptions: PickOption[] | null): PublicView {
     actsAfter: 40_000,
     turnDeadline: 50_000,
     turnTimer: { endsAt: 47_000, limitMs: 20_000 },
-    settings: { maxPlayers: 2, minuteLimit: 15, startingCash: 2_500_000 },
+    settings: { maxPlayers: 2, minuteLimit: 15, startingCash: 2_500_000, roundBonus: 250_000 },
     endsAt: 0,
     players: [
       { ...playerState("p1", 0), wealth: 2_500_000 },

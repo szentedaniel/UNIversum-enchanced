@@ -7,6 +7,7 @@ import { Board } from "#board/Board.tsx";
 import { FieldCard } from "#board/FieldCard.tsx";
 import { ChanceCardOverlay } from "#components/ChanceCardOverlay.tsx";
 import { DiceOverlay } from "#components/DiceOverlay.tsx";
+import { EventLog } from "#components/EventLog.tsx";
 import { GameMenu } from "#components/GameMenu.tsx";
 import { EventToast, MinutePill } from "#components/GameHud.tsx";
 import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
@@ -122,15 +123,23 @@ export function Game() {
       >
         {rejected ? rejectionText(rejection.code) : toast?.text}
       </EventToast>
+      <EventLog />
       <GameMenu />
     </>
   );
 
   // The Turn card at the bottom; the Field card takes its place while open.
-  const turnCard = (
-    <TurnCard view={view} decision={decision} shownTurn={shownTurn} waiting={waiting} />
-  );
   const mySeat = view.players.find((p) => p.id === me)?.seat ?? 0;
+  const turnCard = (
+    <TurnCard
+      view={view}
+      decision={decision}
+      shownTurn={shownTurn}
+      waiting={waiting}
+      clockOffset={clockOffset}
+      seat={mySeat}
+    />
+  );
   // The bottom slot in the Decision module's order (spec #72): the result
   // screen, the Field card in inspect mode during my Sale or pick (‹ › over its
   // pickable Fields only; closing it brings the tray back), the tray, the Field

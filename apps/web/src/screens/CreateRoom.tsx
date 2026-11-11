@@ -3,6 +3,7 @@ import {
   MINUTE_LIMITS,
   PASSWORD_MAX_BYTES,
   PLAYER_COUNTS,
+  ROUND_BONUSES,
   STARTING_CASHES,
   utf8Length,
   type RejectionCode,
@@ -32,6 +33,9 @@ export function CreateRoom() {
   const [startingCash, setStartingCash] = useState<RoomSettings["startingCash"]>(
     DEFAULT_SETTINGS.startingCash,
   );
+  const [roundBonus, setRoundBonus] = useState<RoomSettings["roundBonus"]>(
+    DEFAULT_SETTINGS.roundBonus,
+  );
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<RejectionCode | null>(null);
@@ -55,6 +59,7 @@ export function CreateRoom() {
         maxPlayers,
         minuteLimit,
         startingCash,
+        roundBonus,
         ...(password && { password }),
       });
       await navigate(`/room/${code}`);
@@ -119,6 +124,18 @@ export function CreateRoom() {
                   onChange={() => setStartingCash(cash)}
                 >
                   {formatCompactCash(cash)}
+                </Segment>
+              ))}
+            </Segments>
+            <Segments legend={m.create_round_bonus()}>
+              {ROUND_BONUSES.map((bonus) => (
+                <Segment
+                  key={bonus}
+                  name="round-bonus"
+                  checked={roundBonus === bonus}
+                  onChange={() => setRoundBonus(bonus)}
+                >
+                  {formatCompactCash(bonus)}
                 </Segment>
               ))}
             </Segments>

@@ -70,7 +70,7 @@ describe("the Turn timer", () => {
   it("a server's timing override shortens every deadline, the ring and the Minute limit", () => {
     const state = setupGame({
       seats: seats(2),
-      settings: { maxPlayers: 2, minuteLimit: 15, startingCash: 2_500_000 },
+      settings: { maxPlayers: 2, minuteLimit: 15, startingCash: 2_500_000, roundBonus: 250_000 },
       seed: SEED,
       now: T0,
       turnLimitMs: 5_000,

@@ -4,9 +4,18 @@
  * go through typed maps of message functions, so each message stays
  * tree-shakeable and a missing one fails to compile.
  */
-import type { RejectionCode } from "@universum/protocol/messages";
-import type { PlayerName } from "@universum/rules";
-import { CHANCE_CARD_MONEY, type ChanceCardId, type FieldKind } from "@universum/rules/board";
+import {
+  DEFAULT_SETTINGS,
+  type RejectionCode,
+  type RoomSettings,
+} from "@universum/protocol/messages";
+import type { DealSide, PlayerName } from "@universum/rules";
+import {
+  CHANCE_CARD_MONEY,
+  FIELDS,
+  type ChanceCardId,
+  type FieldKind,
+} from "@universum/rules/board";
 import { m } from "#paraglide/messages.js";
 import { getLocale } from "#paraglide/runtime.js";
 
@@ -108,6 +117,15 @@ const NOUNS: Record<string, Message> = {
 export const playerName = (name: PlayerName): string =>
   `${ADJECTIVES[name.adjective]?.() ?? name.adjective} ${NOUNS[name.noun]?.() ?? name.noun}`;
 
+/** One side of a Deal: its Fields' names and its cash, or "nothing" when it puts in neither. */
+export function dealSideText(side: DealSide): string {
+  const parts = [
+    ...side.fields.map((field) => fieldName(FIELDS[field]?.key ?? "")),
+    ...(side.cash > 0 ? [formatMoney(side.cash)] : []),
+  ];
+  return parts.length > 0 ? parts.join(", ") : m.deal_nothing();
+}
+
 const REJECTIONS: Record<RejectionCode, Message> = {
   STALE_TURN: m.rejection_stale_turn,
   NOT_YOUR_TURN: m.rejection_not_your_turn,
@@ -157,6 +175,11 @@ const CHANCE_CARD_TEXTS: Record<ChanceCardId, { title: Message; text: Message }>
         amount: formatMoney(CHANCE_CARD_MONEY.teachingAssistantJob),
       }),
   },
+  examPeriod: { title: m.chance_exam_period_title, text: m.chance_exam_period_text },
+  scholarshipTransfer: {
+    title: m.chance_scholarship_transfer_title,
+    text: m.chance_scholarship_transfer_text,
+  },
 };
 
 /** A Chance card's title and text in the active language. */
@@ -168,6 +191,23 @@ export const chanceCardText = (card: ChanceCardId): { title: string; text: strin
 /** A Room name; `null` (left empty by its creator) gets one made from the Room code. */
 export const roomNameText = (name: string | null, code: string): string =>
   name ?? m.room_name_generated({ code });
+
+/** One line per Room setting the Lobby list marks when a Lobby is off its default (#188). */
+const CUSTOM_SETTING_LINES: Record<keyof RoomSettings, (settings: RoomSettings) => string> = {
+  maxPlayers: (settings) => m.rooms_setting_players({ max: settings.maxPlayers }),
+  minuteLimit: (settings) => m.lobby_minute_limit({ minutes: settings.minuteLimit }),
+  startingCash: (settings) => m.lobby_starting_cash({ amount: formatMoney(settings.startingCash) }),
+  roundBonus: (settings) => m.lobby_round_bonus({ amount: formatMoney(settings.roundBonus) }),
+};
+
+const isRoomSetting = (key: string): key is keyof RoomSettings => key in DEFAULT_SETTINGS;
+
+/** The differing Room settings of a Lobby, as the Lobby list shows them (#188). */
+export const customSettingsText = (settings: RoomSettings): string[] =>
+  Object.keys(CUSTOM_SETTING_LINES)
+    .filter(isRoomSetting)
+    .filter((key) => settings[key] !== DEFAULT_SETTINGS[key])
+    .map((key) => CUSTOM_SETTING_LINES[key](settings));
 
 /** Money in full, in the active language's number format. */
 export const formatMoney = (amount: number): string =>

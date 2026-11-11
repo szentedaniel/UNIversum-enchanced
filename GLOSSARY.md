@@ -38,6 +38,10 @@ _Avoid_: Room list, server browser
 The short number a Guest uses to find and join a Room.
 _Avoid_: Lobby code, PIN
 
+**Invite link**:
+The Room's address `/room/<Room code>`, which joins the Room in one click and is shown with a QR code in the Lobby.
+_Avoid_: Share code, join URL
+
 **Room name**:
 The name the creator gives a Room, shown on the Lobby list; the only text a Guest types that other Guests see.
 _Avoid_: Lobby name, title
@@ -75,6 +79,10 @@ _Avoid_: Delta, patch
 **Decision gate**:
 The moment the next decision opens, once the Playback before it has ended; the decision's controls and its Turn timer start there.
 _Avoid_: Playback over, unlock
+
+**Event log**:
+The list, on the Game screen, of the lines of the events the Playback has revealed so far, newest last, each line in the language active when it appeared; the client keeps it, so a reload starts it empty.
+_Avoid_: History, chat, transcript
 
 **Turn timer**:
 The countdown a Player has for one decision of their Turn, starting when the Playback before it ends.

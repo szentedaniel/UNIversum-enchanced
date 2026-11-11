@@ -19,11 +19,11 @@ Branch `agent/issue-193-deal-expiry-and-guards`, from `main`. Spec #172.
 
 ## State version and migration
 
-- `STATE_VERSION` is 6. `MIGRATIONS[5]` adds
-  `dealUsed: state["deal"] !== null`: a stored version-5 state with a pending
-  Deal has used this Turn's Deal, one without has used none (the old rules had
-  no guard). `test/fixtures/state-v6.json` is the committed snapshot, generated
-  from `playTurn(newGame()).state`.
+- `STATE_VERSION` is 7. `MIGRATIONS[5]` (from #186) adds the Round bonus, and
+  `MIGRATIONS[6]` adds `dealUsed: state["deal"] !== null`: a stored version-6
+  state with a pending Deal has used this Turn's Deal, one without has used
+  none (the old rules had no guard). `test/fixtures/state-v7.json` is the
+  committed snapshot, generated from `playTurn(newGame()).state`.
 - Every hand-built `PublicView` literal needs `dealUsed`:
   `apps/web/test/{checklist,field-facts,pick,sale-pick}.test.ts`,
   `apps/web/test/playback-fixtures.ts` and `apps/loadtest/test/bot.test.ts`.
@@ -42,11 +42,13 @@ Branch `agent/issue-193-deal-expiry-and-guards`, from `main`. Spec #172.
   web `REJECTIONS` map in `apps/web/src/text.ts`, and the hu/en/de
   `rejection_deal_already_proposed` messages.
 
-## Still later
+## Merged alongside
 
-- #194 owns the composer and the answer panel: `openDecision` still returns
-  `null` for `dealAnswer`.
-- #200 owns the loadtest Bot's Deal answer: `offeredIntents` falls through to
-  `[]` for `dealAnswer`.
+- #194's composer and answer panel handle `dealAnswer` in `openDecision`; the
+  composer and answer panel render from the pushed view. The composer does not
+  read `dealUsed` yet, so after a declined Deal the control returns and the
+  server refuses the second proposal with `DEAL_ALREADY_PROPOSED`.
+- #200's Bot answers a Deal in `rules/bot.ts`, and the loadtest Bot offers
+  `AcceptDeal`/`DeclineDeal`; neither proposes a Deal.
 
 Read for: #194 #200, any Deal rule, the per-Turn guard or a `dealUsed` read.

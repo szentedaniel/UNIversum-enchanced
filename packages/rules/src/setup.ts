@@ -43,6 +43,7 @@ export function setupGame({
       maxPlayers: settings.maxPlayers,
       minuteLimit: settings.minuteLimit,
       startingCash: settings.startingCash,
+      roundBonus: settings.roundBonus,
     },
     endsAt: now + settings.minuteLimit * minuteMs,
     players: seats.map((seat, index) => ({

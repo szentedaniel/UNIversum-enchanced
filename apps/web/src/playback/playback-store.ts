@@ -13,6 +13,7 @@
 import { subscribeWithSelector } from "zustand/middleware";
 import { createStore } from "zustand/vanilla";
 import { playbackOfPush, type Frame, type Playback, type TurnLabel } from "#playback/playback.ts";
+import { syncLog } from "#stores/log-store.ts";
 import { roomStore } from "#stores/room-store.ts";
 
 /** What the Playback store publishes (spec #63). */
@@ -62,7 +63,10 @@ function armNext(playback: Playback, now: number): void {
 
 /** Publishes the core's frame at `now`, then waits for the next boundary. */
 function publish(playback: Playback, now: number): void {
-  playbackStore.setState({ frame: playback.frameAt(now) });
+  const frame = playback.frameAt(now);
+  playbackStore.setState({ frame });
+  // The Event log follows the same frames: a line appears at its step's start.
+  syncLog(roomStore.getState().push, frame);
   armNext(playback, now);
 }
 

@@ -56,6 +56,14 @@ export type CommitReason = Intent["type"] | "Start";
  */
 export const BOT_DELAY_MS = 1_500;
 
+/**
+ * How long a game whose Guests have all dropped keeps its Seats before it
+ * ends with no recorded result (spec: Bots, story 19). The Room's usual Seat
+ * retention: long enough for a reload, short enough that nobody plays a
+ * Bot-only game out.
+ */
+export const BOT_ONLY_RETENTION_MS = 60_000;
+
 export type GameDriverOptions = {
   /** The rules engine's `apply` (tests pass one that throws). */
   engine: typeof apply;
@@ -119,6 +127,8 @@ export class GameDriver {
   #cancelDeletion: (() => void) | null = null;
   /** Cancels the pending Bot action, if any: a commit, a reconnect or the game's end replaces it. */
   #cancelBot: (() => void) | null = null;
+  /** Cancels the Bot-only game's end, if armed: a Guest came back, or the game ended. */
+  #cancelBotRetention: (() => void) | null = null;
 
   constructor(options: GameDriverOptions) {
     this.#scheduler = options.scheduler;
@@ -167,12 +177,10 @@ export class GameDriver {
     if (game.phase.kind === "gameOver") this.#end(game);
     else if (this.#readState().endedAt === null) {
       this.#clock.arm(game);
-      // Only a seated Bot's own Decision: a restored game's Guests have had no
-      // connection to lose since this server started it, and a game with no
-      // Guest connected keeps its Seats instead of Bot play (spec: Bots). The
-      // Room's first connection change arms an absent Guest's Decision.
-      const player = game.players.find((p) => p.id === game.currentPlayer);
-      this.#armBot(game, player?.bot === true);
+      // A restored game has had no connection to lose since this server
+      // started it: its Guests keep their Turn timers and no Bot plays until
+      // the Room's first connection change re-evaluates them (spec: Bots).
+      this.#armBot(game, this.#botPlays(game));
     }
   }
 
@@ -225,6 +233,8 @@ export class GameDriver {
     this.#clock.cancel();
     this.#cancelBot?.();
     this.#cancelBot = null;
+    this.#cancelBotRetention?.();
+    this.#cancelBotRetention = null;
     this.#cancelDeletion?.();
     this.#cancelDeletion = null;
   }
@@ -235,10 +245,20 @@ export class GameDriver {
    * re-evaluated. An absent Guest's Seat gets one; a Guest who is back has any
    * pending one cancelled, so they answer the Decision from here. A Bot action
    * already applied stands: its commit armed the next Decision's wake-up.
+   *
+   * With no Guest connected the Bots stop, and the game ends with no recorded
+   * result once its Seats' retention runs out (spec: Bots, story 19) — unless
+   * a Guest comes back first.
    */
   refreshBot(): void {
     const { game, endedAt } = this.#readState();
     if (game === null || endedAt !== null) return;
+    if (this.#guestsConnected()) {
+      this.#cancelBotRetention?.();
+      this.#cancelBotRetention = null;
+    } else {
+      this.#armBotRetention();
+    }
     const plays = this.#botPlays(game);
     // The pending action is for this Decision already: another Seat's
     // connection change must not push it later.
@@ -249,12 +269,35 @@ export class GameDriver {
   /**
    * Whether the Bot policy answers this state's open Decision: a seated Bot,
    * or a Guest's Seat with no live connection (a drop, or a leave), so a Guest
-   * who is not there costs the table no Turn timer (spec: Bots).
+   * who is not there costs the table no Turn timer (spec: Bots). Never with no
+   * Guest connected: Bots do not play a game out among themselves.
    */
   #botPlays(state: GameState): boolean {
+    if (!this.#guestsConnected()) return false;
     if (state.players.find((p) => p.id === state.currentPlayer)?.bot === true) return true;
     const seat = this.#readState().seats.find((s) => s.playerId === state.currentPlayer);
     return seat !== undefined && !this.#isSeatConnected(seat);
+  }
+
+  /** Whether any Guest's Seat has a live connection; a Bot's Seat never counts. */
+  #guestsConnected(): boolean {
+    return this.#readState().seats.some((seat) => seat.bot !== true && this.#isSeatConnected(seat));
+  }
+
+  /**
+   * Arms the game's one end for a Bot-only game: `BOT_ONLY_RETENTION_MS` after
+   * its last Guest dropped, unless one comes back and `refreshBot` cancels it.
+   */
+  #armBotRetention(): void {
+    if (this.#cancelBotRetention !== null) return;
+    this.#cancelBotRetention = this.#scheduler.at(this.now() + BOT_ONLY_RETENTION_MS, () => {
+      this.#cancelBotRetention = null;
+      const { game, endedAt } = this.#readState();
+      if (game === null || endedAt !== null || this.#guestsConnected()) return;
+      // Nobody came back: the game ends where it stood, with no result recorded.
+      this.#log.info("Room ended with no Guest connected");
+      this.#end(game);
+    });
   }
 
   /**
@@ -353,6 +396,8 @@ export class GameDriver {
     this.#clock.cancel();
     this.#cancelBot?.();
     this.#cancelBot = null;
+    this.#cancelBotRetention?.();
+    this.#cancelBotRetention = null;
     try {
       this.#save(game, [], seats, endedAt);
     } catch (error) {
