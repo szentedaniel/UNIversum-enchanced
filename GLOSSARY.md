@@ -38,6 +38,10 @@ _Avoid_: Room list, server browser
 The short number a Guest uses to find and join a Room.
 _Avoid_: Lobby code, PIN
 
+**Invite link**:
+The Room's address `/room/<Room code>`, which joins the Room in one click and is shown with a QR code in the Lobby.
+_Avoid_: Share code, join URL
+
 **Room name**:
 The name the creator gives a Room, shown on the Lobby list; the only text a Guest types that other Guests see.
 _Avoid_: Lobby name, title
