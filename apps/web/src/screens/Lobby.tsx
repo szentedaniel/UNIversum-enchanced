@@ -3,19 +3,21 @@ import { Check, Copy, Lock, LockOpen, Timer, Users, Wallet } from "lucide-react"
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useStore } from "zustand";
+import { InviteQr } from "#components/InviteQr.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ScreenHeader } from "#components/ScreenHeader.tsx";
 import { SeatCard } from "#components/SeatCard.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
+import { inviteLink } from "#invite.ts";
 import { PasswordForm, RejectionText, retryAtOf, useCountdown, useJoin } from "#screens/join.tsx";
 import { roomStore } from "#stores/room-store.ts";
 import { formatMoney, m, playerName, roomNameText } from "#text.ts";
 
 const COPIED_MS = 1500;
 
-/** The Room code as a big sticker; one tap copies it. */
-function RoomCodeSticker({ code }: { code: string }) {
+/** Returns `[copied, copy]`: `copy(text)` writes to the clipboard, then `copied` is true for a moment; a rejected copy (insecure origin) stays quiet. */
+function useCopy() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -24,18 +26,27 @@ function RoomCodeSticker({ code }: { code: string }) {
     return () => clearTimeout(timer);
   }, [copied]);
 
+  const copy = (text: string) => {
+    navigator.clipboard.writeText(text).then(
+      () => setCopied(true),
+      () => {},
+    );
+  };
+
+  return [copied, copy] as const;
+}
+
+/** The Room code as a big sticker; one tap copies it. */
+function RoomCodeSticker({ code }: { code: string }) {
+  const [copied, copy] = useCopy();
+
   return (
     <button
       type="button"
       aria-label={m.lobby_copy_code()}
       data-testid="room-code"
       className="sticker press inline-flex cursor-pointer items-center gap-3 rounded-ui bg-card px-5 py-2 text-card-foreground"
-      onClick={() => {
-        navigator.clipboard.writeText(code).then(
-          () => setCopied(true),
-          () => {},
-        );
-      }}
+      onClick={() => copy(code)}
     >
       <span className="tnum font-display text-4xl tracking-widest md:text-5xl">{code}</span>
       {copied ? (
@@ -47,6 +58,25 @@ function RoomCodeSticker({ code }: { code: string }) {
         <Copy size={22} strokeWidth={2.5} aria-hidden />
       )}
     </button>
+  );
+}
+
+/** The invite address as a QR code, with a tap-to-copy button; the link carries the Room code only. */
+function InviteCard({ link }: { link: string }) {
+  const [copied, copy] = useCopy();
+
+  return (
+    <div className="sticker flex flex-col items-center gap-3 rounded-ui bg-card p-4 text-card-foreground">
+      <InviteQr link={link} className="size-40" />
+      <Button variant="plain" size="sm" data-testid="invite-link" onClick={() => copy(link)}>
+        {copied ? (
+          <Check size={18} strokeWidth={3} aria-hidden />
+        ) : (
+          <Copy size={18} strokeWidth={2.5} aria-hidden />
+        )}
+        {copied ? m.lobby_copied() : m.lobby_copy_link()}
+      </Button>
+    </div>
   );
 }
 
@@ -137,6 +167,7 @@ export function Lobby() {
   const { maxPlayers, minuteLimit, startingCash } = lobby.settings;
   const full = lobby.seats.length === maxPlayers;
   const open = Array.from({ length: maxPlayers - lobby.seats.length }, (_, i) => i);
+  const invite = inviteLink(window.location.origin, lobby.code);
 
   return (
     <div className="min-h-dvh pb-8">
@@ -148,6 +179,7 @@ export function Lobby() {
             {roomNameText(lobby.roomName, lobby.code)}
           </h1>
           <RoomCodeSticker code={lobby.code} />
+          <InviteCard link={invite} />
         </div>
         <ul className="m-0 mt-8 flex list-none flex-wrap justify-center gap-4 p-0">
           {lobby.seats.map((seat, i) => (
