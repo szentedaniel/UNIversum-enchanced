@@ -9,11 +9,14 @@
  */
 import { FIELDS, MAX_LEVEL, MUSEUM_VALUE, type FieldId, type GroupId } from "#board.ts";
 import type { PlayerIntent } from "#intents.ts";
-import type { PhaseOf, PlayerId } from "#state.ts";
+import type { DealSide, PhaseOf, PlayerId } from "#state.ts";
 import type { PublicView } from "#view.ts";
 
 /** Cash the Bot keeps back when it spends, for Rent and the Timeout penalty. */
 const CASH_RESERVE = 500_000;
+
+/** A Deal must leave the Bot at least a tenth ahead: `11/10` of what it gives (spec #200). */
+const DEAL_AHEAD_TENTHS = 11;
 
 function playerOf(view: PublicView, playerId: PlayerId) {
   const player = view.players.find((p) => p.id === playerId);
@@ -151,6 +154,42 @@ function erasmusIntent(view: PublicView, phase: PhaseOf<"choosingErasmus">): Pla
 }
 
 /**
+ * What one side of a Deal is worth to the Bot: each Field at its Value plus
+ * the Rent it charges now, and the cash at face value.
+ */
+function dealSideValue(view: PublicView, side: DealSide): number {
+  return side.fields.reduce((total, field) => {
+    const info = view.fields[field];
+    return total + (info?.value ?? 0) + (info?.rent ?? 0);
+  }, side.cash);
+}
+
+/** Whether giving `field` away breaks a Monopoly `owner` holds (R29, spec #172). */
+function breaksMonopoly(view: PublicView, field: FieldId, owner: PlayerId): boolean {
+  const group = FIELDS[field]?.group;
+  if (group === null || group === undefined) return false;
+  return FIELDS.filter((f) => f.group === group).every((f) => view.fields[f.id]?.owner === owner);
+}
+
+/**
+ * The Deal answer (spec #172, #200): accept when the incoming Fields' Value
+ * and Rent plus the incoming cash leave the Bot at least a tenth ahead of what
+ * it gives, and it gives away no Field of a Group it monopolises. Bots never
+ * propose a Deal themselves.
+ */
+function dealIntent(view: PublicView): PlayerIntent {
+  const deal = view.deal;
+  if (!deal) throw new Error("the Deal answer has no pending Deal");
+  const incoming = dealSideValue(view, deal.give);
+  const outgoing = dealSideValue(view, deal.take);
+  const ahead = incoming * 10 >= outgoing * DEAL_AHEAD_TENTHS;
+  const keepsMonopolies = deal.take.fields.every(
+    (field) => !breaksMonopoly(view, field, deal.recipient),
+  );
+  return { type: ahead && keepsMonopolies ? "AcceptDeal" : "DeclineDeal", turn: view.turn };
+}
+
+/**
  * The intent a Bot submits for the open Decision, or `null` once the game is
  * over. The switch is exhaustive: a new phase fails to compile until the
  * policy covers it.
@@ -170,9 +209,8 @@ export function botIntent(view: PublicView): PlayerIntent | null {
       return doublerIntent(view, view.phase);
     case "choosingErasmus":
       return erasmusIntent(view, view.phase);
-    // Bots answer Deals in a later ticket (#200); until then they turn every one down.
     case "dealAnswer":
-      return { type: "DeclineDeal", turn };
+      return dealIntent(view);
     case "gameOver":
       return null;
     default: {
