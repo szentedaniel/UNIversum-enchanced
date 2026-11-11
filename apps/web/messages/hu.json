@@ -24,6 +24,8 @@
   "lobby_waiting": "Az indítás akkor válik elérhetővé, ha minden hely betelt.",
   "lobby_copy_code": "Szobakód másolása",
   "lobby_copied": "Másolva",
+  "lobby_copy_link": "Meghívó link másolása",
+  "lobby_invite_qr": "A meghívó link QR-kódja",
   "lobby_creator": "A szoba létrehozója",
   "lobby_add_bot": "Bot hozzáadása",
   "lobby_remove_bot": "Bot eltávolítása",

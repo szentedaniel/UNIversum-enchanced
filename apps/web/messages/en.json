@@ -24,6 +24,8 @@
   "lobby_waiting": "Start unlocks when every Seat is taken.",
   "lobby_copy_code": "Copy the Room code",
   "lobby_copied": "Copied",
+  "lobby_copy_link": "Copy the invite link",
+  "lobby_invite_qr": "QR code for the invite link",
   "lobby_creator": "Room creator",
   "lobby_add_bot": "Add Bot",
   "lobby_remove_bot": "Remove Bot",
