@@ -49,6 +49,14 @@ describe("targetPathsIn", () => {
     expect(targetPathsIn(body)).toEqual([]);
   });
 
+  it("drops the shared files every ticket touches", () => {
+    expect(
+      targetPathsIn(
+        "Append a line to `docs/agents/handoff/INDEX.md`, then link `shared/runs.ts` and pnpm-lock.yaml.",
+      ),
+    ).toEqual(["shared/runs.ts"]);
+  });
+
   it("lists a repeated path once, in the order it appears", () => {
     const body = "`a/one.ts` then `b/two.ts`, and a/one.ts again.";
 
@@ -91,22 +99,36 @@ describe("shareModule", () => {
     expect(shareModule(["turn-clock.ts"], ["apps/server/src/room/turn-clock.ts"])).toBe(true);
     expect(shareModule(["index.ts"], ["apps/web/src/foo/index.ts"])).toBe(false);
   });
+
+  it("never matches the shared ledger, factory log or lockfile", () => {
+    expect(shareModule(["docs/agents/handoff/INDEX.md"], ["docs/agents/handoff/INDEX.md"])).toBe(
+      false,
+    );
+    expect(shareModule(["docs/agents/factory-log.md"], ["docs/agents/factory-log.md"])).toBe(false);
+    expect(shareModule(["pnpm-lock.yaml"], ["pnpm-lock.yaml"])).toBe(false);
+  });
 });
 
 describe("branchNamesTarget", () => {
-  it("matches the module a factory branch slug names", () => {
-    expect(
-      branchNamesTarget(
-        "agent/issue-129-deepen-the-run-log-reader-in-shared-runs-ts-so-one",
-        "shared/runs.ts",
-      ),
-    ).toBe(true);
+  it("matches the module's specific segments in a factory branch slug", () => {
     expect(
       branchNamesTarget(
         "agent/issue-140-room-turn-clock-extract-the-clock",
         "apps/server/src/room/turn-clock.ts",
       ),
     ).toBe(true);
+  });
+
+  it("does not match a generic directory or file pair on an unrelated pull", () => {
+    expect(
+      branchNamesTarget(
+        "agent/issue-129-deepen-the-run-log-reader-in-shared-runs-ts-so-one",
+        "shared/runs.ts",
+      ),
+    ).toBe(false);
+    expect(
+      branchNamesTarget("agent/issue-170-rewrite-src-index", "packages/factory/src/index.ts"),
+    ).toBe(false);
   });
 
   it("does not match a different branch", () => {

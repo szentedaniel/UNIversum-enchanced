@@ -26,7 +26,7 @@ import {
 } from "#maintain/proposals.ts";
 import { claudeAgent } from "#shared/agents.ts";
 import { safeSh, fail, required, sh, shellArg } from "#shared/common.ts";
-import { parseJson } from "#shared/github.ts";
+import { api, parseJson } from "#shared/github.ts";
 
 /** How far back a closed issue still counts as recently filed work. */
 const RECENT_CLOSED_DAYS = 30;
@@ -36,7 +36,8 @@ interface ListedIssue {
   title: string;
   body: string | null;
   labels: { name: string }[];
-  subIssuesSummary: { total: number };
+  sub_issues_summary: { total: number };
+  pull_request?: unknown;
 }
 
 interface ListedPull {
@@ -46,22 +47,27 @@ interface ListedPull {
   files: { path: string }[];
 }
 
-const trackedIssues = (repo: string, state: "open" | "closed", search?: string): TrackedWork[] => {
-  const searchArg = search === undefined ? "" : ` --search ${shellArg(search)}`;
-  return parseJson<ListedIssue[]>(
-    sh(
-      `gh issue list --repo "${repo}" --state ${state}${searchArg} --limit 200 --json number,title,body,labels,subIssuesSummary`,
-    ),
-  ).map((issue) =>
-    issueWork({
-      number: issue.number,
-      title: issue.title,
-      body: issue.body,
-      labels: issue.labels.map((label) => label.name),
-      subIssues: issue.subIssuesSummary.total,
-    }),
-  );
-};
+/**
+ * Every issue in `state` through the shared paginated reader: `gh issue list
+ * --limit` silently drops the rest, and a dropped issue is a proposal the pass
+ * files a second time.
+ */
+const trackedIssues = (repo: string, state: "open" | "closed", since?: Date): TrackedWork[] =>
+  api<ListedIssue>(
+    `repos/${repo}/issues?state=${state}&per_page=100${
+      since === undefined ? "" : `&since=${since.toISOString()}`
+    }`,
+  )
+    .filter((issue) => issue.pull_request === undefined)
+    .map((issue) =>
+      issueWork({
+        number: issue.number,
+        title: issue.title,
+        body: issue.body,
+        labels: issue.labels.map((label) => label.name),
+        subIssues: issue.sub_issues_summary.total,
+      }),
+    );
 
 const trackedPulls = (repo: string): TrackedWork[] =>
   parseJson<ListedPull[]>(
@@ -80,12 +86,10 @@ const trackedPulls = (repo: string): TrackedWork[] =>
  * issues, the closed issues of the last month, and the open pull requests.
  */
 const trackedWork = (repo: string, now: Date): TrackedWork[] => {
-  const since = new Date(now.getTime() - RECENT_CLOSED_DAYS * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
+  const since = new Date(now.getTime() - RECENT_CLOSED_DAYS * 24 * 60 * 60 * 1000);
   return [
     ...trackedIssues(repo, "open"),
-    ...trackedIssues(repo, "closed", `closed:>=${since} sort:updated-desc`),
+    ...trackedIssues(repo, "closed", since),
     ...trackedPulls(repo),
   ];
 };

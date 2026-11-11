@@ -152,6 +152,21 @@ describe("frontierOf", () => {
     expect(frontier.skipped[0]?.reason).toContain("#140");
   });
 
+  it("does not block a ticket on a pull that only shares the handoff ledger", () => {
+    const ticket = issue(101, {
+      body: "Touch `shared/runs.ts`; append to `docs/agents/handoff/INDEX.md`.",
+    });
+    const blocking = pull(154, {
+      branch: "agent/issue-154-record-the-handoff",
+      files: ["docs/agents/handoff/INDEX.md"],
+    });
+
+    const frontier = frontierOf([ticket], [blocking], new Set());
+
+    expect(frontier.eligible.map((entry) => entry.number)).toEqual([101]);
+    expect(frontier.skipped).toEqual([]);
+  });
+
   it("starts only one of two tickets that name the same module", () => {
     const body = "## Files\n\n- `packages/factory/src/dispatch/frontier.ts`";
     const first = issue(101, { body });
@@ -186,6 +201,24 @@ describe("frontierOf", () => {
 
     expect(frontier.eligible).toEqual([]);
     expect(frontier.skipped[0]?.reason).toBe("overlaps #100 (same target module)");
+  });
+
+  it("does not let a stalled ticket hold a newer one", () => {
+    const human = issue(100, {
+      labels: ["ready-for-human"],
+      body: "`packages/factory/src/dispatch/frontier.ts`",
+    });
+    const blocked = issue(99, {
+      labels: ["agent:blocked"],
+      body: "`packages/factory/src/shared/runs.ts`",
+    });
+    const first = issue(101, { body: "`packages/factory/src/dispatch/frontier.ts`" });
+    const second = issue(102, { body: "`packages/factory/src/shared/runs.ts`" });
+
+    const frontier = frontierOf([first, second], [], new Set(), [human, blocked, first, second]);
+
+    expect(frontier.eligible.map((entry) => entry.number)).toEqual([101, 102]);
+    expect(frontier.skipped).toEqual([]);
   });
 
   it("picks a priority:top issue before an older one: red main goes first", () => {

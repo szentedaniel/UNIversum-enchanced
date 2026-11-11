@@ -4,6 +4,7 @@
  * blockers, sub-issues, open pull requests, running runs) and this decides.
  */
 import { closingPull, type PullFacts } from "#shared/closing-pr.ts";
+import { isTicketWork, READY_LABEL } from "#shared/labels.ts";
 import { branchNamesTarget, shareModule, targetPathsIn } from "#shared/targets.ts";
 
 /** The fields of a REST issue the frontier reads. */
@@ -68,6 +69,14 @@ export const BLOCKED_LABEL = "agent:blocked";
 export const HUMAN_LABEL = "ready-for-human";
 
 /**
+ * The labels of the work that holds a module against a newer ticket: an agent
+ * owns it now or next. A stalled ticket (`agent:blocked`, `ready-for-human`)
+ * holds nothing — the newer ticket would wait on it indefinitely, and only a
+ * pull-request overlap posts a note.
+ */
+const HOLDING_LABELS: ReadonlySet<string> = new Set([READY_LABEL, IN_PROGRESS_LABEL]);
+
+/**
  * The priority seam: a label here sorts above age, in list order. Red main
  * carries `priority:top`, so the bug the maintenance watch opens is the next
  * implementer an empty frontier would start on.
@@ -125,8 +134,9 @@ const overlappingPull = (
 /**
  * Splits the candidates into what to dispatch and what to skip, both oldest
  * first. `busy` holds the issues a queued or running implement run already
- * covers; `openWork` holds every open ticket-shaped issue, so a newer duplicate
- * waits for the work that already holds its module.
+ * covers; `openWork` holds every open issue, so an older ticket or a running
+ * one claims its module and a newer duplicate waits for it. A spec and a
+ * stalled ticket claim nothing: neither will start on the module by itself.
  */
 export const frontierOf = (
   issues: readonly IssueFacts[],
@@ -142,7 +152,11 @@ export const frontierOf = (
     paths.set(issue.number, found);
     return found;
   };
-  const claims = openWork.toSorted(byPriorityThenAge);
+  const claims = openWork
+    .filter(
+      (issue) => isTicketWork(issue) && issue.labels.some((label) => HOLDING_LABELS.has(label)),
+    )
+    .toSorted(byPriorityThenAge);
 
   const eligible: IssueFacts[] = [];
   const skipped: SkippedIssue[] = [];

@@ -6,6 +6,7 @@
  * issue the script opens, and keeps the dedupe pure.
  */
 import { z } from "zod";
+import { isTicketWork } from "#shared/labels.ts";
 import { shareModule, targetPathsIn } from "#shared/targets.ts";
 
 /** The weekly cap: a weekly issue stream nobody reads is worse than none. */
@@ -118,14 +119,6 @@ export interface TrackedWork {
   readonly paths: readonly string[];
 }
 
-/** The work labels that make an issue a ticket, not a spec or a report. */
-const WORK_LABELS: Record<string, true> = {
-  "ready-for-agent": true,
-  "agent:in-progress": true,
-  "agent:blocked": true,
-  "ready-for-human": true,
-};
-
 /** The REST fields the tracked-issue mapping reads. */
 export interface TrackedIssue {
   readonly number: number;
@@ -151,15 +144,11 @@ const pathsIn = (title: string, body: string | null): readonly string[] =>
  * pass must not re-open the same wording), and its module paths only when it is
  * a ticket. A spec or a report names a whole area, not a module to claim.
  */
-export const issueWork = (issue: TrackedIssue): TrackedWork => {
-  const isTicket =
-    issue.subIssues === 0 && issue.labels.some((label) => WORK_LABELS[label] === true);
-  return {
-    number: issue.number,
-    title: issue.title,
-    paths: isTicket ? pathsIn(issue.title, issue.body) : [],
-  };
-};
+export const issueWork = (issue: TrackedIssue): TrackedWork => ({
+  number: issue.number,
+  title: issue.title,
+  paths: isTicketWork(issue) ? pathsIn(issue.title, issue.body) : [],
+});
 
 /** The work an open pull request carries: its body's paths and changed files. */
 export const pullWork = (pull: TrackedPull): TrackedWork => ({

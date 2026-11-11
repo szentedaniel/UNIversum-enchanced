@@ -21,15 +21,8 @@ import {
 import { DEFAULT_MAX_PARALLEL, noDispatchReason, planOf } from "#dispatch/plan.ts";
 import { api, parseJson } from "#shared/github.ts";
 import { fail, positiveInt, required, sh } from "#shared/common.ts";
+import { READY_LABEL } from "#shared/labels.ts";
 import { factoryRuns } from "#shared/runs.ts";
-
-/** The work labels that make an open issue a ticket rather than a spec. */
-const WORK_LABELS: Record<string, true> = {
-  "ready-for-agent": true,
-  "agent:in-progress": true,
-  "agent:blocked": true,
-  "ready-for-human": true,
-};
 
 /** The fields of the REST responses the dispatcher reads. */
 interface ApiIssue {
@@ -106,18 +99,12 @@ const issueFacts = (repo: string, issue: ApiIssue): IssueFacts => {
   };
 };
 
-const openIssues = (repo: string): IssueFacts[] =>
+export const openIssues = (repo: string): IssueFacts[] =>
   api<ApiIssue>(`repos/${repo}/issues?state=open&per_page=100`)
     .filter((issue) => issue.pull_request === undefined)
     .map((issue) => issueFacts(repo, issue));
 
-/** The open issues that are tickets, not specs or reports: the dispatcher's claims. */
-const openWork = (issues: readonly IssueFacts[]): IssueFacts[] =>
-  issues.filter(
-    (issue) => issue.subIssues === 0 && issue.labels.some((label) => WORK_LABELS[label] === true),
-  );
-
-const openPulls = (repo: string): OpenPull[] =>
+export const openPulls = (repo: string): OpenPull[] =>
   parseJson<ApiPull[]>(
     sh(
       `gh pr list --repo "${repo}" --state open --limit 100 --json number,url,body,headRefName,files`,
@@ -135,18 +122,25 @@ const comments = (repo: string, issue: number): string[] =>
     (comment) => comment.body,
   );
 
+export interface NoteOverlapDeps {
+  /** The tickets the frontier skipped, with the pull request each one overlaps. */
+  readonly skipped: readonly SkippedIssue[];
+  /** Every comment already on the ticket, for the marker dedupe. */
+  readonly readComments: (issue: number) => readonly string[];
+  /** Posts the note on the ticket. */
+  readonly post: (issue: number, body: string) => void;
+}
+
 /**
  * Posts one note per blocked pull request on a ticket that overlaps it. The
  * marker is the dedupe, so the hourly backstop does not repeat the note.
  */
-const noteOverlaps = (repo: string, skipped: readonly SkippedIssue[]): void => {
+export const noteOverlaps = ({ skipped, readComments, post }: NoteOverlapDeps): void => {
   for (const { issue, blockingPull } of skipped) {
     if (blockingPull === undefined) continue;
     const note = overlapNote(blockingPull);
-    if (comments(repo, issue.number).some((body) => body.includes(note.marker))) continue;
-    const file = join(mkdtempSync(join(tmpdir(), "factory-overlap-")), "note.md");
-    writeFileSync(file, `${note.body}\n`);
-    sh(`gh issue comment ${String(issue.number)} --body-file "${file}"`);
+    if (readComments(issue.number).some((body) => body.includes(note.marker))) continue;
+    post(issue.number, note.body);
     console.log(
       `Noted #${String(issue.number)} waits for pull request #${String(blockingPull.number)}.`,
     );
@@ -210,10 +204,10 @@ const main = (): void => {
   const running = runningImplementers(repo);
   const issues = openIssues(repo);
   const frontier = frontierOf(
-    issues.filter((issue) => issue.labels.includes("ready-for-agent")),
+    issues.filter((issue) => issue.labels.includes(READY_LABEL)),
     openPulls(repo),
     issuesOfRuns(running),
-    openWork(issues),
+    issues,
   );
   const plan = planOf(frontier.eligible, running.length, maxParallel);
   const spent = limit !== undefined && used >= limit;
@@ -235,7 +229,17 @@ const main = (): void => {
       console.log(`  #${String(issue.number)} ${issue.title} — ${reason}`);
     }
   }
-  if (!dryRun) noteOverlaps(repo, frontier.skipped);
+  if (!dryRun) {
+    noteOverlaps({
+      skipped: frontier.skipped,
+      readComments: (issue) => comments(repo, issue),
+      post: (issue, body) => {
+        const file = join(mkdtempSync(join(tmpdir(), "factory-overlap-")), "note.md");
+        writeFileSync(file, `${body}\n`);
+        sh(`gh issue comment ${String(issue)} --body-file "${file}"`);
+      },
+    });
+  }
 
   if (spent) {
     console.log(`Dispatch: none — the ${month.slice(0, 7)} budget is spent.`);
@@ -260,8 +264,10 @@ const main = (): void => {
   for (const issue of plan.dispatch) dispatch(issue);
 };
 
-try {
-  main();
-} catch (error) {
-  fail(error instanceof Error ? error.message : String(error));
+if (import.meta.main) {
+  try {
+    main();
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
 }
