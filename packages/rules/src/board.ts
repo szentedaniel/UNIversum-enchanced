@@ -107,6 +107,9 @@ export const FIELDS: readonly FieldInfo[] = [
 /** The Start Field, where the Round bonus is paid. */
 export const START_FIELD: FieldId = 0;
 
+/** The Quarantine Field, where the Exam period card sends the Player. */
+export const QUARANTINE_FIELD: FieldId = 8;
+
 /**
  * The Chance cards, in v1's order first (R32): a PCR test, a +200,000
  * scholarship and a −200,000 fee for failing every exam, then the university
@@ -118,15 +121,30 @@ export const CHANCE_CARDS = [
   "failedExams",
   "textbookFair",
   "teachingAssistantJob",
+  "examPeriod",
+  "scholarshipTransfer",
+  "dormParty",
+  "thesisPrinting",
 ] as const;
 
 export type ChanceCardId = (typeof CHANCE_CARDS)[number];
 
-/** What each Chance card pays (+) or charges (−) the Player who draws it (R34). */
+/**
+ * What each Chance card pays (+) or charges (−) the Player who draws it (R34).
+ * The two Player-to-Player cards give the amount of one payment, per other
+ * Player; the drawer's total depends on how many Players are left.
+ */
 export const CHANCE_CARD_MONEY: Readonly<Record<ChanceCardId, number>> = {
   pcrTest: 0,
   scholarship: 200_000,
   failedExams: -200_000,
   textbookFair: -150_000,
   teachingAssistantJob: 300_000,
+  // Movement cards: no fixed amount (the move itself pays the Round bonus, if any).
+  examPeriod: 0,
+  scholarshipTransfer: 0,
+  // Dorm party: every other Player pays the drawer this much.
+  dormParty: 50_000,
+  // Thesis printing: the drawer pays every other Player this much.
+  thesisPrinting: -50_000,
 };

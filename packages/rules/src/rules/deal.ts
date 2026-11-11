@@ -96,6 +96,7 @@ export const dealIntents = {
     actor: "player",
     phases: ["awaitingRoll", "quarantineChoice"],
     run(tx, intent) {
+      if (tx.state.dealUsed) return rejection("DEAL_ALREADY_PROPOSED");
       const deal: Deal = {
         proposer: tx.state.currentPlayer,
         recipient: intent.recipient,
@@ -105,6 +106,7 @@ export const dealIntents = {
       const problem = dealProblem(tx, deal);
       if (problem) return rejection(problem);
       tx.state.deal = deal;
+      tx.state.dealUsed = true;
       emit(tx, { type: "DealProposed", ...deal });
       tx.state.currentPlayer = deal.recipient;
       decide(tx, { kind: "dealAnswer" });

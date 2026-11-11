@@ -59,5 +59,6 @@ Branch `agent/issue-196-bots-in-the-lobby`, from main at `f16969f`.
   it; the Room and the views are the only readers.
 - A restored Lobby keeps its Bot Seats (no hold is put on them) and
   `syncListing` hides a full one; a restored running game re-arms the Bot
-  wake-up with `max(actsAfter, now)`, so a Bot whose gate had already passed
-  acts 1.5 s after the restart, not immediately.
+  wake-up with `max(actsAfter, now)`. #199 now arms it only when a Guest is
+  connected, so a restored game with nobody back plays no Bot until a Guest
+  connects.

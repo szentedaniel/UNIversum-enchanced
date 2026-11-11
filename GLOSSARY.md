@@ -38,6 +38,10 @@ _Avoid_: Room list, server browser
 The short number a Guest uses to find and join a Room.
 _Avoid_: Lobby code, PIN
 
+**Invite link**:
+The Room's address `/room/<Room code>`, which joins the Room in one click and is shown with a QR code in the Lobby.
+_Avoid_: Share code, join URL
+
 **Room name**:
 The name the creator gives a Room, shown on the Lobby list; the only text a Guest types that other Guests see.
 _Avoid_: Lobby name, title
@@ -166,7 +170,7 @@ What a Player pays the owner on landing on a Field another Player owns.
 _Avoid_: Tuition, Tandíj
 
 **Deal**:
-An exchange of Fields and cash between two Players that one proposes before their Roll or Quarantine choice and the other accepts or declines; Fields change hands at their current Level, and neither side's cash may fall short.
+An exchange of Fields and cash between two Players that one proposes before their Roll or Quarantine choice, once per Turn, and the other accepts or declines; Fields change hands at their current Level, and neither side's cash may fall short.
 _Avoid_: Trade, Offer (an Offer is the Decision to buy)
 
 **Buyout**:

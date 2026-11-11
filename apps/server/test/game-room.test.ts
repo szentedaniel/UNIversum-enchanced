@@ -67,13 +67,19 @@ function levelOffer(view: GameMessage["view"]): boolean {
 }
 
 describe("creating and joining a Room", () => {
-  it("R4: creates a Room under a 6-digit Room code, with 4 Players, 50 minutes and 2,500,000 starting cash by default", async () => {
+  it("R4: creates a Room under a 6-digit Room code, with 4 Players, 50 minutes, 2,500,000 starting cash, a 250,000 Round bonus and a 20 s Turn timer by default", async () => {
     const alice = await server.create();
 
     expect(alice.code).toMatch(/^[1-9]\d{5}$/);
     expect(await alice.next("lobby")).toMatchObject({
       code: alice.code,
-      settings: { maxPlayers: 4, minuteLimit: 50, startingCash: 2_500_000 },
+      settings: {
+        maxPlayers: 4,
+        minuteLimit: 50,
+        startingCash: 2_500_000,
+        roundBonus: 250_000,
+        turnLimitMs: 20_000,
+      },
     });
   });
 
@@ -83,12 +89,15 @@ describe("creating and joining a Room", () => {
     expect(new Set(rooms.map((r) => r.code)).size).toBe(3);
   });
 
-  it.each([{ maxPlayers: 9 }, { minuteLimit: 20 }, { startingCash: 3_000_000 }])(
-    "refuses create options %j",
-    async (options) => {
-      await expect(server.sdk.create("game", options)).rejects.toBeInstanceOf(MatchMakeError);
-    },
-  );
+  it.each([
+    { maxPlayers: 9 },
+    { minuteLimit: 20 },
+    { startingCash: 3_000_000 },
+    { roundBonus: 300_000 },
+    { turnLimitMs: 5_000 },
+  ])("refuses create options %j", async (options) => {
+    await expect(server.sdk.create("game", options)).rejects.toBeInstanceOf(MatchMakeError);
+  });
 
   it("seats the creator with a public Player id and a Player name from the word lists", async () => {
     const alice = await server.create();
@@ -159,13 +168,44 @@ describe("starting the game", () => {
     const bob = await server.join(alice.code);
 
     const lobby = await bob.until("lobby", (l) => l.seats.length === 2);
-    expect(lobby.settings).toEqual({ maxPlayers: 2, minuteLimit: 50, startingCash: 4_000_000 });
+    expect(lobby.settings).toEqual({
+      maxPlayers: 2,
+      minuteLimit: 50,
+      startingCash: 4_000_000,
+      roundBonus: 250_000,
+      turnLimitMs: 20_000,
+    });
 
     bob.send({ type: "Start" });
     const { view } = await alice.next("game");
 
     expect(view.settings.startingCash).toBe(4_000_000);
     expect(view.players.map((player) => player.cash)).toEqual([4_000_000, 4_000_000]);
+  });
+
+  it("carries chosen settings from the Lobby into the game", async () => {
+    const alice = await server.create({
+      maxPlayers: 2,
+      roundBonus: 400_000,
+      turnLimitMs: 10_000,
+    });
+    const bob = await server.join(alice.code);
+
+    const lobby = await bob.until("lobby", (l) => l.seats.length === 2);
+    expect(lobby.settings).toEqual({
+      maxPlayers: 2,
+      minuteLimit: 50,
+      startingCash: 2_500_000,
+      roundBonus: 400_000,
+      turnLimitMs: 10_000,
+    });
+
+    bob.send({ type: "Start" });
+    const { view } = await alice.next("game");
+
+    expect(view.settings.roundBonus).toBe(400_000);
+    expect(view.settings.turnLimitMs).toBe(10_000);
+    expect(view.turnTimer?.limitMs).toBe(10_000);
   });
 
   it("R5: any Player may start a full Lobby; everyone gets the first game view", async () => {
@@ -182,7 +222,13 @@ describe("starting the game", () => {
       version: 0,
       currentPlayer: aliceId,
       phase: { kind: "awaitingRoll" },
-      settings: { maxPlayers: 2, minuteLimit: 50, startingCash: 2_500_000 },
+      settings: {
+        maxPlayers: 2,
+        minuteLimit: 50,
+        startingCash: 2_500_000,
+        roundBonus: 250_000,
+        turnLimitMs: 20_000,
+      },
     });
   });
 

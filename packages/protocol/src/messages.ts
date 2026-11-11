@@ -136,18 +136,28 @@ export const PLAYER_COUNTS = [2, 3, 4] as const;
 export const MINUTE_LIMITS = [15, 30, 50] as const;
 /** The cash every Player may start with (R7); the middle one is today's value. */
 export const STARTING_CASHES = [1_500_000, 2_500_000, 4_000_000] as const;
+/** The Round bonus a Room may pay for passing or landing on Start (R10, R73); the middle one is today's value. */
+export const ROUND_BONUSES = [150_000, 250_000, 400_000] as const;
+/** How long a Player has for one Decision (R17); the middle one is today's value. */
+export const TURN_LIMITS = [10_000, 20_000, 30_000] as const;
 
 export type RoomSettings = {
   maxPlayers: (typeof PLAYER_COUNTS)[number];
   minuteLimit: (typeof MINUTE_LIMITS)[number];
   /** The cash every Player starts the game with (R7). */
   startingCash: (typeof STARTING_CASHES)[number];
+  /** The money the Bank pays for passing or landing on Start (R10, R73). */
+  roundBonus: (typeof ROUND_BONUSES)[number];
+  /** The Turn timer's length in ms, before the server's slack (R17). */
+  turnLimitMs: (typeof TURN_LIMITS)[number];
 };
 
 export const DEFAULT_SETTINGS: RoomSettings = {
   maxPlayers: 4,
   minuteLimit: 50,
   startingCash: 2_500_000,
+  roundBonus: 250_000,
+  turnLimitMs: 20_000,
 };
 
 /** A password is at most this many UTF-8 bytes. */
@@ -234,8 +244,8 @@ export type LobbyListingMetadata = {
   roomName: string | null;
   /** Taken Seats. */
   players: number;
-  maxPlayers: RoomSettings["maxPlayers"];
-  minuteLimit: RoomSettings["minuteLimit"];
+  /** The Room's settings, so the list can mark the ones a Lobby is not on the defaults of (#188). */
+  settings: RoomSettings;
   hasPassword: boolean;
 };
 
@@ -260,6 +270,7 @@ export const REJECTION_CODES = [
   "DEAL_FIELD_REPEATED",
   "DEAL_EMPTY",
   "DEAL_CASH_NOT_COVERED",
+  "DEAL_ALREADY_PROPOSED",
   // Room server
   "MALFORMED",
   "INTERNAL",

@@ -1,5 +1,5 @@
 import type { FieldId } from "#board.ts";
-import { TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
+import { TURN_SLACK_MS } from "#constants.ts";
 import { autoSellPicks } from "#rules/charge.ts";
 import { doublerPlacement } from "#rules/doubler.ts";
 import { erasmusRoute } from "#rules/erasmus.ts";
@@ -15,7 +15,7 @@ import type { GameState } from "#state.ts";
  */
 export type TurnTimer = { endsAt: number; limitMs: number };
 
-/** The server's clock overrides for the view (e2e runs); production leaves both out. */
+/** The server's Turn limit override for the view (e2e runs); production leaves it out. */
 export type ViewTiming = { turnLimitMs?: number };
 
 /**
@@ -83,12 +83,13 @@ export function publicView(state: GameState, timing: ViewTiming = {}): PublicVie
         ? null
         : {
             endsAt: state.turnDeadline - TURN_SLACK_MS,
-            limitMs: timing.turnLimitMs ?? TURN_LIMIT_MS,
+            limitMs: timing.turnLimitMs ?? state.settings.turnLimitMs,
           },
     settings: state.settings,
     endsAt: state.endsAt,
     lastChanceCard: state.lastChanceCard,
     deal: state.deal,
+    dealUsed: state.dealUsed,
     autoSell:
       state.phase.kind === "selling"
         ? autoSellPicks(state, state.currentPlayer, state.phase.shortfall)

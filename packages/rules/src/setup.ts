@@ -12,7 +12,7 @@ export type SetupInput = {
   seed: Seed;
   /** The server's clock when the game starts. */
   now: number;
-  /** A shorter Turn limit (ms), set by the server for e2e runs. */
+  /** A shorter Turn limit (ms), set by the server for e2e runs; wins over the Room's setting. */
   turnLimitMs?: number;
   /** A shorter "minute" (ms) for the Minute limit, set by the server for e2e runs. */
   minuteMs?: number;
@@ -38,11 +38,13 @@ export function setupGame({
     currentPlayer: first.playerId,
     phase: awaitingRoll(),
     actsAfter: now,
-    turnDeadline: turnDeadlineFrom(now, turnLimitMs),
+    turnDeadline: turnDeadlineFrom(now, turnLimitMs ?? settings.turnLimitMs),
     settings: {
       maxPlayers: settings.maxPlayers,
       minuteLimit: settings.minuteLimit,
       startingCash: settings.startingCash,
+      roundBonus: settings.roundBonus,
+      turnLimitMs: settings.turnLimitMs,
     },
     endsAt: now + settings.minuteLimit * minuteMs,
     players: seats.map((seat, index) => ({
@@ -60,6 +62,7 @@ export function setupGame({
     doubler: null,
     lastChanceCard: null,
     deal: null,
+    dealUsed: false,
     rng: rngFromSeed(seed),
   };
 }

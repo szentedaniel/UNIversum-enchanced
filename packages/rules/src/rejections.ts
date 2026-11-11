@@ -25,6 +25,8 @@ export const RULES_REJECTION_CODES = [
   "DEAL_EMPTY",
   /** One side's cash does not cover what the Deal asks of it (spec #172). */
   "DEAL_CASH_NOT_COVERED",
+  /** A Deal was already proposed this Turn (spec #172). */
+  "DEAL_ALREADY_PROPOSED",
 ] as const;
 
 export type RulesRejectionCode = (typeof RULES_REJECTION_CODES)[number];

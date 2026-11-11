@@ -20,11 +20,12 @@ Branch `agent/issue-198-a-bot-stands-in-for-a-dropped-player`, from main at `9f1
   game only). A reconnect cancels the pending action, so the Guest answers the
   Decision; an action already applied stands because its commit armed the next
   Decision's wake-up.
-- **`resume` arms only a seated Bot** (`player?.bot === true`), not an absent
-  Guest: a restored game has had no connection to lose in this server's run, so
-  its absent Guests keep their Turn timers until the first connection change.
-  After that first change (or any commit) `#botPlays` applies and the absent
-  Seats play. A restored Bot Seat still acts 1.5 s after boot, as #196 set.
+- **`resume` arms only a seated Bot** (`player?.bot === true`; #199 made it
+  `#botPlays`, which also needs a connected Guest), not an absent Guest: a
+  restored game has had no connection to lose in this server's run, so its
+  absent Guests keep their Turn timers until the first connection change. After
+  that first change (or any commit) `#botPlays` applies and the absent Seats
+  play.
 - **No web change.** A stand-in Guest's Seat and Player card are not marked
   BOT: the Player is still the Guest (#196 marks only seated Bots).
 - **Tests.** `apps/server/test/bots.test.ts` (`a Bot stands in for a dropped

@@ -266,7 +266,10 @@ It merges with a merge commit only when every gate holds ([spec #85, Decision
 1. The `CI` workflow concluded `success` on the pull request's head sha (a re-run that passed counts).
 2. The newest `<!-- factory-review -->` comment says pass and was posted **after** the head commit;
    a push after the review queues `agent:review` again, so a fix commit is reviewed before merging.
-3. The pull request carries `risk:low` — a two-way door with a local blast radius.
+3. The pull request carries `risk:low` (a two-way door with a local blast radius), or `risk:high` whose
+   review names a **two-way** door: a wide blast radius alone does not wait for the owner once the
+   review passed and CI, e2e included, is green. A one-way door, or a `risk:high` whose merge danger
+   the gate cannot read, waits for a human.
 4. It touches no protected path: `.github/`, `packages/factory/`, `CODING_STANDARDS.md`, `AGENTS.md`,
    `CLAUDE.md`, `docs/agents/`, `docs/adr/`, `packages/rules/src/migrate.ts` and
    `packages/rules/test/fixtures/`. `docs/agents/handoff/` is the one exception: every implementer

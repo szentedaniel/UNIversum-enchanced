@@ -76,7 +76,9 @@ export function apply(state: GameState, intent: Intent, ctx: Ctx): Applied | Rej
   const actsAfter = ctx.now + playbackOf(tx.events);
   tx.state.actsAfter = actsAfter;
   if (tx.phaseSet) {
-    tx.state.turnDeadline = tx.finalPhase ? null : turnDeadlineFrom(actsAfter, ctx.turnLimitMs);
+    tx.state.turnDeadline = tx.finalPhase
+      ? null
+      : turnDeadlineFrom(actsAfter, ctx.turnLimitMs ?? tx.state.settings.turnLimitMs);
   }
   return { state: tx.state, events: tx.events, reveals: tx.reveals };
 }
