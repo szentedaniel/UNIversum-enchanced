@@ -16,6 +16,8 @@ afterEach(() => {
 const NEW_CARDS = [
   { card: "textbookFair", amount: 150_000 },
   { card: "teachingAssistantJob", amount: 300_000 },
+  { card: "dormParty", amount: 50_000 },
+  { card: "thesisPrinting", amount: 50_000 },
 ] as const;
 
 describe("a Chance card's title and text", () => {
@@ -45,11 +47,15 @@ describe("a Chance card's title and text", () => {
     expect(chanceCardText("teachingAssistantJob").title).toBe("Teaching assistant job");
     expect(chanceCardText("examPeriod").title).toBe("Exam period");
     expect(chanceCardText("scholarshipTransfer").title).toBe("Scholarship transfer");
+    expect(chanceCardText("dormParty").title).toBe("Dorm party");
+    expect(chanceCardText("thesisPrinting").title).toBe("Thesis printing");
     inLanguage("hu");
     expect(chanceCardText("textbookFair").title).toBe("Tankönyvvásár");
     expect(chanceCardText("teachingAssistantJob").title).toBe("Demonstrátori állás");
     expect(chanceCardText("examPeriod").title).toBe("Vizsgaidőszak");
     expect(chanceCardText("scholarshipTransfer").title).toBe("Ösztöndíj-átutalás");
+    expect(chanceCardText("dormParty").title).toBe("Kolibuli");
+    expect(chanceCardText("thesisPrinting").title).toBe("Szakdolgozat-nyomtatás");
   });
 
   it("explain the movement cards' Quarantine and Round bonus effects in every language", () => {
@@ -65,6 +71,19 @@ describe("a Chance card's title and text", () => {
       expect(chanceCardText("examPeriod").text).toContain(texts.bonus);
       expect(chanceCardText("scholarshipTransfer").text).toContain("Start");
       expect(chanceCardText("scholarshipTransfer").text).toContain(texts.bonus);
+    }
+  });
+
+  it("say every other Player pays, or is paid, on the two Player-to-Player cards", () => {
+    const wording = {
+      hu: { dormParty: "minden más játékos", thesisPrinting: "minden más játékosnak" },
+      en: { dormParty: "every other Player", thesisPrinting: "every other Player" },
+      de: { dormParty: "jeder andere Spieler", thesisPrinting: "jedem anderen Spieler" },
+    } as const;
+    for (const locale of LOCALES) {
+      inLanguage(locale);
+      expect(chanceCardText("dormParty").text).toContain(wording[locale].dormParty);
+      expect(chanceCardText("thesisPrinting").text).toContain(wording[locale].thesisPrinting);
     }
   });
 });

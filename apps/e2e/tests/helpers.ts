@@ -61,14 +61,17 @@ export async function probeSockets(page: Page): Promise<void> {
 
 /**
  * The longest Playback a Roll's push can carry: the dice, a 12-Field walk, the
- * Chance card drawn on landing, its effect and the Round bonus. Waits after a
- * Playback use its length, not Playwright's 5 s default.
+ * Chance card drawn on landing, its effect (three Player-to-Player payments is
+ * the longest) and the Round bonus. Waits after a Playback use its length, not
+ * Playwright's 5 s default.
  */
 export const ROLL_PLAYBACK_MS = playbackOf([
   { type: "DiceRolled", player: "p1", dice: [6, 6] },
   { type: "Moved", player: "p1", from: 0, to: 12, steps: 12 },
-  { type: "CardDrawn", player: "p1", card: "failedExams" },
-  { type: "ChanceMoneyReceived", player: "p1", amount: 0 },
+  { type: "CardDrawn", player: "p1", card: "dormParty" },
+  { type: "ChanceTransferPaid", player: "p2", payee: "p1", amount: 0 },
+  { type: "ChanceTransferPaid", player: "p3", payee: "p1", amount: 0 },
+  { type: "ChanceTransferPaid", player: "p4", payee: "p1", amount: 0 },
   { type: "RoundBonusPaid", player: "p1", amount: 0 },
 ] satisfies readonly GameEvent[]);
 

@@ -4,12 +4,23 @@ import {
   publicView,
   ROUND_BONUS,
   START_CASH,
+  SYSTEM,
   type Applied,
   type ChanceCardId,
   type GameState,
   type Seed,
 } from "#index.ts";
-import { newGame, player, playerOf, playTurn, rollOnto, withField, withPlayer } from "./helpers.ts";
+import {
+  accept,
+  deadlineOf,
+  newGame,
+  player,
+  playerOf,
+  playTurn,
+  rollOnto,
+  withField,
+  withPlayer,
+} from "./helpers.ts";
 
 const CHANCE = 14;
 
@@ -58,7 +69,7 @@ function counts(n: number, last: ChanceCardId | null): Record<ChanceCardId, numb
 const totalCash = (state: GameState) => state.players.reduce((sum, p) => sum + p.cash, 0);
 
 describe("the Chance draw", () => {
-  it("R32: there are 7 cards: the PCR test, four money cards and the two movement cards", () => {
+  it("R32: there are 9 cards: the PCR test, six money cards and the two movement cards", () => {
     expect(CHANCE_CARDS).toEqual([
       "pcrTest",
       "scholarship",
@@ -67,6 +78,8 @@ describe("the Chance draw", () => {
       "teachingAssistantJob",
       "examPeriod",
       "scholarshipTransfer",
+      "dormParty",
+      "thesisPrinting",
     ]);
   });
 
@@ -74,23 +87,23 @@ describe("the Chance draw", () => {
     expect(newGame().lastChanceCard).toBeNull();
   });
 
-  it("R32, F17: the first draw of a game is uniform over all seven cards, the PCR card included", () => {
-    const tally = counts(900, null);
+  it("R32, F17: the first draw of a game is uniform over all nine cards, the PCR card included", () => {
+    const tally = counts(1_800, null);
 
     for (const card of CHANCE_CARDS) {
-      expect(tally[card]).toBeGreaterThan(96);
-      expect(tally[card]).toBeLessThan(161);
+      expect(tally[card]).toBeGreaterThan(159);
+      expect(tally[card]).toBeLessThan(241);
     }
   });
 
-  it("R32: a draw never repeats the last card, and is uniform over the other six", () => {
+  it("R32: a draw never repeats the last card, and is uniform over the other eight", () => {
     for (const last of CHANCE_CARDS) {
-      const tally = counts(600, last);
+      const tally = counts(1_200, last);
 
       expect(tally[last]).toBe(0);
       for (const card of CHANCE_CARDS.filter((c) => c !== last)) {
-        expect(tally[card]).toBeGreaterThan(79);
-        expect(tally[card]).toBeLessThan(121);
+        expect(tally[card]).toBeGreaterThan(119);
+        expect(tally[card]).toBeLessThan(181);
       }
     }
   });
@@ -301,5 +314,245 @@ describe("the Scholarship transfer card", () => {
       position: 0,
       cash: beforeCash + ROUND_BONUS,
     });
+  });
+});
+
+// Veszprém at Level 1: the Bank pays 180,000 for it in a Sale.
+const VESZPREM = 1;
+
+/** A 3-Player game whose second Seat is short of 50,000 and holds Veszprém. */
+function dormPartyWithShortPayer(seed: Seed): GameState {
+  let start = newGame({ seed, players: 3 });
+  start = withPlayer(start, "p2", { cash: 10_000 });
+  return withField(start, VESZPREM, { owner: "p2", level: 1 });
+}
+
+describe("the Dorm party card", () => {
+  it("R34: every other Player pays the drawer 50,000, each payment its own event and reveal", () => {
+    const applied = draw(seedDrawing("dormParty"));
+    const drawn = applied.events.findIndex((event) => event.type === "CardDrawn");
+    const payments = applied.events
+      .map((event, index) => ({ event, index }))
+      .filter(({ event }) => event.type === "ChanceTransferPaid");
+
+    expect(applied.events.slice(drawn + 1)).toEqual([
+      { type: "ChanceTransferPaid", player: "p2", payee: "p1", amount: 50_000 },
+      { type: "ChanceTransferPaid", player: "p3", payee: "p1", amount: 50_000 },
+      { type: "ChanceTransferPaid", player: "p4", payee: "p1", amount: 50_000 },
+      { type: "TurnPassed", player: "p2", turn: 2 },
+    ]);
+    // Each payment shows on the Board at its own step: the payer's cash drops
+    // there, and the earlier Payers keep what they paid.
+    const [first, second, third] = payments.map(({ index }) => applied.reveals[index]);
+    if (!first || !second || !third) throw new Error("a payment's reveal is missing");
+    expect(playerOf(first, "p1").cash).toBe(START_CASH + 50_000);
+    expect(playerOf(first, "p2").cash).toBe(START_CASH - 50_000);
+    expect(playerOf(second, "p3").cash).toBe(START_CASH - 50_000);
+    expect(playerOf(third, "p4").cash).toBe(START_CASH - 50_000);
+
+    expect(player(applied.state, "p1").cash).toBe(START_CASH + 150_000);
+    expect(totalCash(applied.state)).toBe(totalCash(newGame()));
+  });
+
+  it("R34, R66: a payer short of cash sells a Field, then the card carries on with the rest", () => {
+    const seed = seedDrawing("dormParty");
+    const sale = draw(seed, null, dormPartyWithShortPayer(seed));
+
+    expect(sale.state.currentPlayer).toBe("p2");
+    expect(sale.state.phase).toEqual({
+      kind: "selling",
+      shortfall: 40_000,
+      resume: {
+        kind: "chanceTransfer",
+        amount: 50_000,
+        payee: "p1",
+        actor: "p1",
+        rest: [{ payer: "p3", payee: "p1", amount: 50_000 }],
+      },
+    });
+    // Nothing is paid until the Sale.
+    expect(sale.events.some((event) => event.type === "ChanceTransferPaid")).toBe(false);
+
+    const done = accept(
+      sale.state,
+      { type: "SellFields", turn: sale.state.turn, fields: [VESZPREM] },
+      "p2",
+    );
+
+    expect(done.events).toEqual([
+      { type: "FieldsSold", player: "p2", fields: [VESZPREM], amount: 180_000, auto: false },
+      { type: "ChanceTransferPaid", player: "p2", payee: "p1", amount: 50_000 },
+      { type: "ChanceTransferPaid", player: "p3", payee: "p1", amount: 50_000 },
+      { type: "TurnPassed", player: "p2", turn: 2 },
+    ]);
+    expect(player(done.state, "p2").cash).toBe(140_000);
+    expect(player(done.state, "p1").cash).toBe(START_CASH + 100_000);
+    expect(done.state.currentPlayer).toBe("p2");
+  });
+
+  it("R34, R66: a second short payer opens the next Sale, and the card finishes after both", () => {
+    const seed = seedDrawing("dormParty");
+    let start = newGame({ seed });
+    start = withPlayer(start, "p2", { cash: 10_000 });
+    start = withPlayer(start, "p3", { cash: 10_000 });
+    start = withField(start, VESZPREM, { owner: "p2", level: 1 });
+    start = withField(start, 2, { owner: "p3", level: 1 }); // Budapest, sale 198,000
+
+    const firstSale = draw(seed, null, start);
+    const afterP2 = accept(
+      firstSale.state,
+      { type: "SellFields", turn: firstSale.state.turn, fields: [VESZPREM] },
+      "p2",
+    );
+
+    expect(afterP2.state.currentPlayer).toBe("p3");
+    expect(afterP2.state.phase).toEqual({
+      kind: "selling",
+      shortfall: 40_000,
+      resume: {
+        kind: "chanceTransfer",
+        amount: 50_000,
+        payee: "p1",
+        actor: "p1",
+        rest: [{ payer: "p4", payee: "p1", amount: 50_000 }],
+      },
+    });
+
+    const afterP3 = accept(
+      afterP2.state,
+      { type: "SellFields", turn: afterP2.state.turn, fields: [2] },
+      "p3",
+    );
+
+    expect(afterP3.events).toEqual([
+      { type: "FieldsSold", player: "p3", fields: [2], amount: 198_000, auto: false },
+      { type: "ChanceTransferPaid", player: "p3", payee: "p1", amount: 50_000 },
+      { type: "ChanceTransferPaid", player: "p4", payee: "p1", amount: 50_000 },
+      { type: "TurnPassed", player: "p2", turn: 2 },
+    ]);
+    expect(player(afterP3.state, "p1").cash).toBe(START_CASH + 150_000);
+  });
+
+  it("R34, R68: Auto-sell covers the payer's Shortfall and the card carries on", () => {
+    const seed = seedDrawing("dormParty");
+    const sale = draw(seed, null, dormPartyWithShortPayer(seed));
+
+    const done = accept(sale.state, { type: "AutoSell", turn: sale.state.turn }, "p2");
+
+    expect(done.events).toEqual([
+      { type: "FieldsSold", player: "p2", fields: [VESZPREM], amount: 180_000, auto: true },
+      { type: "ChanceTransferPaid", player: "p2", payee: "p1", amount: 50_000 },
+      { type: "ChanceTransferPaid", player: "p3", payee: "p1", amount: 50_000 },
+      { type: "TurnPassed", player: "p2", turn: 2 },
+    ]);
+  });
+
+  it("R34, R70: a payer who can't cover it with cash or Fields pays what they have and is Bankrupt", () => {
+    const seed = seedDrawing("dormParty");
+    const start = withPlayer(newGame({ seed, players: 3 }), "p2", { cash: 10_000 });
+
+    const { state, events } = draw(seed, null, start);
+    const drawn = events.findIndex((event) => event.type === "CardDrawn");
+
+    expect(events.slice(drawn + 1)).toEqual([
+      { type: "ChanceTransferPaid", player: "p2", payee: "p1", amount: 10_000 },
+      { type: "WentBankrupt", player: "p2", fields: [] },
+      { type: "ChanceTransferPaid", player: "p3", payee: "p1", amount: 50_000 },
+      // The Bankrupt Player is skipped in turn order (R14).
+      { type: "TurnPassed", player: "p3", turn: 2 },
+    ]);
+    expect(player(state, "p1").cash).toBe(START_CASH + 60_000);
+    expect(player(state, "p2")).toMatchObject({ cash: 0, bankrupt: true });
+  });
+
+  it("R69: a payer's timed-out Sale auto-sells and the card carries on, with no Timeout penalty", () => {
+    const seed = seedDrawing("dormParty");
+    const sale = draw(seed, null, dormPartyWithShortPayer(seed));
+
+    const done = accept(
+      sale.state,
+      { type: "TurnTimedOut", turn: sale.state.turn },
+      SYSTEM,
+      deadlineOf(sale.state),
+    );
+
+    expect(done.events).toEqual([
+      { type: "TimedOut", player: "p2" },
+      { type: "FieldsSold", player: "p2", fields: [VESZPREM], amount: 180_000, auto: true },
+      { type: "ChanceTransferPaid", player: "p2", payee: "p1", amount: 50_000 },
+      { type: "ChanceTransferPaid", player: "p3", payee: "p1", amount: 50_000 },
+      { type: "TurnPassed", player: "p2", turn: 2 },
+    ]);
+    expect(done.events).not.toContainEqual(expect.objectContaining({ type: "TimeoutPenaltyPaid" }));
+  });
+});
+
+describe("the Thesis printing card", () => {
+  it("R34: the drawer pays every other Player 50,000, each payment its own event", () => {
+    const applied = draw(seedDrawing("thesisPrinting"));
+    const drawn = applied.events.findIndex((event) => event.type === "CardDrawn");
+
+    expect(applied.events.slice(drawn + 1)).toEqual([
+      { type: "ChanceTransferPaid", player: "p1", payee: "p2", amount: 50_000 },
+      { type: "ChanceTransferPaid", player: "p1", payee: "p3", amount: 50_000 },
+      { type: "ChanceTransferPaid", player: "p1", payee: "p4", amount: 50_000 },
+      { type: "TurnPassed", player: "p2", turn: 2 },
+    ]);
+    expect(player(applied.state, "p1").cash).toBe(START_CASH - 150_000);
+    for (const id of ["p2", "p3", "p4"]) {
+      expect(player(applied.state, id).cash).toBe(START_CASH + 50_000);
+    }
+    expect(totalCash(applied.state)).toBe(totalCash(newGame()));
+  });
+
+  it("R34, R66: a drawer short of cash sells a Field, then the card carries on with the rest", () => {
+    const seed = seedDrawing("thesisPrinting");
+    let start = newGame({ seed, players: 3 });
+    start = withPlayer(start, "p1", { cash: 10_000 });
+    start = withField(start, VESZPREM, { owner: "p1", level: 1 });
+
+    const sale = draw(seed, null, start);
+
+    expect(sale.state.currentPlayer).toBe("p1");
+    expect(sale.state.phase).toEqual({
+      kind: "selling",
+      shortfall: 40_000,
+      resume: {
+        kind: "chanceTransfer",
+        amount: 50_000,
+        payee: "p2",
+        actor: "p1",
+        rest: [{ payer: "p1", payee: "p3", amount: 50_000 }],
+      },
+    });
+
+    const done = accept(sale.state, { type: "AutoSell", turn: sale.state.turn }, "p1");
+
+    expect(done.events).toEqual([
+      { type: "FieldsSold", player: "p1", fields: [VESZPREM], amount: 180_000, auto: true },
+      { type: "ChanceTransferPaid", player: "p1", payee: "p2", amount: 50_000 },
+      { type: "ChanceTransferPaid", player: "p1", payee: "p3", amount: 50_000 },
+      { type: "TurnPassed", player: "p2", turn: 2 },
+    ]);
+    expect(player(done.state, "p1").cash).toBe(90_000);
+    expect(player(done.state, "p2").cash).toBe(START_CASH + 50_000);
+    expect(player(done.state, "p3").cash).toBe(START_CASH + 50_000);
+  });
+
+  it("R34, R70: a drawer who can't cover it with cash or Fields is Bankrupt and pays no further Player", () => {
+    const seed = seedDrawing("thesisPrinting");
+    const start = withPlayer(newGame({ seed, players: 3 }), "p1", { cash: 0 });
+
+    const { state, events } = draw(seed, null, start);
+    const drawn = events.findIndex((event) => event.type === "CardDrawn");
+
+    expect(events.slice(drawn + 1)).toEqual([
+      { type: "ChanceTransferPaid", player: "p1", payee: "p2", amount: 0 },
+      { type: "WentBankrupt", player: "p1", fields: [] },
+      { type: "TurnPassed", player: "p2", turn: 2 },
+    ]);
+    expect(player(state, "p1")).toMatchObject({ cash: 0, bankrupt: true });
+    expect(player(state, "p2").cash).toBe(START_CASH);
+    expect(player(state, "p3").cash).toBe(START_CASH);
   });
 });

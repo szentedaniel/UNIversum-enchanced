@@ -354,6 +354,13 @@ export function ledgerOf(before: GameState, events: readonly GameEvent[]): Ledge
         bank += event.amount - paid;
         break;
       }
+      case "ChanceTransferPaid": {
+        const paid = Math.min(event.amount, cash[event.player] ?? 0);
+        move(event.player, -paid);
+        move(event.payee, event.amount);
+        bank += event.amount - paid;
+        break;
+      }
       case "TaxPaid":
       case "ChanceChargePaid":
       case "TimeoutPenaltyPaid": {

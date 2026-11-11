@@ -36,15 +36,18 @@ test.setTimeout(300_000);
 
 /**
  * The longest Playback a game-ending push carries: a Roll onto Chance (the
- * dice, a 12-Field walk, the 7 s card, its Charge and the Round bonus) plus
- * the GameEnded beat. The podium appears only after the local Playback (#51),
- * so its wait must allow this instead of Playwright's 5 s default.
+ * dice, a 12-Field walk, the 7 s card, its effect — three Player-to-Player
+ * payments is the longest — and the Round bonus) plus the GameEnded beat. The
+ * podium appears only after the local Playback (#51), so its wait must allow
+ * this instead of Playwright's 5 s default.
  */
 const FINAL_PLAYBACK_MS = playbackOf([
   { type: "DiceRolled", player: "p1", dice: [6, 6] },
   { type: "Moved", player: "p1", from: 0, to: 12, steps: 12 },
-  { type: "CardDrawn", player: "p1", card: "failedExams" },
-  { type: "ChanceChargePaid", player: "p1", amount: 0 },
+  { type: "CardDrawn", player: "p1", card: "dormParty" },
+  { type: "ChanceTransferPaid", player: "p2", payee: "p1", amount: 0 },
+  { type: "ChanceTransferPaid", player: "p3", payee: "p1", amount: 0 },
+  { type: "ChanceTransferPaid", player: "p4", payee: "p1", amount: 0 },
   { type: "RoundBonusPaid", player: "p1", amount: 0 },
   { type: "GameEnded", winner: "p1", reason: "timeUp" },
 ] satisfies readonly GameEvent[]);

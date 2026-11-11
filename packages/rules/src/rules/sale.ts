@@ -7,6 +7,7 @@
 import { FIELDS, type FieldId } from "#board.ts";
 import type { IntentHandlers } from "#handlers.ts";
 import { rejection } from "#rejections.ts";
+import { resumeTransfers } from "#rules/chance-transfer.ts";
 import { saleValueOfAll, settleAfterSale, type PendingCharge } from "#rules/charge.ts";
 import { passTurn } from "#rules/pass-turn.ts";
 import { offerBuyout } from "#rules/universities.ts";
@@ -28,12 +29,19 @@ function saleOf(tx: Tx): PhaseOf<"selling"> {
   return phase;
 }
 
-/** After the Charge: the Buyout a Rent on a University offers (R52), then the Turn passing. */
+/**
+ * After the Charge: the Buyout a Rent on a University offers (R52), a Chance
+ * card's next payment, then the Turn passing.
+ */
 function afterCharge(tx: Tx, playerId: PlayerId, pending: PendingCharge): void {
   if (pending.kind === "rent" && FIELDS[pending.field]?.kind === "university") {
     offerBuyout(tx, playerId, pending.field);
   }
-  if (!tx.decided) passTurn(tx);
+  if (tx.decided) return;
+  // One of a Chance card's Player-to-Player payments: the rest follow, and the
+  // card's Turn passes only once every payment is made (another Sale may open).
+  if (pending.kind === "chanceTransfer" && !resumeTransfers(tx, pending)) return;
+  passTurn(tx);
 }
 
 /**
