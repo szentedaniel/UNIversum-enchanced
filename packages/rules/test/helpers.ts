@@ -6,6 +6,7 @@
 import { expect } from "vitest";
 import {
   apply,
+  ROUND_BONUS,
   setupGame,
   START_CASH,
   type Actor,
@@ -54,7 +55,13 @@ export function newGame(options: GameOptions = {}): GameState {
   const players = options.players ?? options.settings?.maxPlayers ?? 4;
   return setupGame({
     seats: seats(players),
-    settings: { maxPlayers: 4, minuteLimit: 50, startingCash: START_CASH, ...options.settings },
+    settings: {
+      maxPlayers: 4,
+      minuteLimit: 50,
+      startingCash: START_CASH,
+      roundBonus: ROUND_BONUS,
+      ...options.settings,
+    },
     seed: options.seed ?? SEED,
     now: options.now ?? T0,
   });

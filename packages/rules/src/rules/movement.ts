@@ -5,7 +5,6 @@
  * `moveForwardWithoutRoundBonus` skips the bonus.
  */
 import { FIELD_COUNT, type FieldId } from "#board.ts";
-import { ROUND_BONUS } from "#constants.ts";
 import type { PlayerId } from "#state.ts";
 import { emit, playerById, type Tx } from "#tx.ts";
 
@@ -21,8 +20,9 @@ export function moveForward(tx: Tx, playerId: PlayerId, steps: number): void {
   const from = playerById(tx, playerId).position;
   moveForwardWithoutRoundBonus(tx, playerId, steps);
   if (from + steps >= FIELD_COUNT) {
-    playerById(tx, playerId).cash += ROUND_BONUS;
-    emit(tx, { type: "RoundBonusPaid", player: playerId, amount: ROUND_BONUS });
+    const amount = tx.state.settings.roundBonus;
+    playerById(tx, playerId).cash += amount;
+    emit(tx, { type: "RoundBonusPaid", player: playerId, amount });
   }
 }
 

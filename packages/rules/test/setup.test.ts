@@ -48,6 +48,15 @@ describe("game setup", () => {
     },
   );
 
+  it.each([150_000, 250_000, 400_000] as const)(
+    "R10: the Room's Round bonus is kept in the settings (%i)",
+    (roundBonus) => {
+      const state = newGame({ settings: { roundBonus } });
+
+      expect(state.settings.roundBonus).toBe(roundBonus);
+    },
+  );
+
   it("R7: the server-made Player name is kept with the Seat", () => {
     const state = newGame({ players: 2 });
 
@@ -77,7 +86,7 @@ describe("game setup", () => {
         { playerId: "p1", name: { adjective: "adj0", noun: "noun0" } },
         { playerId: "p2", name: { adjective: "adj1", noun: "noun1" }, bot: true },
       ],
-      settings: { maxPlayers: 2, minuteLimit: 50, startingCash: 2_500_000 },
+      settings: { maxPlayers: 2, minuteLimit: 50, startingCash: 2_500_000, roundBonus: 250_000 },
       seed: SEED,
       now: T0,
     });

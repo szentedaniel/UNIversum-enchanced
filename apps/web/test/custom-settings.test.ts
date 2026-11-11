@@ -41,6 +41,7 @@ describe("the Lobby list's custom-settings mark", () => {
       maxPlayers: 3 as const,
       minuteLimit: 30 as const,
       startingCash: 4_000_000 as const,
+      roundBonus: 250_000 as const,
     };
     expect(customSettingsText(custom).map(plain)).toEqual([
       "3 Spieler",

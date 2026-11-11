@@ -196,6 +196,7 @@ const CUSTOM_SETTING_LINES: Record<keyof RoomSettings, (settings: RoomSettings) 
   maxPlayers: (settings) => m.rooms_setting_players({ max: settings.maxPlayers }),
   minuteLimit: (settings) => m.lobby_minute_limit({ minutes: settings.minuteLimit }),
   startingCash: (settings) => m.lobby_starting_cash({ amount: formatMoney(settings.startingCash) }),
+  roundBonus: (settings) => m.lobby_round_bonus({ amount: formatMoney(settings.roundBonus) }),
 };
 
 const isRoomSetting = (key: string): key is keyof RoomSettings => key in DEFAULT_SETTINGS;

@@ -9,7 +9,6 @@
  * `landing.ts` imports this module, so importing it back would be a cycle.
  */
 import { FIELDS, FIELD_COUNT, type FieldId } from "#board.ts";
-import { ROUND_BONUS } from "#constants.ts";
 import type { Landing } from "#rules/landing.ts";
 import type { GameState, PlayerId } from "#state.ts";
 import { decide, type Tx } from "#tx.ts";
@@ -49,7 +48,11 @@ export function erasmusRoute(state: GameState, field: FieldId): ErasmusRoute {
   const from = state.players.find((player) => player.id === state.currentPlayer)?.position ?? 0;
   const steps = (field - from + FIELD_COUNT) % FIELD_COUNT;
   const passesStart = from + steps >= FIELD_COUNT;
-  return { steps, passesStart, bonus: passesStart ? ROUND_BONUS : null };
+  return {
+    steps,
+    passesStart,
+    bonus: passesStart ? state.settings.roundBonus : null,
+  };
 }
 
 /** Landing on Erasmus: a pick when something is free or the Player's, else nothing (R64, F16). */
