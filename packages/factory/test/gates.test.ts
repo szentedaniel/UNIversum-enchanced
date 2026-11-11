@@ -238,7 +238,7 @@ describe("canAutoMerge", () => {
     ]);
   });
 
-  it("names the reviewer's one-way door or wide blast radius as the reason", () => {
+  it("names the reviewer's one-way door as the reason, and merges a wide two-way door", () => {
     const oneWay = {
       body: summaryComment({
         verdict: "pass",
@@ -259,8 +259,24 @@ describe("canAutoMerge", () => {
       }),
       createdAt: "2026-11-09T10:20:00Z",
     };
-    expect(canAutoMerge(facts({ labels: ["risk:high"], comments: [wide] })).reasons).toEqual([
-      "wide blast radius: spans two packages",
+    expect(canAutoMerge(facts({ labels: ["risk:high"], comments: [wide] }))).toEqual({
+      merge: true,
+      reasons: [],
+    });
+  });
+
+  it("keeps a risk:high whose merge danger cannot be read for a human", () => {
+    const unreadable = {
+      // A comment whose merge-danger line is missing: an older or hand-written review.
+      body: summaryComment({
+        verdict: "pass",
+        findings: [],
+        mergeDanger: { door: "two-way", blastRadius: "wide", reason: "spans two packages" },
+      }).replace(/\*\*Merge danger:\*\*.*/u, ""),
+      createdAt: "2026-11-09T10:20:00Z",
+    };
+    expect(canAutoMerge(facts({ labels: ["risk:high"], comments: [unreadable] })).reasons).toEqual([
+      "risk:high",
     ]);
   });
 
