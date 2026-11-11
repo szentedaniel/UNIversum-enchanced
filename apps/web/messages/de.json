@@ -276,5 +276,8 @@
   "erasmus_title": "Du gehst auf Erasmus.",
   "erasmus_prompt": "Wähle eine Stadt, in die du reisen möchtest.",
   "game_over_won": "Sieg",
-  "game_over_congratulations": "Herzlichen Glückwunsch!"
+  "game_over_congratulations": "Herzlichen Glückwunsch!",
+  "log_title": "Ereignisprotokoll",
+  "log_toggle": "Ereignisprotokoll",
+  "log_empty": "Noch keine Ereignisse."
 }

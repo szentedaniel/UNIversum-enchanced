@@ -7,6 +7,7 @@ import { Board } from "#board/Board.tsx";
 import { FieldCard } from "#board/FieldCard.tsx";
 import { ChanceCardOverlay } from "#components/ChanceCardOverlay.tsx";
 import { DiceOverlay } from "#components/DiceOverlay.tsx";
+import { EventLog } from "#components/EventLog.tsx";
 import { GameMenu } from "#components/GameMenu.tsx";
 import { EventToast, MinutePill } from "#components/GameHud.tsx";
 import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
@@ -122,6 +123,7 @@ export function Game() {
       >
         {rejected ? rejectionText(rejection.code) : toast?.text}
       </EventToast>
+      <EventLog />
       <GameMenu />
     </>
   );
