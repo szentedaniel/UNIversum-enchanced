@@ -1,10 +1,10 @@
 /**
  * The Event log (#182): the lines of the events the Playback has revealed so
- * far, newest last. It is client-side history — a reload or a reconnect starts
- * empty — and it appends across pushes itself, because a push replaces the
- * previous one. Each line's text is fixed when the line is appended, from the
- * push's own view and in the language active then, so a later view (whose
- * Players may have changed) never rewrites an earlier line.
+ * far, newest last. It is client-side history — a reload starts empty — and it
+ * appends across pushes itself, because a push replaces the previous one. Each
+ * line's text is fixed when the line is appended, from the push's own view and
+ * in the language active then, so a later view (whose Players may have
+ * changed) never rewrites an earlier line.
  *
  * The Playback core says how many of a push's events it has reached; this
  * module turns those events into lines once each, skipping an event whose
