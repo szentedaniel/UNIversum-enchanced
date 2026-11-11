@@ -123,11 +123,17 @@ export const CHANCE_CARDS = [
   "teachingAssistantJob",
   "examPeriod",
   "scholarshipTransfer",
+  "dormParty",
+  "thesisPrinting",
 ] as const;
 
 export type ChanceCardId = (typeof CHANCE_CARDS)[number];
 
-/** What each Chance card pays (+) or charges (−) the Player who draws it (R34). */
+/**
+ * What each Chance card pays (+) or charges (−) the Player who draws it (R34).
+ * The two Player-to-Player cards give the amount of one payment, per other
+ * Player; the drawer's total depends on how many Players are left.
+ */
 export const CHANCE_CARD_MONEY: Readonly<Record<ChanceCardId, number>> = {
   pcrTest: 0,
   scholarship: 200_000,
@@ -137,4 +143,8 @@ export const CHANCE_CARD_MONEY: Readonly<Record<ChanceCardId, number>> = {
   // Movement cards: no fixed amount (the move itself pays the Round bonus, if any).
   examPeriod: 0,
   scholarshipTransfer: 0,
+  // Dorm party: every other Player pays the drawer this much.
+  dormParty: 50_000,
+  // Thesis printing: the drawer pays every other Player this much.
+  thesisPrinting: -50_000,
 };

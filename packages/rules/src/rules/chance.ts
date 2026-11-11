@@ -13,6 +13,7 @@ import {
   type FieldId,
 } from "#board.ts";
 import { randomInt } from "#rng.ts";
+import { payTransfers } from "#rules/chance-transfer.ts";
 import { charge } from "#rules/charge.ts";
 import type { Landing } from "#rules/landing.ts";
 import { moveForward, moveForwardWithoutRoundBonus } from "#rules/movement.ts";
@@ -60,6 +61,13 @@ function stepsTo(tx: Tx, playerId: PlayerId, field: FieldId): number {
   return (field - playerById(tx, playerId).position + FIELD_COUNT) % FIELD_COUNT;
 }
 
+/** The other Players still in the game, in Seat order. */
+function othersOf(tx: Tx, playerId: PlayerId): PlayerId[] {
+  return tx.state.players
+    .filter((player) => player.id !== playerId && !player.bankrupt)
+    .map((player) => player.id);
+}
+
 /** What each card does to the Player who drew it. */
 const EFFECTS: Record<ChanceCardId, (tx: Tx, playerId: PlayerId) => void> = {
   // A flag, not a count: a second card is wasted (F23).
@@ -79,6 +87,18 @@ const EFFECTS: Record<ChanceCardId, (tx: Tx, playerId: PlayerId) => void> = {
   // The same payment as passing Start, through `moveForward` (R34, R73).
   scholarshipTransfer: (tx, playerId) => {
     moveForward(tx, playerId, stepsTo(tx, playerId, START_FIELD));
+  },
+  // Every other Player pays the drawer, each payment a Charge to the drawer (R34, R57).
+  dormParty: (tx, playerId) => {
+    const amount = CHANCE_CARD_MONEY.dormParty;
+    const payments = othersOf(tx, playerId).map((payer) => ({ payer, payee: playerId, amount }));
+    payTransfers(tx, playerId, payments);
+  },
+  // The drawer pays every other Player, each payment a Charge from the drawer (R34, R57).
+  thesisPrinting: (tx, playerId) => {
+    const amount = -CHANCE_CARD_MONEY.thesisPrinting;
+    const payments = othersOf(tx, playerId).map((payee) => ({ payer: playerId, payee, amount }));
+    payTransfers(tx, playerId, payments);
   },
 };
 
