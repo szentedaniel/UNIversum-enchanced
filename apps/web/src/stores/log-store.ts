@@ -15,7 +15,7 @@ export const logStore = createStore<LogState>(() => emptyLog);
  */
 export function syncLog(push: LogPush | null, frame: Frame | null): void {
   if (push === null || frame === null || frame.seq !== push.seq) return;
-  const next = appendRevealed(logStore.getState(), push, frame.revealed);
+  const next = appendRevealed(logStore.getState(), push, frame.eventsReached);
   if (next !== logStore.getState()) logStore.setState(next);
 }
 

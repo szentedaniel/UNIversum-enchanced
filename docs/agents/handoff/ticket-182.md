@@ -9,14 +9,14 @@ any new event line, Playback step or Game status-row touch.
 
 - **The pure module is `apps/web/src/playback/log.ts`:** `LogLine`
   (`{ seq, index, text }`), `LogState` (`{ lines, cursor }`), `emptyLog`,
-  `LOG_LIMIT = 200` and `appendRevealed(log, push, revealed)`. It reads each
+  `LOG_LIMIT = 200` and `appendRevealed(log, push, reached)`. It reads each
   event's line through `eventText(event, push.view)` from the presentation
   table, so there is no second event-to-text table; an event whose `text` is
   absent appends nothing.
 - **The store is `apps/web/src/stores/log-store.ts`:** `logStore`, `syncLog`,
   `resetLog`. It holds only the lines and the cursor; the panel subscribes to
   it.
-- **The gate is `Frame.revealed`** (`apps/web/src/playback/playback.ts`): how
+- **The gate is `Frame.eventsReached`** (`apps/web/src/playback/playback.ts`): how
   many of the push's events the Playback has reached (the timeline's
   `lastStarted` index plus one, and all of them once the Playback ends).
   `playback-store.ts`'s `publish` calls `syncLog(push, frame)` after every
@@ -41,7 +41,7 @@ any new event line, Playback step or Game status-row touch.
   latest view, whose Players may have changed. The active language at append
   time is the line's language (a language switch reloads the page, so the log
   restarts anyway).
-- **A push with no events adds no line** (its frame has `revealed: 0`), and a
+- **A push with no events adds no line** (its frame has `eventsReached: 0`), and a
   reconnect push has no events.
 - **No import cycle:** `room-store` → `log-store` → `playback/log`; the
   Playback store also imports `log-store`, and `log-store` imports neither

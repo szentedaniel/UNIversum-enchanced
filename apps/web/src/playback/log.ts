@@ -43,16 +43,16 @@ export const LOG_LIMIT = 200;
 export const emptyLog: LogState = { lines: [], cursor: null };
 
 /**
- * The log after the Playback has reached `revealed` of the push's events.
+ * The log after the Playback has reached `reached` of the push's events.
  * Reading the same push again appends nothing; a later push starts a new
  * cursor and keeps the earlier lines.
  */
-export function appendRevealed(log: LogState, push: LogPush, revealed: number): LogState {
+export function appendRevealed(log: LogState, push: LogPush, reached: number): LogState {
   const cursor = log.cursor;
   // A frame left over from a push the log has already passed adds nothing.
   if (cursor !== null && push.seq < cursor.seq) return log;
   const from = cursor !== null && cursor.seq === push.seq ? cursor.shown : 0;
-  const to = Math.min(Math.max(revealed, 0), push.events.length);
+  const to = Math.min(Math.max(reached, 0), push.events.length);
   // The same push read again, at or behind the point already read: nothing new.
   if (from >= to) {
     return cursor !== null && cursor.seq === push.seq

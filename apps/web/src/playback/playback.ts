@@ -77,7 +77,7 @@ export type Frame = {
   /** The Player whose pawn is mid-hop, for the camera to follow; else `null`. */
   walking: PlayerId | null;
   /** How many of the push's events the Playback has reached; every one once it ends. */
-  revealed: number;
+  eventsReached: number;
 };
 
 export type Playback = {
@@ -335,7 +335,7 @@ export function playbackOfPush(
         shownTurn: previousTurn === null || gateOpen || !hasPlayback ? current : previousTurn,
         pawns: pawns.pawns,
         walking: pawns.walking,
-        revealed: stepIndex === -1 ? steps.length : stepIndex + 1,
+        eventsReached: stepIndex === -1 ? steps.length : stepIndex + 1,
       };
     },
   };

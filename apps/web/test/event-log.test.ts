@@ -134,7 +134,7 @@ describe("the Event log store", () => {
 
     advanceTo(T0 + walkEnd + 20);
     expect(logStore.getState().lines.map((line) => line.index)).toEqual([0, 2]);
-    expect(playbackStore.getState().frame?.revealed).toBe(3);
+    expect(playbackStore.getState().frame?.eventsReached).toBe(3);
   });
 
   it("resets with the Room, so leaving or changing Room starts an empty log", () => {
