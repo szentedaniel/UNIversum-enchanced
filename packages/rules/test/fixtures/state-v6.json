@@ -12,7 +12,7 @@
     "maxPlayers": 4,
     "minuteLimit": 50,
     "startingCash": 2500000,
-    "turnLimitMs": 20000
+    "roundBonus": 250000
   },
   "endsAt": 1792414200000,
   "players": [

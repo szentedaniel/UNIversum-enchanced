@@ -45,6 +45,11 @@ export function offeredIntents(view: View, me: string): ClientIntent[] {
       return view.phase.fields.map((field) => ({ type: "PlaceDoubler", turn, field }));
     case "choosingErasmus":
       return view.phase.fields.map((field) => ({ type: "TravelErasmus", turn, field }));
+    case "dealAnswer":
+      return [
+        { type: "AcceptDeal", turn },
+        { type: "DeclineDeal", turn },
+      ];
     case "selling": {
       const intents: ClientIntent[] = [{ type: "AutoSell", turn }];
       const picks = view.autoSell;

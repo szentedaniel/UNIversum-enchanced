@@ -48,6 +48,7 @@ test("a password Lobby is listed with a lock, asks for its password, fills up, l
   await creator.getByLabel("Room name").fill("  Friday   game ");
   await creator.getByLabel("2", { exact: true }).check();
   await creator.getByLabel("15 minutes").check();
+  await creator.getByRole("radio", { name: /400K/ }).check();
   await creator.getByLabel("Password (optional)").fill("open sesame");
   await creator.getByRole("button", { name: "Create Room" }).click();
   await expect(creator).toHaveURL(/\/room\/[1-9]\d{5}$/);
@@ -55,6 +56,7 @@ test("a password Lobby is listed with a lock, asks for its password, fills up, l
   await expect(creator.getByRole("heading", { name: "Friday game" })).toBeVisible();
   await expect(creator.getByText("Password-protected")).toBeVisible();
   await expect(creator.getByText("Players: 1/2")).toBeVisible();
+  await expect(creator.getByText(/Round bonus:.*400,000/)).toBeVisible();
 
   // The list shows it live, with a lock.
   const tile = watcher!.getByTestId(`lobby-${code}`);

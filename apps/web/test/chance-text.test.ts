@@ -43,8 +43,28 @@ describe("a Chance card's title and text", () => {
     inLanguage("en");
     expect(chanceCardText("textbookFair").title).toBe("Textbook fair");
     expect(chanceCardText("teachingAssistantJob").title).toBe("Teaching assistant job");
+    expect(chanceCardText("examPeriod").title).toBe("Exam period");
+    expect(chanceCardText("scholarshipTransfer").title).toBe("Scholarship transfer");
     inLanguage("hu");
     expect(chanceCardText("textbookFair").title).toBe("Tankönyvvásár");
     expect(chanceCardText("teachingAssistantJob").title).toBe("Demonstrátori állás");
+    expect(chanceCardText("examPeriod").title).toBe("Vizsgaidőszak");
+    expect(chanceCardText("scholarshipTransfer").title).toBe("Ösztöndíj-átutalás");
+  });
+
+  it("explain the movement cards' Quarantine and Round bonus effects in every language", () => {
+    const effects = {
+      hu: { quarantine: "karantén", bonus: "körbónusz" },
+      en: { quarantine: "Quarantine", bonus: "Round bonus" },
+      de: { quarantine: "Quarantäne", bonus: "Rundenbonus" },
+    } as const;
+    for (const locale of LOCALES) {
+      inLanguage(locale);
+      const texts = effects[locale];
+      expect(chanceCardText("examPeriod").text).toContain(texts.quarantine);
+      expect(chanceCardText("examPeriod").text).toContain(texts.bonus);
+      expect(chanceCardText("scholarshipTransfer").text).toContain("Start");
+      expect(chanceCardText("scholarshipTransfer").text).toContain(texts.bonus);
+    }
   });
 });

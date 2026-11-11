@@ -143,6 +143,7 @@ describe("restore on boot", () => {
       maxPlayers: 3,
       minuteLimit: 15,
       startingCash: 2_500_000,
+      roundBonus: 250_000,
       turnLimitMs: 20_000,
     });
     // Held for their Guests, who have not taken them back yet (#35).
@@ -175,6 +176,7 @@ describe("restore on boot", () => {
       maxPlayers: 2,
       minuteLimit: 50,
       startingCash: DEFAULT_SETTINGS.startingCash,
+      roundBonus: DEFAULT_SETTINGS.roundBonus,
       turnLimitMs: DEFAULT_SETTINGS.turnLimitMs,
     });
   });
@@ -222,7 +224,13 @@ describe("restore on boot", () => {
     before.store.save(
       {
         code,
-        settings: { maxPlayers: 4, minuteLimit: 50, startingCash: 2_500_000, turnLimitMs: 20_000 },
+        settings: {
+          maxPlayers: 4,
+          minuteLimit: 50,
+          startingCash: 2_500_000,
+          roundBonus: 250_000,
+          turnLimitMs: 20_000,
+        },
         roomName: null,
         creatorId: null,
         password: null,
@@ -243,7 +251,7 @@ describe("restore on boot", () => {
       stateVersion: STATE_VERSION,
       turn: 2,
       actsAfter: stateV1.turnDeadline - DEADLINE_AFTER,
-      settings: { startingCash: 2_500_000, turnLimitMs: 20_000 },
+      settings: { startingCash: 2_500_000, roundBonus: 250_000, turnLimitMs: 20_000 },
     });
     expect(game?.turnDeadline).toBe(stateV1.turnDeadline);
 

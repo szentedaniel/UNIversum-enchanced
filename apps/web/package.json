@@ -32,6 +32,7 @@
     "react-dom": "catalog:",
     "react-router": "catalog:",
     "tailwind-merge": "catalog:",
+    "uqr": "catalog:",
     "zustand": "catalog:"
   },
   "devDependencies": {

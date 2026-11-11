@@ -14,10 +14,11 @@
   (`packages/rules/src/view.ts`). In all three the e2e `GameTiming.turnLimitMs`
   (`GAME_TURN_LIMIT_MS`) wins when set; `TurnClock` arms at the state's `turnDeadline`, so the
   Timeout penalty fires at the Room's deadline without further plumbing.
-- `STATE_VERSION` is 6. `MIGRATIONS[5]` in `packages/rules/src/migrate.ts` adds
+- `STATE_VERSION` is 7. `MIGRATIONS[6]` in `packages/rules/src/migrate.ts` adds
   `turnLimitMs: TURN_LIMIT_MS` to the settings; a running game's existing deadlines were counted
-  with 20 s, and its next decisions keep that length. `packages/rules/test/fixtures/state-v6.json`
-  is the generated snapshot; a later state-shape change bumps the version and adds `state-v7.json`.
+  with 20 s, and its next decisions keep that length. #186's `MIGRATIONS[5]` had already added the
+  Round bonus as version 6. `packages/rules/test/fixtures/state-v7.json` is the generated snapshot;
+  a later state-shape change bumps the version and adds `state-v8.json`.
 - `GameRoom.restore`'s `{ ...DEFAULT_SETTINGS, ...stored.settings }` defaults a stored Lobby from
   before the setting to 20 s, so no room-store migration is needed.
 - Hand-built `PublicView`/`Settings` literals in tests now need `turnLimitMs`; `newGame` in

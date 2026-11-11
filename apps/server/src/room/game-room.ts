@@ -323,11 +323,11 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     } else {
       const parsed = createOptionsSchema.safeParse(options);
       if (!parsed.success) throw refuse("MALFORMED");
-      const { roomName, password, maxPlayers, minuteLimit, startingCash, turnLimitMs } =
+      const { roomName, password, maxPlayers, minuteLimit, startingCash, roundBonus, turnLimitMs } =
         parsed.data;
       const name = checkRoomName(roomName ?? "");
       if (!name.ok) throw refuse(name.code);
-      this.settings = { maxPlayers, minuteLimit, startingCash, turnLimitMs };
+      this.settings = { maxPlayers, minuteLimit, startingCash, roundBonus, turnLimitMs };
       this.displayName = name.name;
       this.password = password ? await hashPassword(password) : null;
       this.roomId = reserveRoomCode((code) => this.store.isCodeInUse(code));
@@ -872,8 +872,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     return {
       roomName: this.displayName,
       players: this.seats.length,
-      maxPlayers: this.settings.maxPlayers,
-      minuteLimit: this.settings.minuteLimit,
+      settings: this.settings,
       hasPassword: this.password !== null,
     };
   }

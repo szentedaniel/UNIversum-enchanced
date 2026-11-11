@@ -6,6 +6,7 @@
 import { expect } from "vitest";
 import {
   apply,
+  ROUND_BONUS,
   setupGame,
   START_CASH,
   TURN_LIMIT_MS,
@@ -59,6 +60,7 @@ export function newGame(options: GameOptions = {}): GameState {
       maxPlayers: 4,
       minuteLimit: 50,
       startingCash: START_CASH,
+      roundBonus: ROUND_BONUS,
       turnLimitMs: TURN_LIMIT_MS,
       ...options.settings,
     },

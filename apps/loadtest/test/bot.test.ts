@@ -13,7 +13,13 @@ const view = (phase: View["phase"], extra: Partial<View> = {}): View => ({
   actsAfter: 0,
   turnDeadline: 1_000,
   turnTimer: { endsAt: 1_000, limitMs: 20_000 },
-  settings: { maxPlayers: 4, minuteLimit: 15, startingCash: 2_500_000, turnLimitMs: 20_000 },
+  settings: {
+    maxPlayers: 4,
+    minuteLimit: 15,
+    startingCash: 2_500_000,
+    roundBonus: 250_000,
+    turnLimitMs: 20_000,
+  },
   endsAt: 900_000,
   players: [
     {
@@ -144,6 +150,13 @@ describe("bot decisions", () => {
     expect(offeredIntents(view({ kind: "choosingErasmus", fields: [9, 22] }), "p0")).toEqual([
       { type: "TravelErasmus", turn: 12, field: 9 },
       { type: "TravelErasmus", turn: 12, field: 22 },
+    ]);
+  });
+
+  it("accepts or declines a Deal put to it", () => {
+    expect(types(offeredIntents(view({ kind: "dealAnswer" }), "p0"))).toEqual([
+      "AcceptDeal",
+      "DeclineDeal",
     ]);
   });
 

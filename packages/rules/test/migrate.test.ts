@@ -4,6 +4,7 @@ import {
   isRejection,
   migrate,
   publicView,
+  ROUND_BONUS,
   START_CASH,
   STATE_VERSION,
   SYSTEM,
@@ -16,6 +17,7 @@ import stateV3 from "./fixtures/state-v3.json" with { type: "json" };
 import stateV4 from "./fixtures/state-v4.json" with { type: "json" };
 import stateV5 from "./fixtures/state-v5.json" with { type: "json" };
 import stateV6 from "./fixtures/state-v6.json" with { type: "json" };
+import stateV7 from "./fixtures/state-v7.json" with { type: "json" };
 import { deadlineOf, newGame, roll } from "./helpers.ts";
 
 /**
@@ -35,6 +37,7 @@ const fixtures: { version: number; state: unknown }[] = [
   { version: 4, state: stateV4 },
   { version: 5, state: stateV5 },
   { version: 6, state: stateV6 },
+  { version: 7, state: stateV7 },
 ];
 
 /** The keys of an object, and of its first array item or nested object, as paths. */
@@ -81,6 +84,12 @@ describe("state migrations", () => {
   it("a state stored before the starting cash setting loads with 2,500,000 (story 14)", () => {
     for (const { state } of fixtures.filter((f) => f.version < STATE_VERSION)) {
       expect(migrate(state).settings.startingCash).toBe(START_CASH);
+    }
+  });
+
+  it("a state stored before the Round bonus setting loads with 250,000 (story 14)", () => {
+    for (const { state } of fixtures.filter((f) => f.version < STATE_VERSION)) {
+      expect(migrate(state).settings.roundBonus).toBe(ROUND_BONUS);
     }
   });
 

@@ -3,6 +3,7 @@ import {
   MINUTE_LIMITS,
   PASSWORD_MAX_BYTES,
   PLAYER_COUNTS,
+  ROUND_BONUSES,
   STARTING_CASHES,
   TURN_LIMITS,
   utf8Length,
@@ -33,6 +34,9 @@ export function CreateRoom() {
   const [startingCash, setStartingCash] = useState<RoomSettings["startingCash"]>(
     DEFAULT_SETTINGS.startingCash,
   );
+  const [roundBonus, setRoundBonus] = useState<RoomSettings["roundBonus"]>(
+    DEFAULT_SETTINGS.roundBonus,
+  );
   const [turnLimitMs, setTurnLimitMs] = useState<RoomSettings["turnLimitMs"]>(
     DEFAULT_SETTINGS.turnLimitMs,
   );
@@ -59,6 +63,7 @@ export function CreateRoom() {
         maxPlayers,
         minuteLimit,
         startingCash,
+        roundBonus,
         turnLimitMs,
         ...(password && { password }),
       });
@@ -124,6 +129,18 @@ export function CreateRoom() {
                   onChange={() => setStartingCash(cash)}
                 >
                   {formatCompactCash(cash)}
+                </Segment>
+              ))}
+            </Segments>
+            <Segments legend={m.create_round_bonus()}>
+              {ROUND_BONUSES.map((bonus) => (
+                <Segment
+                  key={bonus}
+                  name="round-bonus"
+                  checked={roundBonus === bonus}
+                  onChange={() => setRoundBonus(bonus)}
+                >
+                  {formatCompactCash(bonus)}
                 </Segment>
               ))}
             </Segments>

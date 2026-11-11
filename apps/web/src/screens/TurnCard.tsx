@@ -6,12 +6,14 @@
  */
 import type { PhaseOf, PublicView } from "@universum/rules";
 import { FIELDS } from "@universum/rules/board";
+import { useState } from "react";
 import { useStore } from "zustand";
 import { Card } from "#components/ui/card.tsx";
 import { Button } from "#components/ui/button.tsx";
 import { sendIntent } from "#connection.ts";
 import type { OpenDecision } from "#decision/decision.ts";
 import type { TurnLabel } from "#playback/playback.ts";
+import { DealAnswerPanel, DealComposer } from "#screens/DealTray.tsx";
 import { roomStore } from "#stores/room-store.ts";
 import { fieldName, formatMoney, m, playerName } from "#text.ts";
 
@@ -21,15 +23,29 @@ type Props = {
   decision: OpenDecision | null;
   /** The held Turn label: the heading and number before the gate opens. */
   shownTurn: TurnLabel;
-  /** Another Player's Sale or pick, as the card's waiting line. */
-  waiting: "sale" | "pick" | null;
+  /** Another Player's Sale, pick or Deal answer, as the card's waiting line. */
+  waiting: "sale" | "pick" | "deal" | null;
+  /** Server clock minus this client's clock, from the push (`Push.clockOffset`). */
+  clockOffset: number;
+  /** This client's Seat: the Deal answer panel's timer shows their figure. */
+  seat: number;
 };
 
 const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
   view.players.find((player) => player.id === playerId)?.quarantineRounds ?? 0;
 
-export function TurnCard({ view, decision, shownTurn, waiting }: Props) {
+export function TurnCard({ view, decision, shownTurn, waiting, clockOffset, seat }: Props) {
   const me = useStore(roomStore, (state) => state.me);
+  // The composer belongs to one Roll or Quarantine choice: a new decision (the
+  // answer, the next Turn, a fresh deadline) leaves it closed.
+  const decisionKey =
+    decision?.kind === "roll" || decision?.kind === "quarantine"
+      ? `${view.turn}:${view.turnDeadline}`
+      : null;
+  const [composingKey, setComposingKey] = useState<string | null>(null);
+  const composing = decisionKey !== null && composingKey === decisionKey;
+  const openComposer = () => setComposingKey(decisionKey);
+  const closeComposer = () => setComposingKey(null);
   const current = view.players.find((player) => player.id === view.currentPlayer);
   const shownPlayer =
     view.players.find((player) => player.id === shownTurn.currentPlayer) ?? current;
@@ -55,42 +71,73 @@ export function TurnCard({ view, decision, shownTurn, waiting }: Props) {
           {m.pick_waiting({ name: current ? playerName(current.name) : "" })}
         </p>
       )}
-      {decision?.kind === "roll" && (
-        <Button size="lg" onClick={() => sendIntent({ type: "Roll", turn: view.turn })}>
-          {m.game_roll()}
-        </Button>
+      {waiting === "deal" && (
+        <p className="m-0 text-sm font-bold text-ink/70" data-testid="deal-waiting">
+          {m.deal_waiting({ name: current ? playerName(current.name) : "" })}
+        </p>
       )}
-      {decision?.kind === "offer" && <OfferPanel view={view} offer={decision.offer} />}
-      {decision?.kind === "quarantine" && (
-        <section className="flex flex-col gap-2" aria-label={m.field_quarantine()}>
-          <p className="m-0 text-sm font-bold text-ink/70">
-            {m.game_quarantine_rounds({ rounds: quarantineRoundsOf(view, view.currentPlayer) })}
-          </p>
-          <Button size="lg" onClick={() => sendIntent({ type: "RollForTwelve", turn: view.turn })}>
-            {m.game_roll_for_twelve()}
-          </Button>
+      {decision?.owner === "me" && decision.kind === "deal" && (
+        <DealAnswerPanel view={view} deal={decision.deal} clockOffset={clockOffset} seat={seat} />
+      )}
+      {decision?.kind === "roll" &&
+        me !== null &&
+        (composing ? (
+          <DealComposer view={view} me={me} onClose={closeComposer} />
+        ) : (
           <div className="flex flex-wrap gap-2">
-            {decision.choice.canBuyPcrTest && (
-              <Button
-                variant="plain"
-                className="flex-1"
-                onClick={() => sendIntent({ type: "BuyPcrTest", turn: view.turn })}
-              >
-                {m.game_buy_pcr_test({ price: formatMoney(decision.choice.pcrTestPrice) })}
-              </Button>
-            )}
-            {decision.choice.canUsePcrTest && (
-              <Button
-                variant="accent"
-                className="flex-1"
-                onClick={() => sendIntent({ type: "UsePcrTest", turn: view.turn })}
-              >
-                {m.game_use_pcr_test()}
-              </Button>
-            )}
+            <Button
+              size="lg"
+              className="flex-1"
+              onClick={() => sendIntent({ type: "Roll", turn: view.turn })}
+            >
+              {m.game_roll()}
+            </Button>
+            <Button variant="plain" data-testid="deal-open" onClick={openComposer}>
+              {m.deal_open()}
+            </Button>
           </div>
-        </section>
-      )}
+        ))}
+      {decision?.kind === "offer" && <OfferPanel view={view} offer={decision.offer} />}
+      {decision?.kind === "quarantine" &&
+        me !== null &&
+        (composing ? (
+          <DealComposer view={view} me={me} onClose={closeComposer} />
+        ) : (
+          <section className="flex flex-col gap-2" aria-label={m.field_quarantine()}>
+            <p className="m-0 text-sm font-bold text-ink/70">
+              {m.game_quarantine_rounds({ rounds: quarantineRoundsOf(view, view.currentPlayer) })}
+            </p>
+            <Button
+              size="lg"
+              onClick={() => sendIntent({ type: "RollForTwelve", turn: view.turn })}
+            >
+              {m.game_roll_for_twelve()}
+            </Button>
+            <div className="flex flex-wrap gap-2">
+              {decision.choice.canBuyPcrTest && (
+                <Button
+                  variant="plain"
+                  className="flex-1"
+                  onClick={() => sendIntent({ type: "BuyPcrTest", turn: view.turn })}
+                >
+                  {m.game_buy_pcr_test({ price: formatMoney(decision.choice.pcrTestPrice) })}
+                </Button>
+              )}
+              {decision.choice.canUsePcrTest && (
+                <Button
+                  variant="accent"
+                  className="flex-1"
+                  onClick={() => sendIntent({ type: "UsePcrTest", turn: view.turn })}
+                >
+                  {m.game_use_pcr_test()}
+                </Button>
+              )}
+            </div>
+            <Button variant="plain" data-testid="deal-open" onClick={openComposer}>
+              {m.deal_open()}
+            </Button>
+          </section>
+        ))}
     </Card>
   );
 }
