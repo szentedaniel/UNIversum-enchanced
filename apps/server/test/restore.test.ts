@@ -1,6 +1,11 @@
 import { MatchMakeError } from "@colyseus/sdk";
-import { matchmakeRejection, type RejectionCode } from "@universum/protocol";
-import { migrate, type GameState } from "@universum/rules";
+import {
+  DEFAULT_SETTINGS,
+  matchmakeRejection,
+  type RejectionCode,
+  type RoomSettings,
+} from "@universum/protocol";
+import { migrate, STATE_VERSION, type GameState } from "@universum/rules";
 import stateV1 from "../../../packages/rules/test/fixtures/state-v1.json" with { type: "json" };
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -134,12 +139,42 @@ describe("restore on boot", () => {
     expect(after.restored).toBe(1);
     expect(restored.code).toBe(alice.code);
     expect(restored.creatorId).toBe(aliceId);
-    expect(restored.settings).toEqual({ maxPlayers: 3, minuteLimit: 15 });
+    expect(restored.settings).toEqual({
+      maxPlayers: 3,
+      minuteLimit: 15,
+      startingCash: 2_500_000,
+    });
     // Held for their Guests, who have not taken them back yet (#35).
     expect(restored.seats.slice(0, 2)).toEqual(
       lobby.seats.map(({ playerId, name }) => ({ playerId, name, heldUntil: T0 + 60_000 })),
     );
     expect(restored.seats).toHaveLength(3);
+  });
+
+  it("a Lobby stored before the starting cash setting comes back with the default", async () => {
+    const before = await start();
+    const alice = await before.create({ maxPlayers: 2 });
+    await alice.next("lobby");
+    const [stored] = before.store.unfinished();
+    if (!stored) throw new Error("the Room was not stored");
+    before.store.save(
+      {
+        ...stored,
+        game: null,
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the settings of a Room stored before the setting existed
+        settings: { maxPlayers: 2, minuteLimit: 50 } as RoomSettings,
+      },
+      [],
+    );
+
+    const after = await restart(before, T0);
+    const carol = await after.join(alice.code);
+
+    expect((await carol.next("lobby")).settings).toEqual({
+      maxPlayers: 2,
+      minuteLimit: 50,
+      startingCash: DEFAULT_SETTINGS.startingCash,
+    });
   });
 
   it("a password Lobby comes back with its name and still asks for its password", async () => {
@@ -185,7 +220,7 @@ describe("restore on boot", () => {
     before.store.save(
       {
         code,
-        settings: { maxPlayers: 4, minuteLimit: 50 },
+        settings: { maxPlayers: 4, minuteLimit: 50, startingCash: 2_500_000 },
         roomName: null,
         creatorId: null,
         password: null,
@@ -201,17 +236,35 @@ describe("restore on boot", () => {
 
     expect(after.restored).toBe(1);
     const game = after.room(code)?.game;
-    // Migrated on boot: the deadline it had, and no wait before acting.
+    // Migrated on boot: the deadline it had, no wait before acting, and the default starting cash.
     expect(game).toMatchObject({
-      stateVersion: 2,
+      stateVersion: STATE_VERSION,
       turn: 2,
       actsAfter: stateV1.turnDeadline - DEADLINE_AFTER,
+      settings: { startingCash: 2_500_000 },
     });
     expect(game?.turnDeadline).toBe(stateV1.turnDeadline);
 
     // It plays on: the Turn times out at the deadline it kept.
     after.scheduler.advanceTo(stateV1.turnDeadline);
     expect(after.room(code)?.game).toMatchObject({ version: 3, turn: 3 });
+  });
+
+  it("a stored full Lobby restores with its Bots", async () => {
+    const before = await start();
+    const alice = await before.create({ maxPlayers: 2 });
+    alice.send({ type: "AddBot" });
+    const lobby = await alice.until("lobby", (message) => message.seats.length === 2);
+    const botSeat = lobby.seats[1]!;
+    const code = alice.code;
+
+    const after = await restart(before, T0 + 5_000);
+
+    expect(after.restored).toBe(1);
+    expect(after.room(code)?.seats.map(({ playerId, bot }) => ({ playerId, bot }))).toEqual([
+      { playerId: lobby.seats[0]?.playerId, bot: undefined },
+      { playerId: botSeat.playerId, bot: true },
+    ]);
   });
 
   it("a stored game the server can't migrate stays stored and is not restored", async () => {

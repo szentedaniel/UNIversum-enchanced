@@ -9,6 +9,7 @@
  */
 import {
   apply,
+  botIntent,
   isRejection,
   publicView,
   SYSTEM,
@@ -146,11 +147,56 @@ export function nextMove(state: GameState, pick: Pick, timeoutEvery = 8): Move |
       if (field === undefined) throw new Error("the Erasmus pick offers no Field");
       return { intent: { type: "TravelErasmus", turn, field }, now };
     }
+    case "dealAnswer":
+      return { intent: { type: pick(2) === 0 ? "AcceptDeal" : "DeclineDeal", turn }, now };
     default: {
       const unhandled: never = phase;
       throw new Error(`the driver has no move for phase ${JSON.stringify(unhandled)}`);
     }
   }
+}
+
+export type BotGameOptions = GameOptions & {
+  /** A hard cap on accepted intents, so a broken game cannot loop forever. */
+  steps?: number;
+};
+
+/**
+ * Plays one seeded game with every Decision answered by the Bot policy, with
+ * no Turn timeout: the policy must cover every Decision on its own.
+ */
+export function playBotGame(options: BotGameOptions = {}): Simulation {
+  const maxSteps = options.steps ?? 5_000;
+
+  let state = newGame({
+    players: options.players,
+    settings: options.settings,
+    seed: options.seed,
+    now: options.now ?? T0,
+  });
+  const steps: Step[] = [];
+
+  while (state.phase.kind !== "gameOver" && steps.length < maxSteps) {
+    const intent = botIntent(publicView(state));
+    if (!intent) break;
+    const now = state.actsAfter;
+    const result = apply(state, intent, { actor: state.currentPlayer, now });
+    if (isRejection(result)) {
+      throw new Error(
+        `${intent.type} on Turn ${state.turn} (${state.phase.kind}) was refused: ${result.code}`,
+      );
+    }
+    steps.push({
+      before: state,
+      after: result.state,
+      intent,
+      now,
+      events: result.events,
+    });
+    state = result.state;
+  }
+
+  return { state, steps, ended: state.phase.kind === "gameOver" };
 }
 
 /** Plays one seeded game, choosing only legal options, until it ends. */
@@ -232,6 +278,10 @@ export function ledgerOf(before: GameState, events: readonly GameEvent[]): Ledge
       case "BoughtOut":
         move(event.player, -event.price);
         move(event.owner, event.price);
+        break;
+      case "DealAccepted":
+        move(event.proposer, event.take.cash - event.give.cash);
+        move(event.recipient, event.give.cash - event.take.cash);
         break;
       case "RentPaid": {
         const paid = Math.min(event.amount, cash[event.player] ?? 0);

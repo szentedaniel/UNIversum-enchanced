@@ -106,8 +106,8 @@ export type TestHooks = {
     rejection: Rejection | null;
     push: {
       view: PublicView;
-      /** The events of the push, in order. */
-      events: { type: string }[];
+      /** The events of the push, in order. `player`: the Player an event names, when it names one. */
+      events: { type: string; player?: string }[];
       /** One board snapshot per event, in the same order (ADR-0005). */
       reveals: Reveal[];
       seq: number;

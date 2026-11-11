@@ -51,7 +51,7 @@ function newGame(players = 2): GameState {
       playerId: `p${index + 1}`,
       name: { adjective: `adj${index}`, noun: `noun${index}` },
     })),
-    settings: { maxPlayers: 4, minuteLimit: 50 },
+    settings: { maxPlayers: 4, minuteLimit: 50, startingCash: 2_500_000 },
     seed: SEED,
     now: T0,
   });

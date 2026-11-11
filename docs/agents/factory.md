@@ -26,11 +26,28 @@ lint, typecheck, vitest. Playwright and `docker compose build` run once, in CI, 
 ## Schedules
 
 GitHub starts scheduled runs late on this repository, by an hour to nine hours, and sometimes drops a
-run altogether, worst at the top of the hour. So every cron sits on an odd minute, and each nightly job
-has a backup slot later in the night. A second run must be harmless: intake and the review queue find
-nothing left, the dispatcher skips issues a run holds, the retro stops at the day's log entry, the
-maintenance pass's `weekly` job stops after a scheduled pass that succeeded this week, and the report
-edits the week's issue. A run can always be started by hand (`gh workflow run <file>`).
+run altogether, worst at the top of the hour. So the factory schedules one thing: `factory-tick.yml`
+runs every ten minutes, off the top of the hour, and dispatches every nightly or weekly job that is due
+and has not run since it fell due (`packages/factory/src/schedule/due.ts`). The schedule is Budapest
+wall time, so a DST switch needs no second slot:
+
+| Job          | Workflow                                            | Due          | Latest start |
+| ------------ | --------------------------------------------------- | ------------ | ------------ |
+| intake       | `factory-intake.yml`                                | daily 01:07  | 07:00        |
+| review queue | `factory-review.yml` (empty `pr`: drains the queue) | daily 02:23  | 07:00        |
+| retro        | `factory-retro.yml`                                 | daily 04:41  | 07:00        |
+| maintain     | `factory-maintain.yml`                              | Sunday 03:19 | Sunday 07:00 |
+| report       | `factory-report.yml`                                | Monday 06:09 | Monday 23:59 |
+
+The latest start keeps the Claude jobs inside the 01:00–07:00 night window: a tick at or after it does
+not start a missed job; the next day's due time does, so a missed night waits for the next one. The
+tick dispatches with `scheduled=true` and each workflow's run name carries `(factory tick)`; only those
+runs mark a job as done, so a manual, dry or per-pull-request run never suppresses the scheduled one,
+while a failed tick dispatch still counts and is not retried in a loop (failures stay visible in
+Actions and the weekly report). A second run must still be harmless: intake and the review queue find
+nothing left, the dispatcher skips issues a run holds, the retro stops at the day's log entry, and the
+report edits the week's issue. A run can always be started by hand (`gh workflow run <file>`), and
+`factory-dispatch.yml` keeps its own hourly cron as a backstop for a dropped event.
 
 ## Labels
 
@@ -67,8 +84,8 @@ failing pull request back to omp at most twice. The weekly `factory:report` issu
 ## Intake
 
 The owner files a one-line idea as an issue; intake turns it into work the factory can start.
-`factory-intake.yml` runs every night at 00:07 UTC, with a backup slot at 02:47 UTC (both inside the Budapest
-window) and can be dispatched by hand at any time — outside the window too:
+`factory-intake.yml` is dispatched by the tick every night at 01:07 Budapest and can be dispatched by
+hand at any time — outside the night window too:
 
 ```bash
 gh workflow run factory-intake.yml                                   # every waiting issue
@@ -76,9 +93,9 @@ gh workflow run factory-intake.yml -f issue=93                       # one issue
 gh workflow run factory-intake.yml -f dry_run=true                   # print the decisions and writes
 ```
 
-A scheduled run that starts after 07:00 Budapest does nothing (the script re-checks the window), so a
-delayed cron spends no daytime Pro usage. One run handles at most `FACTORY_INTAKE_MAX` issues per
-step (repository variable; default 3), oldest first.
+The tick only dispatches it inside the night window, and a tick-dispatched run that starts after the
+window does nothing (the script re-checks it), so a delayed start spends no daytime Pro usage. One run
+handles at most `FACTORY_INTAKE_MAX` issues per step (repository variable; default 3), oldest first.
 
 **Triage** classifies each issue into exactly one outcome, with one comment and a label:
 
@@ -200,14 +217,15 @@ them and the owner merges those pull requests.
 ## Reviewing a pull request
 
 `factory-review.yml` runs when a pull request gets `agent:review`, when the owner dispatches it by
-hand (`gh workflow run factory-review.yml -f pr=95`), and every night at 01:23 UTC (backup slot 03:53 UTC).
+hand (`gh workflow run factory-review.yml -f pr=95`), and each night when the tick dispatches it with
+no `pr` at 02:23 Budapest.
 
 1. **Queues** instead of reviewing when the Budapest clock is outside 01:00–07:00 and
    `FACTORY_DAY_REVIEWS` (a repository variable, default 2) daytime reviews already ran today. The
-   run exits 0 and leaves `agent:review` in place; the night cron dispatches one review per pull
-   request still carrying the label, so a queued review happens at night. The count comes from the
-   summary comments themselves — they open with `<!-- factory-review -->` — per Budapest calendar
-   day, and night reviews do not spend the daytime quota.
+   run exits 0 and leaves `agent:review` in place; the tick dispatches one review per pull request
+   still carrying the label, so a queued review happens at night. The count comes from the summary
+   comments themselves — they open with `<!-- factory-review -->` — per Budapest calendar day, and
+   night reviews do not spend the daytime quota.
 2. Checks out the pull request's branch, installs Claude Code 2.1.311 and the
    `mattpocock-skills@claude-plugins-official` plugin, and **fails the step unless the plugin is
    1.3.1**: that version is the pin for the `code-review` skill, so a renamed skill fails loudly
@@ -224,7 +242,7 @@ hand (`gh workflow run factory-review.yml -f pr=95`), and every night at 01:23 U
    (`gh workflow run factory-fix.yml -f pr=<n> -f reason=review`); a pass leaves the merge gate to
    decide and clears a stale `ready-for-human`.
 5. On failure, comments the reason on the pull request, removes `agent:review` and adds
-   `ready-for-human`: the night cron must not retry a broken review forever.
+   `ready-for-human`: the tick must not retry a broken review forever.
 
 Claude runs with `--permission-mode bypassPermissions` (`claudeAgent` in `src/shared/agents.ts`):
 Sandcastle's `noSandbox()` provider reports no sandbox, so it passes no permission flag, and
@@ -238,9 +256,9 @@ Two steps finish a pull request: `factory-merge.yml` merges what the gates allow
 ### The merge gate
 
 `factory-merge.yml` runs when a pull request's CI finishes **successfully**, when a review finishes
-(whichever is last decides), and by hand. A failed CI run is the fix loop's. The gate code runs from a
-**checkout of `main`**, never the pull request's copy: a PR that edits `packages/factory/` must not
-decide its own merge.
+(whichever is last decides), hourly as a backstop, and by hand. A failed CI run is the fix loop's. The
+gate code runs from a **checkout of `main`**, never the pull request's copy: a PR that edits
+`packages/factory/` must not decide its own merge.
 
 It merges with a merge commit only when every gate holds ([spec #85, Decision
 5](https://github.com/szentedaniel/UNIversum-enchanced/issues/85)):
@@ -267,6 +285,18 @@ as it is: CI ran on the pull request merged into main. Only a conflict, or main 
 pull request changes too (handoff notes aside), sends it to the fix loop first (`main-moved`). A pull
 request that is only _waiting_ — CI still running, the review not posted yet, `agent:review` queued —
 exits quietly: the next trigger decides.
+
+A `gh` read GitHub refuses for a rate limit — a 403 or 429 saying "rate limit", or a GraphQL error
+(`pr view`, `issue view`) naming one — is waited out and retried, as when many pull requests merge at
+once. The wait the refusal names (`retry-after`, or the `x-ratelimit-reset` instant from the headers
+the reads ask for with `--include`) wins; otherwise the retries take 30 s, 2 min and 5 min. The whole
+run shares one 10-minute wait budget (the job times out at 15): when a wait would pass it, the step
+exits green and comments nothing, so the pull request waits for the next merge-gate run instead of the
+owner reading "could not decide". A write is never retried — a refused write did not apply, and
+retrying a merge or a second comment can leave half a finished state behind — so a refused write also
+exits green for a later run. Every other failure still fails the step and reaches that escalation. The
+hourly `schedule` re-dispatches the gate for every open factory or Dependabot pull request, so a
+deferred one is decided without another CI or review event.
 
 A dry run prints the decision and writes nothing:
 
@@ -298,8 +328,8 @@ gh workflow run factory-fix.yml -f pr=95 -f reason=review      # ci | review | m
 
 ## The nightly retro
 
-`factory-retro.yml` runs at 03:41 UTC (inside the night window, after the review cron), again at 04:11 UTC
-as a backup that stops at the day's log entry (`hasLogFor`), and by hand.
+`factory-retro.yml` is dispatched by the tick at 04:41 Budapest, inside the night window after the
+review queue, and by hand; a second run of a day stops at the day's log entry (`hasLogFor`).
 It reads the last 24 hours of the factory's own trail — the reviewer's summaries and the fixes it
 committed, fix rounds and escalations, merge escalations, merged and blocked pull requests, red `CI`
 runs with their failed jobs, and the owner's own comments on factory issues and pull requests — then
@@ -334,10 +364,9 @@ packages/factory/src/retro/collect.ts` prints the shaped facts to stderr and wri
 
 ## The weekly report
 
-`factory-report.yml` opens the owner's weekly glance, a `factory:report` issue, every Monday at 06:00
-Europe/Budapest. GitHub's cron is UTC, so it schedules 04:09 and 05:09 UTC;
-`packages/factory/src/report/week.ts` lets through a run from 06:00 Budapest on, so a late start still
-posts and a second run edits the same issue. A manual dispatch always runs, and its `dry_run` input only prints the body.
+`factory-report.yml` opens the owner's weekly glance, a `factory:report` issue, every Monday at 06:09
+Europe/Budapest, dispatched by the tick. A repeat dispatch the same week edits the same issue; a
+manual dispatch always runs, and its `dry_run` input only prints the body.
 
 The issue is titled `Factory report: week of YYYY-MM-DD` (the Monday that started the reported week)
 and opens with `<!-- factory-report:YYYY-MM-DD -->`, so a re-run in the same week edits it instead of
@@ -391,9 +420,9 @@ changes `.github/workflows/`, a protected path, so the owner merges those.
 Three things keep it working:
 
 - **A workflow whose actor is `dependabot[bot]` gets no Actions secrets**, not even
-  `pull_request_target`. So `factory-review.yml` skips Dependabot's own label event, and the review's
-  night cron dispatches the queued review as the owner, with the Claude token. A Dependabot pull
-  request is therefore reviewed the night after it opens. CI needs no secret (keep it that way:
+  `pull_request_target`. So `factory-review.yml` skips Dependabot's own label event, and the tick's
+  nightly queue dispatch reviews it as the owner, with the Claude token. A Dependabot pull request is
+  therefore reviewed the night after it opens. CI needs no secret (keep it that way:
   check `ci.yml` before adding one).
 - **The commit check runs on the bump.** Dependabot's own subject ("Bump x from a to b") has no type
   and would be red on `check:commits`, so the config prefixes it with `build(deps)`.
@@ -404,9 +433,8 @@ ticket.
 
 ### Weekly (`factory-maintain.yml`)
 
-Sunday 02:19 UTC (03:19 or 04:19 in Budapest, inside the night window), with a backup slot at 04:49 UTC
-that the `weekly` job stops when this week's scheduled pass already succeeded, or by hand with `dry_run`.
-Three independent jobs:
+Dispatched by the tick every Sunday at 03:19 Budapest, inside the night window, or by hand with
+`dry_run`. Three independent jobs:
 
 - **Architecture**: Claude Code reads the hot spots (`git log`), `GLOSSARY.md`, `docs/adr/` and
   `CODING_STANDARDS.md`, consults the pinned plugin's `codebase-design` skill, and returns **at most
@@ -456,8 +484,8 @@ gh workflow run factory-main-watch.yml -f run_id=<failed CI run> -f dry_run=true
 ### Pausing it
 
 Every workflow is manually dispatchable with `dry_run`, so a week can be skipped without touching the
-cron. Dependabot itself is paused from the repository's **Insights → Dependency graph → Dependabot**
-page, not from a workflow.
+tick's schedule. Dependabot itself is paused from the repository's **Insights → Dependency graph →
+Dependabot** page, not from a workflow.
 
 ## Secrets
 

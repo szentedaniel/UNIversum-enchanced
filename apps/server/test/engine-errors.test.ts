@@ -163,9 +163,9 @@ describe("an engine throw at a Turn deadline", () => {
       reporter,
       log: createLogger({ level: "info", stream: logs.stream }),
     });
-    const { alice, bob, code, view } = await startedGame(server);
-    await alice.leave(); // nobody rolls for Alice: her Turn must time out
-
+    const { bob, code, view } = await startedGame(server);
+    // Alice stays connected and does not roll: her Turn runs out. (An absent
+    // Guest's Decision is the Bot's — ticket #198.)
     failing.add("TurnTimedOut");
     server.scheduler.advanceTo(view.turnDeadline);
     expect(server.room(code)?.game).toMatchObject({ version: view.version, turn: 1 });
@@ -207,8 +207,7 @@ describe("an engine throw at a Turn deadline", () => {
         },
       }),
     });
-    const { alice, bob, code, view } = await startedGame(server);
-    await alice.leave();
+    const { bob, code, view } = await startedGame(server);
 
     failWrites = true;
     server.scheduler.advanceTo(view.turnDeadline);

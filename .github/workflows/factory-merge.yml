@@ -4,6 +4,10 @@
 # with the reasons. The gate code always runs from a checkout of `main`: a pull
 # request that edits `packages/factory/` must never decide its own merge.
 #
+# A run that GitHub rate-limits out of its wait budget exits green and comments
+# nothing, so the hourly backstop re-dispatches the gate for every open factory
+# or Dependabot pull request; another event may decide one sooner.
+#
 # Labels: reads `risk:low`/`risk:high`, `agent:review`, `ready-for-human` and
 # `agent:blocked`; queues `agent:review` when the head moved after its review,
 # and adds `ready-for-human` when the gates say no. The merge closes the issue
@@ -11,7 +15,7 @@
 # dispatcher by itself.
 name: Factory Merge
 
-run-name: "Factory merge #${{ inputs.pr || github.event.workflow_run.pull_requests[0].number }}"
+run-name: "Factory merge #${{ inputs.pr || github.event.workflow_run.pull_requests[0].number || 'backstop' }}"
 
 on:
   workflow_run:
@@ -30,6 +34,10 @@ on:
         description: Print the decision without merging or labelling
         type: boolean
         default: false
+  schedule:
+    # Off the dispatcher's :13, hourly: a rate-limited gate must get a later
+    # run even when no CI or review event follows.
+    - cron: "47 * * * *"
 
 # One decision per pull request at a time; a second trigger waits, then sees
 # the first run's merge or label.
@@ -45,7 +53,7 @@ jobs:
   merge:
     # Only a CI success can merge, a failed run is the fix loop's; a push to
     # main runs CI too but has no pull request. A review run dispatched by the
-    # night cron is a workflow_dispatch, so it is let in and the resolve step
+    # nightly tick is a workflow_dispatch, so it is let in and the resolve step
     # reads the number from its run-name.
     if: |
       github.event_name == 'workflow_dispatch' ||
@@ -71,7 +79,7 @@ jobs:
             pr=$(jq -r '.workflow_run.pull_requests[0].number // empty' "$GITHUB_EVENT_PATH")
           fi
           if [ -z "$pr" ]; then
-            # `/night queue` carries no number: the cron's own run has nothing
+            # `/night queue` carries no number: the queue dispatch has nothing
             # to merge, the review runs it dispatched do.
             pr=$(jq -r '.workflow_run.display_title // ""' "$GITHUB_EVENT_PATH" \
               | grep -oE '#[0-9]+' | head -n 1 | tr -d '#' || true)
@@ -116,3 +124,25 @@ jobs:
           printf 'The merge gate could not decide this pull request.\n\n**Reason:** %s\n\n**Run:** %s\n' "$reason" "$RUN_URL" > "$body"
           gh pr comment "$PR_NUMBER" --body-file "$body" || true
           gh pr edit "$PR_NUMBER" --add-label "ready-for-human" || true
+
+  # The cron names no pull request by itself. It re-dispatches one gate run per
+  # open factory or Dependabot pull request, so a run that a rate limit left
+  # undecided gets another without a CI or review event, and each keeps its own
+  # `factory-merge-<pr>` group. A human's pull request is never dispatched.
+  backstop:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_PAT }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Re-run the gate for every open factory pull request
+        run: |
+          set -euo pipefail
+          gh pr list --state open --limit 100 --json number,headRefName \
+            --jq '.[] | select((.headRefName | startswith("agent/")) or (.headRefName | startswith("dependabot/"))) | .number' |
+            while read -r pr; do
+              gh workflow run factory-merge.yml -f "pr=$pr"
+              echo "Re-dispatched the merge gate for #$pr."
+            done

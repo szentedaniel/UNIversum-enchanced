@@ -4,6 +4,7 @@ import {
   isRejection,
   migrate,
   publicView,
+  START_CASH,
   STATE_VERSION,
   SYSTEM,
   TURN_LIMIT_MS,
@@ -11,6 +12,9 @@ import {
 } from "#index.ts";
 import stateV1 from "./fixtures/state-v1.json" with { type: "json" };
 import stateV2 from "./fixtures/state-v2.json" with { type: "json" };
+import stateV3 from "./fixtures/state-v3.json" with { type: "json" };
+import stateV4 from "./fixtures/state-v4.json" with { type: "json" };
+import stateV5 from "./fixtures/state-v5.json" with { type: "json" };
 import { deadlineOf, newGame, roll } from "./helpers.ts";
 
 /**
@@ -26,6 +30,9 @@ import { deadlineOf, newGame, roll } from "./helpers.ts";
 const fixtures: { version: number; state: unknown }[] = [
   { version: 1, state: stateV1 },
   { version: 2, state: stateV2 },
+  { version: 3, state: stateV3 },
+  { version: 4, state: stateV4 },
+  { version: 5, state: stateV5 },
 ];
 
 /** The keys of an object, and of its first array item or nested object, as paths. */
@@ -69,6 +76,12 @@ describe("state migrations", () => {
     expect(isRejection(timedOut)).toBe(false);
   });
 
+  it("a state stored before the starting cash setting loads with 2,500,000 (story 14)", () => {
+    for (const { state } of fixtures.filter((f) => f.version < STATE_VERSION)) {
+      expect(migrate(state).settings.startingCash).toBe(START_CASH);
+    }
+  });
+
   it("ADR-0004: a version-1 state keeps its deadline and needs no wait", () => {
     const stored = stateV1 as { turnDeadline: number };
     const migrated = migrate(stateV1);
@@ -90,6 +103,16 @@ describe("state migrations", () => {
     const migrated = migrate(stored);
 
     expect(migrated.actsAfter).toBe(stored.endsAt);
+  });
+
+  it("a version-2 state seats no Bots: every Player was a Guest", () => {
+    const migrated = migrate(stateV2);
+
+    expect(migrated.players.map((p) => p.bot)).toEqual(migrated.players.map(() => false));
+  });
+
+  it("spec #172: a version-2 state has no pending Deal, so its Deal slot starts empty", () => {
+    expect(migrate(stateV2).deal).toBeNull();
   });
 
   it("a state at the current version comes back unchanged", () => {

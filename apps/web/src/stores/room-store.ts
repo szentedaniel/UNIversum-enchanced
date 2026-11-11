@@ -9,6 +9,7 @@ import type { LobbyMessage, RejectionCode } from "@universum/protocol/messages";
 import type { GameEvent, PlayerId, PublicView, Reveal } from "@universum/rules";
 import { subscribeWithSelector } from "zustand/middleware";
 import { createStore } from "zustand/vanilla";
+import { resetLog } from "#stores/log-store.ts";
 
 export type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "lost";
 
@@ -111,6 +112,8 @@ export function markIntentSent(): void {
 export function reset(): void {
   seq = 0;
   roomStore.setState(initialRoomState);
+  // The Event log is client-side history: it belongs to the Room being left.
+  resetLog();
 }
 
 /**

@@ -3,6 +3,7 @@ import {
   MINUTE_LIMITS,
   PASSWORD_MAX_BYTES,
   PLAYER_COUNTS,
+  STARTING_CASHES,
   utf8Length,
   type RejectionCode,
   type RoomSettings,
@@ -16,7 +17,7 @@ import { Input } from "#components/ui/input.tsx";
 import { Label } from "#components/ui/label.tsx";
 import { createRoom, JoinError, leaveRoom } from "#connection.ts";
 import { AlertText, RejectionText, retryAtOf, useCountdown, waitLabel } from "#screens/join.tsx";
-import { m } from "#text.ts";
+import { formatCompactCash, m } from "#text.ts";
 
 /** `/create`: the Room's settings, fixed from here on (R1, R3, R11). */
 export function CreateRoom() {
@@ -27,6 +28,9 @@ export function CreateRoom() {
   );
   const [minuteLimit, setMinuteLimit] = useState<RoomSettings["minuteLimit"]>(
     DEFAULT_SETTINGS.minuteLimit,
+  );
+  const [startingCash, setStartingCash] = useState<RoomSettings["startingCash"]>(
+    DEFAULT_SETTINGS.startingCash,
   );
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -50,6 +54,7 @@ export function CreateRoom() {
         roomName,
         maxPlayers,
         minuteLimit,
+        startingCash,
         ...(password && { password }),
       });
       await navigate(`/room/${code}`);
@@ -102,6 +107,18 @@ export function CreateRoom() {
                   onChange={() => setMinuteLimit(minutes)}
                 >
                   {m.lobby_minute_limit({ minutes })}
+                </Segment>
+              ))}
+            </Segments>
+            <Segments legend={m.create_starting_cash()}>
+              {STARTING_CASHES.map((cash) => (
+                <Segment
+                  key={cash}
+                  name="starting-cash"
+                  checked={startingCash === cash}
+                  onChange={() => setStartingCash(cash)}
+                >
+                  {formatCompactCash(cash)}
                 </Segment>
               ))}
             </Segments>

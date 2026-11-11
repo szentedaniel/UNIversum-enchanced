@@ -15,6 +15,7 @@ import {
   MINUTE_LIMITS,
   PASSWORD_MAX_BYTES,
   PLAYER_COUNTS,
+  STARTING_CASHES,
   utf8Length,
   type Assert,
   type ClientIntent,
@@ -24,6 +25,22 @@ import {
 } from "#messages.ts";
 
 const turn = z.int().nonnegative();
+
+/** A Player id: what the server hands out (`newPlayerId`), never a Guest token. */
+const playerId = z.string().min(1).max(64);
+
+/** One side of a Deal: Fields on the Board, and whole forints of cash. */
+const dealSide = z.strictObject({
+  fields: z
+    .array(
+      z
+        .int()
+        .min(0)
+        .max(FIELD_COUNT - 1),
+    )
+    .max(FIELD_COUNT),
+  cash: z.int().nonnegative(),
+});
 
 const PLAYER_INTENT_SCHEMAS = [
   z.strictObject({ type: z.literal("Roll"), turn }),
@@ -64,9 +81,23 @@ const PLAYER_INTENT_SCHEMAS = [
       .min(0)
       .max(FIELD_COUNT - 1),
   }),
+  z.strictObject({
+    type: z.literal("ProposeDeal"),
+    turn,
+    recipient: playerId,
+    give: dealSide,
+    take: dealSide,
+  }),
+  z.strictObject({ type: z.literal("AcceptDeal"), turn }),
+  z.strictObject({ type: z.literal("DeclineDeal"), turn }),
 ] as const;
 
-const ROOM_INTENT_SCHEMAS = [z.strictObject({ type: z.literal("Start") })] as const;
+const ROOM_INTENT_SCHEMAS = [
+  z.strictObject({ type: z.literal("Start") }),
+  z.strictObject({ type: z.literal("AddBot") }),
+  // The public Player id a Room made: bounded, but the Room looks it up in its own Seats.
+  z.strictObject({ type: z.literal("RemoveBot"), playerId: z.string().min(1).max(64) }),
+] as const;
 
 export const playerIntentSchema = z.discriminatedUnion("type", [...PLAYER_INTENT_SCHEMAS]);
 
@@ -99,6 +130,7 @@ const guestToken = z.string().regex(GUEST_TOKEN_PATTERN);
 export const createOptionsSchema = z.object({
   maxPlayers: z.literal(PLAYER_COUNTS).default(DEFAULT_SETTINGS.maxPlayers),
   minuteLimit: z.literal(MINUTE_LIMITS).default(DEFAULT_SETTINGS.minuteLimit),
+  startingCash: z.literal(STARTING_CASHES).default(DEFAULT_SETTINGS.startingCash),
   roomName: z.string().max(ROOM_NAME_MAX_RAW_LENGTH).optional(),
   password: password.optional(),
   guestToken: guestToken.optional(),

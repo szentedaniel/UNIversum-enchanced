@@ -6,6 +6,7 @@
 import type { IntentHandlers } from "#handlers.ts";
 import { rejection } from "#rejections.ts";
 import { charge, timeoutPenaltyOf } from "#rules/charge.ts";
+import { dealAnswerTimeout } from "#rules/deal.ts";
 import { quarantineChoiceTimeout } from "#rules/quarantine-choice.ts";
 import { autoSellAndPay } from "#rules/sale.ts";
 import { passTurn } from "#rules/turn.ts";
@@ -36,6 +37,8 @@ declare module "#events.ts" {
 const TIMEOUT_OUTCOMES: Partial<Record<PhaseKind, (tx: Tx) => void>> = {
   // One Quarantine round used up, no penalty (#30).
   quarantineChoice: quarantineChoiceTimeout,
+  // The Deal counts as declined, no penalty; the proposer's decision reopens (spec #172).
+  dealAnswer: dealAnswerTimeout,
   // Auto-sell and the Charge, then the penalty (R69). No Buyout follows.
   selling(tx) {
     autoSellAndPay(tx);

@@ -13,7 +13,7 @@ const view = (phase: View["phase"], extra: Partial<View> = {}): View => ({
   actsAfter: 0,
   turnDeadline: 1_000,
   turnTimer: { endsAt: 1_000, limitMs: 20_000 },
-  settings: { maxPlayers: 4, minuteLimit: 15 },
+  settings: { maxPlayers: 4, minuteLimit: 15, startingCash: 2_500_000 },
   endsAt: 900_000,
   players: [
     {
@@ -26,11 +26,13 @@ const view = (phase: View["phase"], extra: Partial<View> = {}): View => ({
       bankrupt: false,
       quarantineRounds: null,
       hasPcrTest: false,
+      bot: false,
     },
   ],
   fields: [],
   doubler: null,
   lastChanceCard: null,
+  deal: null,
   autoSell: null,
   pickOptions: null,
   standings: null,

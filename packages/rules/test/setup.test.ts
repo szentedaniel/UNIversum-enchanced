@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FIELD_COUNT, STATE_VERSION } from "#index.ts";
-import { newGame, T0 } from "./helpers.ts";
+import { FIELD_COUNT, publicView, setupGame, STATE_VERSION } from "#index.ts";
+import { newGame, SEED, T0 } from "./helpers.ts";
 
 describe("game setup", () => {
   it("R6: turn order and Player colours follow join order (Seat i gets colour i)", () => {
@@ -33,6 +33,21 @@ describe("game setup", () => {
     }
   });
 
+  it.each([1_500_000, 2_500_000, 4_000_000] as const)(
+    "R7: every Player starts with the Room's starting cash (%i)",
+    (startingCash) => {
+      const state = newGame({ settings: { startingCash } });
+
+      expect(state.settings.startingCash).toBe(startingCash);
+      expect(state.players.map((p) => p.cash)).toEqual([
+        startingCash,
+        startingCash,
+        startingCash,
+        startingCash,
+      ]);
+    },
+  );
+
   it("R7: the server-made Player name is kept with the Seat", () => {
     const state = newGame({ players: 2 });
 
@@ -54,6 +69,22 @@ describe("game setup", () => {
     expect(state.fields).toHaveLength(32);
     expect(state.fields.every((f) => f.owner === null && f.level === 0)).toBe(true);
     expect(state.doubler).toBeNull();
+  });
+
+  it("records which Seats are Bots, and the view carries the flag", () => {
+    const state = setupGame({
+      seats: [
+        { playerId: "p1", name: { adjective: "adj0", noun: "noun0" } },
+        { playerId: "p2", name: { adjective: "adj1", noun: "noun1" }, bot: true },
+      ],
+      settings: { maxPlayers: 2, minuteLimit: 50, startingCash: 2_500_000 },
+      seed: SEED,
+      now: T0,
+    });
+
+    expect(state.players.map((p) => p.bot)).toEqual([false, true]);
+    // The Seat's Bot flag reaches every client's view, so the UI can mark it.
+    expect(publicView(state).players.map((p) => p.bot)).toEqual([false, true]);
   });
 
   it("R11: the Minute limit becomes the end time `now + minutes`", () => {

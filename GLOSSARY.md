@@ -22,12 +22,16 @@ _Avoid_: User (for in-game participants)
 A Player known only by an anonymous identity tied to their browser, with no account behind it.
 _Avoid_: Anonymous user
 
+**Bot**:
+A Player the game plays by itself, either seated in a Lobby in place of a Guest or standing in for a Guest who dropped out of a running game until they return; other Players always see that it is a Bot.
+_Avoid_: AI, computer player, NPC
+
 **Seat**:
 A Player's place in a Room, kept for them while they are disconnected so they can rejoin.
 _Avoid_: Slot
 
 **Lobby list**:
-The public list of Lobbies a Guest can join; Rooms whose game has started are not on it.
+The public list of Lobbies a Guest can join; a Room whose game has started, or whose Seats are all taken, is not on it.
 _Avoid_: Room list, server browser
 
 **Room code**:
@@ -72,6 +76,10 @@ _Avoid_: Delta, patch
 The moment the next decision opens, once the Playback before it has ended; the decision's controls and its Turn timer start there.
 _Avoid_: Playback over, unlock
 
+**Event log**:
+The list, on the Game screen, of the lines of the events the Playback has revealed so far, newest last, each line in the language active when it appeared; the client keeps it, so a reload starts it empty.
+_Avoid_: History, chat, transcript
+
 **Turn timer**:
 The countdown a Player has for one decision of their Turn, starting when the Playback before it ends.
 _Avoid_: Turn countdown
@@ -79,6 +87,10 @@ _Avoid_: Turn countdown
 **Timeout penalty**:
 The fine a Player pays when their Turn timer runs out.
 _Avoid_: Punishment
+
+**Room settings**:
+The choices a Room's creator makes when creating it, each from a fixed list: how many Seats, the Minute limit, the starting cash, the Round bonus and the Turn timer's length.
+_Avoid_: House rules, game options
 
 **Minute limit**:
 The length of a Room's game, chosen when the Room is created; it is checked at each Turn change, so the game ends after the Turn in progress.
@@ -116,7 +128,7 @@ One Player owning every University of a Group.
 One Player owning every Museum, which wins the game.
 
 **Chance card**:
-A card drawn on landing on a Chance Field, which gives or takes money or grants a PCR test.
+A card drawn on landing on a Chance Field, which gives or takes money, moves money between the Player and every other Player, moves the Player to Start or into Quarantine, or grants a PCR test.
 _Avoid_: Esély, card
 
 **Quarantine**:
@@ -152,6 +164,10 @@ _Avoid_: toBuy, price
 **Rent**:
 What a Player pays the owner on landing on a Field another Player owns.
 _Avoid_: Tuition, Tandíj
+
+**Deal**:
+An exchange of Fields and cash between two Players that one proposes before their Roll or Quarantine choice and the other accepts or declines; Fields change hands at their current Level, and neither side's cash may fall short.
+_Avoid_: Trade, Offer (an Offer is the Decision to buy)
 
 **Buyout**:
 Buying another Player's University from them at its current Level.

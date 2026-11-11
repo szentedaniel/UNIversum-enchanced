@@ -97,13 +97,13 @@ export const splitCandidates = (
   );
 
 /**
- * Whether this run may spend Claude usage. The cron must stay inside the night
- * window; the owner's own dispatch always runs, day or night.
+ * Whether a tick-dispatched run may spend Claude usage. It must stay inside
+ * the night window; the owner's own dispatch always runs, day or night.
  */
 export const intakeAllowed = ({
-  eventName,
+  scheduled,
   at,
 }: {
-  readonly eventName: string;
+  readonly scheduled: boolean;
   readonly at: Date;
-}): boolean => eventName !== "schedule" || isNightWindow(at);
+}): boolean => !scheduled || isNightWindow(at);

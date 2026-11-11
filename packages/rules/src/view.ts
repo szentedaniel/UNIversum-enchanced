@@ -88,6 +88,7 @@ export function publicView(state: GameState, timing: ViewTiming = {}): PublicVie
     settings: state.settings,
     endsAt: state.endsAt,
     lastChanceCard: state.lastChanceCard,
+    deal: state.deal,
     autoSell:
       state.phase.kind === "selling"
         ? autoSellPicks(state, state.currentPlayer, state.phase.shortfall)

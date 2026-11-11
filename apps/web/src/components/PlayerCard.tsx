@@ -4,6 +4,7 @@
  * chip on phone (the active one gets the ring).
  */
 import type { ReactNode } from "react";
+import { BotMark } from "#components/BotMark.tsx";
 import { PlayerToken } from "#components/PlayerToken.tsx";
 import { TimerRing } from "#components/TimerRing.tsx";
 import { cn } from "#lib/utils.ts";
@@ -12,6 +13,8 @@ import { m } from "#text.ts";
 export type PlayerSummary = {
   seat: number;
   name: string;
+  /** The Room plays this Player (a Bot, ticket #196); the card says so. */
+  bot: boolean;
   /** Formatted cash. */
   cash: string;
   fields: number;
@@ -25,7 +28,7 @@ export type PlayerSummary = {
 };
 
 export function PlayerCard({ player, className }: { player: PlayerSummary; className?: string }) {
-  const { seat, name, cash, fields, current, you, bankrupt, status, ring } = player;
+  const { seat, name, bot, cash, fields, current, you, bankrupt, status, ring } = player;
   return (
     <li
       data-testid="player-card"
@@ -43,6 +46,7 @@ export function PlayerCard({ player, className }: { player: PlayerSummary; class
         <div className="flex items-center gap-1.5">
           <PlayerToken seat={seat} size={18} />
           <span className="truncate font-black">{name}</span>
+          {bot && <BotMark />}
         </div>
         <div className="tnum truncate text-xl leading-tight font-black" aria-label={m.game_cash()}>
           {cash}
@@ -58,7 +62,7 @@ export function PlayerCard({ player, className }: { player: PlayerSummary; class
 }
 
 export function PlayerChip({ player, className }: { player: PlayerSummary; className?: string }) {
-  const { seat, name, cash, current, you, bankrupt, status, ring } = player;
+  const { seat, name, bot, cash, current, you, bankrupt, status, ring } = player;
   return (
     <li
       data-testid="player-chip"
@@ -74,6 +78,7 @@ export function PlayerChip({ player, className }: { player: PlayerSummary; class
       <TimerRing seat={seat} size={40} ring={current ? ring : null} />
       <div className="mt-0.5 flex max-w-full items-center gap-0.5">
         <PlayerToken seat={seat} size={14} />
+        {bot && <BotMark className="px-1 text-[9px] leading-tight" />}
         <span className={cn("truncate text-[11px] font-extrabold", you && "underline")}>
           {name}
         </span>

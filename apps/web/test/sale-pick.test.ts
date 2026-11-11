@@ -29,6 +29,7 @@ const playerState = (id: string, seat: number): PlayerState => ({
   bankrupt: false,
   quarantineRounds: null,
   hasPcrTest: false,
+  bot: false,
 });
 
 const SELLING: Phase = {
@@ -61,7 +62,7 @@ function viewWith(phase: Phase, autoSell: number[] | null = null): PublicView {
     actsAfter: 40_000,
     turnDeadline: 50_000,
     turnTimer: { endsAt: 47_000, limitMs: 20_000 },
-    settings: { maxPlayers: 2, minuteLimit: 15 },
+    settings: { maxPlayers: 2, minuteLimit: 15, startingCash: 2_500_000 },
     endsAt: 0,
     players: [
       { ...playerState("p1", 0), wealth: 100_000 },
@@ -70,6 +71,7 @@ function viewWith(phase: Phase, autoSell: number[] | null = null): PublicView {
     fields,
     doubler: null,
     lastChanceCard: null,
+    deal: null,
     autoSell,
     pickOptions: null,
     standings: null,

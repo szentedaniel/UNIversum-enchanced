@@ -1,5 +1,5 @@
 import { serverNow, type RejectionCode } from "@universum/protocol/messages";
-import { Check, Copy, Lock, LockOpen, Timer, Users } from "lucide-react";
+import { Check, Copy, Lock, LockOpen, Timer, Users, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useStore } from "zustand";
@@ -10,7 +10,7 @@ import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
 import { PasswordForm, RejectionText, retryAtOf, useCountdown, useJoin } from "#screens/join.tsx";
 import { roomStore } from "#stores/room-store.ts";
-import { m, playerName, roomNameText } from "#text.ts";
+import { formatMoney, m, playerName, roomNameText } from "#text.ts";
 
 const COPIED_MS = 1500;
 
@@ -134,7 +134,7 @@ export function Lobby() {
     );
   }
 
-  const { maxPlayers, minuteLimit } = lobby.settings;
+  const { maxPlayers, minuteLimit, startingCash } = lobby.settings;
   const full = lobby.seats.length === maxPlayers;
   const open = Array.from({ length: maxPlayers - lobby.seats.length }, (_, i) => i);
 
@@ -158,6 +158,12 @@ export function Lobby() {
               you={seat.playerId === me}
               // The creator's Seat, wherever it is after frees and re-joins.
               creator={seat.playerId === lobby.creatorId}
+              bot={seat.bot === true}
+              onRemoveBot={
+                seat.bot === true
+                  ? () => sendIntent({ type: "RemoveBot", playerId: seat.playerId })
+                  : undefined
+              }
               held={
                 seat.heldUntil === undefined ? undefined : (
                   <HeldCountdown until={seat.heldUntil} clockOffset={clockOffset} />
@@ -166,10 +172,15 @@ export function Lobby() {
             />
           ))}
           {open.map((i) => (
-            <SeatCard key={`open-${i}`} open />
+            // A Bot takes the next empty Seat, so only the first open card offers it.
+            <SeatCard
+              key={`open-${i}`}
+              open
+              onAddBot={i === 0 ? () => sendIntent({ type: "AddBot" }) : undefined}
+            />
           ))}
         </ul>
-        <ul className="sticker m-0 mt-8 grid list-none grid-cols-1 gap-4 rounded-ui bg-card p-4 text-card-foreground sm:grid-cols-3">
+        <ul className="sticker m-0 mt-8 grid list-none grid-cols-1 gap-4 rounded-ui bg-card p-4 text-card-foreground sm:grid-cols-2 lg:grid-cols-4">
           <li className="flex items-center gap-2">
             <Users size={22} strokeWidth={2.5} aria-hidden />
             <span className="text-lg font-black">
@@ -180,6 +191,12 @@ export function Lobby() {
             <Timer size={22} strokeWidth={2.5} aria-hidden />
             <span className="text-lg font-black">
               {m.lobby_minute_limit({ minutes: minuteLimit })}
+            </span>
+          </li>
+          <li className="flex items-center gap-2">
+            <Wallet size={22} strokeWidth={2.5} aria-hidden />
+            <span className="text-lg font-black">
+              {m.lobby_starting_cash({ amount: formatMoney(startingCash) })}
             </span>
           </li>
           <li className="flex items-center gap-2">

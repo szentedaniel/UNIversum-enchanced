@@ -49,10 +49,13 @@ export const MESSAGE = {
 // ---------------------------------------------------------------- intents
 
 /** Intents the Room handles itself, outside the rules engine. */
-export type RoomIntent = {
+export type RoomIntent =
   /** Start the game; any Player may, once every Seat is taken (R5). */
-  type: "Start";
-};
+  | { type: "Start" }
+  /** A Bot on the next empty Seat; any seated Player may (ticket #196). */
+  | { type: "AddBot" }
+  /** Take a Bot off its Seat; any seated Player may (ticket #196). */
+  | { type: "RemoveBot"; playerId: PlayerId };
 
 /** Everything a client may send as an `intent` message. */
 export type ClientIntent = RoomIntent | PlayerIntent;
@@ -64,7 +67,12 @@ export type WelcomeMessage = {
   playerId: PlayerId;
 };
 
-export type LobbySeat = { playerId: PlayerId; name: PlayerName };
+export type LobbySeat = {
+  playerId: PlayerId;
+  name: PlayerName;
+  /** True for a Bot (ticket #196); absent on a Guest's Seat. */
+  bot?: boolean;
+};
 
 /**
  * A Lobby Seat as the Lobby shows it. `heldUntil`: its Player dropped, and the
@@ -126,13 +134,21 @@ export function serverNow(clockOffset: number, clientNow = Date.now()): number {
 
 export const PLAYER_COUNTS = [2, 3, 4] as const;
 export const MINUTE_LIMITS = [15, 30, 50] as const;
+/** The cash every Player may start with (R7); the middle one is today's value. */
+export const STARTING_CASHES = [1_500_000, 2_500_000, 4_000_000] as const;
 
 export type RoomSettings = {
   maxPlayers: (typeof PLAYER_COUNTS)[number];
   minuteLimit: (typeof MINUTE_LIMITS)[number];
+  /** The cash every Player starts the game with (R7). */
+  startingCash: (typeof STARTING_CASHES)[number];
 };
 
-export const DEFAULT_SETTINGS: RoomSettings = { maxPlayers: 4, minuteLimit: 50 };
+export const DEFAULT_SETTINGS: RoomSettings = {
+  maxPlayers: 4,
+  minuteLimit: 50,
+  startingCash: 2_500_000,
+};
 
 /** A password is at most this many UTF-8 bytes. */
 export const PASSWORD_MAX_BYTES = 64;
@@ -239,6 +255,11 @@ export const REJECTION_CODES = [
   "NOT_OFFERED",
   "PLAYBACK_RUNNING",
   "SHORTFALL_NOT_COVERED",
+  "DEAL_RECIPIENT_INVALID",
+  "DEAL_FIELD_NOT_OWNED",
+  "DEAL_FIELD_REPEATED",
+  "DEAL_EMPTY",
+  "DEAL_CASH_NOT_COVERED",
   // Room server
   "MALFORMED",
   "INTERNAL",

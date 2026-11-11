@@ -63,8 +63,9 @@ describe("the server holds the next decision until the Playback ends", () => {
   });
 
   it("ADR-0004: the timeout wake-up fires at the later deadline, not before", async () => {
-    const { alice, bob, ids, view } = await startedGame();
-    await alice.leave(); // nobody rolls for Alice: her Turn must time out
+    // Alice stays connected and never rolls: her Turn runs out. (An absent
+    // Guest's Decision is the Bot's — ticket #198.)
+    const { bob, ids, view } = await startedGame();
 
     server.scheduler.advanceTo(view.turnDeadline - 1);
     expect(bob.pending("game")).toEqual([]);

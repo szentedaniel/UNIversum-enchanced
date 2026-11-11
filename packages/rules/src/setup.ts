@@ -1,5 +1,5 @@
 import { FIELDS } from "#board.ts";
-import { MINUTE_MS, START_CASH, turnDeadlineFrom } from "#constants.ts";
+import { MINUTE_MS, turnDeadlineFrom } from "#constants.ts";
 import { rngFromSeed } from "#rng.ts";
 import { awaitingRoll } from "#rules/turn.ts";
 import { STATE_VERSION, type GameState, type Seat, type Seed, type Settings } from "#state.ts";
@@ -39,13 +39,18 @@ export function setupGame({
     phase: awaitingRoll(),
     actsAfter: now,
     turnDeadline: turnDeadlineFrom(now, turnLimitMs),
-    settings: { maxPlayers: settings.maxPlayers, minuteLimit: settings.minuteLimit },
+    settings: {
+      maxPlayers: settings.maxPlayers,
+      minuteLimit: settings.minuteLimit,
+      startingCash: settings.startingCash,
+    },
     endsAt: now + settings.minuteLimit * minuteMs,
     players: seats.map((seat, index) => ({
       id: seat.playerId,
       name: { adjective: seat.name.adjective, noun: seat.name.noun },
       seat: index,
-      cash: START_CASH,
+      bot: seat.bot === true,
+      cash: settings.startingCash,
       position: 0,
       bankrupt: false,
       quarantineRounds: null,
@@ -54,6 +59,7 @@ export function setupGame({
     fields: FIELDS.map(() => ({ owner: null, level: 0 })),
     doubler: null,
     lastChanceCard: null,
+    deal: null,
     rng: rngFromSeed(seed),
   };
 }

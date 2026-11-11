@@ -114,6 +114,11 @@ const REJECTIONS: Record<RejectionCode, Message> = {
   NOT_OFFERED: m.rejection_not_offered,
   PLAYBACK_RUNNING: m.rejection_playback_running,
   SHORTFALL_NOT_COVERED: m.rejection_shortfall_not_covered,
+  DEAL_RECIPIENT_INVALID: m.rejection_deal_recipient_invalid,
+  DEAL_FIELD_NOT_OWNED: m.rejection_deal_field_not_owned,
+  DEAL_FIELD_REPEATED: m.rejection_deal_field_repeated,
+  DEAL_EMPTY: m.rejection_deal_empty,
+  DEAL_CASH_NOT_COVERED: m.rejection_deal_cash_not_covered,
   MALFORMED: m.rejection_malformed,
   INTERNAL: m.rejection_internal,
   ROOM_NOT_FOUND: m.rejection_room_not_found,
@@ -138,6 +143,18 @@ const CHANCE_CARD_TEXTS: Record<ChanceCardId, { title: Message; text: Message }>
   failedExams: {
     title: m.chance_failed_exams_title,
     text: () => m.chance_failed_exams_text({ amount: formatMoney(-CHANCE_CARD_MONEY.failedExams) }),
+  },
+  textbookFair: {
+    title: m.chance_textbook_fair_title,
+    text: () =>
+      m.chance_textbook_fair_text({ amount: formatMoney(-CHANCE_CARD_MONEY.textbookFair) }),
+  },
+  teachingAssistantJob: {
+    title: m.chance_teaching_assistant_job_title,
+    text: () =>
+      m.chance_teaching_assistant_job_text({
+        amount: formatMoney(CHANCE_CARD_MONEY.teachingAssistantJob),
+      }),
   },
 };
 
@@ -172,6 +189,16 @@ export const formatCompactMoney = (amount: number): string =>
   new Intl.NumberFormat(getLocale(), { notation: "compact", maximumFractionDigits: 1 }).format(
     amount,
   );
+
+/** Short money with its currency, for the Create Room segments: three choices fit one row. */
+export const formatCompactCash = (amount: number): string =>
+  new Intl.NumberFormat(getLocale(), {
+    style: "currency",
+    currency: "HUF",
+    currencyDisplay: "narrowSymbol",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(amount);
 
 const FIELD_KINDS: Record<FieldKind, Message> = {
   start: m.field_kind_start,
