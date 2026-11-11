@@ -6,7 +6,7 @@ import {
   type RejectionCode,
 } from "@universum/protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { BOT_DELAY_MS } from "#room/game-driver.ts";
+import { BOT_DELAY_MS, BOT_ONLY_RETENTION_MS } from "#room/game-driver.ts";
 import {
   eventually,
   startTestServer,
@@ -317,5 +317,85 @@ describe("a Bot stands in for a dropped Guest", () => {
 
     expect(played.events[0]).toMatchObject({ type: "DiceRolled", player: aliceId });
     expect(played.events.some((event) => event.type === "TimedOut")).toBe(false);
+  });
+});
+
+/**
+ * A started 2-Seat game with one Guest and one Bot, stopped at the Bot's open
+ * Decision: the Guest has rolled and turned down any Offer.
+ */
+async function botTurnGame() {
+  const alice = await server.create({ maxPlayers: 2 });
+  await alice.next("welcome");
+  await alice.next("lobby");
+  alice.send({ type: "AddBot" });
+  const lobby = await alice.until("lobby", (message) => message.seats.length === 2);
+  const bot = lobby.seats[1]!;
+  const seats = lobby.seats.map(({ playerId }) => playerId);
+  alice.send({ type: "Start" });
+  const started = withDeadline(await alice.next("game"));
+  server.scheduler.advanceTo(started.actsAfter);
+  alice.send({ type: "Roll", turn: started.turn });
+  let push = await alice.next("game");
+  if (push.view.phase.kind === "offer") {
+    server.scheduler.advanceTo(push.view.actsAfter);
+    alice.send({ type: "DeclineOffer", turn: push.view.turn });
+    push = await alice.next("game");
+  }
+  return { alice, bot, seats, code: alice.code, botTurn: push.view };
+}
+
+describe("a game with only Bots left", () => {
+  it("plays no Bot intent and ends after the Seat retention, with no recorded result", async () => {
+    const { alice, bot, seats, code, botTurn } = await botTurnGame();
+    await alice.drop();
+    await dropped(code);
+    const droppedAt = server.scheduler.now();
+
+    // No Guest is connected: the seated Bot's Decision goes unanswered.
+    server.scheduler.advanceTo(botTurn.actsAfter + BOT_DELAY_MS);
+    const quiet = server.room(code)?.game;
+    expect(quiet?.version).toBe(botTurn.version);
+    expect(quiet?.currentPlayer).toBe(bot.playerId);
+    expect(quiet?.players.map(({ id, position }) => ({ id, position }))).toEqual(
+      botTurn.players.map(({ id, position }) => ({ id, position })),
+    );
+
+    // The Seat retention runs out: the game ends where it stood, no winner recorded.
+    server.scheduler.advanceTo(droppedAt + BOT_ONLY_RETENTION_MS);
+    const room = server.room(code);
+    expect(room?.endedAt).toBe(droppedAt + BOT_ONLY_RETENTION_MS);
+    expect(room?.game?.phase.kind).not.toBe("gameOver");
+    // Its Seats stayed with it until then.
+    expect(room?.seats.map(({ playerId }) => playerId)).toEqual(seats);
+    expect(server.store.ended()).toContainEqual({
+      code,
+      endedAt: droppedAt + BOT_ONLY_RETENTION_MS,
+    });
+    const events = server.store.events(code).flatMap((entry) => entry.events);
+    expect(events.some((event) => event.type === "GameEnded")).toBe(false);
+    expect(
+      events.some((event) => event.type === "DiceRolled" && event.player === bot.playerId),
+    ).toBe(false);
+  });
+
+  it("a Guest who comes back before the retention resumes the game and its Bots", async () => {
+    const { alice, bot, code, botTurn } = await botTurnGame();
+    await alice.drop();
+    await dropped(code);
+    const droppedAt = server.scheduler.now();
+
+    const back = await server.reconnect(alice);
+    await back.next("game");
+
+    // The retention never ends the game once a Guest is back.
+    server.scheduler.advanceTo(droppedAt + BOT_ONLY_RETENTION_MS);
+    expect(server.room(code)?.endedAt).toBeNull();
+
+    // ...and the Bot answers its open Decision again, through the rules engine.
+    const played = await back.next("game");
+    expect(played.events[0]).toMatchObject({ type: "DiceRolled", player: bot.playerId });
+    expect(played.events.some((event) => event.type === "TimedOut")).toBe(false);
+    expect(played.view.version).toBe(botTurn.version + 1);
   });
 });
