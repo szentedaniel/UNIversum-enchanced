@@ -42,7 +42,7 @@ describe("the Lobby list", () => {
       code: alice.code,
       roomName: "Friday game",
       players: 1,
-      settings: { maxPlayers: 3, minuteLimit: 30, startingCash: 2_500_000 },
+      settings: { maxPlayers: 3, minuteLimit: 30, startingCash: 2_500_000, roundBonus: 250_000 },
       hasPassword: false,
     });
   });
@@ -58,11 +58,13 @@ describe("the Lobby list", () => {
       maxPlayers: 4,
       minuteLimit: 50,
       startingCash: 2_500_000,
+      roundBonus: 250_000,
     });
     expect(list.get(custom.code)?.settings).toEqual({
       maxPlayers: 4,
       minuteLimit: 50,
       startingCash: 1_500_000,
+      roundBonus: 250_000,
     });
   });
 
