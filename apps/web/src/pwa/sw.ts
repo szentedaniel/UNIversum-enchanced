@@ -51,13 +51,19 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(route === "cache-first-hashed" ? cacheFirst(event) : networkFirst(event));
 });
 
+/** Whether `response` is an HTML document, the only thing the shell cache may hold. */
+function isHtml(response: Response): boolean {
+  return response.headers.get("Content-Type")?.startsWith("text/html") ?? false;
+}
+
 /** Immutable hashed assets: the cache answers, the network only fills it. */
 async function cacheFirst(event: FetchEvent): Promise<Response> {
   const cache = await caches.open(CACHE);
   const cached = await cache.match(event.request, { ignoreSearch: true });
   if (cached) return cached;
   const response = await fetch(event.request);
-  if (response.ok)
+  // A missing asset is answered with the SPA shell (HTML, 200): never pin that.
+  if (response.ok && !isHtml(response))
     event.waitUntil(cache.put(event.request, response.clone()).catch(() => undefined));
   return response;
 }
@@ -66,7 +72,8 @@ async function cacheFirst(event: FetchEvent): Promise<Response> {
 async function networkFirst(event: FetchEvent): Promise<Response> {
   try {
     const response = await fetch(event.request);
-    if (response.ok) {
+    // Only an HTML page is a shell: a navigation to the manifest or an icon is not.
+    if (response.ok && isHtml(response)) {
       const cache = await caches.open(CACHE);
       event.waitUntil(cache.put(SHELL, response.clone()).catch(() => undefined));
     }
