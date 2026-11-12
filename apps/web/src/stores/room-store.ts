@@ -20,6 +20,11 @@ export type Push = {
   events: readonly GameEvent[];
   /** One board snapshot per event, in the same order (ADR-0005); empty without events. */
   reveals: readonly Reveal[];
+  /**
+   * The Player ids that have agreed to a rematch, in Seat order. Present only
+   * once the game has ended; absent while it runs (ticket #223).
+   */
+  rematch?: readonly PlayerId[];
   /** Grows with every push, so a push with no events still differs from the last. */
   seq: number;
   /** The server's clock minus this client's, when the push arrived (for the Turn timer). */
@@ -75,6 +80,8 @@ type ReceivedPush = {
   view: PublicView;
   events: readonly GameEvent[];
   reveals: readonly Reveal[];
+  /** The rematch votes, present only once the game has ended (ticket #223). */
+  rematch?: readonly PlayerId[];
   now: number;
 };
 
@@ -84,13 +91,21 @@ type ReceivedPush = {
  * clock offset. An ignored push spends no `seq`.
  */
 export function receivePush(
-  { view, events, reveals, now }: ReceivedPush,
+  { view, events, reveals, rematch, now }: ReceivedPush,
   receivedAt: number,
 ): void {
   const last = roomStore.getState().push;
   if (last && view.version < last.view.version) return;
   roomStore.setState({
-    push: { view, events, reveals, seq: ++seq, clockOffset: now - receivedAt, receivedAt },
+    push: {
+      view,
+      events,
+      reveals,
+      rematch,
+      seq: ++seq,
+      clockOffset: now - receivedAt,
+      receivedAt,
+    },
   });
 }
 
