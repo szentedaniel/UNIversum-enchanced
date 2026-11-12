@@ -56,6 +56,17 @@
 		file_server
 	}
 
+	# The deployed release (spec: Mobile polish and installable PWA, Decision 3):
+	# the client compares it with its own CLIENT_RELEASE to offer a refresh. It
+	# must never be cached, or the prompt would miss a deploy; its own handle
+	# keeps it out of the SPA fallback.
+	handle /version.json {
+		root * /srv
+		header Content-Type "application/json"
+		header Cache-Control "no-cache"
+		file_server
+	}
+
 	# Source maps are never served (matched before the SPA fallback rewrites the path).
 	@sourcemaps path *.map
 	handle @sourcemaps {
@@ -68,7 +79,7 @@
 		# this matcher, so they keep the cache policy chosen there.
 		@hashed path /assets/*
 		header @hashed Cache-Control "public, max-age=31536000, immutable"
-		@shell not path /assets/* /icons/* /manifest.webmanifest /sw.js
+		@shell not path /assets/* /icons/* /manifest.webmanifest /sw.js /version.json
 		header @shell Cache-Control "no-cache"
 
 		root * /srv

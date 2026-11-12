@@ -53,6 +53,7 @@ describe("routeOf", () => {
     expect(route("/icons/icon-192.png")).toBe("never");
     expect(route("/index.html", { mode: "cors" })).toBe("never");
     expect(route("/sw.js")).toBe("never");
+    expect(route("/version.json")).toBe("never");
   });
 
   it("matches the server paths exactly, not their prefixes", () => {

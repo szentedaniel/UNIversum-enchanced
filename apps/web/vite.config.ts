@@ -41,6 +41,27 @@ function pwaAssets(): Plugin {
   };
 }
 
+/**
+ * Emits `/version.json` with the build's release (#261): the deployment and a
+ * loaded tab compare releases and offer a refresh. `RELEASE` is the same SHA
+ * the server reports; a local build writes `dev`, which the client never
+ * treats as a newer release. Build only: dev serves no file, and its release
+ * is `dev` anyway.
+ */
+function releaseVersion(release: string): Plugin {
+  return {
+    name: "universum:release-version",
+    apply: "build",
+    generateBundle() {
+      this.emitFile({
+        type: "asset",
+        fileName: "version.json",
+        source: `${JSON.stringify({ release })}\n`,
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   // Settings come from the root .env (see .env.example) or the environment.
   const env = { ...loadEnv(mode, repoRoot, ""), ...process.env };
@@ -62,6 +83,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       boardAtlas(),
       pwaAssets(),
+      releaseVersion(env["RELEASE"] || "dev"),
       react(),
       tailwindcss(),
       // Same options as the `paraglide` script in package.json (run on install,

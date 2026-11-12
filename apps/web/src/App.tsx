@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { BrowserRouter, Route, Routes } from "react-router";
+import { UpdatePrompt } from "#components/UpdatePrompt.tsx";
 import { fieldVisible } from "#lib/safe-area.ts";
 import { CreateRoom } from "#screens/CreateRoom.tsx";
 import { Game } from "#screens/Game.tsx";
@@ -39,6 +40,7 @@ export function App() {
         <Route path="/room/:code" element={<Lobby />} />
         <Route path="/game/:code" element={<Game />} />
       </Routes>
+      <UpdatePrompt />
     </BrowserRouter>
   );
 }
