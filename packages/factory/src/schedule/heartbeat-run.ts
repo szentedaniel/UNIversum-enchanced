@@ -9,6 +9,7 @@
 import {
   LIVE_STATUSES,
   liveHeartbeat,
+  messageOf,
   runHeartbeat,
   type LiveRun,
   type LiveStatus,
@@ -77,6 +78,6 @@ if (import.meta.main) {
   try {
     await main();
   } catch (error) {
-    fail(error instanceof Error ? error.message : String(error));
+    fail(messageOf(error));
   }
 }

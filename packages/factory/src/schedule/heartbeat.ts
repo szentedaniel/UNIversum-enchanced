@@ -50,7 +50,7 @@ export interface TickResult {
   readonly errors: readonly string[];
 }
 
-const messageOf = (error: unknown): string =>
+export const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
 /**
