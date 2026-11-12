@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Camera } from "#board/camera.ts";
+import { toScreen, type Camera } from "#board/camera.ts";
 import {
   attachGestures,
   TAP_MS,
@@ -17,6 +17,18 @@ import type { Point } from "#board/layout.ts";
 type Input = PointerEvent | WheelEvent;
 type Listener = (event: Input) => void;
 
+/**
+ * The event shape the gestures read. Node has no PointerEvent or WheelEvent,
+ * so the stand-ins carry only these fields and are cast at this one boundary.
+ */
+const eventOf = (
+  input: Record<string, unknown> & { type: string },
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- a DOM event stand-in
+): Input => input as unknown as Input;
+
+const pointer = (type: string, id: number, at: Point, pointerType: string) =>
+  eventOf({ type, pointerId: id, clientX: at.x, clientY: at.y, pointerType, button: 0 });
+
 /** The canvas the gestures listen on: listeners, a rect and pointer capture. */
 function fakeCanvas(origin: Point) {
   const listeners = new Map<string, Listener[]>();
@@ -30,8 +42,7 @@ function fakeCanvas(origin: Point) {
         (listeners.get(type) ?? []).filter((other) => other !== listener),
       );
     },
-    getBoundingClientRect: () =>
-      ({ left: origin.x, top: origin.y, width: 400, height: 400 }) as unknown as DOMRect,
+    getBoundingClientRect: () => ({ left: origin.x, top: origin.y, width: 400, height: 400 }),
     setPointerCapture: () => undefined,
     dispatch(type: string, event: Input) {
       for (const listener of listeners.get(type) ?? []) listener(event);
@@ -57,6 +68,7 @@ function mount(
   let prevented = 0;
 
   attachGestures(
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the canvas stand-in
     canvas as unknown as HTMLElement,
     {
       camera: () => camera,
@@ -72,16 +84,6 @@ function mount(
     },
     { now: () => clock },
   );
-
-  const pointer = (type: string, id: number, at: Point, pointerType: string) =>
-    ({
-      type,
-      pointerId: id,
-      clientX: at.x,
-      clientY: at.y,
-      pointerType,
-      button: 0,
-    }) as unknown as PointerEvent;
 
   return {
     at(ms: number) {
@@ -100,15 +102,18 @@ function mount(
       canvas.dispatch("pointercancel", pointer("pointercancel", id, at, pointerType));
     },
     wheel(at: Point, deltaY: number) {
-      canvas.dispatch("wheel", {
-        type: "wheel",
-        clientX: at.x,
-        clientY: at.y,
-        deltaY,
-        preventDefault: () => {
-          prevented += 1;
-        },
-      } as unknown as WheelEvent);
+      canvas.dispatch(
+        "wheel",
+        eventOf({
+          type: "wheel",
+          clientX: at.x,
+          clientY: at.y,
+          deltaY,
+          preventDefault: () => {
+            prevented += 1;
+          },
+        }),
+      );
     },
     camera: () => camera,
     moves,
@@ -190,11 +195,6 @@ describe("tap", () => {
   });
 });
 
-const screenOf = (camera: Camera, point: Point): Point => ({
-  x: point.x * camera.scale + camera.x,
-  y: point.y * camera.scale + camera.y,
-});
-
 const boardOf = (camera: Camera, point: Point): Point => ({
   x: (point.x - camera.x) / camera.scale,
   y: (point.y - camera.y) / camera.scale,
@@ -240,7 +240,7 @@ describe("pinch", () => {
     board.move(2, { x: 240, y: 140 });
 
     // The start midpoint (150, 100) stays under the current midpoint (180, 130).
-    const under = screenOf(board.camera(), { x: 150, y: 100 });
+    const under = toScreen(board.camera(), { x: 150, y: 100 });
     expect(under.x).toBeCloseTo(180);
     expect(under.y).toBeCloseTo(130);
   });
@@ -312,7 +312,7 @@ describe("pinch to pan", () => {
     const camera = board.camera();
     expect(camera.scale).toBeGreaterThan(dragged.scale);
     // The Board point under the pinch's start midpoint (220, 200) followed it.
-    const under = screenOf(camera, boardOf(dragged, { x: 220, y: 200 }));
+    const under = toScreen(camera, boardOf(dragged, { x: 220, y: 200 }));
     expect(under.x).toBeCloseTo(220);
     expect(under.y).toBeCloseTo(200);
   });
