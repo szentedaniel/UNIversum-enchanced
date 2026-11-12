@@ -16,6 +16,7 @@ import { buttonVariants } from "#components/ui/button.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ensureJoined, JoinError } from "#connection.ts";
 import { bottomSlot, openDecision } from "#decision/decision.ts";
+import { stripMoney, useCardLayout } from "#lib/tray-layout.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
 import { playbackStore } from "#playback/playback-store.ts";
@@ -24,7 +25,7 @@ import { TurnCard } from "#screens/TurnCard.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { inFlightOf, roomStore } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
-import { formatMoney, m, playerName, rejectionText } from "#text.ts";
+import { formatCompactMoney, formatMoney, m, playerName, rejectionText } from "#text.ts";
 
 export function Game() {
   const { code = "" } = useParams();
@@ -37,7 +38,11 @@ export function Game() {
   // No optimistic UI: a tap locks the controls until the server answers.
   const inFlight = useStore(roomStore, inFlightOf);
   const wide = useWide();
+  // The bottom card's height ceiling and the on-screen keyboard's lift (#184).
+  const cardLayout = useCardLayout();
   const [joinError, setJoinError] = useState<RejectionCode | null>(null);
+  // The phone strip's one expanded Player: its full card replaces the chips.
+  const [openCard, setOpenCard] = useState<number | null>(null);
   // The Playback core's frame: the gate, the view, the held Turn, the toast and the overlay (ADR-0004).
   const frame = useStore(playbackStore, (state) => state.frame);
 
@@ -86,6 +91,7 @@ export function Game() {
     name: playerName(p.name),
     bot: p.bot,
     cash: formatMoney(p.cash),
+    cashShort: formatCompactMoney(p.cash),
     fields: view.fields.filter((field) => field.owner === p.id).length,
     current: p.id === view.currentPlayer,
     you: p.id === me,
@@ -105,6 +111,9 @@ export function Game() {
       />
     ),
   }));
+  const openPlayer = players.find((player) => player.seat === openCard) ?? null;
+  // Four Players on a portrait phone leave each chip too narrow for the full cash.
+  const compactMoney = stripMoney(cardLayout.width, players.length) === "compact";
   const rejected = rejection !== null && rejection.seq > push.seq;
   // The Playback's DOM layer: the frame's overlay is the dice or a drawn Chance card.
   const boardOverlay =
@@ -197,20 +206,44 @@ export function Game() {
       <ReconnectOverlay />
       {podium}
       <ul className="m-0 flex list-none justify-center gap-1.5 px-2" aria-label={m.game_players()}>
-        {players.map((player) => (
-          <PlayerChip key={player.seat} player={player} className="w-0 max-w-28 flex-1" />
-        ))}
+        {/* Phone (#184, story 5): a chip per Player, and one tap shows that
+            Player's full card in the strip's place so the cards never cover
+            the Board. The wide screen keeps the corner cards. */}
+        {openPlayer === null ? (
+          players.map((player) => (
+            <PlayerChip
+              key={player.seat}
+              player={player}
+              className="w-0 max-w-28 flex-1"
+              onExpand={() => setOpenCard(player.seat)}
+              compactMoney={compactMoney}
+            />
+          ))
+        ) : (
+          <PlayerCard
+            key={openPlayer.seat}
+            player={openPlayer}
+            className={cn("w-full max-w-sm", openPlayer.current && "scale-100")}
+            onCollapse={() => setOpenCard(null)}
+          />
+        )}
       </ul>
       <div className="mt-2 flex min-w-0 items-center justify-center gap-2 px-2">{statusRow}</div>
       {/* The card overlays the Board's bottom. The Board fits above it and below
           the camera buttons, into space reserved whether or not a card is open,
           so opening the Field card never changes the zoom. A landscape phone is
           short: the card stays a compact strip at the bottom and the Board fits
-          the whole space above the top row instead. */}
+          the whole space above the top row instead. The card scrolls inside the
+          reserved space (or its share of a short screen) and the keyboard lifts
+          it, so it never covers the Board or sits under the keyboard; the
+          shell's `pb-safe-2` keeps it clear of the safe-area inset. */}
       <div className="relative mt-2 min-h-0 flex-1 [--board-inset-bottom:14rem] [--board-inset-top:3.75rem] landscape:[--board-inset-bottom:0px] landscape:[--board-inset-right:3.5rem] landscape:[--board-inset-top:0px]">
         <Board />
         {boardOverlay && <div className="playback-overlay landscape:bottom-24">{boardOverlay}</div>}
-        <div className="absolute inset-x-2 bottom-0 landscape:mx-auto landscape:max-w-md">
+        <div
+          className="absolute inset-x-2 bottom-0 overflow-y-auto overscroll-contain pb-1 pr-1 landscape:mx-auto landscape:max-w-md"
+          style={{ bottom: cardLayout.keyboard, maxHeight: cardLayout.maxHeight }}
+        >
           {card}
         </div>
       </div>

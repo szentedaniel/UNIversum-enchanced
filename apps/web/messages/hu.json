@@ -37,6 +37,8 @@
   "game_turn_of": "{name} köre",
   "game_roll": "Dobás",
   "game_players": "Játékosok",
+  "game_show_card": "{name} játékoskártyájának megnyitása",
+  "game_hide_card": "Játékoskártya összecsukása",
   "game_cash": "Pénz",
   "game_fields": "Mezők: {count}",
   "game_time_left": "Hátralévő játékidő",

@@ -37,6 +37,8 @@
   "game_turn_of": "{name}'s Turn",
   "game_roll": "Roll",
   "game_players": "Players",
+  "game_show_card": "Show {name}'s card",
+  "game_hide_card": "Collapse the card",
   "game_cash": "Cash",
   "game_fields": "Fields: {count}",
   "game_time_left": "Game time left",

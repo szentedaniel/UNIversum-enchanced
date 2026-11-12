@@ -94,6 +94,7 @@ export function DecisionTray({ view, slot, clockOffset, seat }: Props) {
           <Button
             variant={checklistOpen ? "default" : "plain"}
             size="icon-sm"
+            className="min-h-11 min-w-11"
             aria-label={m.pick_checklist()}
             aria-pressed={checklistOpen}
             data-testid="pick-checklist-toggle"
@@ -104,6 +105,7 @@ export function DecisionTray({ view, slot, clockOffset, seat }: Props) {
           <Button
             variant={inspect ? "default" : "plain"}
             size="icon-sm"
+            className="min-h-11 min-w-11"
             aria-label={m.pick_inspect()}
             aria-pressed={inspect}
             data-testid="pick-inspect-toggle"
@@ -242,7 +244,7 @@ function Picks({ picked, hint, removeLabel, amountOf, onRemove }: PicksProps) {
             type="button"
             aria-label={removeLabel(id)}
             onClick={() => onRemove(id)}
-            className="sticker-sm press inline-flex items-center gap-1 rounded-full bg-success px-2.5 py-1 text-sm font-extrabold text-ink"
+            className="sticker-sm press min-h-11 min-w-11 inline-flex items-center gap-1 rounded-full bg-success px-2.5 py-1 text-sm font-extrabold text-ink"
           >
             {fieldLabel(id)}
             {amountOf !== undefined && (
@@ -301,7 +303,7 @@ function SaleBody({
           {formatCompactMoney(value)} / {formatCompactMoney(sale.shortfall)}
         </span>
       </div>
-      <div className="grid grid-cols-[auto_1fr] gap-2">
+      <div className="sticky bottom-0 grid grid-cols-[auto_1fr] gap-2 bg-card pt-1">
         <Button variant="plain" disabled={busy} onClick={onAutoSell}>
           <Zap size={18} strokeWidth={3} aria-hidden="true" />
           {m.sale_auto_sell()}
@@ -334,6 +336,7 @@ function PickBody({
   return (
     <Button
       size="lg"
+      className="sticky bottom-0"
       disabled={busy || chosen === null}
       onClick={() => {
         if (chosen !== null) onCommit(chosen);
@@ -380,7 +383,7 @@ function PickChecklist({
                 onFocus(row.field);
               }}
               className={cn(
-                "sticker-sm press flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-sm font-extrabold",
+                "sticker-sm press min-h-11 min-w-11 flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-sm font-extrabold",
                 on ? "bg-success text-ink" : "bg-background text-foreground",
               )}
             >

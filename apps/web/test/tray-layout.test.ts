@@ -3,7 +3,9 @@ import {
   CARD_HEIGHT_SHARE,
   CARD_RESERVE_PX,
   cardMaxHeight,
+  chipWidth,
   keyboardInset,
+  stripMoney,
 } from "#lib/tray-layout.ts";
 
 // The phone Game's bottom card (spec #184, story 4): it scrolls instead of
@@ -70,5 +72,35 @@ describe("keyboardInset", () => {
 
   it("floors at zero when the visual viewport is larger than the layout one", () => {
     expect(keyboardInset(640, { height: 700, offsetTop: 0, scale: 1 })).toBe(0);
+  });
+});
+
+describe("the phone Player strip", () => {
+  it("splits the row between the Players, minus its padding and gaps", () => {
+    expect(chipWidth(360, 4)).toBe(81);
+    expect(chipWidth(360, 3)).toBe(110);
+    expect(chipWidth(360, 2)).toBe(169);
+  });
+
+  it("shows the full cash on a two-Player portrait phone", () => {
+    expect(stripMoney(360, 2)).toBe("full");
+    expect(stripMoney(390, 2)).toBe("full");
+  });
+
+  it("shortens the cash when four Players squeeze the strip", () => {
+    expect(stripMoney(360, 4)).toBe("compact");
+    expect(stripMoney(390, 4)).toBe("compact");
+    expect(stripMoney(320, 4)).toBe("compact");
+  });
+
+  it("keeps the full cash on a landscape phone, where four chips are wide", () => {
+    expect(stripMoney(852, 4)).toBe("full");
+  });
+
+  it("switches at the width the full cash line needs", () => {
+    // 4 chips × 100 px + the strip's 16 px padding + three 6 px gaps.
+    expect(chipWidth(434, 4)).toBe(100);
+    expect(stripMoney(434, 4)).toBe("full");
+    expect(stripMoney(433, 4)).toBe("compact");
   });
 });

@@ -19,8 +19,10 @@ export const CARD_HEIGHT_SHARE = 0.45;
 /** A visual viewport as `window.visualViewport` reports it. */
 export type VisualArea = { height: number; offsetTop: number; scale: number };
 
-/** How much of the screen the card may use, and how far the keyboard lifts it. */
+/** The Game screen's measured layout: the card's budget and the strip's width. */
 export type CardLayout = {
+  /** The layout viewport's width in px, what the Player strip divides up. */
+  width: number;
   /** Px of the layout viewport the on-screen keyboard covers at the bottom. */
   keyboard: number;
   /** The card's height ceiling in px. */
@@ -48,16 +50,19 @@ export function cardMaxHeight(viewportHeight: number, keyboard = 0): number {
 
 /** What the browser reports right now; zero before layout runs (no window). */
 function readCardLayout(): CardLayout {
-  if (typeof window === "undefined") return { keyboard: 0, maxHeight: CARD_RESERVE_PX };
+  if (typeof window === "undefined") {
+    return { width: 0, keyboard: 0, maxHeight: CARD_RESERVE_PX };
+  }
+  const width = window.innerWidth;
   const height = window.innerHeight;
   const keyboard = keyboardInset(height, window.visualViewport);
-  return { keyboard, maxHeight: cardMaxHeight(height, keyboard) };
+  return { width, keyboard, maxHeight: cardMaxHeight(height, keyboard) };
 }
 
 /**
- * The Game screen's card layout, kept current as the viewport, the orientation
- * and the on-screen keyboard change. `visualViewport`'s own `resize` and
- * `scroll` are what catch the keyboard; `window`'s `resize` catches rotation.
+ * The Game screen's layout, kept current as the viewport, the orientation and
+ * the on-screen keyboard change. `visualViewport`'s own `resize` and `scroll`
+ * are what catch the keyboard; `window`'s `resize` catches rotation.
  */
 export function useCardLayout(): CardLayout {
   const [layout, setLayout] = useState(readCardLayout);
@@ -65,7 +70,9 @@ export function useCardLayout(): CardLayout {
     const update = () =>
       setLayout((current) => {
         const next = readCardLayout();
-        return next.keyboard === current.keyboard && next.maxHeight === current.maxHeight
+        return next.width === current.width &&
+          next.keyboard === current.keyboard &&
+          next.maxHeight === current.maxHeight
           ? current
           : next;
       });
@@ -80,4 +87,26 @@ export function useCardLayout(): CardLayout {
     };
   }, []);
   return layout;
+}
+
+/** The phone strip's horizontal padding (`px-2`) and the gap between chips (`gap-1.5`). */
+const STRIP_PADDING_PX = 16;
+const CHIP_GAP_PX = 6;
+
+/** The chip width the full cash line needs, its padding and border included. */
+const FULL_CASH_CHIP_PX = 100;
+
+/** One chip's width in the phone strip, from the strip's own padding and gaps. */
+export function chipWidth(viewportWidth: number, players: number): number {
+  if (players <= 0) return 0;
+  return Math.floor((viewportWidth - STRIP_PADDING_PX - (players - 1) * CHIP_GAP_PX) / players);
+}
+
+/**
+ * The cash form the phone strip has room for: four Players on a portrait phone
+ * squeeze each chip below the full amount's width, so the cash shortens there
+ * (the expanded Player card always shows it in full).
+ */
+export function stripMoney(viewportWidth: number, players: number): "full" | "compact" {
+  return chipWidth(viewportWidth, players) >= FULL_CASH_CHIP_PX ? "full" : "compact";
 }
