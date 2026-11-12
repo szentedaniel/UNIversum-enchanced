@@ -143,4 +143,9 @@ describe("the app shell's install tags", () => {
       '<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />',
     );
   });
+
+  it("launches the installed app without browser chrome on iOS and Android", () => {
+    expect(html).toContain('<meta name="apple-mobile-web-app-capable" content="yes" />');
+    expect(html).toContain('<meta name="mobile-web-app-capable" content="yes" />');
+  });
 });
