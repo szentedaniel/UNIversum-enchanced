@@ -110,12 +110,18 @@
     margin: 0;
   }
 
+  /* A phone's rubber-band and pull-to-refresh must not fire over the Board or
+     the tray; no screen scrolls the document's background either. */
+  html,
+  body {
+    overscroll-behavior: none;
+  }
+
   body {
     background: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
     -webkit-tap-highlight-color: transparent;
-    overscroll-behavior: none;
   }
 
   :focus-visible {
@@ -125,17 +131,30 @@
 }
 
 @layer components {
-  /* The Board's host (board/Board.tsx) fills the box the screen gives it. */
+  /* The Board's host (board/Board.tsx) fills the box the screen gives it. Its
+     canvas owns every touch (gestures.ts pans, pinches and zooms), so a drag
+     never scrolls or pull-to-refreshes the page. */
   .board {
     position: absolute;
     inset: 0;
     overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
   }
 
   .board canvas {
     position: absolute;
     inset: 0;
     touch-action: none;
+  }
+
+  /* The Game screen's shell (screens/Game.tsx) is fixed and non-scrolling, so a
+     drag never scrolls or pull-to-refreshes the page. `manipulation` keeps
+     pinch-zoom and one-finger scrolling of the tray checklist while dropping
+     the double-tap page zoom; the Board canvas above turns all gestures off. */
+  .game-shell {
+    overscroll-behavior: none;
+    touch-action: manipulation;
   }
 
   .board-canvas {
@@ -228,6 +247,30 @@
 /* Tabular figures for money, counters and the Room code. */
 @utility tnum {
   font-variant-numeric: tabular-nums;
+}
+
+/* Safe-area padding: the number is the screen's own spacing, raised to the
+   device's inset where it reserves space outside the layout viewport (a notch,
+   a home indicator). `0` gives the inset alone, for a shell whose children
+   already space themselves. */
+@utility p-safe-* {
+  padding: max(calc(var(--spacing) * --value(integer)), env(safe-area-inset-top))
+    max(calc(var(--spacing) * --value(integer)), env(safe-area-inset-right))
+    max(calc(var(--spacing) * --value(integer)), env(safe-area-inset-bottom))
+    max(calc(var(--spacing) * --value(integer)), env(safe-area-inset-left));
+}
+
+@utility pt-safe-* {
+  padding-top: max(calc(var(--spacing) * --value(integer)), env(safe-area-inset-top));
+}
+
+@utility pb-safe-* {
+  padding-bottom: max(calc(var(--spacing) * --value(integer)), env(safe-area-inset-bottom));
+}
+
+@utility px-safe-* {
+  padding-left: max(calc(var(--spacing) * --value(integer)), env(safe-area-inset-left));
+  padding-right: max(calc(var(--spacing) * --value(integer)), env(safe-area-inset-right));
 }
 
 @utility board-backdrop {
