@@ -154,7 +154,10 @@ export function Game() {
     return null;
   }
   const card = bottomCard();
-  const podium = slot.kind === "podium" ? <Podium view={view} phase={slot.phase} /> : null;
+  const podium =
+    slot.kind === "podium" ? (
+      <Podium view={view} phase={slot.phase} rematch={push.rematch} me={me} busy={inFlight} />
+    ) : null;
 
   if (wide) {
     return (
