@@ -1,24 +1,22 @@
 /**
- * The factory's heartbeat run: one `factory-tick.yml` run ticks every ten
- * minutes for about 5.5 hours, then dispatches its successor and exits. A run
- * that finds another tick run queued or running exits without ticking, so
- * GitHub's ten-minute cron is only the safety net and one heartbeat is live at
- * a time.
- *
- * The loop, the tick cadence and the duplicate-start rule live in
- * `heartbeat.ts`; the tick's own rules stay in `tick.ts` and `due.ts`. This
- * entry owns the real clock and sleep, the runs API check and the relay.
+ * The factory's heartbeat entry for `factory-tick.yml`: the loop, its cadence
+ * and the duplicate rule live in `heartbeat.ts`; this file owns the real clock
+ * and sleep, the runs API check and the relay. `DRY_RUN=1` ticks once and
+ * starts no successor.
  *
  * Env: GH_REPO, GH_TOKEN (the PAT, in the workflow), GITHUB_RUN_ID, DRY_RUN.
  */
-import { liveHeartbeat, runHeartbeat, type LiveRun } from "#schedule/heartbeat.ts";
+import {
+  LIVE_STATUSES,
+  liveHeartbeat,
+  runHeartbeat,
+  type LiveRun,
+  type LiveStatus,
+} from "#schedule/heartbeat.ts";
 import { runTick, tickWiring } from "#schedule/tick.ts";
 import { fail, required, sh } from "#shared/common.ts";
 
 const TICK_WORKFLOW = "factory-tick.yml";
-
-/** The runs API statuses a heartbeat can be in; only one is live at a time. */
-type LiveStatus = "in_progress" | "queued";
 
 /** One page of this workflow's runs in `status`; at most one is live, so 100 is plenty. */
 const liveRuns = (repo: string, status: LiveStatus): readonly LiveRun[] => {
@@ -31,6 +29,11 @@ const liveRuns = (repo: string, status: LiveStatus): readonly LiveRun[] => {
   return runs as readonly LiveRun[];
 };
 
+/** The dry tick and the heartbeat fail the run on the same rule. */
+const failOn = (what: string, errors: readonly string[]): void => {
+  if (errors.length > 0) fail(`The ${what} hit errors:\n- ${errors.join("\n- ")}`);
+};
+
 const main = async (): Promise<void> => {
   const repo = required("GH_REPO");
   const dryRun = process.env["DRY_RUN"] === "1";
@@ -40,10 +43,8 @@ const main = async (): Promise<void> => {
   console.log(`Factory heartbeat — ${now.toISOString()}`);
 
   if (dryRun) {
-    const outcome = runTick({ now, dryRun: true, ...wiring, log: console.log });
-    if (outcome.errors.length > 0) {
-      fail(`The dry tick hit errors:\n- ${outcome.errors.join("\n- ")}`);
-    }
+    const { errors } = runTick({ now, dryRun: true, ...wiring, log: console.log });
+    failOn("dry tick", errors);
     console.log("Dry run: one tick, no successor.");
     return;
   }
@@ -57,8 +58,10 @@ const main = async (): Promise<void> => {
       return promise;
     },
     live: () =>
-      liveHeartbeat([...liveRuns(repo, "in_progress"), ...liveRuns(repo, "queued")], selfId) !==
-      undefined,
+      liveHeartbeat(
+        LIVE_STATUSES.flatMap((status) => liveRuns(repo, status)),
+        selfId,
+      ) !== undefined,
     tick: (tickNow) => runTick({ now: tickNow, dryRun: false, ...wiring, log: console.log }),
     relay: () => {
       sh(`gh workflow run ${TICK_WORKFLOW} --ref main`);
@@ -67,9 +70,7 @@ const main = async (): Promise<void> => {
   });
 
   if (outcome.duplicate) return;
-  if (outcome.errors.length > 0) {
-    fail(`The heartbeat hit errors:\n- ${outcome.errors.join("\n- ")}`);
-  }
+  failOn("heartbeat", outcome.errors);
 };
 
 if (import.meta.main) {

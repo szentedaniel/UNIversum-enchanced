@@ -1,10 +1,10 @@
 /**
  * The factory's tick: dispatches every nightly or weekly job that is due and
  * has no tick dispatch since it fell due, so a late or dropped GitHub schedule
- * is caught up by the next one. The heartbeat (`heartbeat.ts`,
- * `heartbeat-run.ts`) runs it every ten minutes for about 5.5 hours and then
- * relays its successor; `due.ts` holds the schedule and the rule, and this
- * script only reads the runs and starts the workflows.
+ * is caught up by the next one. The heartbeat (`heartbeat-run.ts`) runs it
+ * every ten minutes; the cadence itself lives in `heartbeat.ts`. `due.ts` holds
+ * the schedule and the rule, and this script only reads the runs and starts the
+ * workflows.
  *
  * Only the tick's own dispatch counts. It dispatches with `scheduled=true` and
  * every workflow puts the `(factory tick)` marker in its run name, which the
