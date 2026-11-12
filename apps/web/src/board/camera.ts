@@ -41,6 +41,31 @@ export function zoomAround(camera: Camera, anchor: Point, scale: number): Camera
   return { scale, x: anchor.x - bx * scale, y: anchor.y - by * scale };
 }
 
+/** A pointer gesture in canvas CSS px: the midpoint between the fingers and their distance. */
+export type GestureSpan = { mid: Point; spread: number };
+
+/**
+ * One move of a pointer gesture: zooms by `to.spread / from.spread` (a
+ * one-finger span has 0 spread, so it only pans) and pans so the Board point
+ * under `from.mid` lands under `to.mid`. The scale stays within `limits`; the
+ * Board still clamps the camera's position in its `move`.
+ */
+export function gestureCamera(
+  camera: Camera,
+  from: GestureSpan,
+  to: GestureSpan,
+  limits: { min: number; max: number },
+): Camera {
+  const ratio = from.spread > 0 ? to.spread / from.spread : 1;
+  const scale = Math.min(limits.max, Math.max(limits.min, camera.scale * ratio));
+  const zoomed = zoomAround(camera, from.mid, scale);
+  return {
+    scale,
+    x: zoomed.x + to.mid.x - from.mid.x,
+    y: zoomed.y + to.mid.y - from.mid.y,
+  };
+}
+
 /**
  * Keeps the zoom within limits and the Board within reach: any Board edge can
  * be dragged as far as the middle of the fit area, never further.

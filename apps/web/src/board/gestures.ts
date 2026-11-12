@@ -5,10 +5,16 @@
  *
  * A press is a tap while it stays inside the slop of the pointer that landed
  * (`TAP_SLOP` for a mouse or pen, `TOUCH_TAP_SLOP` for a finger, whose contact
- * patch rolls) and ends within `TAP_MS`. The clock is injected so the tap's
- * duration is testable without waiting.
+ * patch rolls) and ends within `TAP_MS`; a second pointer makes it a pinch,
+ * never a tap. The clock is injected so the tap's duration is testable without
+ * waiting.
+ *
+ * Every move applies the whole delta from the gesture's baseline, and the
+ * baseline is taken again whenever a pointer lands or lifts. A second finger
+ * landing mid-drag or one finger lifting from a pinch therefore rebases the
+ * gesture instead of jumping the camera.
  */
-import { zoomAround, type Camera } from "#board/camera.ts";
+import { gestureCamera, zoomAround, type Camera } from "#board/camera.ts";
 import type { Point } from "#board/layout.ts";
 
 export type GestureTarget = {
@@ -28,6 +34,11 @@ export const TAP_MS = 500;
 export const TAP_SLOP = 10;
 /** A finger's slop: its contact patch rolls and wobbles more than a mouse's. */
 export const TOUCH_TAP_SLOP = 18;
+/**
+ * A pinch's spread is never read below this, so two fingers landing on the
+ * same point cannot turn `to.spread / from.spread` into a divide-by-zero.
+ */
+const PINCH_MIN_SPREAD = 24;
 const WHEEL_ZOOM = 0.002;
 
 /** The clock a tap's duration is measured on; the browser's by default. */
@@ -43,6 +54,8 @@ type Press = {
   slop: number;
   /** The press left the slop, so it is a drag and cannot be a tap. */
   moved: boolean;
+  /** A second pointer landed, so the press is a pinch or pan and never a tap. */
+  multi: boolean;
 };
 
 /** The camera and the fingers a move is measured from. */
@@ -62,6 +75,10 @@ const spreadOf = (points: Point[]) =>
     ? Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y)
     : 0;
 
+/** The spread a pinch reads; a finger on its own has none, so it only pans. */
+const pinchSpread = (points: Point[]) =>
+  points.length >= 2 ? Math.max(PINCH_MIN_SPREAD, spreadOf(points)) : 0;
+
 /** Listens on `el`; returns the function that stops listening. */
 export function attachGestures(
   el: HTMLElement,
@@ -77,18 +94,13 @@ export function attachGestures(
     const rect = el.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
-  const clampScale = (scale: number) => {
-    const { min, max } = target.scaleLimits();
-    return Math.min(max, Math.max(min, scale));
-  };
-
   /** (Re)starts the gesture from the current pointers, e.g. when a second finger lands. */
   function begin(): void {
     const points = [...pointers.values()];
     baseline = {
       camera: target.camera(),
       mid: midpoint(points),
-      spread: spreadOf(points),
+      spread: pinchSpread(points),
     };
   }
 
@@ -102,7 +114,10 @@ export function attachGestures(
         at: now(),
         slop: event.pointerType === "touch" ? TOUCH_TAP_SLOP : TAP_SLOP,
         moved: false,
+        multi: false,
       };
+    } else {
+      press.multi = true;
     }
     el.setPointerCapture?.(event.pointerId);
     begin();
@@ -114,23 +129,20 @@ export function attachGestures(
     const points = [...pointers.values()];
     const mid = midpoint(points);
     if (!press.moved) {
-      const far = Math.hypot(mid.x - press.start.x, mid.y - press.start.y) >= press.slop;
-      if (!far && points.length < 2) return;
+      const far =
+        press.multi || Math.hypot(mid.x - press.start.x, mid.y - press.start.y) >= press.slop;
+      if (!far) return;
       press.moved = true;
       target.moved();
     }
-    const { camera, mid: from, spread } = baseline;
-    const scale =
-      points.length >= 2 && spread > 0
-        ? clampScale(camera.scale * (spreadOf(points) / spread))
-        : camera.scale;
-    // Keep the Board point that was under the gesture's start midpoint under the current one.
-    const zoomed = zoomAround(camera, from, scale);
-    target.move({
-      scale,
-      x: zoomed.x + mid.x - from.x,
-      y: zoomed.y + mid.y - from.y,
-    });
+    target.move(
+      gestureCamera(
+        baseline.camera,
+        baseline,
+        { mid, spread: pinchSpread(points) },
+        target.scaleLimits(),
+      ),
+    );
   }
 
   function up(event: PointerEvent): void {
@@ -138,6 +150,7 @@ export function attachGestures(
     const at = local(event);
     const isTap =
       !press.moved &&
+      !press.multi &&
       pointers.size === 1 &&
       event.type === "pointerup" &&
       now() - press.at < TAP_MS &&
@@ -154,7 +167,8 @@ export function attachGestures(
   function wheel(event: WheelEvent): void {
     event.preventDefault();
     const camera = target.camera();
-    const scale = clampScale(camera.scale * Math.exp(-event.deltaY * WHEEL_ZOOM));
+    const { min, max } = target.scaleLimits();
+    const scale = Math.min(max, Math.max(min, camera.scale * Math.exp(-event.deltaY * WHEEL_ZOOM)));
     target.moved();
     target.move(zoomAround(camera, local(event), scale));
   }

@@ -183,3 +183,131 @@ describe("tap", () => {
     expect(board.taps).toEqual([{ x: 100, y: 100 }]);
   });
 });
+
+const screenOf = (camera: Camera, point: Point): Point => ({
+  x: point.x * camera.scale + camera.x,
+  y: point.y * camera.scale + camera.y,
+});
+
+const boardOf = (camera: Camera, point: Point): Point => ({
+  x: (point.x - camera.x) / camera.scale,
+  y: (point.y - camera.y) / camera.scale,
+});
+
+describe("pinch", () => {
+  it("keeps the Board point under the midpoint and clamps the scale to the target's limits", () => {
+    const board = mount({ limits: { min: 0.75, max: 1.5 } });
+    board.down(1, { x: 100, y: 100 });
+    board.down(2, { x: 200, y: 100 });
+    board.move(1, { x: 80, y: 100 });
+    board.move(2, { x: 220, y: 100 });
+
+    let camera = board.camera();
+    expect(camera.scale).toBeCloseTo(1.4);
+    expect(boardOf(camera, { x: 150, y: 100 }).x).toBeCloseTo(150);
+    expect(boardOf(camera, { x: 150, y: 100 }).y).toBeCloseTo(100);
+
+    board.move(1, { x: -100, y: 100 });
+    board.move(2, { x: 400, y: 100 });
+    camera = board.camera();
+    expect(camera.scale).toBeCloseTo(1.5);
+    expect(boardOf(camera, { x: 150, y: 100 }).x).toBeCloseTo(150);
+    expect(boardOf(camera, { x: 150, y: 100 }).y).toBeCloseTo(100);
+
+    board.move(1, { x: 149, y: 100 });
+    board.move(2, { x: 151, y: 100 });
+    camera = board.camera();
+    expect(camera.scale).toBeCloseTo(0.75);
+    expect(boardOf(camera, { x: 150, y: 100 }).x).toBeCloseTo(150);
+
+    for (const move of board.moves) {
+      expect(move.scale).toBeGreaterThanOrEqual(0.75);
+      expect(move.scale).toBeLessThanOrEqual(1.5);
+    }
+  });
+
+  it("keeps the start midpoint's Board point under the midpoint as it moves", () => {
+    const board = mount();
+    board.down(1, { x: 100, y: 100 });
+    board.down(2, { x: 200, y: 100 });
+    board.move(1, { x: 120, y: 120 });
+    board.move(2, { x: 240, y: 140 });
+
+    // The start midpoint (150, 100) stays under the current midpoint (180, 130).
+    const under = screenOf(board.camera(), { x: 150, y: 100 });
+    expect(under.x).toBeCloseTo(180);
+    expect(under.y).toBeCloseTo(130);
+  });
+
+  it("treats two fingers landing on one point as the smallest pinch", () => {
+    const board = mount();
+    board.down(1, { x: 200, y: 200 });
+    board.down(2, { x: 200, y: 200 });
+    expect(board.camera()).toEqual({ scale: 1, x: 0, y: 0 });
+
+    board.move(2, { x: 201, y: 200 });
+    expect(board.camera().scale).toBe(1);
+    expect(Number.isFinite(board.camera().x)).toBe(true);
+    expect(Number.isFinite(board.camera().y)).toBe(true);
+
+    board.move(2, { x: 250, y: 200 });
+    expect(board.camera().scale).toBe(2);
+  });
+
+  it("never taps after a second finger has landed", () => {
+    const board = mount();
+    board.at(0);
+    board.down(1, { x: 100, y: 100 });
+    board.at(50);
+    board.down(2, { x: 150, y: 150 });
+    board.at(100);
+    board.up(2, { x: 150, y: 150 });
+    board.at(150);
+    board.up(1, { x: 100, y: 100 });
+
+    expect(board.taps).toEqual([]);
+  });
+});
+
+describe("pinch to pan", () => {
+  it("lifts one finger and pans by the remaining finger's delta, without a jump", () => {
+    const board = mount();
+    board.down(1, { x: 100, y: 100 });
+    board.down(2, { x: 200, y: 100 });
+    board.move(1, { x: 80, y: 100 });
+    board.move(2, { x: 220, y: 100 });
+    const before = board.camera();
+    const moves = board.moves.length;
+
+    board.up(2, { x: 220, y: 100 });
+    expect(board.camera()).toEqual(before);
+    expect(board.moves.length).toBe(moves);
+
+    board.move(1, { x: 100, y: 130 });
+    const after = board.camera();
+    expect(after.scale).toBe(before.scale);
+    expect(after.x - before.x).toBeCloseTo(20);
+    expect(after.y - before.y).toBeCloseTo(30);
+  });
+
+  it("lands a second finger mid-drag without a jump and pinches from there", () => {
+    const board = mount();
+    board.down(1, { x: 100, y: 100 });
+    board.move(1, { x: 140, y: 100 });
+    const dragged = board.camera();
+    const moves = board.moves.length;
+
+    board.down(2, { x: 300, y: 300 });
+    expect(board.camera()).toEqual(dragged);
+    expect(board.moves.length).toBe(moves);
+
+    board.move(1, { x: 120, y: 100 });
+    board.move(2, { x: 320, y: 300 });
+    const camera = board.camera();
+    expect(camera.scale).toBeGreaterThan(dragged.scale);
+    // The Board point under the pinch's start midpoint (220, 200) followed it.
+    const under = screenOf(camera, boardOf(dragged, { x: 220, y: 200 }));
+    expect(under.x).toBeCloseTo(220);
+    expect(under.y).toBeCloseTo(200);
+  });
+});
