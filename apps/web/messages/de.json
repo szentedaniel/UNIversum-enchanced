@@ -314,5 +314,9 @@
   "game_over_congratulations": "Herzlichen Glückwunsch!",
   "log_title": "Ereignisprotokoll",
   "log_toggle": "Ereignisprotokoll",
-  "log_empty": "Noch keine Ereignisse."
+  "log_empty": "Noch keine Ereignisse.",
+  "update_available": "Eine neue Version von UNIversum ist bereit.",
+  "update_refresh": "Aktualisieren",
+  "update_later": "Später",
+  "update_in_game": "Du bekommst sie, sobald du dieses Spiel beendest oder verlässt."
 }

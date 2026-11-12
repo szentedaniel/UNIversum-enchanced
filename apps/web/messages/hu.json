@@ -314,5 +314,9 @@
   "game_over_congratulations": "Gratulálunk!",
   "log_title": "Eseménynapló",
   "log_toggle": "Eseménynapló",
-  "log_empty": "Még nincs esemény."
+  "log_empty": "Még nincs esemény.",
+  "update_available": "Elkészült az UNIversum új verziója.",
+  "update_refresh": "Frissítés",
+  "update_later": "Később",
+  "update_in_game": "A játék befejezése vagy elhagyása után lép életbe."
 }

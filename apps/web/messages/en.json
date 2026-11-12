@@ -314,5 +314,9 @@
   "game_over_congratulations": "Congratulations!",
   "log_title": "Event log",
   "log_toggle": "Event log",
-  "log_empty": "No events yet."
+  "log_empty": "No events yet.",
+  "update_available": "A new version of UNIversum is ready.",
+  "update_refresh": "Refresh",
+  "update_later": "Later",
+  "update_in_game": "Finish or leave this game to get it."
 }
