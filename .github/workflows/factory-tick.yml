@@ -1,10 +1,12 @@
-# The factory's tick: every ten minutes, dispatch each nightly or weekly job
-# that is due and has not run since it fell due. GitHub starts this repo's
-# scheduled runs hours late and drops some, so the tick is the scheduler and
-# `packages/factory/src/schedule/due.ts` decides what a tick may start. The
-# five scheduled workflows no longer carry a cron of their own.
+# The factory's heartbeat: one run ticks every ten minutes for about 5.5 hours,
+# then dispatches its successor and exits. The cron below is only the safety net
+# for a dropped relay: a run that finds another tick run queued or running exits
+# without ticking, so exactly one heartbeat is live at a time. A tick dispatches
+# every nightly or weekly job that is due and has not run since it fell due;
+# `packages/factory/src/schedule/due.ts` decides what a tick may start. The five
+# scheduled workflows no longer carry a cron of their own.
 #
-# Every dispatch sets `scheduled=true`; the workflows turn that into the
+# Every job dispatch sets `scheduled=true`; the workflows turn that into the
 # `(factory tick)` run-name marker that `schedule/tick.ts` counts, so a manual,
 # dry or per-pull-request run never suppresses the scheduled one.
 name: Factory Tick
@@ -16,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: Print the due jobs without dispatching
+        description: Tick once and print the due jobs without dispatching
         type: boolean
         default: false
 
@@ -24,8 +26,8 @@ on:
 permissions:
   contents: read
 
-# A tick that is still reading runs must finish before the next one starts;
-# the second then sees the first tick's runs and dispatches nothing twice.
+# One heartbeat at a time: a relayed successor waits here until its predecessor
+# exits, and a newer pending run replaces an older one in the queue.
 concurrency:
   group: factory-tick
   cancel-in-progress: false
@@ -33,7 +35,8 @@ concurrency:
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Above the 5.5-hour heartbeat and below GitHub's six-hour job limit.
+    timeout-minutes: 350
     env:
       GH_TOKEN: ${{ secrets.AGENT_PAT }}
       GH_REPO: ${{ github.repository }}
@@ -55,5 +58,5 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Tick
-        run: node packages/factory/src/schedule/tick.ts
+      - name: Heartbeat
+        run: node packages/factory/src/schedule/heartbeat-run.ts
