@@ -10,6 +10,7 @@
 import { FIELD_COUNT, MAX_LEVEL, type PlayerIntent } from "@universum/rules";
 import { z } from "zod";
 import {
+  CHAT_IDS,
   DEFAULT_SETTINGS,
   GUEST_TOKEN_PATTERN,
   MINUTE_LIMITS,
@@ -20,6 +21,7 @@ import {
   TURN_LIMITS,
   utf8Length,
   type Assert,
+  type ClientChat,
   type ClientIntent,
   type CreateOptions,
   type JoinOptions,
@@ -117,6 +119,12 @@ export type PlayerIntentsMatchRules = Assert<
 
 /** Compile-time check: `intentSchema` parses exactly `ClientIntent`. */
 export type ClientIntentsMatch = Assert<Same<z.infer<typeof intentSchema>, ClientIntent>>;
+
+/** One quick-chat message: a catalogue id and nothing else (the Room fills in the sender's Seat). */
+export const chatSchema = z.strictObject({ id: z.enum(CHAT_IDS) });
+
+/** Compile-time check: `chatSchema` parses exactly `ClientChat`. */
+export type ChatMatchesClient = Assert<Same<z.infer<typeof chatSchema>, ClientChat>>;
 
 /** A password of at most `PASSWORD_MAX_BYTES` UTF-8 bytes. */
 const password = z
