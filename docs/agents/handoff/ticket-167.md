@@ -22,8 +22,10 @@
   the clock and shifts forward through the spring gap; the schedule's 02:23 review lands at 03:23 on
   the spring switch day.
 - `.github/workflows/factory-tick.yml`: `3-59/10 * * * *` plus `workflow_dispatch` (`dry_run`),
-  `timeout-minutes: 5`, `concurrency: factory-tick` without cancel, checkout main + setup-node from
-  `.node-version` + `pnpm install --frozen-lockfile`. `factory-dispatch.yml` keeps its hourly cron.
+  `concurrency: factory-tick` without cancel, checkout main + setup-node from `.node-version` +
+  `pnpm install --frozen-lockfile`. #221 later replaced the five-minute run with a 5.5-hour
+  heartbeat (`ticket-221.md`): `timeout-minutes: 350`, and the cron is only the safety net.
+  `factory-dispatch.yml` keeps its hourly cron.
 - The five nightly/weekly workflows (`factory-intake.yml`, `factory-review.yml`, `factory-retro.yml`,
   `factory-maintain.yml`, `factory-report.yml`) no longer have a `schedule:` trigger and all declare
   the `scheduled` input. In `factory-review.yml`, `dispatch-queued` runs only for a

@@ -27,12 +27,13 @@ lint, typecheck, vitest. Playwright and `docker compose build` run once, in CI, 
 
 GitHub starts scheduled runs late on this repository, by an hour to nine hours, and sometimes drops a
 run altogether, worst at the top of the hour. So the factory schedules one thing: `factory-tick.yml`.
-Its cron runs every ten minutes, off the top of the hour, but only as the safety net. A started run
-first asks the runs API whether another `factory-tick.yml` run is queued or running; if one is, it
-exits without ticking. Otherwise it becomes the heartbeat: it calls the tick every ten minutes for
-about 5.5 hours, then dispatches its successor with `gh workflow run factory-tick.yml --ref main` and
-exits. The successor waits in the `factory-tick` concurrency group behind the old run, so exactly one
-heartbeat is live and the chain relays itself; the cron only starts a new chain after a dropped relay.
+Its cron runs every ten minutes, off the top of the hour, but only as the safety net. Unless it is a
+dry run, a started run first asks the runs API whether another `factory-tick.yml` run is queued or
+running; if one is, it exits without ticking. Otherwise it becomes the heartbeat: it calls the tick
+every ten minutes for about 5.5 hours, then dispatches its successor with
+`gh workflow run factory-tick.yml --ref main` and exits. The successor waits in the `factory-tick`
+concurrency group behind the old run, so exactly one heartbeat is live and the chain relays itself;
+the cron only starts a new chain after a dropped relay.
 A tick dispatches every nightly or weekly job that is due and has not run since it fell due
 (`packages/factory/src/schedule/due.ts`). The schedule is Budapest wall time, so a DST switch needs no
 second slot:
