@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CUES, type CueName } from "#sound/cues.ts";
+import { CUES } from "#sound/cues.ts";
 
 /** Just the parts of HTMLAudioElement the cue pool uses. */
 class FakeAudio {
@@ -35,10 +35,6 @@ async function loadAudio() {
 const press = (type: string) => {
   for (const listener of listeners.get(type) ?? []) listener();
 };
-
-/** The elements a cue's pool created, in the order the pool made them. */
-const elementsOf = (name: CueName) =>
-  FakeAudio.instances.filter((sound) => sound.src === CUES[name]);
 
 /**
  * Lets an unlock's awaited silent play finish, and the cue it holds back, so
@@ -130,8 +126,8 @@ describe("the sound cues", () => {
     press("pointerdown");
     await settle();
 
-    for (const name of Object.keys(CUES) as CueName[]) {
-      const elements = elementsOf(name);
+    for (const [name, file] of Object.entries(CUES)) {
+      const elements = FakeAudio.instances.filter((sound) => sound.src === file);
       // The dice already played its three cues; every other cue only unlocked.
       expect(elements.map((sound) => sound.plays)).toEqual(name === "dice" ? [2, 2, 2] : [1, 1, 1]);
       expect(elements.map((sound) => sound.pauses)).toEqual([1, 1, 1]);
@@ -152,7 +148,7 @@ describe("the sound cues", () => {
     playCue("dice");
     await settle();
 
-    const [sound] = elementsOf("dice");
+    const sound = FakeAudio.instances.find((element) => element.src === CUES.dice);
     expect(FakeAudio.instances).toHaveLength(3 * Object.keys(CUES).length);
     expect(sound?.plays).toBe(2);
     expect(sound?.volume).toBe(1);
@@ -168,8 +164,8 @@ describe("the sound cues", () => {
     press("pointerdown");
     await settle();
 
-    for (const name of Object.keys(CUES) as CueName[]) {
-      const elements = elementsOf(name);
+    for (const [name, file] of Object.entries(CUES)) {
+      const elements = FakeAudio.instances.filter((sound) => sound.src === file);
       expect(elements.map((sound) => sound.plays)).toEqual(name === "dice" ? [2, 2, 2] : [1, 1, 1]);
       expect(elements.every((sound) => sound.volume === 1)).toBe(true);
     }
