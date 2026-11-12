@@ -50,7 +50,7 @@ export function isStale(running: string, deployed: string | null): boolean {
 }
 
 /**
- * Whether a reload is safe here. A Game holds the Player's Seat, Turn and open
+ * Whether a reload is safe here. A Room's game holds the Player's Seat, Turn and open
  * Decision; the refresh prompt never reloads it under them (spec Decision 3).
  */
 export function canReload(pathname: string): boolean {

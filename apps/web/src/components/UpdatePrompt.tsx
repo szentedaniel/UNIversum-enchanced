@@ -2,7 +2,7 @@
  * Offers a refresh when the deployment serves a newer release (spec: Mobile
  * polish and installable PWA, Decision 3). A dismissible banner, not a modal:
  * its wrapper lets taps through, so an open Decision's tray stays usable. A
- * Game in progress is never reloaded under the Player; that update arrives on
+ * game in progress is never reloaded under the Player; that update arrives on
  * the next launch.
  */
 import { RefreshCw } from "lucide-react";
