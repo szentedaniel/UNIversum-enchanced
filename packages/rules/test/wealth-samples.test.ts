@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 import { publicView, setupGame, type GameState, type PlayerId } from "#index.ts";
 import { newGame, playerOf, playTurn, SEED, seats, T0, withPlayer } from "./helpers.ts";
+import { playRandomGame } from "./simulation.ts";
 
 /** Every Player's Wealth as the view shows it: the number a sample records (R77). */
 function wealthInView(state: GameState): Record<PlayerId, number> {
@@ -71,6 +72,38 @@ describe("the Wealth series", () => {
       playerOf(publicView(first), "p2").wealth,
     );
     expect(afterBankruptcy.wealthSamples[1]?.wealth["p2"]).toBe(0);
+  });
+
+  it("R80, spec #177: the last sample of a finished game equals the standings' Wealth", () => {
+    const run = playRandomGame({
+      seed: SEED,
+      choiceSeed: 3,
+      players: 4,
+      settings: { minuteLimit: 15 },
+    });
+    const standings = publicView(run.state).standings ?? [];
+    const final = run.state.wealthSamples.at(-1);
+
+    expect(run.ended).toBe(true);
+    expect(standings).toHaveLength(run.state.players.length);
+    for (const standing of standings) {
+      expect(final?.wealth[standing.player]).toBe(standing.wealth);
+    }
+  });
+
+  it("spec #177: a played game records one sample per passed Turn plus the final one", () => {
+    const run = playRandomGame({
+      seed: SEED,
+      choiceSeed: 3,
+      players: 4,
+      settings: { minuteLimit: 15 },
+    });
+    const passed = run.steps.flatMap((step) =>
+      step.events.filter((event) => event.type === "TurnPassed"),
+    );
+
+    expect(run.ended).toBe(true);
+    expect(run.state.wealthSamples).toHaveLength(passed.length + 1);
   });
 
   it("the samples and the minute length stay out of the public view (ticket #236 adds the summary)", () => {

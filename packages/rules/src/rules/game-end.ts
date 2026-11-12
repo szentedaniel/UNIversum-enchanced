@@ -7,6 +7,7 @@
  */
 import { FIELDS, type GroupId } from "#board.ts";
 import { isMonopoly, museumsOf, wealthOf } from "#rules/pricing.ts";
+import { recordWealthSample } from "#rules/wealth-samples.ts";
 import type { GameState, PlayerId, PlayerState } from "#state.ts";
 import { emit, setFinalPhase, type Tx } from "#tx.ts";
 
@@ -36,6 +37,9 @@ function finish(tx: Tx, winner: PlayerId, reason: GameEndReason): void {
   // is ever the current Player (the one invariant that would otherwise break).
   tx.state.currentPlayer = winner;
   setFinalPhase(tx, { kind: "gameOver", winner, reason });
+  // The series ends on the Wealth the standings show; the Turn does not pass,
+  // so `passTurn` records no sample for this last one.
+  recordWealthSample(tx);
   emit(tx, { type: "GameEnded", winner, reason });
 }
 
