@@ -200,3 +200,6 @@ _Avoid_: Eliminated, Csőd
 
 **Wealth**:
 A Player's cash plus the Value of their Fields; it decides the winner when the Minute limit runs out.
+
+**Wealth series**:
+Every Player's Wealth, sampled with the game's elapsed Minute each time a Turn passes and once more when the game ends, so the last sample equals the final standings.
