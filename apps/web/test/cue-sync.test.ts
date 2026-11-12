@@ -1,8 +1,10 @@
 import type { GameEvent } from "@universum/rules";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { currentPlayback } from "#playback/playback-store.ts";
 import { playbackOfPush } from "#playback/playback.ts";
 import { resetCues, syncCues } from "#sound/cue-sync.ts";
 import type { CueName } from "#sound/cues.ts";
+import { roomStore } from "#stores/room-store.ts";
 import { ROLL, viewOf } from "./playback-fixtures.ts";
 
 const { playCue } = vi.hoisted(() => ({ playCue: vi.fn<(name: CueName) => void>() }));
@@ -21,6 +23,37 @@ const frame = (seq: number, eventsReached: number) => ({ seq, eventsReached });
 beforeEach(() => {
   resetCues();
   playCue.mockClear();
+});
+
+describe("the Playback store's cues", () => {
+  afterEach(() => {
+    roomStore.setState({ push: null });
+    vi.useRealTimers();
+  });
+
+  it("plays the dice when the frame reaches the roll, not when the push arrives", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    // The roll's step starts after the walk, so the first frame has not reached it.
+    roomStore.setState({
+      push: {
+        view: viewOf(undefined, { actsAfter: 0 }),
+        events: [move(), dice()],
+        reveals: [],
+        seq: 7,
+        clockOffset: 0,
+        receivedAt: 1_000,
+      },
+    });
+
+    expect(playCue).not.toHaveBeenCalled();
+
+    const [walkEnds] = currentPlayback()?.boundaries ?? [];
+    vi.advanceTimersByTime((walkEnds ?? 0) - 1_000 + 20);
+
+    expect(playCue).toHaveBeenCalledTimes(1);
+    expect(playCue).toHaveBeenCalledWith("dice");
+  });
 });
 
 describe("syncCues", () => {
