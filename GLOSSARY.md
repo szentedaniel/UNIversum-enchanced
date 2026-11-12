@@ -84,6 +84,10 @@ _Avoid_: Playback over, unlock
 The list, on the Game screen, of the lines of the events the Playback has revealed so far, newest last, each line in the language active when it appeared; the client keeps it, so a reload starts it empty.
 _Avoid_: History, chat, transcript
 
+**Quick chat**:
+The only way Players talk in a Room: each picks a ready-made line or emote from a fixed catalogue, and the server shows it beside that Player's Seat; no free text is ever sent, and it is not the Event log.
+_Avoid_: Chat message, free chat
+
 **Turn timer**:
 The countdown a Player has for one decision of their Turn, starting when the Playback before it ends.
 _Avoid_: Turn countdown
