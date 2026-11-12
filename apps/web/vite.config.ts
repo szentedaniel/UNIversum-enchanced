@@ -1,6 +1,7 @@
 import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import { buildAtlas } from "./scripts/atlas.ts";
 import { buildPwa } from "./scripts/pwa.ts";
@@ -80,6 +81,20 @@ export default defineConfig(({ mode }) => {
     },
     server: { proxy },
     preview: { proxy },
-    build: { sourcemap: "hidden" },
+    build: {
+      sourcemap: "hidden",
+      rollupOptions: {
+        // The worker is a second entry, but it must keep the stable `/sw.js`
+        // URL and root scope: the browser looks it up there and Caddy
+        // revalidates it, so its name is not hashed like the app's chunks.
+        input: {
+          index: fileURLToPath(new URL("index.html", import.meta.url)),
+          sw: fileURLToPath(new URL("src/pwa/sw.ts", import.meta.url)),
+        },
+        output: {
+          entryFileNames: (chunk) => (chunk.name === "sw" ? "sw.js" : "assets/[name]-[hash].js"),
+        },
+      },
+    },
   };
 });

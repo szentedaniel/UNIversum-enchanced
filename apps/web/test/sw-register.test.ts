@@ -5,26 +5,33 @@ import { registerServiceWorker } from "../src/pwa/register.ts";
 // old cache. Production registers `/sw.js` after `load`, and only where the
 // browser allows a worker (a secure context; `localhost` counts as one).
 
+type Listener = () => void;
+type AddListener = (type: "load", listener: Listener, options?: { once?: boolean }) => void;
+type Register = (
+  script: string,
+  options?: { scope?: string; type?: "classic" | "module" },
+) => Promise<void>;
+
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
 
 function stubPage({ secure = true } = {}) {
-  const register = vi.fn(() => Promise.resolve({} as ServiceWorkerRegistration));
-  const addEventListener = vi.fn();
+  const register = vi.fn<Register>(() => Promise.resolve());
+  const addEventListener = vi.fn<AddListener>();
   vi.stubGlobal("navigator", { serviceWorker: { register } });
   vi.stubGlobal("window", { addEventListener, isSecureContext: secure });
-  return { register, addEventListener };
+  const fireLoad = () => {
+    const handler = addEventListener.mock.calls[0]?.[1];
+    expect(handler).toBeTypeOf("function");
+    handler?.();
+  };
+  return { register, addEventListener, fireLoad };
 }
 
 function production(): void {
   vi.stubEnv("PROD", true);
-}
-
-function onLoad(listener: unknown): () => void {
-  expect(listener).toBeTypeOf("function");
-  return listener as () => void;
 }
 
 describe("registerServiceWorker", () => {
@@ -39,14 +46,14 @@ describe("registerServiceWorker", () => {
 
   it("registers /sw.js at the root after load in a production build", () => {
     production();
-    const { register, addEventListener } = stubPage();
+    const { register, addEventListener, fireLoad } = stubPage();
 
     registerServiceWorker();
     expect(addEventListener).toHaveBeenCalledTimes(1);
     expect(addEventListener).toHaveBeenCalledWith("load", expect.any(Function), { once: true });
     expect(register).not.toHaveBeenCalled();
 
-    onLoad(addEventListener.mock.calls[0]?.[1])();
+    fireLoad();
     expect(register).toHaveBeenCalledWith("/sw.js", { scope: "/", type: "module" });
   });
 
@@ -62,7 +69,7 @@ describe("registerServiceWorker", () => {
 
   it("does nothing in a browser without service workers", () => {
     production();
-    const addEventListener = vi.fn();
+    const addEventListener = vi.fn<AddListener>();
     vi.stubGlobal("navigator", {});
     vi.stubGlobal("window", { addEventListener, isSecureContext: true });
 

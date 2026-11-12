@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { routeOf } from "../src/pwa/routing.ts";
+import { withoutComments } from "./source-scan.ts";
 
 // The service worker's routing (spec #184, Decisions 1 and 2): which requests
 // it intercepts at all, which it answers from the immutable `/assets` cache
@@ -43,10 +45,7 @@ describe("routeOf", () => {
 
   it("leaves cross-origin, non-GET and every other request alone", () => {
     expect(
-      routeOf(
-        { url: "https://cdn.example/assets/chunk.js", method: "GET", mode: "cors" },
-        ORIGIN,
-      ),
+      routeOf({ url: "https://cdn.example/assets/chunk.js", method: "GET", mode: "cors" }, ORIGIN),
     ).toBe("never");
     expect(route("/assets/index-abc123.js", { method: "POST" })).toBe("never");
     expect(route("/room/ABCD", { method: "POST", mode: "navigate" })).toBe("never");
@@ -61,4 +60,9 @@ describe("routeOf", () => {
     expect(route("/errors-page", { mode: "navigate" })).toBe("network-first");
     expect(route("/client-configuration", { mode: "navigate" })).toBe("network-first");
   });
+});
+
+it("leaves the new worker to take over on the next launch", () => {
+  const source = readFileSync(new URL("../src/pwa/sw.ts", import.meta.url), "utf8");
+  expect(withoutComments(source)).not.toMatch(/\bskipWaiting\b|\bclients\.claim\b/);
 });

@@ -16,16 +16,20 @@ const CACHE = `${CACHE_PREFIX}${CLIENT_RELEASE}`;
 /** The last shell that loaded, the fallback when the network is gone. */
 const SHELL = "/index.html";
 
-const worker = self as unknown as ServiceWorkerGlobalScope;
+/**
+ * The webworker lib types `self` as the generic `WorkerGlobalScope`; a service
+ * worker is the narrower scope with `install`, `activate` and `fetch` events.
+ */
+declare const self: ServiceWorkerGlobalScope;
 
-worker.addEventListener("install", (event) => {
+self.addEventListener("install", (event) => {
   // Nothing is precached: the shell arrives from the first successful
   // navigation and each hashed asset from its first use. Wait for the release's
   // cache to exist so `activate` has a stable name to keep.
   event.waitUntil(caches.open(CACHE).then(() => undefined));
 });
 
-worker.addEventListener("activate", (event) => {
+self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const names = await caches.keys();
@@ -38,10 +42,10 @@ worker.addEventListener("activate", (event) => {
   );
 });
 
-worker.addEventListener("fetch", (event) => {
+self.addEventListener("fetch", (event) => {
   const route = routeOf(
     { url: event.request.url, method: event.request.method, mode: event.request.mode },
-    worker.location.origin,
+    self.location.origin,
   );
   if (route === "never") return;
   event.respondWith(route === "cache-first-hashed" ? cacheFirst(event) : networkFirst(event));
@@ -53,7 +57,8 @@ async function cacheFirst(event: FetchEvent): Promise<Response> {
   const cached = await cache.match(event.request, { ignoreSearch: true });
   if (cached) return cached;
   const response = await fetch(event.request);
-  if (response.ok) event.waitUntil(cache.put(event.request, response.clone()).catch(() => undefined));
+  if (response.ok)
+    event.waitUntil(cache.put(event.request, response.clone()).catch(() => undefined));
   return response;
 }
 
