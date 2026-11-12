@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-/** Just the parts of HTMLAudioElement the dice sound uses. */
+/** Just the parts of HTMLAudioElement the cue pool uses. */
 class FakeAudio {
   static instances: FakeAudio[] = [];
   currentTime = 0;
   volume = 1;
+  muted = false;
   plays = 0;
   pauses = 0;
   src: string;
@@ -34,6 +35,16 @@ const press = (type: string) => {
   for (const listener of listeners.get(type) ?? []) listener();
 };
 
+/**
+ * Lets an unlock's awaited silent play finish, and the cue it holds back, so
+ * the assertions read the final counts. Two microtask rounds: the unlock's
+ * `await play()`, then its queued cue.
+ */
+const settle = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
   FakeAudio.instances = [];
@@ -55,17 +66,26 @@ function stubBrowser() {
   });
 }
 
-describe("the dice sound", () => {
-  it("plays through one HTMLAudioElement, from the start, on every roll", async () => {
+describe("the sound cues", () => {
+  it("starts two cues in quick succession, each through its own element, from the start", async () => {
     stubBrowser();
-    const { playDice } = await loadAudio();
+    const { playCue } = await loadAudio();
 
-    playDice();
-    playDice();
+    playCue("dice");
+    playCue("dice");
 
-    expect(FakeAudio.instances).toHaveLength(1);
-    expect(FakeAudio.instances[0]?.plays).toBe(2);
-    expect(FakeAudio.instances[0]?.currentTime).toBe(0);
+    expect(FakeAudio.instances).toHaveLength(2);
+    expect(FakeAudio.instances.map((sound) => sound.plays)).toEqual([1, 1]);
+    expect(FakeAudio.instances.every((sound) => sound.currentTime === 0)).toBe(true);
+  });
+
+  it("keeps a few elements per cue and reuses them round-robin", async () => {
+    stubBrowser();
+    const { playCue } = await loadAudio();
+
+    for (let play = 0; play < 4; play += 1) playCue("dice");
+
+    expect(FakeAudio.instances.map((sound) => sound.plays)).toEqual([2, 1, 1]);
   });
 
   it("is silent and stays silent after a reload once muted", async () => {
@@ -73,50 +93,82 @@ describe("the dice sound", () => {
     const first = await loadAudio();
     first.soundStore.getState().setMuted(true);
     expect(storage.get("universum.soundMuted")).toBe("1");
-    first.playDice();
-    expect(FakeAudio.instances[0]?.plays ?? 0).toBe(0);
+    first.playCue("dice");
+    expect(FakeAudio.instances).toHaveLength(0);
 
     const second = await loadAudio();
     expect(second.soundStore.getState().muted).toBe(true);
-    second.playDice();
-    expect(FakeAudio.instances[1]?.plays ?? 0).toBe(0);
+    second.playCue("dice");
+    expect(FakeAudio.instances).toHaveLength(0);
   });
 
   it("plays again after unmuting, and remembers that too", async () => {
     stubBrowser();
     const first = await loadAudio();
     first.soundStore.getState().setMuted(true);
+    first.playCue("dice");
+    expect(FakeAudio.instances).toHaveLength(0);
     first.soundStore.getState().setMuted(false);
-    first.playDice();
+    first.playCue("dice");
 
     expect(storage.get("universum.soundMuted")).toBe("0");
     expect(FakeAudio.instances[0]?.plays).toBe(1);
   });
 
-  it("unlocks the element on the first pointer press, once", async () => {
+  it("unlocks every pooled element on the first pointer press, once", async () => {
     stubBrowser();
-    const { installAudioUnlock } = await loadAudio();
+    const { installAudioUnlock, playCue } = await loadAudio();
+    for (let play = 0; play < 3; play += 1) playCue("dice");
 
     installAudioUnlock();
     press("pointerdown");
     press("pointerdown");
-    await Promise.resolve();
+    await settle();
 
-    expect(FakeAudio.instances[0]?.plays).toBe(1);
-    expect(FakeAudio.instances[0]?.volume).toBe(1);
-    expect(FakeAudio.instances[0]?.pauses).toBe(1);
+    expect(FakeAudio.instances.map((sound) => sound.plays)).toEqual([2, 2, 2]);
+    expect(FakeAudio.instances.map((sound) => sound.pauses)).toEqual([1, 1, 1]);
+    expect(FakeAudio.instances.every((sound) => sound.volume === 1)).toBe(true);
+  });
+
+  it("unlocks an element created after the unlock, then plays its cue", async () => {
+    stubBrowser();
+    const { installAudioUnlock, playCue } = await loadAudio();
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+    expect(FakeAudio.instances).toHaveLength(0);
+
+    playCue("dice");
+    await settle();
+
+    const [sound] = FakeAudio.instances;
+    expect(sound?.plays).toBe(2);
+    expect(sound?.pauses).toBe(1);
+    expect(sound?.volume).toBe(1);
   });
 
   it("unlocks without a sound when muted", async () => {
     stubBrowser();
-    const { installAudioUnlock, soundStore } = await loadAudio();
+    const { installAudioUnlock, playCue, soundStore } = await loadAudio();
+    for (let play = 0; play < 3; play += 1) playCue("dice");
     soundStore.getState().setMuted(true);
 
     installAudioUnlock();
     press("pointerdown");
-    await Promise.resolve();
+    await settle();
 
+    expect(FakeAudio.instances.map((sound) => sound.plays)).toEqual([2, 2, 2]);
+    expect(FakeAudio.instances.every((sound) => sound.volume === 1)).toBe(true);
+  });
+
+  it("stays muted and still counted under browser automation", async () => {
+    stubBrowser();
+    vi.stubGlobal("navigator", { webdriver: true });
+    const { playCue } = await loadAudio();
+
+    playCue("dice");
+
+    expect(FakeAudio.instances[0]?.muted).toBe(true);
     expect(FakeAudio.instances[0]?.plays).toBe(1);
-    expect(FakeAudio.instances[0]?.volume).toBe(1);
   });
 });
