@@ -109,10 +109,10 @@ describe("buildPwa", () => {
         .trim({ background: light.background, threshold: 12 })
         .toBuffer({ resolveWithObject: true });
       const margin = icon.size * icon.padding;
-      expect(info.width).toBeLessThanOrEqual(icon.size - 2 * margin);
-      expect(info.height).toBeLessThanOrEqual(icon.size - 2 * margin);
-      expect(Math.abs(info.trimOffsetLeft)).toBeGreaterThanOrEqual(margin);
-      expect(Math.abs(info.trimOffsetTop)).toBeGreaterThanOrEqual(margin);
+      expect(info.width!).toBeLessThanOrEqual(icon.size - 2 * margin);
+      expect(info.height!).toBeLessThanOrEqual(icon.size - 2 * margin);
+      expect(Math.abs(info.trimOffsetLeft!)).toBeGreaterThanOrEqual(margin);
+      expect(Math.abs(info.trimOffsetTop!)).toBeGreaterThanOrEqual(margin);
     }
   });
 });
@@ -123,7 +123,11 @@ describe("the app shell's install tags", () => {
   });
 
   it("gives the browser the theme colour for both schemes", () => {
-    const metas = [...html.matchAll(/<meta name="theme-color" content="([^"]+)" media="\(prefers-color-scheme: (\w+)\)" \/>/g)];
+    const metas = [
+      ...html.matchAll(
+        /<meta name="theme-color" content="([^"]+)" media="\(prefers-color-scheme: (\w+)\)" \/>/g,
+      ),
+    ];
     expect(metas.map(([, content, scheme]) => [scheme, content])).toEqual([
       ["light", light.primary],
       ["dark", dark.primary],
