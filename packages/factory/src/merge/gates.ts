@@ -176,7 +176,13 @@ const reviewReason = (state: ReviewState): string => {
   return "";
 };
 
-/** Why the labels alone already say no, or nothing when they let the gate run. */
+/**
+ * Why the labels alone already say no, or nothing when they let the gate run.
+ * A `risk:high` two-way door merges too: a wide blast radius alone is not the
+ * owner's call once the review passed and CI (e2e included) is green, and a
+ * revert undoes it. A one-way door, or a verdict the gate cannot read, still
+ * waits for a human.
+ */
 const riskReason = (facts: MergeFacts): string | undefined => {
   const low = facts.labels.includes("risk:low");
   const high = facts.labels.includes("risk:high");
@@ -185,7 +191,7 @@ const riskReason = (facts: MergeFacts): string | undefined => {
   if (!high) return "no risk label";
   const danger = mergeDangerOf(newestMarkerComment(facts.comments)?.body ?? "");
   if (danger?.door === "one-way") return `one-way door: ${danger.reason}`;
-  if (danger?.blastRadius === "wide") return `wide blast radius: ${danger.reason}`;
+  if (danger?.door === "two-way") return undefined;
   return "risk:high";
 };
 
@@ -213,7 +219,8 @@ export interface MergeGate {
 
 /**
  * The spec's auto-merge gate: CI green on the head, a passing review newer
- * than the head, `risk:low`, no protected path and no dependency major. Every
+ * than the head, `risk:low` or a two-way `risk:high`, no protected path and no
+ * dependency major. Every
  * failing condition is a reason, so the escalation comment says all of them.
  */
 export const canAutoMerge = (facts: MergeFacts): MergeGate => {
@@ -244,6 +251,9 @@ export const canAutoMerge = (facts: MergeFacts): MergeGate => {
 /** Dependabot's login, as the REST author of its pull requests. */
 export const DEPENDABOT_AUTHOR = "dependabot[bot]";
 
+/** The same author as `gh pr view` names it, which is what the gate reads. */
+const DEPENDABOT_APP_AUTHOR = "app/dependabot";
+
 const DEPENDABOT_BRANCH = "dependabot/";
 
 /**
@@ -251,7 +261,8 @@ const DEPENDABOT_BRANCH = "dependabot/";
  * The branch alone is not enough — anyone can name a branch `dependabot/…`.
  */
 export const isDependabotPull = (headRefName: string, author: string): boolean =>
-  headRefName.startsWith(DEPENDABOT_BRANCH) && author === DEPENDABOT_AUTHOR;
+  headRefName.startsWith(DEPENDABOT_BRANCH) &&
+  (author === DEPENDABOT_AUTHOR || author === DEPENDABOT_APP_AUTHOR);
 
 /** Only a factory branch, a factory-labelled pull or a Dependabot bump is the gate's business. */
 export const isFactoryPull = (

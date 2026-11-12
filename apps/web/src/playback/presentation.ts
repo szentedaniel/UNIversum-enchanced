@@ -15,7 +15,7 @@
  */
 import type { EventOf, GameEvent, PublicView } from "@universum/rules";
 import { FIELDS } from "@universum/rules/board";
-import { chanceCardText, fieldName, formatMoney, m, playerName } from "#text.ts";
+import { chanceCardText, dealSideText, fieldName, formatMoney, m, playerName } from "#text.ts";
 
 /** What the DOM shows for an event (`none` = only the Board, if anything). */
 export type Overlay = "dice" | "card" | "toast" | "none";
@@ -131,6 +131,16 @@ export const EVENT_PRESENTATION: PresentationTable = {
         amount: formatMoney(event.amount),
       }),
   },
+  ChanceTransferPaid: {
+    overlay: "toast",
+    tone: "notice",
+    text: (event, view) =>
+      m.event_chance_transfer_paid({
+        name: nameOf(view, event.player),
+        payee: nameOf(view, event.payee),
+        amount: formatMoney(event.amount),
+      }),
+  },
   TaxPaid: {
     overlay: "toast",
     tone: "notice",
@@ -200,6 +210,44 @@ export const EVENT_PRESENTATION: PresentationTable = {
       }),
   },
   DoublerPlaced: { overlay: "none", tone: "routine" },
+  DealProposed: {
+    overlay: "toast",
+    tone: "notice",
+    text: (event, view) =>
+      m.event_deal_proposed({
+        name: nameOf(view, event.proposer),
+        recipient: nameOf(view, event.recipient),
+        give: dealSideText(event.give),
+        take: dealSideText(event.take),
+      }),
+  },
+  DealAccepted: {
+    overlay: "toast",
+    tone: "routine",
+    text: (event, view) =>
+      m.event_deal_accepted({
+        name: nameOf(view, event.proposer),
+        recipient: nameOf(view, event.recipient),
+      }),
+  },
+  DealDeclined: {
+    overlay: "toast",
+    tone: "routine",
+    text: (event, view) =>
+      m.event_deal_declined({
+        recipient: nameOf(view, event.recipient),
+        proposer: nameOf(view, event.proposer),
+      }),
+  },
+  DealExpired: {
+    overlay: "toast",
+    tone: "routine",
+    text: (event, view) =>
+      m.event_deal_expired({
+        recipient: nameOf(view, event.recipient),
+        proposer: nameOf(view, event.proposer),
+      }),
+  },
   GameEnded: {
     overlay: "toast",
     tone: "notice",

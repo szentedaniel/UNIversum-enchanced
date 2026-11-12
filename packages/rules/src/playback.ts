@@ -38,6 +38,7 @@ export const PLAYBACK_MS: Readonly<Record<GameEvent["type"], number>> = {
   CardDrawn: CARD_MS,
   ChanceMoneyReceived: BEAT_MS,
   ChanceChargePaid: BEAT_MS,
+  ChanceTransferPaid: BEAT_MS,
   TaxPaid: BEAT_MS,
   QuarantineEntered: BEAT_MS,
   QuarantineRoundUsed: BEAT_MS,
@@ -49,6 +50,10 @@ export const PLAYBACK_MS: Readonly<Record<GameEvent["type"], number>> = {
   TimedOut: BEAT_MS,
   TimeoutPenaltyPaid: BEAT_MS,
   DoublerPlaced: BEAT_MS,
+  DealProposed: BEAT_MS,
+  DealAccepted: BEAT_MS,
+  DealDeclined: BEAT_MS,
+  DealExpired: BEAT_MS,
   GameEnded: BEAT_MS,
   TurnPassed: NOTHING_MS,
 };

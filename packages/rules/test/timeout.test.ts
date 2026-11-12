@@ -52,6 +52,27 @@ describe("the Turn timer", () => {
     expect(applied.state.turnDeadline).toBe(applied.state.actsAfter + DEADLINE_AFTER);
   });
 
+  it.each([10_000, 20_000, 30_000] as const)(
+    "R17: the Room's %i ms Turn timer sets the deadline and the ring",
+    (turnLimitMs) => {
+      const state = newGame({ settings: { turnLimitMs }, now: T0 });
+
+      expect(state.turnDeadline).toBe(T0 + turnLimitMs + TURN_SLACK_MS);
+      expect(publicView(state).turnTimer).toEqual({
+        endsAt: T0 + turnLimitMs,
+        limitMs: turnLimitMs,
+      });
+    },
+  );
+
+  it("R17: every decision reads the Room's Turn timer, not the default", () => {
+    const later = T0 + 7_000;
+
+    const applied = rollOnto(newGame({ settings: { turnLimitMs: 10_000 } }), START_FIELD, later);
+
+    expect(applied.state.turnDeadline).toBe(applied.state.actsAfter + 10_000 + TURN_SLACK_MS);
+  });
+
   it("R17: a Rejection leaves the deadline alone", () => {
     const state = newGame();
 
@@ -67,10 +88,16 @@ describe("the Turn timer", () => {
     expect(view.turnTimer).toEqual({ endsAt: T0 + 20_000, limitMs: 20_000 });
   });
 
-  it("a server's timing override shortens every deadline, the ring and the Minute limit", () => {
+  it("a server's timing override shortens every deadline, the ring and the Minute limit, whatever the Room's Turn timer", () => {
     const state = setupGame({
       seats: seats(2),
-      settings: { maxPlayers: 2, minuteLimit: 15 },
+      settings: {
+        maxPlayers: 2,
+        minuteLimit: 15,
+        startingCash: 2_500_000,
+        roundBonus: 250_000,
+        turnLimitMs: 30_000,
+      },
       seed: SEED,
       now: T0,
       turnLimitMs: 5_000,

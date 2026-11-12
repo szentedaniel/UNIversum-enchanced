@@ -15,6 +15,18 @@ export const RULES_REJECTION_CODES = [
   "PLAYBACK_RUNNING",
   /** The Fields picked in a Sale sell for less than the Shortfall (R66). */
   "SHORTFALL_NOT_COVERED",
+  /** The Deal's recipient is the proposer, a Bankrupt Player, or nobody in the game. */
+  "DEAL_RECIPIENT_INVALID",
+  /** A Field in the Deal is not owned by the side that offers it (spec #172). */
+  "DEAL_FIELD_NOT_OWNED",
+  /** A Field appears more than once in the Deal (spec #172). */
+  "DEAL_FIELD_REPEATED",
+  /** The Deal moves neither a Field nor any cash (spec #172). */
+  "DEAL_EMPTY",
+  /** One side's cash does not cover what the Deal asks of it (spec #172). */
+  "DEAL_CASH_NOT_COVERED",
+  /** A Deal was already proposed this Turn (spec #172). */
+  "DEAL_ALREADY_PROPOSED",
 ] as const;
 
 export type RulesRejectionCode = (typeof RULES_REJECTION_CODES)[number];

@@ -52,6 +52,7 @@ const player = (id: string, seat: number, position: number, cash = 100_000) => (
   bankrupt: false,
   quarantineRounds: null,
   hasPcrTest: false,
+  bot: false,
   wealth: cash,
 });
 
@@ -62,7 +63,7 @@ export const playersWithCash = (
 ): PlayerView[] => [player("p1", 0, positions.p1, cash.p1), player("p2", 1, positions.p2, cash.p2)];
 
 const BASE_VIEW: PublicView = {
-  stateVersion: 2,
+  stateVersion: 3,
   version: 1,
   turn: 2,
   currentPlayer: "p1",
@@ -70,12 +71,20 @@ const BASE_VIEW: PublicView = {
   actsAfter: 0,
   turnDeadline: null,
   turnTimer: null,
-  settings: { maxPlayers: 2, minuteLimit: 15 },
+  settings: {
+    maxPlayers: 2,
+    minuteLimit: 15,
+    startingCash: 2_500_000,
+    roundBonus: 250_000,
+    turnLimitMs: 20_000,
+  },
   endsAt: 0,
   players: [],
   fields: [],
   doubler: null,
   lastChanceCard: null,
+  deal: null,
+  dealUsed: false,
   autoSell: null,
   pickOptions: null,
   standings: null,

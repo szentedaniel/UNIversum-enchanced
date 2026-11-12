@@ -1,6 +1,6 @@
 /** Game constants (spec: Rules, parity yardstick). Amounts are in forints. */
 
-/** Cash each Player starts with (R7). */
+/** The default cash each Player starts with (R7); a Room's creator may choose another. */
 export const START_CASH = 2_500_000;
 
 /** Paid by the Bank for passing or landing on Start (R10, R73). */
@@ -8,7 +8,7 @@ export const ROUND_BONUS = 250_000;
 
 export const MINUTE_MS = 60_000;
 
-/** The Turn timer every client shows: 20 s per decision (F22, R17). */
+/** The default Turn timer: 20 s per decision (F22, R17); a Room's creator may choose another. */
 export const TURN_LIMIT_MS = 20_000;
 
 /**
@@ -20,8 +20,8 @@ export const TURN_SLACK_MS = 3_000;
 
 /**
  * The `turnDeadline` of a decision whose Playback ends at `actsAfter`.
- * `turnLimitMs` is a server override for e2e runs, which need short Turns;
- * production leaves it out.
+ * `turnLimitMs` is the Room's Turn timer; a server override for e2e runs,
+ * which need short Turns, wins over it when set.
  */
 export const turnDeadlineFrom = (actsAfter: number, turnLimitMs = TURN_LIMIT_MS): number =>
   actsAfter + turnLimitMs + TURN_SLACK_MS;

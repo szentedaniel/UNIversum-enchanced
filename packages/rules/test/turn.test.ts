@@ -100,6 +100,37 @@ describe("the roll", () => {
     expect(applied.events.some((e) => e.type === "RoundBonusPaid")).toBe(false);
   });
 
+  it.each([150_000, 250_000, 400_000] as const)(
+    "R10, R73: passing Start pays the Room's Round bonus (%i)",
+    (roundBonus) => {
+      const state = withPlayer(newGame({ settings: { roundBonus } }), "p1", { position: 31 });
+
+      const applied = roll(state);
+
+      expect(player(applied.state, "p1").cash).toBe(START_CASH + roundBonus);
+      expect(applied.events).toContainEqual({
+        type: "RoundBonusPaid",
+        player: "p1",
+        amount: roundBonus,
+      });
+    },
+  );
+
+  it.each([150_000, 250_000, 400_000] as const)(
+    "R73: landing exactly on Start pays the Room's Round bonus (%i)",
+    (roundBonus) => {
+      const [a, b] = diceOf(roll(newGame()));
+      const state = withPlayer(newGame({ settings: { roundBonus } }), "p1", {
+        position: 32 - (a + b),
+      });
+
+      const applied = roll(state);
+
+      expect(player(applied.state, "p1").position).toBe(0);
+      expect(player(applied.state, "p1").cash).toBe(START_CASH + roundBonus);
+    },
+  );
+
   it("R13: returns the events in order: DiceRolled, Moved, RoundBonusPaid, TurnPassed", () => {
     // Ends exactly on Start, the one Field with no effect of its own.
     const [a, b] = diceOf(roll(newGame()));

@@ -7,6 +7,7 @@ import { Board } from "#board/Board.tsx";
 import { FieldCard } from "#board/FieldCard.tsx";
 import { ChanceCardOverlay } from "#components/ChanceCardOverlay.tsx";
 import { DiceOverlay } from "#components/DiceOverlay.tsx";
+import { EventLog } from "#components/EventLog.tsx";
 import { GameMenu } from "#components/GameMenu.tsx";
 import { EventToast, MinutePill } from "#components/GameHud.tsx";
 import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
@@ -54,7 +55,7 @@ export function Game() {
 
   if (!push || frame === null) {
     return (
-      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-4 text-center">
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-safe-4 text-center">
         <p className="m-0 font-bold">
           {joinError
             ? rejectionText(joinError)
@@ -83,6 +84,7 @@ export function Game() {
   const players: PlayerSummary[] = view.players.map((p) => ({
     seat: p.seat,
     name: playerName(p.name),
+    bot: p.bot,
     cash: formatMoney(p.cash),
     fields: view.fields.filter((field) => field.owner === p.id).length,
     current: p.id === view.currentPlayer,
@@ -121,15 +123,23 @@ export function Game() {
       >
         {rejected ? rejectionText(rejection.code) : toast?.text}
       </EventToast>
+      <EventLog />
       <GameMenu />
     </>
   );
 
   // The Turn card at the bottom; the Field card takes its place while open.
-  const turnCard = (
-    <TurnCard view={view} decision={decision} shownTurn={shownTurn} waiting={waiting} />
-  );
   const mySeat = view.players.find((p) => p.id === me)?.seat ?? 0;
+  const turnCard = (
+    <TurnCard
+      view={view}
+      decision={decision}
+      shownTurn={shownTurn}
+      waiting={waiting}
+      clockOffset={clockOffset}
+      seat={mySeat}
+    />
+  );
   // The bottom slot in the Decision module's order (spec #72): the result
   // screen, the Field card in inspect mode during my Sale or pick (‹ › over its
   // pickable Fields only; closing it brings the tray back), the tray, the Field
@@ -154,7 +164,7 @@ export function Game() {
 
   if (wide) {
     return (
-      <main className="board-backdrop fixed inset-0 overflow-hidden">
+      <main className="game-shell board-backdrop fixed inset-0 overflow-hidden p-safe-0">
         <ReconnectOverlay />
         {podium}
         {/* The Board's box: clear of the corner cards, the status row and the card; the
@@ -183,7 +193,7 @@ export function Game() {
   }
 
   return (
-    <main className="board-backdrop fixed inset-0 flex flex-col overflow-hidden pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
+    <main className="game-shell board-backdrop fixed inset-0 flex flex-col overflow-hidden px-safe-0 pt-safe-2 pb-safe-2">
       <ReconnectOverlay />
       {podium}
       <ul className="m-0 flex list-none justify-center gap-1.5 px-2" aria-label={m.game_players()}>

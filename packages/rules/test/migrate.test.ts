@@ -4,6 +4,8 @@ import {
   isRejection,
   migrate,
   publicView,
+  ROUND_BONUS,
+  START_CASH,
   STATE_VERSION,
   SYSTEM,
   TURN_LIMIT_MS,
@@ -11,7 +13,15 @@ import {
 } from "#index.ts";
 import stateV1 from "./fixtures/state-v1.json" with { type: "json" };
 import stateV2 from "./fixtures/state-v2.json" with { type: "json" };
-import { deadlineOf, newGame, roll } from "./helpers.ts";
+import stateV3 from "./fixtures/state-v3.json" with { type: "json" };
+import stateV4 from "./fixtures/state-v4.json" with { type: "json" };
+import stateV5 from "./fixtures/state-v5.json" with { type: "json" };
+import stateV6 from "./fixtures/state-v6.json" with { type: "json" };
+import stateV7 from "./fixtures/state-v7.json" with { type: "json" };
+import stateV8 from "./fixtures/state-v8.json" with { type: "json" };
+import stateV9 from "./fixtures/state-v9.json" with { type: "json" };
+import { deadlineOf, newGame, playTurn, roll } from "./helpers.ts";
+import { chooser, nextMove } from "./simulation.ts";
 
 /**
  * Stored snapshots, one per `stateVersion` the server has ever written
@@ -26,6 +36,13 @@ import { deadlineOf, newGame, roll } from "./helpers.ts";
 const fixtures: { version: number; state: unknown }[] = [
   { version: 1, state: stateV1 },
   { version: 2, state: stateV2 },
+  { version: 3, state: stateV3 },
+  { version: 4, state: stateV4 },
+  { version: 5, state: stateV5 },
+  { version: 6, state: stateV6 },
+  { version: 7, state: stateV7 },
+  { version: 8, state: stateV8 },
+  { version: 9, state: stateV9 },
 ];
 
 /** The keys of an object, and of its first array item or nested object, as paths. */
@@ -44,10 +61,12 @@ describe("state migrations", () => {
     expect(fixtures.map((f) => f.version)).toContain(STATE_VERSION);
   });
 
-  it("the current snapshot has the shape a new game has (a changed shape needs a new STATE_VERSION)", () => {
+  it("the current snapshot has the shape a played Turn has (a changed shape needs a new STATE_VERSION)", () => {
     const current = fixtures.find((f) => f.version === STATE_VERSION);
 
-    expect(shape(current?.state)).toEqual(shape(roll(newGame()).state));
+    // The Wealth series grows with the game, so the reference is the
+    // fixture's own recipe: a game one Turn in.
+    expect(shape(current?.state)).toEqual(shape(playTurn(newGame()).state));
   });
 
   it.each(fixtures)("a snapshot stored at version $version loads and plays on", ({ state }) => {
@@ -67,6 +86,24 @@ describe("state migrations", () => {
       { actor: SYSTEM, now: deadlineOf(migrated) },
     );
     expect(isRejection(timedOut)).toBe(false);
+  });
+
+  it("a state stored before the starting cash setting loads with 2,500,000 (story 14)", () => {
+    for (const { state } of fixtures.filter((f) => f.version < STATE_VERSION)) {
+      expect(migrate(state).settings.startingCash).toBe(START_CASH);
+    }
+  });
+
+  it("a state stored before the Round bonus setting loads with 250,000 (story 14)", () => {
+    for (const { state } of fixtures.filter((f) => f.version < STATE_VERSION)) {
+      expect(migrate(state).settings.roundBonus).toBe(ROUND_BONUS);
+    }
+  });
+
+  it("a state stored before the Turn timer setting loads with 20 s (story 14)", () => {
+    for (const { state } of fixtures.filter((f) => f.version < STATE_VERSION)) {
+      expect(migrate(state).settings.turnLimitMs).toBe(TURN_LIMIT_MS);
+    }
   });
 
   it("ADR-0004: a version-1 state keeps its deadline and needs no wait", () => {
@@ -90,6 +127,59 @@ describe("state migrations", () => {
     const migrated = migrate(stored);
 
     expect(migrated.actsAfter).toBe(stored.endsAt);
+  });
+
+  it("a version-2 state seats no Bots: every Player was a Guest", () => {
+    const migrated = migrate(stateV2);
+
+    expect(migrated.players.map((p) => p.bot)).toEqual(migrated.players.map(() => false));
+  });
+
+  it("spec #172: a version-2 state has no pending Deal, so its Deal slot starts empty", () => {
+    expect(migrate(stateV2).deal).toBeNull();
+  });
+
+  it("spec #172: a version-7 state keeps this Turn's Deal guard", () => {
+    expect(migrate(stateV7).dealUsed).toBe(false);
+    const pending = {
+      ...stateV7,
+      deal: {
+        proposer: "p1",
+        recipient: "p2",
+        give: { fields: [], cash: 0 },
+        take: { fields: [], cash: 0 },
+      },
+    };
+
+    expect(migrate(pending).dealUsed).toBe(true);
+  });
+
+  it("spec #177: a version-8 state loads with an empty Wealth series and a production Minute", () => {
+    const migrated = migrate(stateV8);
+
+    expect(migrated.wealthSamples).toEqual([]);
+    expect(migrated.minuteMs).toBe(60_000);
+  });
+
+  it("spec #177: a version-8 state plays on to its end, and its final sample matches the standings", () => {
+    const pick = chooser(1);
+    let state = migrate(stateV8);
+
+    while (state.phase.kind !== "gameOver") {
+      const move = nextMove(state, pick, 1_000);
+      if (!move) throw new Error("a stored game offered no move");
+      const actor = move.intent.type === "TurnTimedOut" ? SYSTEM : state.currentPlayer;
+      const result = apply(state, move.intent, { actor, now: move.now });
+      if (isRejection(result)) throw new Error(`${move.intent.type} was refused: ${result.code}`);
+      state = result.state;
+    }
+
+    const standings = publicView(state).standings ?? [];
+    const final = state.wealthSamples.at(-1);
+    expect(standings).toHaveLength(state.players.length);
+    for (const standing of standings) {
+      expect(final?.wealth[standing.player]).toBe(standing.wealth);
+    }
   });
 
   it("a state at the current version comes back unchanged", () => {

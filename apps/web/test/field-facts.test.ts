@@ -15,6 +15,7 @@ const owner: PlayerState = {
   bankrupt: false,
   quarantineRounds: null,
   hasPcrTest: false,
+  bot: false,
 };
 
 function viewWith(field: FieldView): PublicView {
@@ -27,7 +28,13 @@ function viewWith(field: FieldView): PublicView {
     actsAfter: 40_000,
     turnDeadline: 0,
     turnTimer: { endsAt: 0, limitMs: 0 },
-    settings: { maxPlayers: 2, minuteLimit: 15 },
+    settings: {
+      maxPlayers: 2,
+      minuteLimit: 15,
+      startingCash: 2_500_000,
+      roundBonus: 250_000,
+      turnLimitMs: 20_000,
+    },
     endsAt: 0,
     players: [{ ...owner, wealth: owner.cash }],
     fields: Array.from({ length: FIELD_COUNT }, (_, id) =>
@@ -35,6 +42,8 @@ function viewWith(field: FieldView): PublicView {
     ),
     doubler: null,
     lastChanceCard: null,
+    deal: null,
+    dealUsed: false,
     autoSell: null,
     pickOptions: null,
     standings: null,

@@ -23,7 +23,7 @@ test("the create form refuses a bad Room name inline and keeps the Guest on the 
   await expect(page).toHaveURL("/create");
 });
 
-test("a password Lobby is listed with a lock, asks for its password, fills up and leaves the list when started", async ({
+test("a password Lobby is listed with a lock, asks for its password, fills up, leaves the list and stays off when started", async ({
   page: creator,
   browser,
   baseURL,
@@ -48,6 +48,7 @@ test("a password Lobby is listed with a lock, asks for its password, fills up an
   await creator.getByLabel("Room name").fill("  Friday   game ");
   await creator.getByLabel("2", { exact: true }).check();
   await creator.getByLabel("15 minutes").check();
+  await creator.getByRole("radio", { name: /400K/ }).check();
   await creator.getByLabel("Password (optional)").fill("open sesame");
   await creator.getByRole("button", { name: "Create Room" }).click();
   await expect(creator).toHaveURL(/\/room\/[1-9]\d{5}$/);
@@ -55,6 +56,7 @@ test("a password Lobby is listed with a lock, asks for its password, fills up an
   await expect(creator.getByRole("heading", { name: "Friday game" })).toBeVisible();
   await expect(creator.getByText("Password-protected")).toBeVisible();
   await expect(creator.getByText("Players: 1/2")).toBeVisible();
+  await expect(creator.getByText(/Round bonus:.*400,000/)).toBeVisible();
 
   // The list shows it live, with a lock.
   const tile = watcher!.getByTestId(`lobby-${code}`);
@@ -76,14 +78,14 @@ test("a password Lobby is listed with a lock, asks for its password, fills up an
   await expect(joiner!).toHaveURL(`/room/${code}`);
   await expect(joiner!.getByText("Players: 2/2")).toBeVisible();
 
-  // A full Lobby shows Full, with no Join button; joining by code says so.
-  await expect(tile).toContainText("Full");
-  await expect(tile.getByRole("button", { name: "Join" })).toHaveCount(0);
+  // A full Lobby has no empty Seat, so it leaves the list (ticket #196);
+  // joining by code still says why.
+  await expect(tile).toHaveCount(0);
   await watcher!.getByRole("textbox", { name: "Room code" }).fill(code);
   await watcher!.locator("form.join").getByRole("button", { name: "Join" }).click();
   await expect(watcher!.getByRole("alert")).toHaveText("This Lobby is full.");
 
-  // Started: the Room leaves the list.
+  // Started: the Room stays off the list.
   await joiner!.getByRole("button", { name: "Start" }).click();
   await expect(creator).toHaveURL(`/game/${code}`);
   await expect(tile).toHaveCount(0);

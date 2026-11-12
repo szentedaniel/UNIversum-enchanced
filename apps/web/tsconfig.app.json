@@ -9,5 +9,8 @@
     "allowJs": true,
     "types": ["vite/client"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  // The service worker has its own project and the `webworker` lib
+  // (tsconfig.worker.json); its globals would clash with the DOM's.
+  "exclude": ["src/pwa/sw.ts"]
 }

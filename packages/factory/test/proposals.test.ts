@@ -3,9 +3,11 @@ import {
   ARCHITECTURE_MARKER,
   architectureRun,
   DEFAULT_MAX_PROPOSALS,
+  issueWork,
   newProposals,
   proposalIssueBody,
   proposalLabel,
+  pullWork,
   type Proposal,
 } from "#maintain/proposals.ts";
 
@@ -50,18 +52,106 @@ describe("proposalIssueBody", () => {
   });
 });
 
+const tracked = (number: number, title: string, paths: string[] = []) => ({
+  number,
+  title,
+  paths,
+});
+
 describe("newProposals", () => {
   it("drops a proposal an open issue already carries, ignoring case and spacing", () => {
-    const open = ["  deepen the DISPATCHER's frontier "];
+    const open = [tracked(120, "  deepen the DISPATCHER's frontier ")];
 
     expect(newProposals([twoWayDoor, oneWayDoor], open)).toEqual([oneWayDoor]);
   });
 
+  it("drops a proposal whose module an open issue or pull request already names", () => {
+    const trackedWork = [
+      issueWork({
+        number: 112,
+        title: "Deepen the run-log reader",
+        body: "## Files\n\n- `packages/factory/src/shared/runs.ts`",
+        labels: ["ready-for-agent"],
+        subIssues: 0,
+      }),
+      pullWork({
+        number: 154,
+        title: "Implement #129",
+        body: "Closes #129",
+        files: ["packages/factory/src/shared/runs.ts"],
+      }),
+    ];
+    const repeat = { ...twoWayDoor, files: ["packages/factory/src/shared/runs.ts"] };
+
+    expect(newProposals([repeat, oneWayDoor], trackedWork)).toEqual([oneWayDoor]);
+  });
+
+  it("keeps a proposal whose modules none of the tracked work names", () => {
+    const unrelated = [
+      tracked(160, "GameRoom crash", ["apps/server/src/room/game-room.ts"]),
+      tracked(164, "Implement #160", ["apps/server/src/room/game-room.ts"]),
+    ];
+
+    expect(newProposals([twoWayDoor, oneWayDoor], unrelated)).toEqual([twoWayDoor, oneWayDoor]);
+  });
+
   it("keeps both when neither is tracked", () => {
-    expect(newProposals([twoWayDoor, oneWayDoor], ["Red main: CI failed on 0b9af87"])).toEqual([
-      twoWayDoor,
-      oneWayDoor,
-    ]);
+    expect(
+      newProposals([twoWayDoor, oneWayDoor], [tracked(141, "Red main: CI failed on 0b9af87")]),
+    ).toEqual([twoWayDoor, oneWayDoor]);
+  });
+});
+
+describe("issueWork", () => {
+  it("reads the paths an open ticket names, and keeps its title for the title dedupe", () => {
+    expect(
+      issueWork({
+        number: 129,
+        title: "Deepen the run-log reader in shared/runs.ts",
+        body: "The callers are fix/decide.ts and maintain/run-red-main.ts.",
+        labels: ["ready-for-agent"],
+        subIssues: 0,
+      }),
+    ).toEqual({
+      number: 129,
+      title: "Deepen the run-log reader in shared/runs.ts",
+      paths: ["shared/runs.ts", "fix/decide.ts", "maintain/run-red-main.ts"],
+    });
+  });
+
+  it("keeps a spec, a report and an unlabelled issue's title, but not its modules", () => {
+    const base = {
+      number: 85,
+      title: "AI software factory",
+      body: "`packages/factory/src/shared/runs.ts`",
+      labels: ["ready-for-agent"],
+      subIssues: 0,
+    };
+
+    for (const issue of [
+      { ...base, subIssues: 8 },
+      { ...base, labels: ["factory:report"] },
+      { ...base, labels: [] },
+    ]) {
+      expect(issueWork(issue)).toEqual({ number: 85, title: "AI software factory", paths: [] });
+    }
+  });
+});
+
+describe("pullWork", () => {
+  it("carries the changed files as targets", () => {
+    expect(
+      pullWork({
+        number: 154,
+        title: "Implement #129: deepen the run-log reader",
+        body: "Closes #129",
+        files: ["packages/factory/src/shared/runs.ts", "packages/factory/src/fix/decide.ts"],
+      }),
+    ).toEqual({
+      number: 154,
+      title: "Implement #129: deepen the run-log reader",
+      paths: ["packages/factory/src/shared/runs.ts", "packages/factory/src/fix/decide.ts"],
+    });
   });
 });
 

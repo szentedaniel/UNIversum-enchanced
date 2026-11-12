@@ -95,6 +95,26 @@ describe("travelling with Erasmus", () => {
     expect(travelled.state.phase).toMatchObject({ kind: "offer", field: MUSEUM_4 });
   });
 
+  it.each([150_000, 250_000, 400_000] as const)(
+    "R65: a route past Start pays the Room's Round bonus (%i)",
+    (roundBonus) => {
+      const landed = rollOnto(newGame({ players: 2, settings: { roundBonus } }), ERASMUS);
+
+      const travelled = accept(
+        landed.state,
+        { type: "TravelErasmus", turn: landed.state.turn, field: LONDON },
+        "p1",
+      );
+
+      expect(travelled.events).toContainEqual({
+        type: "RoundBonusPaid",
+        player: "p1",
+        amount: roundBonus,
+      });
+      expect(player(travelled.state, "p1").cash).toBe(2_500_000 + roundBonus);
+    },
+  );
+
   it("R65: landing on the Player's own Museum does nothing and passes the Turn", () => {
     let state = withField(newGame({ players: 2 }), MUSEUM_4, { owner: "p1" });
     state = withField(state, VESZPREM, { owner: "p2", level: 1 });
@@ -171,6 +191,24 @@ describe("the Erasmus pick in the view", () => {
       steps: 4,
       passesStart: false,
       bonus: null,
+    });
+  });
+
+  it("lists the Room's Round bonus as the bonus of a route past Start", () => {
+    const state = withField(newGame({ players: 2, settings: { roundBonus: 400_000 } }), ZURICH, {
+      owner: "p1",
+      level: 1,
+    });
+
+    const landed = rollOnto(state, ERASMUS);
+    const view = publicView(landed.state);
+
+    expect(view.pickOptions).toContainEqual({
+      kind: "erasmus",
+      field: LONDON,
+      steps: 29,
+      passesStart: true,
+      bonus: 400_000,
     });
   });
 

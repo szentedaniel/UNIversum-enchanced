@@ -12,7 +12,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "atlas": "node scripts/atlas.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.worker.json",
     "paraglide": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy localStorage preferredLanguage baseLocale --silent",
     "postinstall": "pnpm run paraglide"
   },
@@ -32,6 +32,7 @@
     "react-dom": "catalog:",
     "react-router": "catalog:",
     "tailwind-merge": "catalog:",
+    "uqr": "catalog:",
     "zustand": "catalog:"
   },
   "devDependencies": {

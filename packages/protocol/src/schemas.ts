@@ -10,13 +10,18 @@
 import { FIELD_COUNT, MAX_LEVEL, type PlayerIntent } from "@universum/rules";
 import { z } from "zod";
 import {
+  CHAT_IDS,
   DEFAULT_SETTINGS,
   GUEST_TOKEN_PATTERN,
   MINUTE_LIMITS,
   PASSWORD_MAX_BYTES,
   PLAYER_COUNTS,
+  ROUND_BONUSES,
+  STARTING_CASHES,
+  TURN_LIMITS,
   utf8Length,
   type Assert,
+  type ClientChat,
   type ClientIntent,
   type CreateOptions,
   type JoinOptions,
@@ -24,6 +29,22 @@ import {
 } from "#messages.ts";
 
 const turn = z.int().nonnegative();
+
+/** A Player id: what the server hands out (`newPlayerId`), never a Guest token. */
+const playerId = z.string().min(1).max(64);
+
+/** One side of a Deal: Fields on the Board, and whole forints of cash. */
+const dealSide = z.strictObject({
+  fields: z
+    .array(
+      z
+        .int()
+        .min(0)
+        .max(FIELD_COUNT - 1),
+    )
+    .max(FIELD_COUNT),
+  cash: z.int().nonnegative(),
+});
 
 const PLAYER_INTENT_SCHEMAS = [
   z.strictObject({ type: z.literal("Roll"), turn }),
@@ -64,9 +85,25 @@ const PLAYER_INTENT_SCHEMAS = [
       .min(0)
       .max(FIELD_COUNT - 1),
   }),
+  z.strictObject({
+    type: z.literal("ProposeDeal"),
+    turn,
+    recipient: playerId,
+    give: dealSide,
+    take: dealSide,
+  }),
+  z.strictObject({ type: z.literal("AcceptDeal"), turn }),
+  z.strictObject({ type: z.literal("DeclineDeal"), turn }),
 ] as const;
 
-const ROOM_INTENT_SCHEMAS = [z.strictObject({ type: z.literal("Start") })] as const;
+const ROOM_INTENT_SCHEMAS = [
+  z.strictObject({ type: z.literal("Start") }),
+  z.strictObject({ type: z.literal("AddBot") }),
+  // The public Player id a Room made: bounded, but the Room looks it up in its own Seats.
+  z.strictObject({ type: z.literal("RemoveBot"), playerId: z.string().min(1).max(64) }),
+  z.strictObject({ type: z.literal("Rematch") }),
+  z.strictObject({ type: z.literal("WithdrawRematch") }),
+] as const;
 
 export const playerIntentSchema = z.discriminatedUnion("type", [...PLAYER_INTENT_SCHEMAS]);
 
@@ -85,6 +122,12 @@ export type PlayerIntentsMatchRules = Assert<
 /** Compile-time check: `intentSchema` parses exactly `ClientIntent`. */
 export type ClientIntentsMatch = Assert<Same<z.infer<typeof intentSchema>, ClientIntent>>;
 
+/** One quick-chat message: a catalogue id and nothing else (the Room fills in the sender's Seat). */
+export const chatSchema = z.strictObject({ id: z.enum(CHAT_IDS) });
+
+/** Compile-time check: `chatSchema` parses exactly `ClientChat`. */
+export type ChatMatchesClient = Assert<Same<z.infer<typeof chatSchema>, ClientChat>>;
+
 /** A password of at most `PASSWORD_MAX_BYTES` UTF-8 bytes. */
 const password = z
   .string()
@@ -99,6 +142,9 @@ const guestToken = z.string().regex(GUEST_TOKEN_PATTERN);
 export const createOptionsSchema = z.object({
   maxPlayers: z.literal(PLAYER_COUNTS).default(DEFAULT_SETTINGS.maxPlayers),
   minuteLimit: z.literal(MINUTE_LIMITS).default(DEFAULT_SETTINGS.minuteLimit),
+  startingCash: z.literal(STARTING_CASHES).default(DEFAULT_SETTINGS.startingCash),
+  roundBonus: z.literal(ROUND_BONUSES).default(DEFAULT_SETTINGS.roundBonus),
+  turnLimitMs: z.literal(TURN_LIMITS).default(DEFAULT_SETTINGS.turnLimitMs),
   roomName: z.string().max(ROOM_NAME_MAX_RAW_LENGTH).optional(),
   password: password.optional(),
   guestToken: guestToken.optional(),
@@ -115,6 +161,7 @@ export const joinOptionsSchema = z.object({
   code: z.string().regex(/^\d{6}$/),
   password: password.optional(),
   guestToken: guestToken.optional(),
+  watch: z.boolean().optional(),
 });
 
 export type JoinOptionsMatch = Assert<

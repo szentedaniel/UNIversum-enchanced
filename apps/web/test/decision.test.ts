@@ -51,7 +51,13 @@ function newGame(players = 2): GameState {
       playerId: `p${index + 1}`,
       name: { adjective: `adj${index}`, noun: `noun${index}` },
     })),
-    settings: { maxPlayers: 4, minuteLimit: 50 },
+    settings: {
+      maxPlayers: 4,
+      minuteLimit: 50,
+      startingCash: 2_500_000,
+      roundBonus: 250_000,
+      turnLimitMs: 20_000,
+    },
     seed: SEED,
     now: T0,
   });
@@ -224,6 +230,31 @@ describe("openDecision", () => {
 
     expect(view.phase.kind).toBe("quarantineChoice");
     expect(myDecision(view)).toEqual({ owner: "me", kind: "quarantine", choice: view.phase });
+  });
+
+  it("offers me the recipient's Deal answer with its terms", () => {
+    const base = withField(newGame(), VIENNA, { owner: "p1", level: 1 });
+    const proposed = accept(base, {
+      type: "ProposeDeal",
+      turn: base.turn,
+      recipient: "p2",
+      give: { fields: [VIENNA], cash: 100_000 },
+      take: { fields: [], cash: 50_000 },
+    });
+    const view = publicView(proposed.state);
+
+    expect(view.phase.kind).toBe("dealAnswer");
+    expect(openDecision(frameOf(view), "p2", false)).toEqual({
+      owner: "me",
+      kind: "deal",
+      deal: view.deal,
+    });
+    expect(openDecision(frameOf(view), "p1", false)).toEqual({
+      owner: "other",
+      player: "p2",
+      kind: "deal",
+    });
+    expect(openDecision(frameOf(view), "p2", true)).toBeNull();
   });
 
   it("offers me my Sale with its key, Shortfall and pickable Fields", () => {

@@ -9,9 +9,11 @@
  */
 import {
   apply,
+  botIntent,
   isRejection,
   publicView,
   SYSTEM,
+  type DealSide,
   type FieldId,
   type GameEvent,
   type GameState,
@@ -146,11 +148,119 @@ export function nextMove(state: GameState, pick: Pick, timeoutEvery = 8): Move |
       if (field === undefined) throw new Error("the Erasmus pick offers no Field");
       return { intent: { type: "TravelErasmus", turn, field }, now };
     }
+    case "dealAnswer":
+      return { intent: { type: pick(2) === 0 ? "AcceptDeal" : "DeclineDeal", turn }, now };
     default: {
       const unhandled: never = phase;
       throw new Error(`the driver has no move for phase ${JSON.stringify(unhandled)}`);
     }
   }
+}
+
+export type BotGameOptions = GameOptions & {
+  /** A hard cap on accepted intents, so a broken game cannot loop forever. */
+  steps?: number;
+  /**
+   * One Deal is put to the current Player every `dealEvery` Turns; 0 (the
+   * default) never. The driver stands in for a Guest proposer: the policy
+   * itself never proposes a Deal (spec #171).
+   */
+  dealEvery?: number;
+};
+
+/**
+ * A legal Deal the driver puts to the current Player's next active opponent: a
+ * gift on an even Turn and a demand on an odd one, so the Bot's accept and
+ * decline paths both run. `null` when the phase does not allow a proposal or
+ * neither side has a Field or cash to move.
+ */
+function dealProposal(view: PublicView): Intent | null {
+  const { phase } = view;
+  if (phase.kind !== "awaitingRoll" && phase.kind !== "quarantineChoice") return null;
+  const proposer = view.currentPlayer;
+  const recipient = view.players.find((player) => player.id !== proposer && !player.bankrupt);
+  if (!recipient) return null;
+  const turn = view.turn;
+  if (turn % 2 === 0) {
+    const mine = view.fields.flatMap((field, id) => (field.owner === proposer ? [id] : []));
+    const cash = view.players.find((player) => player.id === proposer)?.cash ?? 0;
+    const give: DealSide =
+      mine.length > 0
+        ? { fields: [mine[0]!], cash: 0 }
+        : cash > 0
+          ? { fields: [], cash: 1 }
+          : { fields: [], cash: 0 };
+    if (give.fields.length === 0 && give.cash === 0) return null;
+    return {
+      type: "ProposeDeal",
+      turn,
+      recipient: recipient.id,
+      give,
+      take: { fields: [], cash: 0 },
+    };
+  }
+  const theirs = view.fields.flatMap((field, id) => (field.owner === recipient.id ? [id] : []));
+  const take: DealSide =
+    theirs.length > 0
+      ? { fields: [theirs[0]!], cash: 0 }
+      : recipient.cash > 0
+        ? { fields: [], cash: 1 }
+        : { fields: [], cash: 0 };
+  if (take.fields.length === 0 && take.cash === 0) return null;
+  return {
+    type: "ProposeDeal",
+    turn,
+    recipient: recipient.id,
+    give: { fields: [], cash: 0 },
+    take,
+  };
+}
+
+/**
+ * Plays one seeded game with every Decision answered by the Bot policy, with
+ * no Turn timeout: the policy must cover every Decision on its own.
+ */
+export function playBotGame(options: BotGameOptions = {}): Simulation {
+  const maxSteps = options.steps ?? 5_000;
+  const dealEvery = options.dealEvery ?? 0;
+
+  let state = newGame({
+    players: options.players,
+    settings: options.settings,
+    seed: options.seed,
+    now: options.now ?? T0,
+  });
+  const steps: Step[] = [];
+  /** The Turn whose Deal was already put, so the reopened decision cannot propose another. */
+  let dealTurn = 0;
+
+  while (state.phase.kind !== "gameOver" && steps.length < maxSteps) {
+    const view = publicView(state);
+    const proposal =
+      dealEvery > 0 && state.turn !== dealTurn && state.turn % dealEvery === 0
+        ? dealProposal(view)
+        : null;
+    const intent = proposal ?? botIntent(view);
+    if (!intent) break;
+    const now = state.actsAfter;
+    const result = apply(state, intent, { actor: state.currentPlayer, now });
+    if (isRejection(result)) {
+      throw new Error(
+        `${intent.type} on Turn ${state.turn} (${state.phase.kind}) was refused: ${result.code}`,
+      );
+    }
+    steps.push({
+      before: state,
+      after: result.state,
+      intent,
+      now,
+      events: result.events,
+    });
+    if (proposal) dealTurn = state.turn;
+    state = result.state;
+  }
+
+  return { state, steps, ended: state.phase.kind === "gameOver" };
 }
 
 /** Plays one seeded game, choosing only legal options, until it ends. */
@@ -233,10 +343,21 @@ export function ledgerOf(before: GameState, events: readonly GameEvent[]): Ledge
         move(event.player, -event.price);
         move(event.owner, event.price);
         break;
+      case "DealAccepted":
+        move(event.proposer, event.take.cash - event.give.cash);
+        move(event.recipient, event.give.cash - event.take.cash);
+        break;
       case "RentPaid": {
         const paid = Math.min(event.amount, cash[event.player] ?? 0);
         move(event.player, -paid);
         move(event.owner, event.amount);
+        bank += event.amount - paid;
+        break;
+      }
+      case "ChanceTransferPaid": {
+        const paid = Math.min(event.amount, cash[event.player] ?? 0);
+        move(event.player, -paid);
+        move(event.payee, event.amount);
         bank += event.amount - paid;
         break;
       }

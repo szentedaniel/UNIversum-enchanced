@@ -17,14 +17,30 @@ import { decide, emit, playerById, type Tx } from "#tx.ts";
 
 /**
  * A Charge waiting to be paid: who gets the money and how much. Plain JSON,
- * because it waits in the `selling` phase. Rent goes to the owner; the rest
- * to the Bank.
+ * because it waits in the `selling` phase. Rent and a Chance card's
+ * Player-to-Player payment go to a Player; the rest to the Bank.
  */
 export type PendingCharge =
   | { kind: "rent"; amount: number; owner: PlayerId; field: FieldId }
   | { kind: "tax"; amount: number }
   | { kind: "chanceCard"; amount: number }
+  | {
+      /**
+       * One Player-to-Player payment a Chance card makes (Dorm party, Thesis
+       * printing). `actor` is the card's drawer, whose Turn resumes once the
+       * `rest` of the card's payments are made; a Sale that interrupts them
+       * carries both, so the card finishes after the Sale.
+       */
+      kind: "chanceTransfer";
+      amount: number;
+      payee: PlayerId;
+      actor: PlayerId;
+      rest: ChancePayment[];
+    }
   | { kind: "timeoutPenalty"; amount: number };
+
+/** One payment a Chance card makes from a Player to another, in Seat order. */
+export type ChancePayment = { payer: PlayerId; payee: PlayerId; amount: number };
 
 declare module "#state.ts" {
   interface PhaseMap {
@@ -109,6 +125,10 @@ function payTo(tx: Tx, payer: PlayerId, pending: PendingCharge, amount: number):
       return;
     case "chanceCard":
       emit(tx, { type: "ChanceChargePaid", player: payer, amount });
+      return;
+    case "chanceTransfer":
+      playerById(tx, pending.payee).cash += amount;
+      emit(tx, { type: "ChanceTransferPaid", player: payer, payee: pending.payee, amount });
       return;
     case "timeoutPenalty":
       emit(tx, { type: "TimeoutPenaltyPaid", player: payer, amount });

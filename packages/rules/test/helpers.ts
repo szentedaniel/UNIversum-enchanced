@@ -6,7 +6,10 @@
 import { expect } from "vitest";
 import {
   apply,
+  ROUND_BONUS,
   setupGame,
+  START_CASH,
+  TURN_LIMIT_MS,
   type Actor,
   type Applied,
   type FieldId,
@@ -48,12 +51,19 @@ export function deadlineOf(state: GameState): number {
   return state.turnDeadline;
 }
 
-/** A freshly started game with default settings (4 Players, 50-minute Minute limit). */
+/** A freshly started game with default settings (4 Players, 50-minute Minute limit, 2,500,000 starting cash). */
 export function newGame(options: GameOptions = {}): GameState {
   const players = options.players ?? options.settings?.maxPlayers ?? 4;
   return setupGame({
     seats: seats(players),
-    settings: { maxPlayers: 4, minuteLimit: 50, ...options.settings },
+    settings: {
+      maxPlayers: 4,
+      minuteLimit: 50,
+      startingCash: START_CASH,
+      roundBonus: ROUND_BONUS,
+      turnLimitMs: TURN_LIMIT_MS,
+      ...options.settings,
+    },
     seed: options.seed ?? SEED,
     now: options.now ?? T0,
   });

@@ -32,10 +32,18 @@ export const LOBBY_ROOM = "lobby";
  */
 export const LOBBY_LIST_MESSAGE = { rooms: "rooms", add: "+", remove: "-" } as const;
 
-/** Message names. The client sends only `intent`; everything else is server → client. */
+/**
+ * Message names. The client sends `intent` and `chat`; everything else is
+ * server → client.
+ */
 export const MESSAGE = {
   /** Client → server: one `ClientIntent`. */
   intent: "intent",
+  /**
+   * Client → server: one `ClientChat`; server → every client: the accepted
+   * `ChatEvent`, with the sender's Seat filled in by the Room.
+   */
+  chat: "chat",
   /** Server → the joining client: `WelcomeMessage`. */
   welcome: "welcome",
   /** Server → every client while the Room is a Lobby: `LobbyMessage`. */
@@ -49,13 +57,54 @@ export const MESSAGE = {
 // ---------------------------------------------------------------- intents
 
 /** Intents the Room handles itself, outside the rules engine. */
-export type RoomIntent = {
+export type RoomIntent =
   /** Start the game; any Player may, once every Seat is taken (R5). */
-  type: "Start";
-};
+  | { type: "Start" }
+  /** A Bot on the next empty Seat; any seated Player may (ticket #196). */
+  | { type: "AddBot" }
+  /** Take a Bot off its Seat; any seated Player may (ticket #196). */
+  | { type: "RemoveBot"; playerId: PlayerId }
+  /** Ask for a rematch on the Podium; any seated Player may (ticket #223). */
+  | { type: "Rematch" }
+  /** Take the rematch vote back; any seated Player may (ticket #223). */
+  | { type: "WithdrawRematch" };
 
 /** Everything a client may send as an `intent` message. */
 export type ClientIntent = RoomIntent | PlayerIntent;
+
+// ---------------------------------------------------------------- chat
+
+/**
+ * The quick-chat lines. The wire carries the id; the web app shows its
+ * hu/en/de message. Ids are stable forever: the web message keys derive from
+ * them, so a removed line keeps its id reserved.
+ */
+export const CHAT_LINES = [
+  "good_luck",
+  "well_played",
+  "nice_move",
+  "thanks",
+  "hurry_up",
+  "oops",
+  "good_game",
+  "rematch",
+] as const;
+
+/** The quick-chat emotes, drawn as language-free glyphs with an accessible label. Ids are stable forever. */
+export const CHAT_EMOTES = ["cheer", "groan", "thinking", "laugh", "shock", "heart"] as const;
+
+export type ChatLineId = (typeof CHAT_LINES)[number];
+export type ChatEmoteId = (typeof CHAT_EMOTES)[number];
+export type ChatId = ChatLineId | ChatEmoteId;
+
+/** Every catalogue id, lines first: exactly what `chatSchema` accepts. */
+export const CHAT_IDS = [...CHAT_LINES, ...CHAT_EMOTES] as const;
+
+/** One chat tap, client → server. The sender is the connection's Seat, never part of the payload. */
+export type ClientChat = { id: ChatId };
+
+/** An accepted chat, server → every client: the sender's Seat and the catalogue id. */
+export type ChatEvent = { seat: number; id: ChatId };
 
 // ---------------------------------------------------------------- server messages
 
@@ -64,7 +113,12 @@ export type WelcomeMessage = {
   playerId: PlayerId;
 };
 
-export type LobbySeat = { playerId: PlayerId; name: PlayerName };
+export type LobbySeat = {
+  playerId: PlayerId;
+  name: PlayerName;
+  /** True for a Bot (ticket #196); absent on a Guest's Seat. */
+  bot?: boolean;
+};
 
 /**
  * A Lobby Seat as the Lobby shows it. `heldUntil`: its Player dropped, and the
@@ -100,6 +154,11 @@ export type GameMessage = {
    */
   reveals: Reveal[];
   /**
+   * The Player ids that have agreed to a rematch, in Seat order. Present only
+   * once the game has ended; absent while it runs (ticket #223).
+   */
+  rematch?: PlayerId[];
+  /**
    * The server's clock when it sent this push (epoch ms), so clients can show
    * the Turn timer without trusting their own clock.
    */
@@ -126,13 +185,31 @@ export function serverNow(clockOffset: number, clientNow = Date.now()): number {
 
 export const PLAYER_COUNTS = [2, 3, 4] as const;
 export const MINUTE_LIMITS = [15, 30, 50] as const;
+/** The cash every Player may start with (R7); the middle one is today's value. */
+export const STARTING_CASHES = [1_500_000, 2_500_000, 4_000_000] as const;
+/** The Round bonus a Room may pay for passing or landing on Start (R10, R73); the middle one is today's value. */
+export const ROUND_BONUSES = [150_000, 250_000, 400_000] as const;
+/** How long a Player has for one Decision (R17); the middle one is today's value. */
+export const TURN_LIMITS = [10_000, 20_000, 30_000] as const;
 
 export type RoomSettings = {
   maxPlayers: (typeof PLAYER_COUNTS)[number];
   minuteLimit: (typeof MINUTE_LIMITS)[number];
+  /** The cash every Player starts the game with (R7). */
+  startingCash: (typeof STARTING_CASHES)[number];
+  /** The money the Bank pays for passing or landing on Start (R10, R73). */
+  roundBonus: (typeof ROUND_BONUSES)[number];
+  /** The Turn timer's length in ms, before the server's slack (R17). */
+  turnLimitMs: (typeof TURN_LIMITS)[number];
 };
 
-export const DEFAULT_SETTINGS: RoomSettings = { maxPlayers: 4, minuteLimit: 50 };
+export const DEFAULT_SETTINGS: RoomSettings = {
+  maxPlayers: 4,
+  minuteLimit: 50,
+  startingCash: 2_500_000,
+  roundBonus: 250_000,
+  turnLimitMs: 20_000,
+};
 
 /** A password is at most this many UTF-8 bytes. */
 export const PASSWORD_MAX_BYTES = 64;
@@ -171,8 +248,15 @@ export const GUEST_TOKEN_PATTERN = /^[0-9a-f]{32}$/;
  * here because the password is checked before a Seat is reserved, where the
  * server does not yet know which Room is meant. A Guest token that matches a
  * Seat takes that Seat back (no password asked, even in a running game).
+ * `watch` asks to enter as a spectator (spec #179): a client with no Seat,
+ * which takes no Seat and never gets a Guest token.
  */
-export type JoinOptions = { code: string; password?: string; guestToken?: string };
+export type JoinOptions = {
+  code: string;
+  password?: string;
+  guestToken?: string;
+  watch?: boolean;
+};
 
 /**
  * WebSocket close codes the Room server sends (Colyseus uses 4000–4010).
@@ -218,8 +302,8 @@ export type LobbyListingMetadata = {
   roomName: string | null;
   /** Taken Seats. */
   players: number;
-  maxPlayers: RoomSettings["maxPlayers"];
-  minuteLimit: RoomSettings["minuteLimit"];
+  /** The Room's settings, so the list can mark the ones a Lobby is not on the defaults of (#188). */
+  settings: RoomSettings;
   hasPassword: boolean;
 };
 
@@ -239,11 +323,18 @@ export const REJECTION_CODES = [
   "NOT_OFFERED",
   "PLAYBACK_RUNNING",
   "SHORTFALL_NOT_COVERED",
+  "DEAL_RECIPIENT_INVALID",
+  "DEAL_FIELD_NOT_OWNED",
+  "DEAL_FIELD_REPEATED",
+  "DEAL_EMPTY",
+  "DEAL_CASH_NOT_COVERED",
+  "DEAL_ALREADY_PROPOSED",
   // Room server
   "MALFORMED",
   "INTERNAL",
   "ROOM_NOT_FOUND",
   "ROOM_FULL",
+  "REMATCH_NOT_OFFERED",
   "ROOM_NAME_INVALID",
   "WRONG_PASSWORD",
   // abuse protection (#37)

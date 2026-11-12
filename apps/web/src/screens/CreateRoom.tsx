@@ -3,6 +3,9 @@ import {
   MINUTE_LIMITS,
   PASSWORD_MAX_BYTES,
   PLAYER_COUNTS,
+  ROUND_BONUSES,
+  STARTING_CASHES,
+  TURN_LIMITS,
   utf8Length,
   type RejectionCode,
   type RoomSettings,
@@ -16,7 +19,7 @@ import { Input } from "#components/ui/input.tsx";
 import { Label } from "#components/ui/label.tsx";
 import { createRoom, JoinError, leaveRoom } from "#connection.ts";
 import { AlertText, RejectionText, retryAtOf, useCountdown, waitLabel } from "#screens/join.tsx";
-import { m } from "#text.ts";
+import { formatCompactCash, m } from "#text.ts";
 
 /** `/create`: the Room's settings, fixed from here on (R1, R3, R11). */
 export function CreateRoom() {
@@ -27,6 +30,15 @@ export function CreateRoom() {
   );
   const [minuteLimit, setMinuteLimit] = useState<RoomSettings["minuteLimit"]>(
     DEFAULT_SETTINGS.minuteLimit,
+  );
+  const [startingCash, setStartingCash] = useState<RoomSettings["startingCash"]>(
+    DEFAULT_SETTINGS.startingCash,
+  );
+  const [roundBonus, setRoundBonus] = useState<RoomSettings["roundBonus"]>(
+    DEFAULT_SETTINGS.roundBonus,
+  );
+  const [turnLimitMs, setTurnLimitMs] = useState<RoomSettings["turnLimitMs"]>(
+    DEFAULT_SETTINGS.turnLimitMs,
   );
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -50,6 +62,9 @@ export function CreateRoom() {
         roomName,
         maxPlayers,
         minuteLimit,
+        startingCash,
+        roundBonus,
+        turnLimitMs,
         ...(password && { password }),
       });
       await navigate(`/room/${code}`);
@@ -61,9 +76,9 @@ export function CreateRoom() {
   }
 
   return (
-    <div className="min-h-dvh pb-8">
+    <div className="min-h-dvh pb-safe-8">
       <ScreenHeader back="/rooms" label={m.back_to_list()} />
-      <main className="mx-auto flex max-w-md flex-col items-center gap-5 px-4 pt-6">
+      <main className="mx-auto flex max-w-md flex-col items-center gap-5 px-safe-4 pt-6">
         <h1 className="m-0 text-center text-3xl font-black md:text-4xl">{m.create_title()}</h1>
         <Card className="w-full p-4">
           <form className="flex flex-col gap-5" onSubmit={(e) => void submit(e)}>
@@ -105,6 +120,42 @@ export function CreateRoom() {
                 </Segment>
               ))}
             </Segments>
+            <Segments legend={m.create_starting_cash()}>
+              {STARTING_CASHES.map((cash) => (
+                <Segment
+                  key={cash}
+                  name="starting-cash"
+                  checked={startingCash === cash}
+                  onChange={() => setStartingCash(cash)}
+                >
+                  {formatCompactCash(cash)}
+                </Segment>
+              ))}
+            </Segments>
+            <Segments legend={m.create_round_bonus()}>
+              {ROUND_BONUSES.map((bonus) => (
+                <Segment
+                  key={bonus}
+                  name="round-bonus"
+                  checked={roundBonus === bonus}
+                  onChange={() => setRoundBonus(bonus)}
+                >
+                  {formatCompactCash(bonus)}
+                </Segment>
+              ))}
+            </Segments>
+            <Segments legend={m.create_turn_timer()}>
+              {TURN_LIMITS.map((limitMs) => (
+                <Segment
+                  key={limitMs}
+                  name="turn-timer"
+                  checked={turnLimitMs === limitMs}
+                  onChange={() => setTurnLimitMs(limitMs)}
+                >
+                  {m.create_turn_seconds({ seconds: limitMs / 1_000 })}
+                </Segment>
+              ))}
+            </Segments>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="room-password">{m.create_password()}</Label>
               <Input
@@ -128,7 +179,7 @@ export function CreateRoom() {
   );
 }
 
-/** A row of chunky single-choice segments (Players 2/3/4, Minute limit 15/30/50). */
+/** A row of chunky single-choice segments (Players, Minute limit, starting cash, Turn timer). */
 function Segments({ legend, children }: { legend: string; children: ReactNode }) {
   return (
     <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">

@@ -1,21 +1,23 @@
 import { serverNow, type RejectionCode } from "@universum/protocol/messages";
-import { Check, Copy, Lock, LockOpen, Timer, Users } from "lucide-react";
+import { Banknote, Check, Copy, Lock, LockOpen, Timer, Users, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useStore } from "zustand";
+import { InviteQr } from "#components/InviteQr.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ScreenHeader } from "#components/ScreenHeader.tsx";
 import { SeatCard } from "#components/SeatCard.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
+import { inviteLink } from "#invite.ts";
 import { PasswordForm, RejectionText, retryAtOf, useCountdown, useJoin } from "#screens/join.tsx";
 import { roomStore } from "#stores/room-store.ts";
-import { m, playerName, roomNameText } from "#text.ts";
+import { formatMoney, m, playerName, roomNameText } from "#text.ts";
 
 const COPIED_MS = 1500;
 
-/** The Room code as a big sticker; one tap copies it. */
-function RoomCodeSticker({ code }: { code: string }) {
+/** Returns `[copied, copy]`: `copy(text)` writes to the clipboard, then `copied` is true for a moment; a rejected copy (insecure origin) stays quiet. */
+function useCopy() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -24,18 +26,27 @@ function RoomCodeSticker({ code }: { code: string }) {
     return () => clearTimeout(timer);
   }, [copied]);
 
+  const copy = (text: string) => {
+    navigator.clipboard.writeText(text).then(
+      () => setCopied(true),
+      () => {},
+    );
+  };
+
+  return [copied, copy] as const;
+}
+
+/** The Room code as a big sticker; one tap copies it. */
+function RoomCodeSticker({ code }: { code: string }) {
+  const [copied, copy] = useCopy();
+
   return (
     <button
       type="button"
       aria-label={m.lobby_copy_code()}
       data-testid="room-code"
       className="sticker press inline-flex cursor-pointer items-center gap-3 rounded-ui bg-card px-5 py-2 text-card-foreground"
-      onClick={() => {
-        navigator.clipboard.writeText(code).then(
-          () => setCopied(true),
-          () => {},
-        );
-      }}
+      onClick={() => copy(code)}
     >
       <span className="tnum font-display text-4xl tracking-widest md:text-5xl">{code}</span>
       {copied ? (
@@ -47,6 +58,25 @@ function RoomCodeSticker({ code }: { code: string }) {
         <Copy size={22} strokeWidth={2.5} aria-hidden />
       )}
     </button>
+  );
+}
+
+/** The invite address as a QR code, with a tap-to-copy button; the link carries the Room code only. */
+function InviteCard({ link }: { link: string }) {
+  const [copied, copy] = useCopy();
+
+  return (
+    <div className="sticker flex flex-col items-center gap-3 rounded-ui bg-card p-4 text-card-foreground">
+      <InviteQr link={link} className="size-40" />
+      <Button variant="plain" size="sm" data-testid="invite-link" onClick={() => copy(link)}>
+        {copied ? (
+          <Check size={18} strokeWidth={3} aria-hidden />
+        ) : (
+          <Copy size={18} strokeWidth={2.5} aria-hidden />
+        )}
+        {copied ? m.lobby_copied() : m.lobby_copy_link()}
+      </Button>
+    </div>
   );
 }
 
@@ -99,7 +129,7 @@ export function Lobby() {
 
   if (error) {
     return (
-      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-4 text-center">
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-safe-4 text-center">
         <RejectionText code={error} wait={wait} />
         <Link to="/rooms" className={buttonVariants({ variant: "plain" })}>
           {m.back_to_list()}
@@ -110,9 +140,9 @@ export function Lobby() {
 
   if (!lobby && passwordJoin.asking) {
     return (
-      <div className="min-h-dvh pb-8">
+      <div className="min-h-dvh pb-safe-8">
         <ScreenHeader back="/rooms" label={m.back_to_list()} />
-        <main className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 pt-10 text-center">
+        <main className="mx-auto flex max-w-md flex-col items-center gap-4 px-safe-4 pt-10 text-center">
           <h1 className="m-0 text-3xl font-black md:text-4xl">{m.lobby_title()}</h1>
           <PasswordForm
             className="sticker rounded-ui bg-card p-4 text-card-foreground"
@@ -128,26 +158,28 @@ export function Lobby() {
 
   if (!lobby) {
     return (
-      <main className="flex min-h-dvh items-center justify-center p-4">
+      <main className="flex min-h-dvh items-center justify-center p-safe-4">
         <p className="font-bold">{m.connecting()}</p>
       </main>
     );
   }
 
-  const { maxPlayers, minuteLimit } = lobby.settings;
+  const { maxPlayers, minuteLimit, startingCash, roundBonus } = lobby.settings;
   const full = lobby.seats.length === maxPlayers;
   const open = Array.from({ length: maxPlayers - lobby.seats.length }, (_, i) => i);
+  const invite = inviteLink(window.location.origin, lobby.code);
 
   return (
-    <div className="min-h-dvh pb-8">
+    <div className="min-h-dvh pb-safe-8">
       <ScreenHeader back="/rooms" label={m.back_to_list()} />
       <ReconnectOverlay />
-      <main className="mx-auto max-w-5xl px-4 pt-6">
+      <main className="mx-auto max-w-5xl px-safe-4 pt-6">
         <div className="flex flex-col items-center gap-3 text-center">
           <h1 className="m-0 text-3xl font-black md:text-4xl">
             {roomNameText(lobby.roomName, lobby.code)}
           </h1>
           <RoomCodeSticker code={lobby.code} />
+          <InviteCard link={invite} />
         </div>
         <ul className="m-0 mt-8 flex list-none flex-wrap justify-center gap-4 p-0">
           {lobby.seats.map((seat, i) => (
@@ -158,6 +190,12 @@ export function Lobby() {
               you={seat.playerId === me}
               // The creator's Seat, wherever it is after frees and re-joins.
               creator={seat.playerId === lobby.creatorId}
+              bot={seat.bot === true}
+              onRemoveBot={
+                seat.bot === true
+                  ? () => sendIntent({ type: "RemoveBot", playerId: seat.playerId })
+                  : undefined
+              }
               held={
                 seat.heldUntil === undefined ? undefined : (
                   <HeldCountdown until={seat.heldUntil} clockOffset={clockOffset} />
@@ -166,10 +204,15 @@ export function Lobby() {
             />
           ))}
           {open.map((i) => (
-            <SeatCard key={`open-${i}`} open />
+            // A Bot takes the next empty Seat, so only the first open card offers it.
+            <SeatCard
+              key={`open-${i}`}
+              open
+              onAddBot={i === 0 ? () => sendIntent({ type: "AddBot" }) : undefined}
+            />
           ))}
         </ul>
-        <ul className="sticker m-0 mt-8 grid list-none grid-cols-1 gap-4 rounded-ui bg-card p-4 text-card-foreground sm:grid-cols-3">
+        <ul className="sticker m-0 mt-8 grid list-none grid-cols-1 gap-4 rounded-ui bg-card p-4 text-card-foreground sm:grid-cols-2 lg:grid-cols-3">
           <li className="flex items-center gap-2">
             <Users size={22} strokeWidth={2.5} aria-hidden />
             <span className="text-lg font-black">
@@ -180,6 +223,18 @@ export function Lobby() {
             <Timer size={22} strokeWidth={2.5} aria-hidden />
             <span className="text-lg font-black">
               {m.lobby_minute_limit({ minutes: minuteLimit })}
+            </span>
+          </li>
+          <li className="flex items-center gap-2">
+            <Wallet size={22} strokeWidth={2.5} aria-hidden />
+            <span className="text-lg font-black">
+              {m.lobby_starting_cash({ amount: formatMoney(startingCash) })}
+            </span>
+          </li>
+          <li className="flex items-center gap-2">
+            <Banknote size={22} strokeWidth={2.5} aria-hidden />
+            <span className="text-lg font-black">
+              {m.lobby_round_bonus({ amount: formatMoney(roundBonus) })}
             </span>
           </li>
           <li className="flex items-center gap-2">

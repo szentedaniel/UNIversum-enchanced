@@ -4,9 +4,18 @@
  * go through typed maps of message functions, so each message stays
  * tree-shakeable and a missing one fails to compile.
  */
-import type { RejectionCode } from "@universum/protocol/messages";
-import type { PlayerName } from "@universum/rules";
-import { CHANCE_CARD_MONEY, type ChanceCardId, type FieldKind } from "@universum/rules/board";
+import {
+  DEFAULT_SETTINGS,
+  type RejectionCode,
+  type RoomSettings,
+} from "@universum/protocol/messages";
+import type { DealSide, PlayerName } from "@universum/rules";
+import {
+  CHANCE_CARD_MONEY,
+  FIELDS,
+  type ChanceCardId,
+  type FieldKind,
+} from "@universum/rules/board";
 import { m } from "#paraglide/messages.js";
 import { getLocale } from "#paraglide/runtime.js";
 
@@ -108,12 +117,28 @@ const NOUNS: Record<string, Message> = {
 export const playerName = (name: PlayerName): string =>
   `${ADJECTIVES[name.adjective]?.() ?? name.adjective} ${NOUNS[name.noun]?.() ?? name.noun}`;
 
+/** One side of a Deal: its Fields' names and its cash, or "nothing" when it puts in neither. */
+export function dealSideText(side: DealSide): string {
+  const parts = [
+    ...side.fields.map((field) => fieldName(FIELDS[field]?.key ?? "")),
+    ...(side.cash > 0 ? [formatMoney(side.cash)] : []),
+  ];
+  return parts.length > 0 ? parts.join(", ") : m.deal_nothing();
+}
+
 const REJECTIONS: Record<RejectionCode, Message> = {
   STALE_TURN: m.rejection_stale_turn,
   NOT_YOUR_TURN: m.rejection_not_your_turn,
   NOT_OFFERED: m.rejection_not_offered,
+  REMATCH_NOT_OFFERED: m.rejection_rematch_not_offered,
   PLAYBACK_RUNNING: m.rejection_playback_running,
   SHORTFALL_NOT_COVERED: m.rejection_shortfall_not_covered,
+  DEAL_RECIPIENT_INVALID: m.rejection_deal_recipient_invalid,
+  DEAL_FIELD_NOT_OWNED: m.rejection_deal_field_not_owned,
+  DEAL_FIELD_REPEATED: m.rejection_deal_field_repeated,
+  DEAL_EMPTY: m.rejection_deal_empty,
+  DEAL_CASH_NOT_COVERED: m.rejection_deal_cash_not_covered,
+  DEAL_ALREADY_PROPOSED: m.rejection_deal_already_proposed,
   MALFORMED: m.rejection_malformed,
   INTERNAL: m.rejection_internal,
   ROOM_NOT_FOUND: m.rejection_room_not_found,
@@ -139,6 +164,32 @@ const CHANCE_CARD_TEXTS: Record<ChanceCardId, { title: Message; text: Message }>
     title: m.chance_failed_exams_title,
     text: () => m.chance_failed_exams_text({ amount: formatMoney(-CHANCE_CARD_MONEY.failedExams) }),
   },
+  textbookFair: {
+    title: m.chance_textbook_fair_title,
+    text: () =>
+      m.chance_textbook_fair_text({ amount: formatMoney(-CHANCE_CARD_MONEY.textbookFair) }),
+  },
+  teachingAssistantJob: {
+    title: m.chance_teaching_assistant_job_title,
+    text: () =>
+      m.chance_teaching_assistant_job_text({
+        amount: formatMoney(CHANCE_CARD_MONEY.teachingAssistantJob),
+      }),
+  },
+  examPeriod: { title: m.chance_exam_period_title, text: m.chance_exam_period_text },
+  scholarshipTransfer: {
+    title: m.chance_scholarship_transfer_title,
+    text: m.chance_scholarship_transfer_text,
+  },
+  dormParty: {
+    title: m.chance_dorm_party_title,
+    text: () => m.chance_dorm_party_text({ amount: formatMoney(CHANCE_CARD_MONEY.dormParty) }),
+  },
+  thesisPrinting: {
+    title: m.chance_thesis_printing_title,
+    text: () =>
+      m.chance_thesis_printing_text({ amount: formatMoney(-CHANCE_CARD_MONEY.thesisPrinting) }),
+  },
 };
 
 /** A Chance card's title and text in the active language. */
@@ -150,6 +201,24 @@ export const chanceCardText = (card: ChanceCardId): { title: string; text: strin
 /** A Room name; `null` (left empty by its creator) gets one made from the Room code. */
 export const roomNameText = (name: string | null, code: string): string =>
   name ?? m.room_name_generated({ code });
+
+/** One line per Room setting the Lobby list marks when a Lobby is off its default (#188). */
+const CUSTOM_SETTING_LINES: Record<keyof RoomSettings, (settings: RoomSettings) => string> = {
+  maxPlayers: (settings) => m.rooms_setting_players({ max: settings.maxPlayers }),
+  minuteLimit: (settings) => m.lobby_minute_limit({ minutes: settings.minuteLimit }),
+  startingCash: (settings) => m.lobby_starting_cash({ amount: formatMoney(settings.startingCash) }),
+  roundBonus: (settings) => m.lobby_round_bonus({ amount: formatMoney(settings.roundBonus) }),
+  turnLimitMs: (settings) => m.lobby_turn_timer({ seconds: settings.turnLimitMs / 1_000 }),
+};
+
+const isRoomSetting = (key: string): key is keyof RoomSettings => key in DEFAULT_SETTINGS;
+
+/** The differing Room settings of a Lobby, as the Lobby list shows them (#188). */
+export const customSettingsText = (settings: RoomSettings): string[] =>
+  Object.keys(CUSTOM_SETTING_LINES)
+    .filter(isRoomSetting)
+    .filter((key) => settings[key] !== DEFAULT_SETTINGS[key])
+    .map((key) => CUSTOM_SETTING_LINES[key](settings));
 
 /** Money in full, in the active language's number format. */
 export const formatMoney = (amount: number): string =>
@@ -172,6 +241,16 @@ export const formatCompactMoney = (amount: number): string =>
   new Intl.NumberFormat(getLocale(), { notation: "compact", maximumFractionDigits: 1 }).format(
     amount,
   );
+
+/** Short money with its currency, for the Create Room segments: three choices fit one row. */
+export const formatCompactCash = (amount: number): string =>
+  new Intl.NumberFormat(getLocale(), {
+    style: "currency",
+    currency: "HUF",
+    currencyDisplay: "narrowSymbol",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(amount);
 
 const FIELD_KINDS: Record<FieldKind, Message> = {
   start: m.field_kind_start,

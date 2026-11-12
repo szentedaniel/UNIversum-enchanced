@@ -11,6 +11,7 @@ import {
 import {
   CLOSE_CODE,
   createOptionsSchema,
+  DEFAULT_SETTINGS,
   intentSchema,
   joinOptionsSchema,
   MESSAGE,
@@ -51,6 +52,7 @@ import {
   type PasswordHash,
 } from "#room/password.ts";
 import { claimRoomCode, releaseRoomCode, reserveRoomCode } from "#room/room-code.ts";
+import { castVote, votersOf, withdrawVote } from "#room/rematch.ts";
 import { checkRoomName } from "#room/room-name.ts";
 import { GameDriver, type GameTiming, type SeatRecord } from "#room/game-driver.ts";
 import { systemScheduler, type Scheduler } from "#room/scheduler.ts";
@@ -140,14 +142,42 @@ type RoomIntentHandler<K extends RoomIntent["type"]> = (
 ) => RejectionCode | void;
 
 /**
- * Intents the Room handles itself, outside the rules engine (Start; later
- * Lobby actions). Every other intent goes to the rules engine.
+ * Intents the Room handles itself, outside the rules engine (Start, the
+ * Lobby's Bots, the Podium's rematch votes). Every other intent goes to the
+ * rules engine.
  */
 const ROOM_INTENTS: { [K in RoomIntent["type"]]: RoomIntentHandler<K> } = {
   Start: (room) => room.startGame(),
+  AddBot: (room) => room.addBot(),
+  RemoveBot: (room, _seat, intent) => room.removeBot(intent.playerId),
+  Rematch: (room, seat) => room.rematch(seat),
+  WithdrawRematch: (room, seat) => room.withdrawRematch(seat),
 };
 
 const isRoomIntent = (intent: ClientIntent): intent is RoomIntent => intent.type in ROOM_INTENTS;
+
+/**
+ * Runs one Room intent through its handler. The switch is exhaustive, so a
+ * new Room intent fails typecheck until its handler is registered above.
+ */
+function dispatchRoomIntent(
+  room: GameRoom,
+  seat: SeatRecord,
+  intent: RoomIntent,
+): RejectionCode | void {
+  switch (intent.type) {
+    case "Start":
+      return ROOM_INTENTS.Start(room, seat, intent);
+    case "AddBot":
+      return ROOM_INTENTS.AddBot(room, seat, intent);
+    case "RemoveBot":
+      return ROOM_INTENTS.RemoveBot(room, seat, intent);
+    case "Rematch":
+      return ROOM_INTENTS.Rematch(room, seat, intent);
+    case "WithdrawRematch":
+      return ROOM_INTENTS.WithdrawRematch(room, seat, intent);
+  }
+}
 
 /**
  * Create options that rebuild a Room from the store on boot. A class
@@ -218,10 +248,17 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   #shuttingDown = false;
   /** Seats held for absent Players, by public Player id (spec: Seat hold). */
   readonly #holds = new Map<PlayerId, Hold>();
+  /**
+   * The rematch votes of the ended Room, by public Player id: Room memory only,
+   * never in the store (spec #175, decision 6).
+   */
+  #rematchVotes: ReadonlySet<PlayerId> = new Set();
   /** The server's abuse protection; `createGameServer` sets it. */
   guard!: AbuseGuard;
   /** Intent flood control, per connected client. */
   readonly #flood = new Map<string, FloodMeter>();
+  /** Whether this Lobby is on the Lobby list; a full one is not (ticket #196). */
+  #listed = true;
 
   /** The commit pipeline; `onCreate` creates it once every dependency is set. */
   private get driver(): GameDriver {
@@ -262,8 +299,15 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     // password asked (#35). Everyone else needs an open Lobby Seat.
     if (!room.seatOfToken(join.data.guestToken ?? null)) {
       if (room.game) throw refuse("ROOM_NOT_FOUND");
-      // Seats, not clients: held and restored Seats have no client (maxClients leaves them room).
-      if (room.seats.length >= room.settings.maxPlayers) throw refuse("ROOM_FULL");
+      // Seats, not clients: held and restored Seats have no client (maxClients
+      // leaves them room). A Bot never keeps a Guest out of a full Lobby: the
+      // joining Guest takes its Seat instead (ticket #197).
+      if (
+        room.seats.length >= room.settings.maxPlayers &&
+        !room.seats.some((seat) => seat.bot === true)
+      ) {
+        throw refuse("ROOM_FULL");
+      }
       if (room.password !== null) {
         const password = join.data.password ?? "";
         // No password yet: the client asks for one. Not a guess, so not counted.
@@ -292,10 +336,11 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     } else {
       const parsed = createOptionsSchema.safeParse(options);
       if (!parsed.success) throw refuse("MALFORMED");
-      const { roomName, password, maxPlayers, minuteLimit } = parsed.data;
+      const { roomName, password, maxPlayers, minuteLimit, startingCash, roundBonus, turnLimitMs } =
+        parsed.data;
       const name = checkRoomName(roomName ?? "");
       if (!name.ok) throw refuse(name.code);
-      this.settings = { maxPlayers, minuteLimit };
+      this.settings = { maxPlayers, minuteLimit, startingCash, roundBonus, turnLimitMs };
       this.displayName = name.name;
       this.password = password ? await hashPassword(password) : null;
       this.roomId = reserveRoomCode((code) => this.store.isCodeInUse(code));
@@ -325,7 +370,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       readState: () => ({ game: this.game, seats: this.seats, endedAt: this.endedAt }),
       publish: (state, message) => {
         this.game = state;
-        this.broadcast(MESSAGE.game, message);
+        this.broadcast(MESSAGE.game, this.withVotes(message));
       },
       onEnded: (endedAt) => {
         this.endedAt = endedAt;
@@ -334,6 +379,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       onRetention: () => {
         void this.disconnect();
       },
+      isSeatConnected: (seat) => this.isSeatConnected(seat),
     });
     this.metrics.trackRoom(this);
     if (restored) {
@@ -341,6 +387,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       // A running game re-arms its deadline; one a crash left game-over (the
       // final save landed, `endedAt` did not) is finished now, so retention applies.
       if (this.game) this.driver.resume(this.game);
+      // A restored Lobby with every Seat taken is not listed (ticket #196).
+      this.syncListing();
     } else {
       this.log.info({ ...this.settings, hasPassword: this.password !== null }, "Room created");
     }
@@ -357,26 +405,30 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   private restore(stored: StoredRoom): void {
     this.roomId = stored.code;
     claimRoomCode(stored.code);
-    this.settings = stored.settings;
+    this.settings = { ...DEFAULT_SETTINGS, ...stored.settings };
     this.displayName = stored.roomName;
     this.creatorId = stored.creatorId;
     this.password = stored.password && decodePassword(stored.password);
-    this.seats = stored.seats.map(({ playerId, name, tokenHash = null }) => ({
+    this.seats = stored.seats.map(({ playerId, name, tokenHash = null, bot }) => ({
       playerId,
       name,
       sessionId: null,
       tokenHash,
+      ...(bot === true && { bot: true }),
     }));
     this.game = stored.game;
     // Nobody is connected yet: the Room waits for its Players instead of disposing.
     this.autoDispose = false;
     if (this.game) {
-      // A running game lives on with nobody connected (its Turns time out),
-      // until it ends; `onCreate` arms its deadline once the driver exists.
+      // A running game lives on with nobody connected: its Turn timers keep
+      // running until a Guest comes back (the Bot takes the absent Seats'
+      // Decisions from that first connection change on) or the game ends.
+      // `onCreate` arms its deadline once the driver exists.
       this.unlist();
     } else {
-      // A Lobby holds each Seat for its 60 s, as if its Player had just dropped.
-      for (const seat of this.seats) this.hold(seat, null);
+      // A Lobby holds each Guest's Seat for its 60 s, as if its Player had just
+      // dropped; a Bot has nobody to come back, so its Seat needs no hold.
+      for (const seat of this.seats) if (seat.bot !== true) this.hold(seat, null);
     }
   }
 
@@ -394,7 +446,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       this.guard.lobbyCreatedBy(this.roomId, auth.bucket);
     }
     if (this.game) throw refuse("ROOM_NOT_FOUND");
-    if (this.seats.length >= this.settings.maxPlayers) {
+    // A full Lobby takes the Guest in place of a Bot, if it has one (ticket #197).
+    const full = this.seats.length >= this.settings.maxPlayers;
+    const replaced = full ? this.seats.findIndex((seat) => seat.bot === true) : -1;
+    if (full && replaced === -1) {
       throw refuse("ROOM_FULL");
     }
     const seat: SeatRecord = {
@@ -404,9 +459,12 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       tokenHash: token && hashGuestToken(token),
     };
     if (auth?.creates && this.seats.length === 0) this.creatorId = seat.playerId;
+    const seats = this.seats.slice();
+    if (replaced === -1) seats.push(seat);
+    else seats[replaced] = seat;
     // Saved first: a Seat the store doesn't have isn't taken (the join fails).
-    this.driver.saveSeats([...this.seats, seat]);
-    this.seats.push(seat);
+    this.driver.saveSeats(seats);
+    this.seats = seats;
     this.log.info({ playerId: seat.playerId }, "Seat taken");
     client.send(MESSAGE.welcome, { playerId: seat.playerId } satisfies WelcomeMessage);
     this.broadcastLobby();
@@ -432,6 +490,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.hold(seat, reject ? () => reject() : null);
     this.metrics.seatDropped();
     this.log.info({ playerId: seat.playerId }, "Seat dropped");
+    // A running game's absent Guest has their Decisions played by the Bot.
+    this.driver.refreshBot();
     if (!this.game) this.broadcastLobby();
   }
 
@@ -440,23 +500,27 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     const seat = this.seatOf(client);
     if (!seat) return;
     this.unhold(seat.playerId);
+    // The Guest decides the open Decision again: any pending Bot action is cancelled.
+    this.driver.refreshBot();
     this.seatReconnected(seat);
     this.sendCurrent(client);
   }
 
   override onLeave(client: Client): void {
     this.#flood.delete(client.sessionId);
-    // In a running game the Seat stays (its Turns time out); a Lobby frees it.
-    // On shutdown nothing changes: the Room comes back as it was.
+    // In a running game the Seat stays (a Bot plays its Decisions from then);
+    // a Lobby frees it. On shutdown nothing changes: the Room comes back as it was.
     if (this.#shuttingDown) return;
     const seat = this.seatOf(client);
     if (!seat) return; // taken back from another connection, or already freed
     if (this.game) {
-      // Left a running game on purpose: the Seat stays (its Turns time out), as for a drop.
+      // Left a running game on purpose: the Seat stays (a Bot stands in), as for a drop.
       // (After a drop, `onLeave` only runs once the game has ended or the Seat was taken back.)
       if (this.endedAt === null) {
         this.metrics.seatDropped();
         this.log.info({ playerId: seat.playerId }, "Seat dropped");
+        // A Guest who left is absent too: the Bot plays their Decisions.
+        this.driver.refreshBot();
       }
       return;
     }
@@ -504,23 +568,42 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     // Its `onDrop` and `onLeave` find no Seat any more, so they change nothing.
     this.clients.find((c) => c.sessionId === previous)?.leave(CLOSE_CODE.seatTaken);
     client.send(MESSAGE.welcome, { playerId: seat.playerId } satisfies WelcomeMessage);
+    // The Guest is back: any pending Bot action for the open Decision is cancelled.
+    this.driver.refreshBot();
     this.seatReconnected(seat);
     this.sendCurrent(client);
   }
 
   /** Brings a returning client up to date: the game view, or the Lobby (to everyone, as the Seat is no longer held). */
   private sendCurrent(client: Client): void {
-    if (this.game) {
-      const message: GameMessage = {
-        view: publicView(this.game, this.timing),
-        events: [],
-        reveals: [],
-        now: this.now(),
-      };
-      client.send(MESSAGE.game, message);
-    } else {
-      this.broadcastLobby();
-    }
+    if (this.game) client.send(MESSAGE.game, this.gamePush(this.game));
+    else this.broadcastLobby();
+  }
+
+  /** The push of the Room's current state: its view, and the Podium's votes once the game ended. */
+  private gamePush(game: GameState): GameMessage {
+    return this.withVotes({
+      view: publicView(game, this.timing),
+      events: [],
+      reveals: [],
+      now: this.now(),
+    });
+  }
+
+  /** Adds the rematch votes to a push once the game has ended; a running game's push is unchanged. */
+  private withVotes(message: GameMessage): GameMessage {
+    return this.rematchOffered()
+      ? { ...message, rematch: votersOf(this.#rematchVotes, this.seats) }
+      : message;
+  }
+
+  /**
+   * Whether the Podium is up: the game has ended, or this push is the one that
+   * ended it (`endedAt` lands just after the broadcast).
+   */
+  private rematchOffered(): boolean {
+    const game = this.game;
+    return game !== null && (this.endedAt !== null || game.phase.kind === "gameOver");
   }
 
   /**
@@ -617,11 +700,75 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     return this.scheduler.now();
   }
 
+  /**
+   * A Bot on the next empty Seat (ticket #196): any seated Player may, while
+   * the Room is a Lobby. Bots get a generated Player name like a Guest.
+   */
+  addBot(): RejectionCode | void {
+    if (this.game) return "NOT_OFFERED";
+    if (this.seats.length >= this.settings.maxPlayers) return "ROOM_FULL";
+    const seat: SeatRecord = {
+      playerId: newPlayerId(),
+      name: newPlayerName(this.seats.map((s) => s.name)),
+      sessionId: null,
+      tokenHash: null,
+      bot: true,
+    };
+    this.driver.saveSeats([...this.seats, seat]);
+    this.seats.push(seat);
+    this.log.info({ playerId: seat.playerId }, "Bot seated");
+    this.broadcastLobby();
+  }
+
+  /** Takes a Bot off its Seat (ticket #196); a Guest's Seat is refused. */
+  removeBot(playerId: PlayerId): RejectionCode | void {
+    if (this.game) return "NOT_OFFERED";
+    const seat = this.seats.find((s) => s.playerId === playerId);
+    if (seat?.bot !== true) return "NOT_OFFERED";
+    this.log.info({ playerId }, "Bot removed");
+    this.freeSeat(playerId);
+  }
+
+  /**
+   * A Player asks for a rematch on the Podium (ticket #223): the vote is kept
+   * in Room memory and everyone hears who has agreed. Refused while no game
+   * has ended.
+   */
+  rematch(seat: SeatRecord): RejectionCode | void {
+    const refusal = this.voteRefusal(seat);
+    if (refusal) return refusal;
+    this.#rematchVotes = castVote(this.#rematchVotes, seat.playerId);
+    this.broadcastVotes();
+  }
+
+  /** A Player takes their rematch vote back (ticket #223); repeating it is harmless. */
+  withdrawRematch(seat: SeatRecord): RejectionCode | void {
+    const refusal = this.voteRefusal(seat);
+    if (refusal) return refusal;
+    this.#rematchVotes = withdrawVote(this.#rematchVotes, seat.playerId);
+    this.broadcastVotes();
+  }
+
+  /** Why this Seat cannot vote for a rematch, if it cannot: no game has ended, or it is a Bot's. */
+  private voteRefusal(seat: SeatRecord): RejectionCode | null {
+    if (this.game === null || this.endedAt === null) return "REMATCH_NOT_OFFERED";
+    // A Bot has no vote; a Guest's Seat keeps its vote while they are away.
+    if (seat.bot === true) return "NOT_OFFERED";
+    return null;
+  }
+
+  /** Tells everyone the Podium's votes (ticket #223). */
+  private broadcastVotes(): void {
+    if (this.game) this.broadcast(MESSAGE.game, this.gamePush(this.game));
+  }
+
   /** Start (R5): any Player, once every Seat is taken. */
   startGame(): RejectionCode | void {
     if (this.game || this.seats.length < this.settings.maxPlayers) return "NOT_OFFERED";
+    // A new game starts with no votes from the old Podium.
+    this.#rematchVotes = new Set();
     const game = setupGame({
-      seats: this.seats.map(({ playerId, name }) => ({ playerId, name })),
+      seats: this.seats.map(({ playerId, name, bot }) => ({ playerId, name, bot })),
       settings: this.settings,
       seed: this.timing.seed ?? newSeed(),
       now: this.now(),
@@ -658,8 +805,34 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    */
   private unlist(): void {
     this.guard.lobbyClosed(this.roomId);
+    this.hideFromList();
+  }
+
+  /**
+   * Keeps the Lobby list in step with the Seats (ticket #196): a Lobby with no
+   * empty Seat leaves the list, so strangers do not try to join it, and comes
+   * back once a Seat opens. Only a Lobby is listed.
+   */
+  private syncListing(): void {
+    if (this.game) return;
+    if (this.seats.length >= this.settings.maxPlayers) this.hideFromList();
+    else this.listAgain();
+  }
+
+  /** Removes the Lobby's entry from the Lobby list, if it is on it. */
+  private hideFromList(): void {
+    if (!this.#listed) return;
+    this.#listed = false;
     updateLobby(this, true);
     void this.setMatchmaking({ unlisted: true });
+  }
+
+  /** Puts the Lobby back on the Lobby list once a Seat has opened. */
+  private listAgain(): void {
+    if (this.#listed) return;
+    this.#listed = true;
+    // `unlisted` first: the LobbyRoom reads the Room's listing when it sees the add.
+    void this.setMatchmaking({ unlisted: false }).then(() => updateLobby(this));
   }
 
   /**
@@ -693,7 +866,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (intent !== null) {
       try {
         refused = isRoomIntent(intent)
-          ? ROOM_INTENTS[intent.type](this, seat, intent)
+          ? dispatchRoomIntent(this, seat, intent)
           : this.play(seat, intent);
       } catch (error) {
         // A bug outside the engine's own call (say, in game setup): same as an engine throw.
@@ -721,17 +894,25 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /**
+   * Whether that Seat's Player is connected right now: a live client holds its
+   * `sessionId`. A Bot's Seat has none, and a Guest who dropped keeps the stale
+   * one (the Seat is held for them).
+   */
+  private isSeatConnected(seat: SeatRecord): boolean {
+    return seat.sessionId !== null && this.clients.get(seat.sessionId) !== undefined;
+  }
+
+  /**
    * The Room's numbers for the `rooms`, `players_connected` and
-   * `seats_held_disconnected` gauges. Held: every Seat with no live client
-   * (dropped and held, or restored and not yet taken back), until the game ends.
+   * `seats_held_disconnected` gauges. Held: every Guest Seat with no live
+   * client (dropped and held, or restored and not yet taken back), until the
+   * game ends; a Bot's Seat is neither connected nor held.
    */
   gauges(): RoomGauges {
-    const live = new Set(this.clients.map((c) => c.sessionId));
-    const connected = this.seats.filter(
-      (s) => s.sessionId !== null && live.has(s.sessionId),
-    ).length;
+    const guests = this.seats.filter((s) => s.bot !== true);
+    const connected = guests.filter((seat) => this.isSeatConnected(seat)).length;
     const state = this.game === null ? "lobby" : this.endedAt === null ? "playing" : null;
-    return { state, connected, held: state === null ? 0 : this.seats.length - connected };
+    return { state, connected, held: state === null ? 0 : guests.length - connected };
   }
 
   /** Runs a Player intent through the commit pipeline. */
@@ -756,8 +937,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     return {
       roomName: this.displayName,
       players: this.seats.length,
-      maxPlayers: this.settings.maxPlayers,
-      minuteLimit: this.settings.minuteLimit,
+      settings: this.settings,
       hasPassword: this.password !== null,
     };
   }
@@ -765,6 +945,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   /** Sends the Seats to the Room, and the Players count to the Lobby list. */
   private broadcastLobby(): void {
     void this.setMetadata(this.listing());
+    this.syncListing();
     const lobby: LobbyMessage = {
       code: this.roomId,
       roomName: this.displayName,
@@ -772,9 +953,14 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       hasPassword: this.password !== null,
       settings: this.settings,
       // Public Player ids and names only: never a session id or token hash.
-      seats: this.seats.map(({ playerId, name }) => {
+      seats: this.seats.map(({ playerId, name, bot }) => {
         const heldUntil = this.#holds.get(playerId)?.until;
-        return typeof heldUntil === "number" ? { playerId, name, heldUntil } : { playerId, name };
+        return {
+          playerId,
+          name,
+          ...(bot === true && { bot: true }),
+          ...(typeof heldUntil === "number" && { heldUntil }),
+        };
       }),
       now: this.now(),
     };

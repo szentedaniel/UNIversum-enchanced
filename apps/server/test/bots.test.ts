@@ -1,0 +1,401 @@
+import { MatchMakeError } from "@colyseus/sdk";
+import {
+  matchmakeRejection,
+  PLAYER_NAME_ADJECTIVES,
+  PLAYER_NAME_NOUNS,
+  type RejectionCode,
+} from "@universum/protocol";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { BOT_DELAY_MS, BOT_ONLY_RETENTION_MS } from "#room/game-driver.ts";
+import {
+  eventually,
+  startTestServer,
+  withDeadline,
+  type TestClient,
+  type TestServer,
+} from "./helpers.ts";
+
+let server: TestServer;
+
+beforeAll(async () => {
+  server = await startTestServer();
+});
+
+afterAll(async () => {
+  await server.stop();
+});
+
+/** The Rejection code a failed create or join shows, as the web app maps it. */
+async function refusal(attempt: Promise<unknown>): Promise<RejectionCode> {
+  const error: unknown = await attempt.then(
+    () => null,
+    (e: unknown) => e,
+  );
+  if (!(error instanceof MatchMakeError))
+    throw new Error(`expected a MatchMakeError, got ${String(error)}`);
+  return matchmakeRejection(error);
+}
+
+/** Creates a 3-Seat Room and has a second Guest join; both have their Lobby read. */
+async function twoGuests(): Promise<{ alice: TestClient; bob: TestClient }> {
+  const alice = await server.create({ maxPlayers: 3 });
+  const bob = await server.join(alice.code);
+  await alice.until("lobby", (lobby) => lobby.seats.length === 2);
+  await bob.until("lobby", (lobby) => lobby.seats.length === 2);
+  return { alice, bob };
+}
+
+describe("Bots in the Lobby", () => {
+  it("seats a Bot on the next empty Seat with a Player name and the Bot flag", async () => {
+    const alice = await server.create({ maxPlayers: 3 });
+    const aliceId = (await alice.next("welcome")).playerId;
+    await alice.next("lobby");
+
+    alice.send({ type: "AddBot" });
+    const lobby = await alice.until("lobby", (message) => message.seats.length === 2);
+
+    expect(lobby.seats[0]).toEqual({
+      playerId: aliceId,
+      name: expect.any(Object),
+    });
+    const bot = lobby.seats[1]!;
+    expect(bot.bot).toBe(true);
+    expect(PLAYER_NAME_ADJECTIVES).toContain(bot.name.adjective);
+    expect(PLAYER_NAME_NOUNS).toContain(bot.name.noun);
+    // A Bot's name is as easy to tell apart as a Guest's.
+    expect(bot.name).not.toEqual(lobby.seats[0]?.name);
+  });
+
+  it("lets any seated Player add a Bot, and everyone sees the Seat fill", async () => {
+    const { alice, bob } = await twoGuests();
+
+    bob.send({ type: "AddBot" });
+    const [seenByAlice, seenByBob] = await Promise.all([
+      alice.until("lobby", (message) => message.seats.length === 3),
+      bob.until("lobby", (message) => message.seats.length === 3),
+    ]);
+
+    expect(seenByAlice).toEqual(seenByBob);
+    expect(seenByAlice.seats[2]?.bot).toBe(true);
+  });
+
+  it("takes a Bot off its Seat for any seated Player", async () => {
+    const { alice, bob } = await twoGuests();
+    alice.send({ type: "AddBot" });
+    const withBot = await alice.until("lobby", (message) => message.seats.length === 3);
+    const bot = withBot.seats[2]!;
+
+    bob.send({ type: "RemoveBot", playerId: bot.playerId });
+    const [seenByAlice, seenByBob] = await Promise.all([
+      alice.until("lobby", (message) => message.seats.length === 2),
+      bob.until("lobby", (message) => message.seats.length === 2),
+    ]);
+
+    expect(seenByAlice).toEqual(seenByBob);
+    expect(seenByAlice.seats.some((seat) => seat.playerId === bot.playerId)).toBe(false);
+  });
+
+  it("refuses to take a Guest off their Seat", async () => {
+    const { alice, bob } = await twoGuests();
+    const bobId = (await bob.next("welcome")).playerId;
+
+    alice.send({ type: "RemoveBot", playerId: bobId });
+
+    expect(await alice.next("rejected")).toEqual({ code: "NOT_OFFERED" });
+    expect(alice.pending("lobby")).toEqual([]);
+  });
+
+  it("gives a Guest the Seat of a Bot when it joins a full Lobby", async () => {
+    const alice = await server.create({ maxPlayers: 2 });
+    const aliceId = (await alice.next("welcome")).playerId;
+    await alice.next("lobby");
+    alice.send({ type: "AddBot" });
+    const full = await alice.until("lobby", (message) => message.seats.length === 2);
+    const bot = full.seats[1]!;
+
+    const bob = await server.join(alice.code);
+    const bobId = (await bob.next("welcome")).playerId;
+    const [seenByAlice, seenByBob] = await Promise.all([
+      alice.until("lobby", (message) => message.seats.some((seat) => seat.playerId === bobId)),
+      bob.until("lobby", (message) => message.seats.some((seat) => seat.playerId === bobId)),
+    ]);
+
+    expect(seenByAlice).toEqual(seenByBob);
+    // The Bot's Seat, not a new one: the Guest takes its place in the join order.
+    expect(seenByAlice.seats.map(({ playerId, bot: isBot }) => ({ playerId, isBot }))).toEqual([
+      { playerId: aliceId, isBot: undefined },
+      { playerId: bobId, isBot: undefined },
+    ]);
+    expect(seenByAlice.seats.some((seat) => seat.playerId === bot.playerId)).toBe(false);
+  });
+
+  it("still answers ROOM_FULL when every Seat of a full Lobby has a Guest", async () => {
+    const alice = await server.create({ maxPlayers: 2 });
+    await server.join(alice.code);
+    await alice.until("lobby", (message) => message.seats.length === 2);
+
+    expect(await refusal(server.join(alice.code))).toBe("ROOM_FULL");
+  });
+
+  it("refuses a Bot when every Seat is taken", async () => {
+    const alice = await server.create({ maxPlayers: 2 });
+    await server.join(alice.code);
+    await alice.until("lobby", (message) => message.seats.length === 2);
+
+    alice.send({ type: "AddBot" });
+
+    expect(await alice.next("rejected")).toEqual({ code: "ROOM_FULL" });
+    expect(alice.pending("lobby")).toEqual([]);
+  });
+
+  it("refuses AddBot and RemoveBot once the game runs", async () => {
+    const alice = await server.create({ maxPlayers: 2 });
+    await server.join(alice.code);
+    await alice.until("lobby", (message) => message.seats.length === 2);
+    alice.send({ type: "Start" });
+    await alice.next("game");
+
+    alice.send({ type: "AddBot" });
+    expect(await alice.next("rejected")).toEqual({ code: "NOT_OFFERED" });
+
+    alice.send({ type: "RemoveBot", playerId: "nobody" });
+    expect(await alice.next("rejected")).toEqual({ code: "NOT_OFFERED" });
+  });
+
+  it("answers a RemoveBot without a Player id with MALFORMED", async () => {
+    const alice = await server.create();
+
+    alice.send({ type: "RemoveBot" });
+
+    expect(await alice.next("rejected")).toEqual({ code: "MALFORMED" });
+  });
+
+  it("leaves the Lobby list when Bots fill the last Seat, and comes back when one is removed", async () => {
+    const list = await server.watchLobbyList();
+    const alice = await server.create({ maxPlayers: 2 });
+    await list.until((l) => l.get(alice.code)?.players === 1);
+
+    alice.send({ type: "AddBot" });
+    const withBot = await alice.until("lobby", (message) => message.seats.length === 2);
+    // No empty Seat left: a stranger looking for a game has nothing to join.
+    await list.until((l) => l.get(alice.code) === undefined);
+    expect(list.get(alice.code)).toBeUndefined();
+
+    alice.send({ type: "RemoveBot", playerId: withBot.seats[1]!.playerId });
+    await list.until((l) => l.get(alice.code)?.players === 1);
+    expect(list.get(alice.code)).toMatchObject({ players: 1, settings: { maxPlayers: 2 } });
+  });
+
+  it("starts a game with one Guest and a Bot, and the Bot plays its Turn after the gate", async () => {
+    const alice = await server.create({ maxPlayers: 2 });
+    const aliceId = (await alice.next("welcome")).playerId;
+    await alice.next("lobby");
+    alice.send({ type: "AddBot" });
+    const lobby = await alice.until("lobby", (message) => message.seats.length === 2);
+    const bot = lobby.seats[1]!;
+
+    alice.send({ type: "Start" });
+    const started = withDeadline(await alice.next("game"));
+    // A game with a single Guest: the Bots fill the rest (spec: Bots, story 1).
+    expect(started.players.map(({ id, bot: isBot }) => ({ id, isBot }))).toEqual([
+      { id: aliceId, isBot: false },
+      { id: bot.playerId, isBot: true },
+    ]);
+
+    // The Guest's Turn: roll, and turn down the offer a landing stops at.
+    server.scheduler.advanceTo(started.actsAfter);
+    alice.send({ type: "Roll", turn: started.turn });
+    let push = await alice.next("game");
+    if (push.view.phase.kind === "offer") {
+      server.scheduler.advanceTo(push.view.actsAfter);
+      alice.send({ type: "DeclineOffer", turn: push.view.turn });
+      push = await alice.next("game");
+    }
+    const botTurn = push.view;
+    expect(botTurn.currentPlayer).toBe(bot.playerId);
+    expect(botTurn.phase.kind).toBe("awaitingRoll");
+    // Well inside the Turn timer: the Bot's pause is a second and a half.
+    expect(botTurn.turnDeadline! - botTurn.actsAfter).toBeGreaterThan(BOT_DELAY_MS);
+
+    // Nothing before the pause: the clock never moves by itself.
+    server.scheduler.advanceTo(botTurn.actsAfter + BOT_DELAY_MS - 1);
+    expect(alice.pending("game")).toEqual([]);
+
+    // At the pause the Room plays the Bot's Roll, through the rules engine.
+    server.scheduler.advanceTo(botTurn.actsAfter + BOT_DELAY_MS);
+    const botPush = await alice.next("game");
+    expect(botPush.events[0]).toMatchObject({ type: "DiceRolled", player: bot.playerId });
+    expect(botPush.events.some((event) => event.type === "TimedOut")).toBe(false);
+    expect(botPush.view.version).toBe(botTurn.version + 1);
+    expect(botPush.view.players.find((p) => p.id === bot.playerId)?.position).toBeGreaterThan(0);
+  });
+
+  it("refuses a RemoveBot naming no Seat", async () => {
+    const alice = await server.create();
+
+    alice.send({ type: "RemoveBot", playerId: "nobody" });
+
+    expect(await alice.next("rejected")).toEqual({ code: "NOT_OFFERED" });
+  });
+});
+
+/**
+ * A started 2-Guest game: the creator's first Decision is open, and both have
+ * taken the first view (its `actsAfter` is the open Decision's gate).
+ */
+async function startedGame() {
+  const alice = await server.create({ maxPlayers: 2 });
+  const bob = await server.join(alice.code);
+  const aliceId = (await alice.next("welcome")).playerId;
+  alice.send({ type: "Start" });
+  const [first] = await Promise.all([alice.next("game"), bob.next("game")]);
+  return { alice, bob, aliceId, code: alice.code, first };
+}
+
+/** Waits until the Room counts the dropped Seat as held (its client is gone). */
+async function dropped(code: string): Promise<void> {
+  await eventually(() => expect(server.room(code)?.gauges().held).toBe(1));
+}
+
+describe("a Bot stands in for a dropped Guest", () => {
+  it("plays the dropped Guest's Decision without a Timeout penalty", async () => {
+    const { alice, bob, aliceId, code, first } = await startedGame();
+    await alice.drop();
+    await dropped(code);
+
+    // Her open Decision is answered at the Bot's pause, well inside the Turn
+    // timer: no TimedOut, so no penalty for a Player who was not there.
+    server.scheduler.advanceTo(first.view.actsAfter + BOT_DELAY_MS);
+    const played = await bob.next("game");
+
+    expect(played.events[0]).toMatchObject({ type: "DiceRolled", player: aliceId });
+    expect(played.events.some((event) => event.type === "TimedOut")).toBe(false);
+    expect(played.view.version).toBe(first.view.version + 1);
+  });
+
+  it("cancels the pending Bot action when the Guest reconnects, and she decides", async () => {
+    const { alice, bob, aliceId, code, first } = await startedGame();
+    await alice.drop();
+    await dropped(code);
+    const back = await server.reconnect(alice);
+    const current = await back.next("game");
+
+    // The pause passes with no action: the open Decision is the Guest's again.
+    server.scheduler.advanceTo(first.view.actsAfter + BOT_DELAY_MS);
+    expect(bob.pending("game")).toEqual([]);
+
+    back.send({ type: "Roll", turn: current.view.turn });
+    const rolled = await bob.next("game");
+
+    expect(rolled.events[0]).toMatchObject({ type: "DiceRolled", player: aliceId });
+    expect(rolled.view.version).toBe(current.view.version + 1);
+  });
+
+  it("keeps a Bot action already applied when the Guest reconnects", async () => {
+    const { alice, bob, code, first } = await startedGame();
+    await alice.drop();
+    await dropped(code);
+    server.scheduler.advanceTo(first.view.actsAfter + BOT_DELAY_MS);
+    const played = await bob.next("game");
+
+    const back = await server.reconnect(alice);
+    const current = await back.next("game");
+
+    // One answer to one Decision, never two: the applied Roll stands.
+    expect(current.events).toEqual([]);
+    expect(current.view.version).toBe(played.view.version);
+    expect(current.view.players).toEqual(played.view.players);
+  });
+
+  it("plays a Guest's Decisions after they leave the game on purpose", async () => {
+    const { alice, bob, aliceId, code, first } = await startedGame();
+    await alice.leave();
+    await dropped(code);
+
+    server.scheduler.advanceTo(first.view.actsAfter + BOT_DELAY_MS);
+    const played = await bob.next("game");
+
+    expect(played.events[0]).toMatchObject({ type: "DiceRolled", player: aliceId });
+    expect(played.events.some((event) => event.type === "TimedOut")).toBe(false);
+  });
+});
+
+/**
+ * A started 2-Seat game with one Guest and one Bot, stopped at the Bot's open
+ * Decision: the Guest has rolled and turned down any Offer.
+ */
+async function botTurnGame() {
+  const alice = await server.create({ maxPlayers: 2 });
+  await alice.next("welcome");
+  await alice.next("lobby");
+  alice.send({ type: "AddBot" });
+  const lobby = await alice.until("lobby", (message) => message.seats.length === 2);
+  const bot = lobby.seats[1]!;
+  const seats = lobby.seats.map(({ playerId }) => playerId);
+  alice.send({ type: "Start" });
+  const started = withDeadline(await alice.next("game"));
+  server.scheduler.advanceTo(started.actsAfter);
+  alice.send({ type: "Roll", turn: started.turn });
+  let push = await alice.next("game");
+  if (push.view.phase.kind === "offer") {
+    server.scheduler.advanceTo(push.view.actsAfter);
+    alice.send({ type: "DeclineOffer", turn: push.view.turn });
+    push = await alice.next("game");
+  }
+  return { alice, bot, seats, code: alice.code, botTurn: push.view };
+}
+
+describe("a game with only Bots left", () => {
+  it("plays no Bot intent and ends after the Seat retention, with no recorded result", async () => {
+    const { alice, bot, seats, code, botTurn } = await botTurnGame();
+    await alice.drop();
+    await dropped(code);
+    const droppedAt = server.scheduler.now();
+
+    // No Guest is connected: the seated Bot's Decision goes unanswered.
+    server.scheduler.advanceTo(botTurn.actsAfter + BOT_DELAY_MS);
+    const quiet = server.room(code)?.game;
+    expect(quiet?.version).toBe(botTurn.version);
+    expect(quiet?.currentPlayer).toBe(bot.playerId);
+    expect(quiet?.players.map(({ id, position }) => ({ id, position }))).toEqual(
+      botTurn.players.map(({ id, position }) => ({ id, position })),
+    );
+
+    // The Seat retention runs out: the game ends where it stood, no winner recorded.
+    server.scheduler.advanceTo(droppedAt + BOT_ONLY_RETENTION_MS);
+    const room = server.room(code);
+    expect(room?.endedAt).toBe(droppedAt + BOT_ONLY_RETENTION_MS);
+    expect(room?.game?.phase.kind).not.toBe("gameOver");
+    // Its Seats stayed with it until then.
+    expect(room?.seats.map(({ playerId }) => playerId)).toEqual(seats);
+    expect(server.store.ended()).toContainEqual({
+      code,
+      endedAt: droppedAt + BOT_ONLY_RETENTION_MS,
+    });
+    const events = server.store.events(code).flatMap((entry) => entry.events);
+    expect(events.some((event) => event.type === "GameEnded")).toBe(false);
+    expect(
+      events.some((event) => event.type === "DiceRolled" && event.player === bot.playerId),
+    ).toBe(false);
+  });
+
+  it("a Guest who comes back before the retention resumes the game and its Bots", async () => {
+    const { alice, bot, code, botTurn } = await botTurnGame();
+    await alice.drop();
+    await dropped(code);
+    const droppedAt = server.scheduler.now();
+
+    const back = await server.reconnect(alice);
+    await back.next("game");
+
+    // The retention never ends the game once a Guest is back.
+    server.scheduler.advanceTo(droppedAt + BOT_ONLY_RETENTION_MS);
+    expect(server.room(code)?.endedAt).toBeNull();
+
+    // ...and the Bot answers its open Decision again, through the rules engine.
+    const played = await back.next("game");
+    expect(played.events[0]).toMatchObject({ type: "DiceRolled", player: bot.playerId });
+    expect(played.events.some((event) => event.type === "TimedOut")).toBe(false);
+    expect(played.view.version).toBe(botTurn.version + 1);
+  });
+});

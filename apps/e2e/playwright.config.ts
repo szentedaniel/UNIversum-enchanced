@@ -17,9 +17,9 @@ const SERVER_ENV = {
   PORT: String(SERVER_PORT),
   DATA_DIR: process.env["E2E_DATA_DIR"] ?? mkdtempSync(join(tmpdir(), "universum-e2e-")),
   INTERNAL_PORT: "0",
-  // Test-only clock overrides: a full 4-Guest game reaches its end inside the test.
-  // 8 s Turns (+3 s slack) and 8 s "minutes" (15 × 8 s = 2 min for a 15-minute Room).
-  GAME_TURN_LIMIT_MS: "8000",
+  // Test-only clock override: a full 4-Guest game reaches its end inside the test.
+  // 8 s "minutes" (15 × 8 s = 2 min for a 15-minute Room). The Turn timer is a
+  // Room setting: a spec that needs short Turns picks 10 s on the Create screen.
   GAME_MINUTE_MS: "8000",
   // A fixed dice/card seed: the full game reaches a Doubler/Erasmus/Sale pick
   // early (turn 5 in the 4-Guest game, turn 1's offer in the 2-Guest game), so

@@ -31,12 +31,16 @@ A Player's place in a Room, kept for them while they are disconnected so they ca
 _Avoid_: Slot
 
 **Lobby list**:
-The public list of Lobbies a Guest can join; Rooms whose game has started are not on it.
+The public list of Lobbies a Guest can join; a Room whose game has started, or whose Seats are all taken, is not on it.
 _Avoid_: Room list, server browser
 
 **Room code**:
 The short number a Guest uses to find and join a Room.
 _Avoid_: Lobby code, PIN
+
+**Invite link**:
+The Room's address `/room/<Room code>`, which joins the Room in one click and is shown with a QR code in the Lobby.
+_Avoid_: Share code, join URL
 
 **Room name**:
 The name the creator gives a Room, shown on the Lobby list; the only text a Guest types that other Guests see.
@@ -45,6 +49,14 @@ _Avoid_: Lobby name, title
 **Player name**:
 The name other Players see for a Player, made up by the game when the Player takes a Seat; Guests do not choose or change it.
 _Avoid_: Username, nickname
+
+**Podium**:
+The state of a Room whose game has ended, in which the final standings are shown and the Players can vote on a rematch.
+_Avoid_: Results screen, game-over screen
+
+**Rematch vote**:
+A Player's agreement, given on the Podium and withdrawable until the next game starts, to play again in the same Room; it lives in the Room's memory and names the Player, not the connection, so it survives a reconnect. A Bot cannot vote.
+_Avoid_: Replay request, play again
 
 ### Play
 
@@ -75,6 +87,14 @@ _Avoid_: Delta, patch
 **Decision gate**:
 The moment the next decision opens, once the Playback before it has ended; the decision's controls and its Turn timer start there.
 _Avoid_: Playback over, unlock
+
+**Event log**:
+The list, on the Game screen, of the lines of the events the Playback has revealed so far, newest last, each line in the language active when it appeared; the client keeps it, so a reload starts it empty.
+_Avoid_: History, chat, transcript
+
+**Quick chat**:
+The only way Players talk in a Room: each picks a ready-made line or emote from a fixed catalogue, and the server shows it beside that Player's Seat; no free text is ever sent, and it is not the Event log.
+_Avoid_: Chat message, free chat
 
 **Turn timer**:
 The countdown a Player has for one decision of their Turn, starting when the Playback before it ends.
@@ -162,7 +182,7 @@ What a Player pays the owner on landing on a Field another Player owns.
 _Avoid_: Tuition, Tandíj
 
 **Deal**:
-An exchange of Fields and cash between two Players that one proposes before their Roll or Quarantine choice and the other accepts or declines; Fields change hands at their current Level, and neither side's cash may fall short.
+An exchange of Fields and cash between two Players that one proposes before their Roll or Quarantine choice, once per Turn, and the other accepts or declines; Fields change hands at their current Level, and neither side's cash may fall short.
 _Avoid_: Trade, Offer (an Offer is the Decision to buy)
 
 **Buyout**:
@@ -192,3 +212,6 @@ _Avoid_: Eliminated, Csőd
 
 **Wealth**:
 A Player's cash plus the Value of their Fields; it decides the winner when the Minute limit runs out.
+
+**Wealth series**:
+Every Player's Wealth, sampled with the game's elapsed Minute each time a Turn passes and once more when the game ends, so the last sample equals the final standings.

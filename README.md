@@ -61,6 +61,19 @@ Error reporting is off unless `SENTRY_DSN` is set in `.env` (any Sentry-protocol
 server then reports engine failures and crashes, and the browser sends its errors through `/errors`;
 the tunnel strips the IP and every token before forwarding. With no DSN, neither SDK sends anything.
 
+### Installing on a phone
+
+The web build is an installable PWA. `apps/web/scripts/pwa.ts` generates the manifest and the
+home-screen icons at build time from `apps/web/assets/logo.png` and the theme tokens in
+`apps/web/src/styles.css`; no icon binaries are committed. Vite serves them at
+`/manifest.webmanifest` and `/icons/*`, and the Caddy image caches the icons for a day while
+revalidating the manifest.
+
+Use the browser's **Add to Home Screen** / **Install app**: the game then opens full screen,
+without the address bar. Browsers only install from a secure context, so the site needs HTTPS in
+production (`localhost` is exempt). This repository's Caddy listens on plain port 80; TLS belongs
+in whatever proxy or load balancer sits in front of it.
+
 ### Monitoring (opt-in)
 
 ```sh

@@ -52,8 +52,17 @@ export const shellArg = (value: string): string => `'${value.replaceAll("'", `'\
  */
 const SH_MAX_BUFFER = 256 * 1024 * 1024;
 
-export const sh = (cmd: string): string =>
-  execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: SH_MAX_BUFFER });
+/**
+ * `sh`, optionally capped: a hung command must not hold a loop past its
+ * deadline. The cap kills the command, so `execSync` throws instead.
+ */
+export const sh = (cmd: string, timeoutMs?: number): string =>
+  execSync(cmd, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: SH_MAX_BUFFER,
+    timeout: timeoutMs,
+  });
 
 /** `sh`, but an empty string when the command fails. */
 export const safeSh = (cmd: string): string => {

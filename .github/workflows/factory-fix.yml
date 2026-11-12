@@ -86,7 +86,8 @@ jobs:
           elif [ "$(jq -r .isCrossRepository <<< "$info")" = "true" ]; then
             reason="pull request #$pr comes from a fork"
           elif [[ "$branch" != agent/* ]] && [[ " $labels " != *" factory "* ]] &&
-            { [[ "$branch" != dependabot/* ]] || [ "$author" != "dependabot[bot]" ]; }; then
+            { [[ "$branch" != dependabot/* ]] ||
+              { [ "$author" != "dependabot[bot]" ] && [ "$author" != "app/dependabot" ]; }; }; then
             reason="pull request #$pr is not a factory or Dependabot pull request"
           elif [ -n "$RUN_HEAD" ] && [ "$(jq -r .headRefOid <<< "$info")" != "$RUN_HEAD" ]; then
             # A newer push has its own CI run, which decides on its own.
