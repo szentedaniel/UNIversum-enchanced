@@ -50,6 +50,14 @@ _Avoid_: Lobby name, title
 The name other Players see for a Player, made up by the game when the Player takes a Seat; Guests do not choose or change it.
 _Avoid_: Username, nickname
 
+**Podium**:
+The state of a Room whose game has ended, in which the final standings are shown and the Players can vote on a rematch.
+_Avoid_: Results screen, game-over screen
+
+**Rematch vote**:
+A Player's agreement, given on the Podium and withdrawable until the next game starts, to play again in the same Room; it lives in the Room's memory and names the Player, not the connection, so it survives a reconnect. A Bot cannot vote.
+_Avoid_: Replay request, play again
+
 ### Play
 
 **Turn**:
