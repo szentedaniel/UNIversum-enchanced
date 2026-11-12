@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import {
   canReload,
   deployedRelease,
+  isStale,
   releaseOf,
   UPDATE_CHECK_INTERVAL_MS,
-  updateAvailable,
   watchForUpdate,
   type StopUpdateWatch,
   type VersionFetch,
@@ -63,16 +63,16 @@ describe("deployedRelease", () => {
   });
 });
 
-describe("updateAvailable", () => {
+describe("isStale", () => {
   it("offers a refresh when the deployment serves another release", () => {
-    expect(updateAvailable("old", "new")).toBe(true);
+    expect(isStale("old", "new")).toBe(true);
   });
 
   it("stays silent for the same release, a dev build or a failed fetch", () => {
-    expect(updateAvailable("same", "same")).toBe(false);
-    expect(updateAvailable("dev", "new")).toBe(false);
-    expect(updateAvailable("old", "dev")).toBe(false);
-    expect(updateAvailable("old", null)).toBe(false);
+    expect(isStale("same", "same")).toBe(false);
+    expect(isStale("dev", "new")).toBe(false);
+    expect(isStale("old", "dev")).toBe(false);
+    expect(isStale("old", null)).toBe(false);
   });
 });
 

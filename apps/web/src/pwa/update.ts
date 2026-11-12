@@ -41,9 +41,9 @@ export async function deployedRelease(fetcher: VersionFetch = fetch): Promise<st
  * Whether this build is stale: the deployment serves another release. `dev` is
  * not a release (a dev server or a local build), so it never prompts.
  */
-export function updateAvailable(current: string, deployed: string | null): boolean {
-  if (current === "dev" || deployed === null || deployed === "dev") return false;
-  return current !== deployed;
+export function isStale(running: string, deployed: string | null): boolean {
+  if (running === "dev" || deployed === null || deployed === "dev") return false;
+  return running !== deployed;
 }
 
 /**
@@ -116,7 +116,7 @@ export function watchForUpdate(options: UpdateWatchOptions): StopUpdateWatch {
     } catch {
       return;
     }
-    if (stopped || deployed === null || !updateAvailable(options.current, deployed)) return;
+    if (stopped || deployed === null || !isStale(options.current, deployed)) return;
     // One prompt is the answer: stop asking until the next launch.
     stopped = true;
     cancelTimer();
