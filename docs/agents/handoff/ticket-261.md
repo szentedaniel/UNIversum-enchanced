@@ -26,10 +26,10 @@ Branch `agent/issue-261-pwa-refresh-prompt-when-a-newer-release-is-deploye`. Fil
 
 - `UpdatePrompt` (mounted in `App.tsx` inside `BrowserRouter`, after `Routes`) owns the watcher in one effect and
   the `deployed`/`dismissed` state. It renders nothing until a different release arrives or after **Later**.
-- The banner is `fixed inset-x-0 top-0 z-40` inside a `pointer-events-none` wrapper, so taps reach the Board;
-  the `Card` itself is `pointer-events-auto`, `aria-live="polite"`, `data-testid="update-prompt"`. It is not a
-  modal and sits below `ReconnectOverlay` and the shadcn `Dialog` (both `z-50`), so an open Decision keeps its
-  tray.
+- The wrapper is always mounted: `fixed inset-x-0 top-0 z-40`, `pointer-events-none` (taps reach the Board)
+  and `aria-live="polite"` (a persistent live region, so the insert is announced). The `Card` appears inside it
+  only on an update: `pointer-events-auto`, `data-testid="update-prompt"`. It is not a modal and sits below
+  `ReconnectOverlay` and the shadcn `Dialog` (both `z-50`), so an open Decision keeps its tray.
 - Outside `/game/…` it offers **Refresh** (`window.location.reload()`) and **Later**; inside a Game only
   **Later**, with `m.update_in_game()`, so a game is never reloaded under the Player. A new deployment reaches
   the waiting service worker on the next launch.
