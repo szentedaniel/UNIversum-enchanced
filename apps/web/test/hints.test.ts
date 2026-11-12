@@ -1,4 +1,4 @@
-import type { PublicView } from "@universum/rules";
+import type { PlayerId, PublicView } from "@universum/rules";
 import { describe, expect, it } from "vitest";
 import { openDecision } from "#decision/decision.ts";
 import { HINTS, nextHint, type HintId, type HintMessageKey } from "#hints/hints.ts";
@@ -38,7 +38,7 @@ function hintIn(
     inFlight = false,
     gate = "open",
   }: {
-    me?: string | null;
+    me?: PlayerId | null;
     seen?: ReadonlySet<HintId>;
     enabled?: boolean;
     inFlight?: boolean;
