@@ -37,7 +37,10 @@ export type PickOption =
  * compile here until someone decides whether clients may see it. Derived
  * numbers the UI shows (Rent, Buyout price, Auto-sell's picks) are added here.
  */
-export type PublicView = Omit<GameState, "rng" | "fields" | "players"> & {
+export type PublicView = Omit<
+  GameState,
+  "rng" | "fields" | "players" | "minuteMs" | "wealthSamples"
+> & {
   fields: FieldView[];
   players: PlayerView[];
   /** The Turn timer ring; `null` once the game is over. */

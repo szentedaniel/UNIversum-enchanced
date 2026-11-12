@@ -47,6 +47,7 @@ export function setupGame({
       turnLimitMs: settings.turnLimitMs,
     },
     endsAt: now + settings.minuteLimit * minuteMs,
+    minuteMs,
     players: seats.map((seat, index) => ({
       id: seat.playerId,
       name: { adjective: seat.name.adjective, noun: seat.name.noun },
@@ -63,6 +64,7 @@ export function setupGame({
     lastChanceCard: null,
     deal: null,
     dealUsed: false,
+    wealthSamples: [],
     rng: rngFromSeed(seed),
   };
 }
