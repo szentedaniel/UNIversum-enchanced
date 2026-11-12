@@ -250,9 +250,8 @@
 }
 
 /* Safe-area padding: the number is the screen's own spacing, raised to the
-   device's inset where it reserves space outside the layout viewport (a notch,
-   a home indicator). `0` gives the inset alone, for a shell whose children
-   already space themselves. */
+   device's inset where it reserves space for a notch or a home indicator. `0`
+   gives the inset alone, for a shell whose children already space themselves. */
 @utility p-safe-* {
   padding: max(calc(var(--spacing) * --value(integer)), env(safe-area-inset-top))
     max(calc(var(--spacing) * --value(integer)), env(safe-area-inset-right))

@@ -6,7 +6,7 @@
  */
 
 /** Space kept between a focused field and the top and bottom of the visible area. */
-export const FIELD_MARGIN = 12;
+const FIELD_MARGIN = 12;
 
 /** Whether the visible area shows the whole of `field`, clear of its edges. */
 export function fieldVisible(
