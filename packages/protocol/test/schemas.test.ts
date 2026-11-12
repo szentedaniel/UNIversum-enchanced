@@ -267,11 +267,33 @@ describe("Room options", () => {
     });
   });
 
+  it("takes a watch flag next to the Room code", () => {
+    expect(joinOptionsSchema.parse({ code: "123456", watch: true })).toEqual({
+      code: "123456",
+      watch: true,
+    });
+    expect(joinOptionsSchema.parse({ code: "123456", watch: false })).toEqual({
+      code: "123456",
+      watch: false,
+    });
+    expect(joinOptionsSchema.parse({ code: "123456" })).toEqual({ code: "123456" });
+  });
+
+  it("drops unknown join options, as it did before the watch flag", () => {
+    // `authorize` tells a create from a join by this schema's success, so it
+    // must stay a plain `z.object`: a strict one would turn a create's options
+    // into a malformed join.
+    expect(joinOptionsSchema.parse({ code: "123456", maxPlayers: 4 })).toEqual({ code: "123456" });
+  });
+
   it.each([
     ["no Room code", {}],
     ["a short Room code", { code: "12345" }],
     ["a Room code that is a number", { code: 123456 }],
     ["a password over 64 bytes", { code: "123456", password: "x".repeat(65) }],
+    ["a watch flag that is a string", { code: "123456", watch: "yes" }],
+    ["a watch flag that is a number", { code: "123456", watch: 1 }],
+    ["a watch flag that is null", { code: "123456", watch: null }],
   ])("refuses join options with %s", (_, options) => {
     expect(joinOptionsSchema.safeParse(options).success).toBe(false);
   });
