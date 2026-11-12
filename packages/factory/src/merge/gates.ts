@@ -251,6 +251,9 @@ export const canAutoMerge = (facts: MergeFacts): MergeGate => {
 /** Dependabot's login, as the REST author of its pull requests. */
 export const DEPENDABOT_AUTHOR = "dependabot[bot]";
 
+/** The same author as `gh pr view` names it, which is what the gate reads. */
+const DEPENDABOT_APP_AUTHOR = "app/dependabot";
+
 const DEPENDABOT_BRANCH = "dependabot/";
 
 /**
@@ -258,7 +261,8 @@ const DEPENDABOT_BRANCH = "dependabot/";
  * The branch alone is not enough — anyone can name a branch `dependabot/…`.
  */
 export const isDependabotPull = (headRefName: string, author: string): boolean =>
-  headRefName.startsWith(DEPENDABOT_BRANCH) && author === DEPENDABOT_AUTHOR;
+  headRefName.startsWith(DEPENDABOT_BRANCH) &&
+  (author === DEPENDABOT_AUTHOR || author === DEPENDABOT_APP_AUTHOR);
 
 /** Only a factory branch, a factory-labelled pull or a Dependabot bump is the gate's business. */
 export const isFactoryPull = (

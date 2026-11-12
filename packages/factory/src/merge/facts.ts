@@ -22,7 +22,7 @@ export interface PullView {
   labels: string[];
   closing: number[];
   headCommittedAt: string;
-  /** The REST login: `dependabot[bot]` for a dependency bump. */
+  /** The author's login: `dependabot[bot]` (REST) or `app/dependabot` (`gh`) for a dependency bump. */
   author: string;
 }
 
