@@ -70,14 +70,16 @@ describe("buildPwa", () => {
     const manifest = JSON.parse(readFileSync(join(out, "manifest.webmanifest"), "utf8"));
     expect(manifest).toEqual(manifestFor(light));
 
-    for (const icon of ICONS) {
-      const { width, height } = await sharp(join(out, "icons", icon.file)).metadata();
-      expect({ file: icon.file, width, height }).toEqual({
-        file: icon.file,
-        width: icon.size,
-        height: icon.size,
-      });
-    }
+    await Promise.all(
+      ICONS.map(async (icon) => {
+        const { width, height } = await sharp(join(out, "icons", icon.file)).metadata();
+        expect({ file: icon.file, width, height }).toEqual({
+          file: icon.file,
+          width: icon.size,
+          height: icon.size,
+        });
+      }),
+    );
   });
 
   it("paints the icons on the theme's background with the logo inside a safe margin", async () => {
@@ -86,34 +88,36 @@ describe("buildPwa", () => {
     });
     const plate = await expected.raw().toBuffer();
 
-    for (const icon of ICONS) {
-      const file = join(out, "icons", icon.file);
-      const stats = await sharp(file).stats();
-      expect(stats.channels[3]?.min).toBe(255);
+    await Promise.all(
+      ICONS.map(async (icon) => {
+        const file = join(out, "icons", icon.file);
+        const stats = await sharp(file).stats();
+        expect(stats.channels[3]?.min).toBe(255);
 
-      const { data } = await sharp(file).raw().toBuffer({ resolveWithObject: true });
-      // The padding above the (wide) logo is background, not a black plate.
-      const samples = [
-        [0, 0],
-        [icon.size - 1, 0],
-        [0, icon.size - 1],
-        [icon.size - 1, icon.size - 1],
-        [Math.floor(icon.size / 2), Math.floor(icon.size * icon.padding + 1)],
-      ] as const;
-      for (const [x, y] of samples) {
-        const start = (y * icon.size + x) * 4;
-        expect([...data.subarray(start, start + 4)]).toEqual([...plate]);
-      }
+        const { data } = await sharp(file).raw().toBuffer({ resolveWithObject: true });
+        // The padding above the (wide) logo is background, not a black plate.
+        const samples = [
+          [0, 0],
+          [icon.size - 1, 0],
+          [0, icon.size - 1],
+          [icon.size - 1, icon.size - 1],
+          [Math.floor(icon.size / 2), Math.floor(icon.size * icon.padding + 1)],
+        ] as const;
+        for (const [x, y] of samples) {
+          const start = (y * icon.size + x) * 4;
+          expect([...data.subarray(start, start + 4)]).toEqual([...plate]);
+        }
 
-      const { info } = await sharp(file)
-        .trim({ background: light.background, threshold: 12 })
-        .toBuffer({ resolveWithObject: true });
-      const margin = icon.size * icon.padding;
-      expect(info.width!).toBeLessThanOrEqual(icon.size - 2 * margin);
-      expect(info.height!).toBeLessThanOrEqual(icon.size - 2 * margin);
-      expect(Math.abs(info.trimOffsetLeft!)).toBeGreaterThanOrEqual(margin);
-      expect(Math.abs(info.trimOffsetTop!)).toBeGreaterThanOrEqual(margin);
-    }
+        const { info } = await sharp(file)
+          .trim({ background: light.background, threshold: 12 })
+          .toBuffer({ resolveWithObject: true });
+        const margin = icon.size * icon.padding;
+        expect(info.width).toBeLessThanOrEqual(icon.size - 2 * margin);
+        expect(info.height).toBeLessThanOrEqual(icon.size - 2 * margin);
+        expect(Math.abs(info.trimOffsetLeft!)).toBeGreaterThanOrEqual(margin);
+        expect(Math.abs(info.trimOffsetTop!)).toBeGreaterThanOrEqual(margin);
+      }),
+    );
   });
 });
 
