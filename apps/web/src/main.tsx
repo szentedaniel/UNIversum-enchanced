@@ -4,12 +4,15 @@ import { App } from "#App.tsx";
 import { installAudioUnlock } from "#audio.ts";
 import { startErrorReporting } from "#error-reporting.ts";
 import { getLocale } from "#paraglide/runtime.js";
+import { registerServiceWorker } from "#pwa/register.ts";
 import "#styles.css";
 
 // Start reporting first, so errors during the first render are caught too.
 // Without a SENTRY_DSN the server says no and nothing is initialised.
 await startErrorReporting();
 installAudioUnlock();
+// Production only; the worker registers after load and takes over next launch.
+registerServiceWorker();
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root is missing from index.html");

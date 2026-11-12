@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The worker runs in a ServiceWorkerGlobalScope: it has `self`, `caches`
+    // and FetchEvent, but none of the DOM. Keeping it in its own project stops
+    // the webworker lib leaking into the app's `Window` code.
+    "lib": ["esnext", "webworker"]
+  },
+  "include": ["src/pwa/sw.ts"]
+}
