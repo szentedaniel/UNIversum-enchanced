@@ -83,6 +83,23 @@ describe("syncCues", () => {
     expect(playCue.mock.calls).toEqual([["dice"], ["dice"]]);
   });
 
+  it("plays Rent then a purchase as a push's frame reaches them", () => {
+    // A push whose Rent arrives before a purchase: one sound at each event's step.
+    const events: GameEvent[] = [
+      { type: "RentPaid", player: "p1", owner: "p2", field: 8, amount: 50_000 },
+      { type: "LevelBought", player: "p1", field: 9, level: 1, price: 100_000 },
+    ];
+
+    syncCues(push(1, events), frame(1, 0));
+    expect(playCue).not.toHaveBeenCalled();
+
+    syncCues(push(1, events), frame(1, 1));
+    expect(playCue.mock.calls).toEqual([["rent"]]);
+
+    syncCues(push(1, events), frame(1, 2));
+    expect(playCue.mock.calls).toEqual([["rent"], ["buy"]]);
+  });
+
   it("plays the cues of a new push from its start, even after the last one ended", () => {
     syncCues(push(1, [dice()]), frame(1, 1));
     syncCues(push(2, [dice()]), frame(2, 1));
