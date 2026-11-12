@@ -84,6 +84,10 @@ _Avoid_: Playback over, unlock
 The list, on the Game screen, of the lines of the events the Playback has revealed so far, newest last, each line in the language active when it appeared; the client keeps it, so a reload starts it empty.
 _Avoid_: History, chat, transcript
 
+**Cue**:
+A short sound effect one Game event's Playback step starts; the cue table maps each event type to at most one cue, and each cue is one audio file.
+_Avoid_: Sound effect (for the named entry), clip
+
 **Turn timer**:
 The countdown a Player has for one decision of their Turn, starting when the Playback before it ends.
 _Avoid_: Turn countdown
