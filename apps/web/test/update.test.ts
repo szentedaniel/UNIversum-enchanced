@@ -5,6 +5,7 @@ import {
   isStale,
   releaseOf,
   UPDATE_CHECK_INTERVAL_MS,
+  UPDATE_CHECK_MIN_GAP_MS,
   watchForUpdate,
   type StopUpdateWatch,
   type VersionFetch,
@@ -106,10 +107,12 @@ function watch(releases: Array<string | null>, current = "old") {
   const visibles: Array<{ run: () => void; cancel: Mock<() => void> }> = [];
   const onUpdate = vi.fn<(deployed: string) => void>();
   const release = vi.fn<() => Promise<string | null>>(async () => releases.shift() ?? null);
+  let time = 0;
   const stop = watchForUpdate({
     current,
     onUpdate,
     release,
+    now: () => time,
     schedule: (run, ms) => {
       const cancel = vi.fn<() => void>();
       timers.push({ run, ms, cancel });
@@ -121,7 +124,16 @@ function watch(releases: Array<string | null>, current = "old") {
       return cancel;
     },
   });
-  return { stop, timers, visibles, onUpdate, release };
+  return {
+    stop,
+    timers,
+    visibles,
+    onUpdate,
+    release,
+    advance: (ms: number) => {
+      time += ms;
+    },
+  };
 }
 
 describe("watchForUpdate", () => {
@@ -143,12 +155,14 @@ describe("watchForUpdate", () => {
     expect(watcher.onUpdate).not.toHaveBeenCalled();
     expect(watcher.timers[0]?.ms).toBe(UPDATE_CHECK_INTERVAL_MS);
 
+    watcher.advance(UPDATE_CHECK_INTERVAL_MS);
     watcher.timers[0]?.run();
     await flush();
     expect(watcher.onUpdate).not.toHaveBeenCalled();
     expect(watcher.timers).toHaveLength(2);
     expect(watcher.timers[1]?.ms).toBe(UPDATE_CHECK_INTERVAL_MS);
 
+    watcher.advance(UPDATE_CHECK_INTERVAL_MS);
     watcher.timers[1]?.run();
     await flush();
 
@@ -159,6 +173,24 @@ describe("watchForUpdate", () => {
     const watcher = watch(["old", "new"]);
 
     await flush();
+    watcher.advance(UPDATE_CHECK_MIN_GAP_MS);
+    watcher.visibles[0]?.run();
+    await flush();
+
+    expect(watcher.onUpdate).toHaveBeenCalledExactlyOnceWith("new");
+  });
+
+  it("checks at most once a minute when the tab becomes visible again", async () => {
+    const watcher = watch(["old", "new"]);
+
+    await flush();
+    watcher.advance(UPDATE_CHECK_MIN_GAP_MS - 1);
+    watcher.visibles[0]?.run();
+    await flush();
+
+    expect(watcher.release).toHaveBeenCalledOnce();
+
+    watcher.advance(1);
     watcher.visibles[0]?.run();
     await flush();
 

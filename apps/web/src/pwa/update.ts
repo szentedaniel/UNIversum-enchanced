@@ -14,6 +14,9 @@ const VERSION_URL = "/version.json";
 /** How often a visible page asks again; a returning tab checks through its visibility event. */
 export const UPDATE_CHECK_INTERVAL_MS = 5 * 60_000;
 
+/** The shortest gap between two checks: a tab that keeps regaining focus asks once a minute. */
+export const UPDATE_CHECK_MIN_GAP_MS = 60_000;
+
 /** The narrow `fetch` the checker needs; the real one fits. */
 export type VersionFetch = (
   url: string,
@@ -71,6 +74,8 @@ export type UpdateWatchOptions = {
   schedule?: ScheduleCheck;
   /** The visibility subscription; injectable for tests. */
   listenVisible?: ListenVisible;
+  /** The clock the once-a-minute gap reads; injectable for tests. */
+  now?: () => number;
 };
 
 /** The stop function a mounted `UpdatePrompt` returns from its effect. */
@@ -96,20 +101,27 @@ function visibilityListener(run: () => void): () => void {
 }
 
 /**
- * Checks at once, then every interval and whenever the tab becomes visible.
- * The first update stops the watch: the prompt stays until the page reloads.
- * The returned function stops both the timer and the listener.
+ * Checks at once, then every interval and whenever the tab becomes visible,
+ * never more often than `UPDATE_CHECK_MIN_GAP_MS`. The first update stops the
+ * watch: the prompt stays until the page reloads. The returned function stops
+ * both the timer and the listener.
  */
 export function watchForUpdate(options: UpdateWatchOptions): StopUpdateWatch {
   const release = options.release ?? (() => deployedRelease());
   const schedule = options.schedule ?? intervalTimer;
   const listen = options.listenVisible ?? visibilityListener;
+  const now = options.now ?? Date.now;
   let stopped = false;
+  let lastCheckedAt = Number.NEGATIVE_INFINITY;
   let cancelTimer: StopUpdateWatch = noCancel;
   let cancelVisible: StopUpdateWatch = noCancel;
 
   const check = async () => {
     if (stopped) return;
+    const at = now();
+    // Regaining focus can fire this many times in a minute; the deployment is asked once.
+    if (at - lastCheckedAt < UPDATE_CHECK_MIN_GAP_MS) return;
+    lastCheckedAt = at;
     let deployed: string | null;
     try {
       deployed = await release();
