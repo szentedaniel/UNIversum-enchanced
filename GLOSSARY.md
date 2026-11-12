@@ -50,6 +50,14 @@ _Avoid_: Lobby name, title
 The name other Players see for a Player, made up by the game when the Player takes a Seat; Guests do not choose or change it.
 _Avoid_: Username, nickname
 
+**Podium**:
+The state of a Room whose game has ended, in which the final standings are shown and the Players can vote on a rematch.
+_Avoid_: Results screen, game-over screen
+
+**Rematch vote**:
+A Player's agreement, given on the Podium and withdrawable until the next game starts, to play again in the same Room; it lives in the Room's memory and names the Player, not the connection, so it survives a reconnect. A Bot cannot vote.
+_Avoid_: Replay request, play again
+
 ### Play
 
 **Turn**:
@@ -87,6 +95,10 @@ _Avoid_: History, chat, transcript
 **Cue**:
 A short sound effect one Game event's Playback step starts; the cue table maps each event type to at most one cue, and each cue is one audio file.
 _Avoid_: Sound effect (for the named entry), clip
+
+**Quick chat**:
+The only way Players talk in a Room: each picks a ready-made line or emote from a fixed catalogue, and the server shows it beside that Player's Seat; no free text is ever sent, and it is not the Event log.
+_Avoid_: Chat message, free chat
 
 **Turn timer**:
 The countdown a Player has for one decision of their Turn, starting when the Playback before it ends.
@@ -204,3 +216,6 @@ _Avoid_: Eliminated, Csőd
 
 **Wealth**:
 A Player's cash plus the Value of their Fields; it decides the winner when the Minute limit runs out.
+
+**Wealth series**:
+Every Player's Wealth, sampled with the game's elapsed Minute each time a Turn passes and once more when the game ends, so the last sample equals the final standings.

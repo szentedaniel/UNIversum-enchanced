@@ -442,6 +442,8 @@ describe("isFactoryPull", () => {
 
   it("takes Dependabot's own branch, only from Dependabot", () => {
     expect(isFactoryPull("dependabot/npm_and_yarn/vitest-5.0.6", [], "dependabot[bot]")).toBe(true);
+    // `gh pr view` names the same author `app/dependabot`.
+    expect(isFactoryPull("dependabot/npm_and_yarn/vitest-5.0.6", [], "app/dependabot")).toBe(true);
     // A branch can be named anything; the author is what makes it Dependabot's.
     expect(isFactoryPull("dependabot/npm_and_yarn/vitest-5.0.6", [], "szentedaniel")).toBe(false);
     expect(isFactoryPull("agent/issue-91-maintenance", [], "dependabot[bot]")).toBe(true);

@@ -39,7 +39,7 @@ export function Podium({ view, phase }: { view: PublicView; phase: PhaseOf<"game
     <section
       data-testid="podium"
       aria-labelledby="podium-title"
-      className="fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden p-4"
+      className="fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden p-safe-4"
       style={{ background: OVERLAY_BG }}
     >
       {Array.from({ length: 40 }, (_, i) => (

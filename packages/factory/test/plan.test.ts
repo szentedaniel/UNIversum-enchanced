@@ -10,6 +10,7 @@ const issue = (number: number): IssueFacts => ({
   blockedBy: 0,
   openBlockers: [],
   subIssues: 0,
+  body: "",
 });
 
 describe("planOf", () => {

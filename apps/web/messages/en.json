@@ -117,6 +117,7 @@
   "rejection_stale_turn": "That move is no longer possible.",
   "rejection_not_your_turn": "It's not your Turn.",
   "rejection_not_offered": "That isn't possible right now.",
+  "rejection_rematch_not_offered": "You can ask for a rematch only after the game has ended.",
   "rejection_playback_running": "The Playback is still running. Wait for it to end.",
   "rejection_malformed": "Something went wrong. Please reload the page.",
   "rejection_internal": "Something went wrong. Please reload the page.",
@@ -282,6 +283,12 @@
   "pick_checklist": "Field checklist",
   "pick_inspect": "Inspect mode",
   "pick_inspect_hint": "Inspect mode: a tap opens the Field card, not a pick",
+  "hint_offer": "An Offer lets you buy or build on the Field you landed on, buy out another Player's University, or decline.",
+  "hint_quarantine": "You are in Quarantine for landing on the Quarantine Field: roll a 12, use a PCR test, or use up your Quarantine rounds to get out.",
+  "hint_doubler": "The Doubler doubles the Rent of the Field it stands on: pick one of your own Universities or Museums to place it.",
+  "hint_erasmus": "Erasmus lets you travel forward to a University or Museum that no other Player owns: pick a Field.",
+  "hint_sale": "When you cannot pay a Rent, a Tax or a Chance card, sell Fields to cover the Shortfall: pick them on the Board or let Auto-sell choose.",
+  "hint_game_end": "The game ends when one Player is left, the time runs out (then the Player with the highest Wealth wins), or a Player holds all four Museums or three Monopolies.",
   "rejection_room_name_blocked": "That Room name isn't allowed. Please choose another one.",
   "rejection_password_locked": "Too many wrong passwords. Please wait a little.",
   "rejection_rate_limited": "Too many attempts. Please wait a moment.",
@@ -314,5 +321,9 @@
   "game_over_congratulations": "Congratulations!",
   "log_title": "Event log",
   "log_toggle": "Event log",
-  "log_empty": "No events yet."
+  "log_empty": "No events yet.",
+  "update_available": "A new version of UNIversum is ready.",
+  "update_refresh": "Refresh",
+  "update_later": "Later",
+  "update_in_game": "Finish or leave this game to get it."
 }
