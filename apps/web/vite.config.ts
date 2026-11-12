@@ -1,7 +1,7 @@
+import { fileURLToPath } from "node:url";
 import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import { buildAtlas } from "./scripts/atlas.ts";
 import { buildPwa } from "./scripts/pwa.ts";
