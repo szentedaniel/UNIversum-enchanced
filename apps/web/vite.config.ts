@@ -3,6 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import { buildAtlas } from "./scripts/atlas.ts";
+import { buildPwa } from "./scripts/pwa.ts";
 
 // The browser talks to one origin: Vite (and Caddy in production) forwards
 // `/colyseus/*` — Colyseus' HTTP matchmaking and its WebSockets — to the Room
@@ -21,6 +22,20 @@ function boardAtlas(): Plugin {
     name: "universum:board-atlas",
     async buildStart() {
       if (!process.env["VITEST"]) await buildAtlas();
+    },
+  };
+}
+
+/**
+ * Builds the manifest and icons (scripts/pwa.ts) into public/ before Vite
+ * serves or bundles, so `/manifest.webmanifest` and `/icons/*` exist in dev
+ * and in the image. Vitest loads this config too and skips it.
+ */
+function pwaAssets(): Plugin {
+  return {
+    name: "universum:pwa-assets",
+    async buildStart() {
+      if (!process.env["VITEST"]) await buildPwa();
     },
   };
 }
@@ -45,6 +60,7 @@ export default defineConfig(({ mode }) => {
     envDir: repoRoot,
     plugins: [
       boardAtlas(),
+      pwaAssets(),
       react(),
       tailwindcss(),
       // Same options as the `paraglide` script in package.json (run on install,
