@@ -281,8 +281,8 @@ describe("Room options", () => {
 
   it("drops unknown join options, as it did before the watch flag", () => {
     // `authorize` tells a create from a join by this schema's success, so it
-    // must stay a plain `z.object`: a strict one would turn a create's options
-    // into a malformed join.
+    // must stay a plain `z.object`: a strict one would turn a join with an
+    // extra key into a create (a new Room) instead of `MALFORMED`.
     expect(joinOptionsSchema.parse({ code: "123456", maxPlayers: 4 })).toEqual({ code: "123456" });
   });
 
