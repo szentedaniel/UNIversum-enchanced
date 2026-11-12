@@ -90,10 +90,11 @@ describe("canReload", () => {
   });
 });
 
-/** One check's async tail: the injected release and the watcher's await. */
-const flush = async () => {
-  await Promise.resolve();
-  await Promise.resolve();
+/** Drain every microtask a check queues; a macrotask boundary, not a wait. */
+const flush = () => {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  setImmediate(resolve);
+  return promise;
 };
 
 /**
@@ -135,14 +136,20 @@ describe("watchForUpdate", () => {
     expect(watcher.visibles[0]?.cancel).toHaveBeenCalledOnce();
   });
 
-  it("checks again on the interval with the deployment's interval", async () => {
-    const watcher = watch(["old", "new"]);
+  it("checks again on every interval with the deployment's interval", async () => {
+    const watcher = watch(["old", "old", "new"]);
 
     await flush();
     expect(watcher.onUpdate).not.toHaveBeenCalled();
     expect(watcher.timers[0]?.ms).toBe(UPDATE_CHECK_INTERVAL_MS);
 
     watcher.timers[0]?.run();
+    await flush();
+    expect(watcher.onUpdate).not.toHaveBeenCalled();
+    expect(watcher.timers).toHaveLength(2);
+    expect(watcher.timers[1]?.ms).toBe(UPDATE_CHECK_INTERVAL_MS);
+
+    watcher.timers[1]?.run();
     await flush();
 
     expect(watcher.onUpdate).toHaveBeenCalledExactlyOnceWith("new");
@@ -209,7 +216,7 @@ describe("watchForUpdate", () => {
   });
 
   it("uses the browser's timer and visibility event by default", async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const addEventListener = vi.fn<(...args: unknown[]) => void>();
     const removeEventListener = vi.fn<(...args: unknown[]) => void>();
     vi.stubGlobal("document", {

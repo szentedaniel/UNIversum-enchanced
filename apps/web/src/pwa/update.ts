@@ -124,7 +124,16 @@ export function watchForUpdate(options: UpdateWatchOptions): StopUpdateWatch {
     options.onUpdate(deployed);
   };
 
-  cancelTimer = schedule(() => void check(), UPDATE_CHECK_INTERVAL_MS);
+  const queueInterval = () => {
+    cancelTimer = schedule(() => {
+      void check().finally(() => {
+        // A check that found an update set `stopped` and cancelled the rest.
+        if (!stopped) queueInterval();
+      });
+    }, UPDATE_CHECK_INTERVAL_MS);
+  };
+
+  queueInterval();
   cancelVisible = listen(() => void check());
   void check();
 
