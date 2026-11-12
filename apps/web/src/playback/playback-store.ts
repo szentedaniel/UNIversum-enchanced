@@ -13,6 +13,7 @@
 import { subscribeWithSelector } from "zustand/middleware";
 import { createStore } from "zustand/vanilla";
 import { playbackOfPush, type Frame, type Playback, type TurnLabel } from "#playback/playback.ts";
+import { resetCues, syncCues } from "#sound/cue-sync.ts";
 import { syncLog } from "#stores/log-store.ts";
 import { roomStore } from "#stores/room-store.ts";
 
@@ -65,8 +66,11 @@ function armNext(playback: Playback, now: number): void {
 function publish(playback: Playback, now: number): void {
   const frame = playback.frameAt(now);
   playbackStore.setState({ frame });
-  // The Event log follows the same frames: a line appears at its step's start.
-  syncLog(roomStore.getState().push, frame);
+  // The Event log and the sound cues follow the same frames: a line or a cue
+  // appears at its step's start.
+  const { push } = roomStore.getState();
+  syncLog(push, frame);
+  syncCues(push, frame);
   armNext(playback, now);
 }
 
@@ -84,6 +88,8 @@ function start(): void {
   if (!push) {
     current = null;
     playbackStore.setState({ frame: null });
+    // A Room left behind: the next Room's push counter starts over.
+    resetCues();
     return;
   }
   // The previous push's shown Turn is what this one holds until its gate opens.

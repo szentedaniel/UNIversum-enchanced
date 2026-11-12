@@ -79,6 +79,8 @@ function start(element: HTMLAudioElement): void {
 /** Plays a cue, unless muted. A cue on an element unlocked a moment ago follows the unlock. */
 export function playCue(name: CueName): void {
   if (soundStore.getState().muted) return;
+  // No audio outside a browser: the store's vitest drives the cues' caller in Node.
+  if (typeof Audio === "undefined") return;
   const sound = elementFor(name);
   const pending = unlocking.get(sound);
   if (pending) void pending.then(() => start(sound));

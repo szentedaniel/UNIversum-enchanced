@@ -53,7 +53,7 @@ describe("the cue table", () => {
   it("lists every event type with the dice on a roll and silence everywhere else", () => {
     expect(EVENT_CUES).toEqual(CUED);
     // The presentation table is exhaustive too, so the two agree on the set.
-    expect(Object.keys(EVENT_CUES).sort()).toEqual(Object.keys(EVENT_PRESENTATION).sort());
+    expect(Object.keys(EVENT_CUES).toSorted()).toEqual(Object.keys(EVENT_PRESENTATION).toSorted());
   });
 
   it("names the effect file of every cue", () => {
