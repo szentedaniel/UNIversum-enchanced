@@ -462,6 +462,28 @@ describe("returning to Lobby", () => {
     expect(seated.seats[1]).toEqual({ playerId: bobId, name: lobby.seats[1]?.name });
   });
 
+  it("holds or frees a Seat dropped or left after the return, as a Lobby does", async () => {
+    const server = await start();
+    const { alice, bob, bobId, code } = await startedGame(server);
+    await endedGame(server, alice, bob);
+    const endsAt = endedAtOf(server, code);
+    await bothAgree(server, alice, bob);
+
+    // A drop is an ordinary Lobby drop now: the Seat is held, not freed.
+    await bob.drop();
+    const held = await alice.until("lobby", (message) => message.seats[1]?.heldUntil !== undefined);
+    expect(held.seats[1]).toMatchObject({ playerId: bobId, heldUntil: endsAt + 60_000 });
+
+    // The reconnection token brings Bob back to the same Seat.
+    const back = await server.reconnect(bob);
+    await alice.until("lobby", (message) => message.seats[1]?.heldUntil === undefined);
+
+    // A leave frees it, as in any Lobby.
+    await back.leave();
+    const freed = await alice.until("lobby", (message) => message.seats.length === 1);
+    expect(freed.seats.map((seat) => seat.playerId)).not.toContain(bobId);
+  });
+
   it("waits for a held Seat of a returned Lobby, then the Room disposes and is deleted", async () => {
     const tokens: [string, string] = [newGuestToken(), newGuestToken()];
     const server = await start();
