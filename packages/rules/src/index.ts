@@ -43,6 +43,7 @@ export {
   type Seat,
   type Seed,
   type Settings,
+  type WealthSample,
 } from "#state.ts";
 export type { PendingCharge } from "#rules/charge.ts";
 export type { GameEndReason, Standing } from "#rules/game-end.ts";

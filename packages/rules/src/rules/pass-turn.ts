@@ -5,6 +5,7 @@
  */
 import { beginTurn } from "#rules/quarantine.ts";
 import { checkGameEnd } from "#rules/game-end.ts";
+import { recordWealthSample } from "#rules/wealth-samples.ts";
 import type { PlayerId } from "#state.ts";
 import { emit, type Tx } from "#tx.ts";
 
@@ -31,6 +32,8 @@ export const awaitingRoll = () => ({ kind: "awaitingRoll" }) as const;
  */
 export function passTurn(tx: Tx): void {
   if (checkGameEnd(tx)) return;
+  // The game goes on, so this Turn's end is one point of the Wealth series.
+  recordWealthSample(tx);
   const { players } = tx.state;
   const current = players.findIndex((p) => p.id === tx.state.currentPlayer);
   for (let step = 1; step <= players.length; step++) {

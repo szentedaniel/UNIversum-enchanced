@@ -3,7 +3,7 @@
  * every accepted intent; after a deploy that changes the state's shape it runs
  * every stored state through `migrate` on boot, before restoring the Room.
  */
-import { ROUND_BONUS, START_CASH, TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
+import { MINUTE_MS, ROUND_BONUS, START_CASH, TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
 import { STATE_VERSION, type GameState } from "#state.ts";
 
 /** A stored state as JSON, before it is known to have the current shape. */
@@ -80,6 +80,11 @@ const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> 
   // a pending Deal has used this Turn's Deal; one stored without has used
   // none, as the old rules had no guard.
   7: (state) => ({ ...state, stateVersion: 8, dealUsed: state["deal"] !== null }),
+  // Version 9 records the Wealth series (spec #177) and how long one game
+  // Minute lasts. A game stored before it has no samples: it gains one at each
+  // Turn it passes from now on, and the final one at its end. Its Minutes were
+  // production ones, so it gets the production length.
+  8: (state) => ({ ...state, stateVersion: 9, minuteMs: MINUTE_MS, wealthSamples: [] }),
 };
 
 /**

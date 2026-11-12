@@ -8,7 +8,7 @@
 import type { ChanceCardId, FieldId } from "#board.ts";
 
 /** The version of the state's shape (not the per-intent `version`). */
-export const STATE_VERSION = 8;
+export const STATE_VERSION = 9;
 
 /** A Player's public id: what every client sees instead of a Guest token. */
 export type PlayerId = string;
@@ -89,6 +89,13 @@ export type Deal = {
 };
 
 /**
+ * One sample of the Wealth series (spec #177): the game Minute it was taken
+ * in, and every Player's Wealth then (R77), by Player id. A Bankrupt Player's
+ * is 0, so their series falls to zero and stays there.
+ */
+export type WealthSample = { minute: number; wealth: Record<PlayerId, number> };
+
+/**
  * Phases, by `kind`. The map is open: each rule area adds its own phases with
  * declaration merging, next to its intent handlers:
  *
@@ -135,6 +142,13 @@ export type GameState = {
   settings: Settings;
   /** When the Minute limit runs out (epoch ms); checked at each Turn change. */
   endsAt: number;
+  /**
+   * How long one game Minute lasts (ms). `endsAt` is the start plus the
+   * Room's Minutes, so the start is `endsAt - settings.minuteLimit × this`;
+   * the server shortens it for e2e runs, so it is state, not a constant
+   * (spec #177).
+   */
+  minuteMs: number;
   /** Players in Seat order. */
   players: PlayerState[];
   /** Per-Field state, indexed by Field id. */
@@ -150,6 +164,12 @@ export type GameState = {
    * #172); reset when the Turn passes.
    */
   dealUsed: boolean;
+  /**
+   * The Wealth series (spec #177): one sample per passed Turn, plus the final
+   * one at game end. Kept out of `publicView`; the result screen reads it
+   * through `summary` (ticket #236).
+   */
+  wealthSamples: WealthSample[];
   /** The PRNG state. Never sent to clients (see `publicView`). */
   rng: number[];
 };
