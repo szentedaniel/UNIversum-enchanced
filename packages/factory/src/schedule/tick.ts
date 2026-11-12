@@ -1,7 +1,9 @@
 /**
  * The factory's tick: dispatches every nightly or weekly job that is due and
  * has no tick dispatch since it fell due, so a late or dropped GitHub schedule
- * is caught up by the next one. `due.ts` holds the schedule and the rule; this
+ * is caught up by the next one. The heartbeat (`heartbeat.ts`,
+ * `heartbeat-run.ts`) runs it every ten minutes for about 5.5 hours and then
+ * relays its successor; `due.ts` holds the schedule and the rule, and this
  * script only reads the runs and starts the workflows.
  *
  * Only the tick's own dispatch counts. It dispatches with `scheduled=true` and
@@ -109,6 +111,14 @@ export const runTick = ({ now, dryRun, lastTickRun, dispatch, log }: TickDeps): 
   return { due, dispatched, errors };
 };
 
+/** The real wiring the tick and the heartbeat share: the runs API read and a PAT dispatch. */
+export const tickWiring = (repo: string): Pick<TickDeps, "lastTickRun" | "dispatch"> => ({
+  lastTickRun: (workflow, since) => tickRunSince(repo, workflow, since),
+  dispatch: (workflow) => {
+    sh(`gh workflow run ${workflow} --ref main -f scheduled=true`);
+  },
+});
+
 const main = (): void => {
   const repo = required("GH_REPO");
   const now = new Date();
@@ -118,10 +128,7 @@ const main = (): void => {
   const outcome = runTick({
     now,
     dryRun,
-    lastTickRun: (workflow, since) => tickRunSince(repo, workflow, since),
-    dispatch: (workflow) => {
-      sh(`gh workflow run ${workflow} --ref main -f scheduled=true`);
-    },
+    ...tickWiring(repo),
     log: console.log,
   });
 
