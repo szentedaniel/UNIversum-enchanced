@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { castVote, seatsAfterRematch, shouldReturn, votersOf, withdrawVote } from "#room/rematch.ts";
+import {
+  castVote,
+  seatsAfterRematch,
+  shouldReturn,
+  votersOf,
+  withdrawVote,
+} from "#room/rematch.ts";
 
 const seats = [{ playerId: "p1" }, { playerId: "p2" }, { playerId: "p3" }];
 
 /** The Seats of the Players in `ids` count as connected. */
-const connected = (...ids: string[]) => (seat: { playerId: string }) => ids.includes(seat.playerId);
+const connected =
+  (...ids: string[]) =>
+  (seat: { playerId: string }) =>
+    ids.includes(seat.playerId);
 
 describe("the rematch votes", () => {
   it("keeps a cast vote without changing the set it came from", () => {

@@ -43,9 +43,7 @@ export function shouldReturn<S extends RematchSeat>(
   isConnected: (seat: S) => boolean,
 ): boolean {
   if (votes.size === 0) return false;
-  return seats.every(
-    (seat) => seat.bot === true || votes.has(seat.playerId) || !isConnected(seat),
-  );
+  return seats.every((seat) => seat.bot === true || votes.has(seat.playerId) || !isConnected(seat));
 }
 
 /**

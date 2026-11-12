@@ -479,3 +479,55 @@ describe("the game ending", () => {
     expect(deleted).toEqual(["ABC123"]);
   });
 });
+
+describe("returning to Lobby", () => {
+  it("saves one Lobby snapshot with the kept Seats and cancels the retention deletion", () => {
+    const { driver, scheduler, saved, deleted } = newDriver();
+    const game = newGame({ minuteMs: 100 });
+    driver.start(game);
+    const deadline = game.turnDeadline ?? 0;
+    scheduler.advanceTo(deadline);
+    expect(saved.at(-1)?.room).toMatchObject({ endedAt: deadline });
+
+    driver.returnToLobby([SEATS[0]!]);
+
+    expect(saved.at(-1)).toEqual({
+      room: {
+        code: "ABC123",
+        ...ROOM,
+        seats: SEATS.slice(0, 1).map(({ playerId, name, tokenHash }) => ({
+          playerId,
+          name,
+          tokenHash,
+        })),
+        game: null,
+        endedAt: null,
+      },
+      events: [],
+    });
+    // The old game's deletion never fires; nothing is published.
+    scheduler.advanceTo(deadline + RETENTION_MS);
+    expect(deleted).toEqual([]);
+  });
+
+  it("a failed write throws and leaves the retention deletion armed", () => {
+    const { driver, scheduler, saved, deleted, fail } = newDriver();
+    const game = newGame({ minuteMs: 100 });
+    driver.start(game);
+    const deadline = game.turnDeadline ?? 0;
+    scheduler.advanceTo(deadline);
+
+    fail(true);
+    expect(() => driver.returnToLobby([SEATS[0]!])).toThrow("disk full");
+
+    // The ended snapshot stands, and the Room is still deleted with its events.
+    expect(saved.at(-1)?.room).toMatchObject({
+      endedAt: deadline,
+      game: { phase: { kind: "gameOver" } },
+    });
+    expect(deleted).toEqual([]);
+    fail(false);
+    scheduler.advanceTo(deadline + RETENTION_MS);
+    expect(deleted).toEqual(["ABC123"]);
+  });
+});
