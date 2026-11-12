@@ -92,6 +92,10 @@ _Avoid_: Playback over, unlock
 The list, on the Game screen, of the lines of the events the Playback has revealed so far, newest last, each line in the language active when it appeared; the client keeps it, so a reload starts it empty.
 _Avoid_: History, chat, transcript
 
+**Cue**:
+A short sound effect one Game event's Playback step starts; the cue table maps each event type to at most one cue, and each cue is one audio file.
+_Avoid_: Sound effect (for the named entry), clip
+
 **Quick chat**:
 The only way Players talk in a Room: each picks a ready-made line or emote from a fixed catalogue, and the server shows it beside that Player's Seat; no free text is ever sent, and it is not the Event log.
 _Avoid_: Chat message, free chat
