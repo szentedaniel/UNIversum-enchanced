@@ -17,6 +17,13 @@ describe("positiveInt", () => {
   });
 });
 
+describe("sh", () => {
+  it("kills a call that outlives its cap instead of hanging its loop", () => {
+    // The heartbeat caps every gh call, so a hung one must throw like a failure.
+    expect(() => sh("sleep 5", 50)).toThrow(/ETIMEDOUT/u);
+  });
+});
+
 describe("shellArg", () => {
   it("hands a value with spaces, quotes and dollars to the shell as one word", () => {
     const value = `chore(merge): #87 it's a "title" $HOME \`id\``;

@@ -26,10 +26,24 @@ lint, typecheck, vitest. Playwright and `docker compose build` run once, in CI, 
 ## Schedules
 
 GitHub starts scheduled runs late on this repository, by an hour to nine hours, and sometimes drops a
-run altogether, worst at the top of the hour. So the factory schedules one thing: `factory-tick.yml`
-runs every ten minutes, off the top of the hour, and dispatches every nightly or weekly job that is due
-and has not run since it fell due (`packages/factory/src/schedule/due.ts`). The schedule is Budapest
-wall time, so a DST switch needs no second slot:
+run altogether, worst at the top of the hour. So the factory schedules one thing: `factory-tick.yml`.
+Its cron runs every ten minutes, off the top of the hour, but only as the safety net. Unless it is a
+dry run, a started run first asks the runs API whether a newer `factory-tick.yml` run is queued or
+running; if one is, it exits without ticking. Only a newer run counts: the group holds one running
+and one pending run, and a newer pending run replaces the older one, so an older run the API still
+lists as queued is one that already ran or lost its slot. A scheduled (cron) run is only the safety
+net and a dry run ticks once without relaying, so neither counts. Otherwise the run becomes the
+heartbeat: it calls the tick every ten minutes for about 5.5 hours, then dispatches its successor
+with `gh workflow run factory-tick.yml --ref main` and exits. A tick that overruns its ten minutes
+skips the slots it missed instead of ticking back to back. The successor waits in the `factory-tick`
+group behind the old run, so exactly one heartbeat is live and the chain relays itself; a dry run
+waits in `factory-tick-dry-run`, so it can neither replace the pending successor nor pass for a
+heartbeat. The cron only starts a new chain after a dropped relay. Every `gh` call is capped at
+`GH_CALL_TIMEOUT_MS` (a minute), so a hung call fails like any other error and cannot carry the loop
+past its hand-over without a relay.
+A tick dispatches every nightly or weekly job that is due and has not run since it fell due
+(`packages/factory/src/schedule/due.ts`). The schedule is Budapest wall time, so a DST switch needs no
+second slot:
 
 | Job          | Workflow                                            | Due          | Latest start |
 | ------------ | --------------------------------------------------- | ------------ | ------------ |
@@ -44,10 +58,14 @@ not start a missed job; the next day's due time does, so a missed night waits fo
 tick dispatches with `scheduled=true` and each workflow's run name carries `(factory tick)`; only those
 runs mark a job as done, so a manual, dry or per-pull-request run never suppresses the scheduled one,
 while a failed tick dispatch still counts and is not retried in a loop (failures stay visible in
-Actions and the weekly report). A second run must still be harmless: intake and the review queue find
-nothing left, the dispatcher skips issues a run holds, the retro stops at the day's log entry, and the
-report edits the week's issue. A run can always be started by hand (`gh workflow run <file>`), and
-`factory-dispatch.yml` keeps its own hourly cron as a backstop for a dropped event.
+Actions and the weekly report). A failed tick inside the heartbeat does not end it: the error is
+logged and collected, the next tick still runs, and the heartbeat relays its successor before the run
+turns red. A failed relay is retried three times, a minute apart; when every attempt fails, the run
+turns red and the next cron run starts a new chain. A dry run ticks once and starts no successor. A
+second run must still be harmless: intake and the review queue find nothing left, the dispatcher
+skips issues a run holds, the retro stops at the day's log entry, and the report edits the week's
+issue. A run can always be started by hand (`gh workflow run <file>`), and `factory-dispatch.yml`
+keeps its own hourly cron as a backstop for a dropped event.
 
 ## Labels
 
