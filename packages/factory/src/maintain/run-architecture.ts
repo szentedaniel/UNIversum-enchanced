@@ -15,19 +15,84 @@ import * as sandcastle from "@ai-hero/sandcastle";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import {
   architectureRun,
+  issueWork,
   newProposals,
   proposalIssueBody,
   proposalLabel,
+  pullWork,
+  trackedBy,
   type Proposal,
+  type TrackedWork,
 } from "#maintain/proposals.ts";
 import { claudeAgent } from "#shared/agents.ts";
 import { safeSh, fail, required, sh, shellArg } from "#shared/common.ts";
-import { parseJson } from "#shared/github.ts";
+import { api, parseJson } from "#shared/github.ts";
 
-const openTitles = (repo: string): string[] =>
-  parseJson<{ title: string }[]>(
-    sh(`gh issue list --repo "${repo}" --state open --limit 200 --json title`),
-  ).map((issue) => issue.title);
+/** How far back a closed issue still counts as recently filed work. */
+const RECENT_CLOSED_DAYS = 30;
+
+interface ListedIssue {
+  number: number;
+  title: string;
+  body: string | null;
+  labels: { name: string }[];
+  sub_issues_summary: { total: number };
+  pull_request?: unknown;
+}
+
+interface ListedPull {
+  number: number;
+  title: string;
+  body: string | null;
+  files: { path: string }[];
+}
+
+/**
+ * Every issue in `state` through the shared paginated reader: `gh issue list
+ * --limit` silently drops the rest, and a dropped issue is a proposal the pass
+ * files a second time.
+ */
+const trackedIssues = (repo: string, state: "open" | "closed", since?: Date): TrackedWork[] =>
+  api<ListedIssue>(
+    `repos/${repo}/issues?state=${state}&per_page=100${
+      since === undefined ? "" : `&since=${since.toISOString()}`
+    }`,
+  )
+    .filter((issue) => issue.pull_request === undefined)
+    .map((issue) =>
+      issueWork({
+        number: issue.number,
+        title: issue.title,
+        body: issue.body,
+        labels: issue.labels.map((label) => label.name),
+        subIssues: issue.sub_issues_summary.total,
+      }),
+    );
+
+const trackedPulls = (repo: string): TrackedWork[] =>
+  parseJson<ListedPull[]>(
+    sh(`gh pr list --repo "${repo}" --state open --limit 100 --json number,title,body,files`),
+  ).map((pull) =>
+    pullWork({
+      number: pull.number,
+      title: pull.title,
+      body: pull.body,
+      files: pull.files.map((file) => file.path),
+    }),
+  );
+
+/**
+ * The open and recently closed work a proposal must not repeat: the open
+ * issues, the closed issues of the last month, and the open pull requests.
+ */
+const trackedWork = (repo: string, now: Date): TrackedWork[] => {
+  const since = new Date(now.getTime() - RECENT_CLOSED_DAYS * 24 * 60 * 60 * 1000);
+  return [
+    ...trackedIssues(repo, "open"),
+    ...trackedIssues(repo, "closed", since),
+    ...trackedPulls(repo),
+  ];
+};
 
 const writeTemp = (proposal: Proposal): string => {
   const file = join(mkdtempSync(join(tmpdir(), "factory-architecture-")), "issue.md");
@@ -41,9 +106,10 @@ const describe = (proposal: Proposal): string =>
 const main = async (): Promise<void> => {
   const repo = required("GH_REPO");
   const dryRun = process.env["DRY_RUN"] === "1";
+  const now = new Date();
   const { focus, schema, promptArgs } = architectureRun(
     { MAX_PROPOSALS: process.env["MAX_PROPOSALS"], FOCUS: process.env["FOCUS"] },
-    new Date(),
+    now,
   );
 
   const result = await sandcastle.run({
@@ -72,9 +138,16 @@ const main = async (): Promise<void> => {
   }
   for (const proposal of proposals) console.log(`Proposed: ${describe(proposal)}`);
 
-  const fresh = newProposals(proposals, openTitles(repo));
+  const tracked = trackedWork(repo, now);
+  const fresh = newProposals(proposals, tracked);
   for (const proposal of proposals) {
-    if (!fresh.includes(proposal)) console.log(`Already open: "${proposal.title}".`);
+    if (fresh.includes(proposal)) continue;
+    const work = trackedBy(proposal, tracked);
+    console.log(
+      work === undefined
+        ? `Already tracked: "${proposal.title}".`
+        : `Already tracked: "${proposal.title}" overlaps #${String(work.number)} ${work.title}.`,
+    );
   }
 
   for (const proposal of fresh) {

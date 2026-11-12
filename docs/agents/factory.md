@@ -160,8 +160,20 @@ DRY_RUN=1 GH_REPO=<owner>/<repo> ISSUE_NUMBER=<n> node packages/factory/src/inta
 
 `factory-dispatch.yml` picks the frontier: open `ready-for-agent` issues that no run holds
 (`agent:in-progress`), no human owns (`agent:blocked`, `ready-for-human`), no open blocker holds back
-(GitHub's native dependencies), that are not a spec (sub-issues), and that no open pull request
-already closes. Oldest first — there is no priority label yet (`PRIORITY_LABELS` in
+(GitHub's native dependencies), that are not a spec (sub-issues), that no open pull request already
+closes, and whose target module no open work already holds. A ticket's target modules are the paths
+its body names, usually its `## Files` list; it overlaps an open pull request when one of those paths
+matches the pull's changed files, a three-segment module path in its branch slug, or a two-segment
+pair whose directory and file name are both specific. It overlaps an older open ticket when both name
+the same module, but only work an agent holds or will start (`ready-for-agent`, `agent:in-progress`)
+holds a module: a stalled ticket (`agent:blocked`, `ready-for-human`) claims nothing, so it cannot
+stall a newer ticket indefinitely. The handoff ledger, the factory log and the lockfile are shared
+files every ticket touches, so naming one is not a target. An overlapping ticket keeps
+`ready-for-agent`, gets one note naming the pull request number (deduped by a hidden marker), and
+starts once the pull request merges or closes. The match is deterministic
+(`packages/factory/src/shared/targets.ts`), with no model call.
+
+Oldest first — there is no priority label yet (`PRIORITY_LABELS` in
 `packages/factory/src/dispatch/frontier.ts` is the seam) — and at most `FACTORY_MAX_PARALLEL`
 implementers (default 2) run at once. An issue whose run is already queued counts as running, even
 before its `agent:in-progress` label lands.
@@ -452,8 +464,10 @@ Dispatched by the tick every Sunday at 03:19 Budapest, inside the night window, 
 
 - **Architecture**: Claude Code reads the hot spots (`git log`), `GLOSSARY.md`, `docs/adr/` and
   `CODING_STANDARDS.md`, consults the pinned plugin's `codebase-design` skill, and returns **at most
-  two** proposals as JSON. The script opens one issue each, deduped against the open issue titles:
-  `ready-for-agent` only for a two-way door, else `ready-for-human` (the merge gate would escalate a
+  two** proposals as JSON. The script opens one issue each, deduped against the open and recently
+  closed issue titles and target paths, and against the open pull requests' changed files: a proposal
+  that repeats a module already in flight is dropped, not filed. `ready-for-agent` only for a two-way
+  door, else `ready-for-human` (the merge gate would escalate a
   one-way door anyway). The plugin also ships `improve-codebase-architecture`, but that command is
   interactive (an HTML report and a question), so the pass owns its own output contract and takes
   only the vocabulary from `codebase-design`. A manual run may lift the cap for a whole-codebase

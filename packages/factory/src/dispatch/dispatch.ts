@@ -11,11 +11,17 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { budgetNotice, budgetLimit, minutesUsed, monthStart } from "#dispatch/budget.ts";
-import { frontierOf, type IssueFacts } from "#dispatch/frontier.ts";
+import {
+  frontierOf,
+  overlapNote,
+  type IssueFacts,
+  type OpenPull,
+  type SkippedIssue,
+} from "#dispatch/frontier.ts";
 import { DEFAULT_MAX_PARALLEL, noDispatchReason, planOf } from "#dispatch/plan.ts";
-import { api } from "#shared/github.ts";
-import type { PullFacts } from "#shared/closing-pr.ts";
+import { api, parseJson } from "#shared/github.ts";
 import { fail, positiveInt, required, sh } from "#shared/common.ts";
+import { READY_LABEL } from "#shared/labels.ts";
 import { factoryRuns } from "#shared/runs.ts";
 
 /** The fields of the REST responses the dispatcher reads. */
@@ -28,6 +34,14 @@ interface ApiIssue {
   pull_request?: unknown;
   issue_dependencies_summary: { blocked_by: number };
   sub_issues_summary: { total: number };
+}
+
+interface ApiPull {
+  number: number;
+  url: string;
+  body: string | null;
+  headRefName: string;
+  files: { path: string }[];
 }
 
 interface ApiRun {
@@ -68,29 +82,70 @@ const openBlockers = (repo: string, issue: number): number[] =>
     .filter((blocker) => blocker.state === "open")
     .map((blocker) => blocker.number);
 
-const candidates = (repo: string): IssueFacts[] =>
-  api<ApiIssue>(`repos/${repo}/issues?state=open&labels=ready-for-agent&per_page=100`)
-    .filter((issue) => issue.pull_request === undefined)
-    .map((issue) => ({
-      number: issue.number,
-      title: issue.title,
-      createdAt: issue.created_at,
-      labels: issue.labels.map((label) => label.name),
-      blockedBy: issue.issue_dependencies_summary.blocked_by,
-      openBlockers:
-        issue.issue_dependencies_summary.blocked_by === 0 ? [] : openBlockers(repo, issue.number),
-      subIssues: issue.sub_issues_summary.total,
-    }));
+const issueFacts = (repo: string, issue: ApiIssue): IssueFacts => {
+  const labels = issue.labels.map((label) => label.name);
+  return {
+    number: issue.number,
+    title: issue.title,
+    createdAt: issue.created_at,
+    labels,
+    blockedBy: issue.issue_dependencies_summary.blocked_by,
+    openBlockers:
+      !labels.includes(READY_LABEL) || issue.issue_dependencies_summary.blocked_by === 0
+        ? []
+        : openBlockers(repo, issue.number),
+    subIssues: issue.sub_issues_summary.total,
+    body: issue.body,
+  };
+};
 
-const openPulls = (repo: string): PullFacts[] =>
-  api<{ html_url: string; body: string | null }>(`repos/${repo}/pulls?state=open&per_page=100`).map(
-    (pull) => ({ url: pull.html_url, body: pull.body }),
-  );
+export const openIssues = (repo: string): IssueFacts[] =>
+  api<ApiIssue>(`repos/${repo}/issues?state=open&per_page=100`)
+    .filter((issue) => issue.pull_request === undefined)
+    .map((issue) => issueFacts(repo, issue));
+
+export const openPulls = (repo: string): OpenPull[] =>
+  parseJson<ApiPull[]>(
+    sh(
+      `gh pr list --repo "${repo}" --state open --limit 100 --json number,url,body,headRefName,files`,
+    ),
+  ).map((pull) => ({
+    number: pull.number,
+    url: pull.url,
+    body: pull.body,
+    branch: pull.headRefName,
+    files: pull.files.map((file) => file.path),
+  }));
 
 const comments = (repo: string, issue: number): string[] =>
   api<{ body: string }>(`repos/${repo}/issues/${String(issue)}/comments?per_page=100`).map(
     (comment) => comment.body,
   );
+
+export interface NoteOverlapDeps {
+  /** The tickets the frontier skipped, with the pull request each one overlaps. */
+  readonly skipped: readonly SkippedIssue[];
+  /** Every comment already on the ticket, for the marker dedupe. */
+  readonly readComments: (issue: number) => readonly string[];
+  /** Posts the note on the ticket. */
+  readonly post: (issue: number, body: string) => void;
+}
+
+/**
+ * Posts one note per blocked pull request on a ticket that overlaps it. The
+ * marker is the dedupe, so the hourly backstop does not repeat the note.
+ */
+export const noteOverlaps = ({ skipped, readComments, post }: NoteOverlapDeps): void => {
+  for (const { issue, blockingPull } of skipped) {
+    if (blockingPull === undefined) continue;
+    const note = overlapNote(blockingPull);
+    if (readComments(issue.number).some((body) => body.includes(note.marker))) continue;
+    post(issue.number, note.body);
+    console.log(
+      `Noted #${String(issue.number)} waits for pull request #${String(blockingPull.number)}.`,
+    );
+  }
+};
 
 /**
  * Posts the budget notice once per month: on the newest open `factory:report`
@@ -147,7 +202,13 @@ const main = (): void => {
           now,
         );
   const running = runningImplementers(repo);
-  const frontier = frontierOf(candidates(repo), openPulls(repo), issuesOfRuns(running));
+  const issues = openIssues(repo);
+  const frontier = frontierOf(
+    issues.filter((issue) => issue.labels.includes(READY_LABEL)),
+    openPulls(repo),
+    issuesOfRuns(running),
+    issues,
+  );
   const plan = planOf(frontier.eligible, running.length, maxParallel);
   const spent = limit !== undefined && used >= limit;
 
@@ -167,6 +228,17 @@ const main = (): void => {
     for (const { issue, reason } of frontier.skipped) {
       console.log(`  #${String(issue.number)} ${issue.title} — ${reason}`);
     }
+  }
+  if (!dryRun) {
+    noteOverlaps({
+      skipped: frontier.skipped,
+      readComments: (issue) => comments(repo, issue),
+      post: (issue, body) => {
+        const file = join(mkdtempSync(join(tmpdir(), "factory-overlap-")), "note.md");
+        writeFileSync(file, `${body}\n`);
+        sh(`gh issue comment ${String(issue)} --body-file "${file}"`);
+      },
+    });
   }
 
   if (spent) {
@@ -192,8 +264,10 @@ const main = (): void => {
   for (const issue of plan.dispatch) dispatch(issue);
 };
 
-try {
-  main();
-} catch (error) {
-  fail(error instanceof Error ? error.message : String(error));
+if (import.meta.main) {
+  try {
+    main();
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
 }
