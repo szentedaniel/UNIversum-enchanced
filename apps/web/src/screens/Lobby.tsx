@@ -129,7 +129,7 @@ export function Lobby() {
 
   if (error) {
     return (
-      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-4 text-center">
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-safe-4 text-center">
         <RejectionText code={error} wait={wait} />
         <Link to="/rooms" className={buttonVariants({ variant: "plain" })}>
           {m.back_to_list()}
@@ -140,9 +140,9 @@ export function Lobby() {
 
   if (!lobby && passwordJoin.asking) {
     return (
-      <div className="min-h-dvh pb-8">
+      <div className="min-h-dvh pb-safe-8">
         <ScreenHeader back="/rooms" label={m.back_to_list()} />
-        <main className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 pt-10 text-center">
+        <main className="mx-auto flex max-w-md flex-col items-center gap-4 px-safe-4 pt-10 text-center">
           <h1 className="m-0 text-3xl font-black md:text-4xl">{m.lobby_title()}</h1>
           <PasswordForm
             className="sticker rounded-ui bg-card p-4 text-card-foreground"
@@ -158,7 +158,7 @@ export function Lobby() {
 
   if (!lobby) {
     return (
-      <main className="flex min-h-dvh items-center justify-center p-4">
+      <main className="flex min-h-dvh items-center justify-center p-safe-4">
         <p className="font-bold">{m.connecting()}</p>
       </main>
     );
@@ -170,10 +170,10 @@ export function Lobby() {
   const invite = inviteLink(window.location.origin, lobby.code);
 
   return (
-    <div className="min-h-dvh pb-8">
+    <div className="min-h-dvh pb-safe-8">
       <ScreenHeader back="/rooms" label={m.back_to_list()} />
       <ReconnectOverlay />
-      <main className="mx-auto max-w-5xl px-4 pt-6">
+      <main className="mx-auto max-w-5xl px-safe-4 pt-6">
         <div className="flex flex-col items-center gap-3 text-center">
           <h1 className="m-0 text-3xl font-black md:text-4xl">
             {roomNameText(lobby.roomName, lobby.code)}
