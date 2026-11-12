@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Camera } from "#board/camera.ts";
-import { attachGestures, TAP_MS, TAP_SLOP, TOUCH_TAP_SLOP } from "#board/gestures.ts";
+import {
+  attachGestures,
+  TAP_MS,
+  TAP_SLOP,
+  TOUCH_TAP_SLOP,
+  TOUCH_WHEEL_GRACE_MS,
+} from "#board/gestures.ts";
 import type { Point } from "#board/layout.ts";
 
 // Board touch polish (#263): each decision in gestures.ts is pinned through the
@@ -373,5 +379,52 @@ describe("pointercancel", () => {
     board.up(2, { x: 50, y: 50 });
 
     expect(board.taps).toEqual([{ x: 50, y: 50 }]);
+  });
+});
+
+describe("wheel", () => {
+  it("zooms around the cursor", () => {
+    const board = mount();
+    board.wheel({ x: 150, y: 100 }, -100);
+
+    const camera = board.camera();
+    expect(camera.scale).toBeCloseTo(Math.exp(0.2));
+    expect(boardOf(camera, { x: 150, y: 100 }).x).toBeCloseTo(150);
+    expect(boardOf(camera, { x: 150, y: 100 }).y).toBeCloseTo(100);
+    expect(board.moved()).toBe(1);
+    expect(board.prevented()).toBe(1);
+  });
+
+  it("ignores a wheel during a touch and just after it", () => {
+    const board = mount();
+    board.at(0);
+    board.down(1, { x: 100, y: 100 });
+    board.wheel({ x: 150, y: 100 }, -100);
+    expect(board.moves).toEqual([]);
+    expect(board.moved()).toBe(0);
+
+    board.at(100);
+    board.up(1, { x: 100, y: 100 });
+    board.at(100 + TOUCH_WHEEL_GRACE_MS - 1);
+    board.wheel({ x: 150, y: 100 }, -100);
+    expect(board.moves).toEqual([]);
+    expect(board.moved()).toBe(0);
+
+    board.at(100 + TOUCH_WHEEL_GRACE_MS);
+    board.wheel({ x: 150, y: 100 }, -100);
+    expect(board.moves).toHaveLength(1);
+    expect(board.moved()).toBe(1);
+    expect(board.prevented()).toBe(3);
+  });
+
+  it("leaves a mouse wheel alone while the mouse is down", () => {
+    const board = mount();
+    board.at(0);
+    board.down(1, { x: 100, y: 100 }, "mouse");
+    board.at(100);
+    board.wheel({ x: 150, y: 100 }, -100);
+
+    expect(board.moves).toHaveLength(1);
+    expect(board.moved()).toBe(1);
   });
 });
