@@ -12,7 +12,9 @@
  * Every move applies the whole delta from the gesture's baseline, and the
  * baseline is taken again whenever a pointer lands or lifts. A second finger
  * landing mid-drag or one finger lifting from a pinch therefore rebases the
- * gesture instead of jumping the camera.
+ * gesture instead of jumping the camera. A `pointercancel` (a system gesture,
+ * a call) throws the whole press away: no tap, and no moves from the fingers
+ * still down.
  */
 import { gestureCamera, zoomAround, type Camera } from "#board/camera.ts";
 import type { Point } from "#board/layout.ts";
@@ -156,6 +158,14 @@ export function attachGestures(
       now() - press.at < TAP_MS &&
       Math.hypot(at.x - press.start.x, at.y - press.start.y) < press.slop;
     pointers.delete(event.pointerId);
+    if (event.type === "pointercancel") {
+      // The system took the gesture (a call, an edge swipe): drop every finger
+      // with it rather than panning on with the ones still down.
+      pointers.clear();
+      press = null;
+      baseline = null;
+      return;
+    }
     if (pointers.size > 0) begin();
     else {
       press = null;

@@ -311,3 +311,67 @@ describe("pinch to pan", () => {
     expect(under.y).toBeCloseTo(200);
   });
 });
+
+describe("pointercancel", () => {
+  it("ends a press cleanly: no tap, no moved and no later move", () => {
+    const board = mount();
+    board.at(0);
+    board.down(1, { x: 100, y: 100 });
+    board.at(100);
+    board.cancel(1, { x: 100, y: 100 });
+
+    expect(board.taps).toEqual([]);
+    expect(board.moved()).toBe(0);
+
+    board.move(1, { x: 140, y: 100 });
+    expect(board.moves).toEqual([]);
+  });
+
+  it("drops the whole press when the system cancels one finger of a pinch", () => {
+    const board = mount();
+    board.at(0);
+    board.down(1, { x: 100, y: 100 });
+    board.at(50);
+    board.down(2, { x: 200, y: 100 });
+    board.at(100);
+    board.cancel(2, { x: 200, y: 100 });
+    board.move(1, { x: 140, y: 100 });
+
+    expect(board.taps).toEqual([]);
+    expect(board.moved()).toBe(0);
+    expect(board.moves).toEqual([]);
+
+    board.at(150);
+    board.up(1, { x: 100, y: 100 });
+    board.move(1, { x: 160, y: 100 });
+    expect(board.taps).toEqual([]);
+    expect(board.moves).toEqual([]);
+  });
+
+  it("does not fire moved again when a moved press is cancelled", () => {
+    const board = mount();
+    board.at(0);
+    board.down(1, { x: 100, y: 100 });
+    board.at(100);
+    board.move(1, { x: 140, y: 100 });
+    board.at(200);
+    board.cancel(1, { x: 140, y: 100 });
+
+    expect(board.moved()).toBe(1);
+    expect(board.taps).toEqual([]);
+  });
+
+  it("starts a fresh press after a cancel", () => {
+    const board = mount();
+    board.at(0);
+    board.down(1, { x: 100, y: 100 });
+    board.at(50);
+    board.cancel(1, { x: 100, y: 100 });
+    board.at(1000);
+    board.down(2, { x: 50, y: 50 });
+    board.at(1100);
+    board.up(2, { x: 50, y: 50 });
+
+    expect(board.taps).toEqual([{ x: 50, y: 50 }]);
+  });
+});
