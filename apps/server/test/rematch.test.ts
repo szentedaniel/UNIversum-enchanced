@@ -292,8 +292,8 @@ describe("returning to Lobby", () => {
 
   it("cancels the old game's retention, and stores the Lobby in the same snapshot", async () => {
     const server = await start();
-    const { alice, bob, aliceId, bobId, code } = await startedGame(server);
-    await endedGame(server, alice, bob);
+    const { alice, bob, code } = await startedGame(server);
+    const ended = await endedGame(server, alice, bob);
     const endsAt = endedAtOf(server, code);
     expect(server.store.ended()).toEqual([{ code, endedAt: endsAt }]);
 
@@ -302,10 +302,9 @@ describe("returning to Lobby", () => {
     expect(server.store.ended()).toEqual([]);
     const stored = server.store.unfinished().find((room) => room.code === code);
     expect(stored).toMatchObject({ game: null, endedAt: null });
-    expect(stored?.seats.map(({ playerId, name }) => ({ playerId, name }))).toEqual([
-      { playerId: aliceId, name: server.room(code)?.seats[0]?.name },
-      { playerId: bobId, name: server.room(code)?.seats[1]?.name },
-    ]);
+    expect(stored?.seats.map(({ playerId, name }) => ({ playerId, name }))).toEqual(
+      ended.view.players.map(({ id, name }) => ({ playerId: id, name })),
+    );
 
     // The old game's retention deletion never fires.
     server.scheduler.advanceTo(endsAt + RETENTION);
@@ -484,6 +483,18 @@ describe("returning to Lobby", () => {
     expect(server.store.isCodeInUse(code)).toBe(true);
 
     server.scheduler.advanceTo(endsAt + 60_000);
+    await eventually(() => expect(server.room(code)).toBeUndefined());
+    await eventually(() => expect(server.store.isCodeInUse(code)).toBe(false));
+  });
+
+  it("disposes a returned Lobby once its Guests leave", async () => {
+    const server = await start();
+    const { alice, bob, code } = await startedGame(server);
+    await endedGame(server, alice, bob);
+    await bothAgree(server, alice, bob);
+
+    await Promise.all([alice.leave(), bob.leave()]);
+
     await eventually(() => expect(server.room(code)).toBeUndefined());
     await eventually(() => expect(server.store.isCodeInUse(code)).toBe(false));
   });
