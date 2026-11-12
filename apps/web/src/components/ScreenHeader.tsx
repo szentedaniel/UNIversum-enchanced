@@ -6,7 +6,7 @@ import { buttonVariants } from "#components/ui/button.tsx";
 
 export function ScreenHeader({ back, label }: { back: string; label: string }) {
   return (
-    <header className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 pt-5">
+    <header className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-safe-4 pt-safe-5">
       <Link
         to={back}
         className={buttonVariants({ variant: "plain", size: "sm", className: "rounded-full" })}

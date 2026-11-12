@@ -76,9 +76,9 @@ export function CreateRoom() {
   }
 
   return (
-    <div className="min-h-dvh pb-8">
+    <div className="min-h-dvh pb-safe-8">
       <ScreenHeader back="/rooms" label={m.back_to_list()} />
-      <main className="mx-auto flex max-w-md flex-col items-center gap-5 px-4 pt-6">
+      <main className="mx-auto flex max-w-md flex-col items-center gap-5 px-safe-4 pt-6">
         <h1 className="m-0 text-center text-3xl font-black md:text-4xl">{m.create_title()}</h1>
         <Card className="w-full p-4">
           <form className="flex flex-col gap-5" onSubmit={(e) => void submit(e)}>

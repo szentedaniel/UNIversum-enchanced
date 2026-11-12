@@ -55,7 +55,7 @@ export function Game() {
 
   if (!push || frame === null) {
     return (
-      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-4 text-center">
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-safe-4 text-center">
         <p className="m-0 font-bold">
           {joinError
             ? rejectionText(joinError)
@@ -164,7 +164,7 @@ export function Game() {
 
   if (wide) {
     return (
-      <main className="board-backdrop fixed inset-0 overflow-hidden">
+      <main className="game-shell board-backdrop fixed inset-0 overflow-hidden p-safe-0">
         <ReconnectOverlay />
         {podium}
         {/* The Board's box: clear of the corner cards, the status row and the card; the
@@ -193,7 +193,7 @@ export function Game() {
   }
 
   return (
-    <main className="board-backdrop fixed inset-0 flex flex-col overflow-hidden pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
+    <main className="game-shell board-backdrop fixed inset-0 flex flex-col overflow-hidden px-safe-0 pt-safe-2 pb-safe-2">
       <ReconnectOverlay />
       {podium}
       <ul className="m-0 flex list-none justify-center gap-1.5 px-2" aria-label={m.game_players()}>
