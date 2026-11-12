@@ -52,6 +52,7 @@ import {
   type PasswordHash,
 } from "#room/password.ts";
 import { claimRoomCode, releaseRoomCode, reserveRoomCode } from "#room/room-code.ts";
+import { castVote, votersOf, withdrawVote } from "#room/rematch.ts";
 import { checkRoomName } from "#room/room-name.ts";
 import { GameDriver, type GameTiming, type SeatRecord } from "#room/game-driver.ts";
 import { systemScheduler, type Scheduler } from "#room/scheduler.ts";
@@ -142,12 +143,15 @@ type RoomIntentHandler<K extends RoomIntent["type"]> = (
 
 /**
  * Intents the Room handles itself, outside the rules engine (Start, the
- * Lobby's Bots). Every other intent goes to the rules engine.
+ * Lobby's Bots, the Podium's rematch votes). Every other intent goes to the
+ * rules engine.
  */
 const ROOM_INTENTS: { [K in RoomIntent["type"]]: RoomIntentHandler<K> } = {
   Start: (room) => room.startGame(),
   AddBot: (room) => room.addBot(),
   RemoveBot: (room, _seat, intent) => room.removeBot(intent.playerId),
+  Rematch: (room, seat) => room.rematch(seat),
+  WithdrawRematch: (room, seat) => room.withdrawRematch(seat),
 };
 
 const isRoomIntent = (intent: ClientIntent): intent is RoomIntent => intent.type in ROOM_INTENTS;
@@ -168,6 +172,10 @@ function dispatchRoomIntent(
       return ROOM_INTENTS.AddBot(room, seat, intent);
     case "RemoveBot":
       return ROOM_INTENTS.RemoveBot(room, seat, intent);
+    case "Rematch":
+      return ROOM_INTENTS.Rematch(room, seat, intent);
+    case "WithdrawRematch":
+      return ROOM_INTENTS.WithdrawRematch(room, seat, intent);
   }
 }
 
@@ -240,6 +248,11 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   #shuttingDown = false;
   /** Seats held for absent Players, by public Player id (spec: Seat hold). */
   readonly #holds = new Map<PlayerId, Hold>();
+  /**
+   * The rematch votes of the ended Room, by public Player id: Room memory only,
+   * never in the store (spec #175, decision 6).
+   */
+  #rematchVotes: ReadonlySet<PlayerId> = new Set();
   /** The server's abuse protection; `createGameServer` sets it. */
   guard!: AbuseGuard;
   /** Intent flood control, per connected client. */
@@ -357,7 +370,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       readState: () => ({ game: this.game, seats: this.seats, endedAt: this.endedAt }),
       publish: (state, message) => {
         this.game = state;
-        this.broadcast(MESSAGE.game, message);
+        this.broadcast(MESSAGE.game, this.withVotes(message));
       },
       onEnded: (endedAt) => {
         this.endedAt = endedAt;
@@ -563,17 +576,34 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
 
   /** Brings a returning client up to date: the game view, or the Lobby (to everyone, as the Seat is no longer held). */
   private sendCurrent(client: Client): void {
-    if (this.game) {
-      const message: GameMessage = {
-        view: publicView(this.game, this.timing),
-        events: [],
-        reveals: [],
-        now: this.now(),
-      };
-      client.send(MESSAGE.game, message);
-    } else {
-      this.broadcastLobby();
-    }
+    if (this.game) client.send(MESSAGE.game, this.gamePush(this.game));
+    else this.broadcastLobby();
+  }
+
+  /** The push of the Room's current state: its view, and the Podium's votes once the game ended. */
+  private gamePush(game: GameState): GameMessage {
+    return this.withVotes({
+      view: publicView(game, this.timing),
+      events: [],
+      reveals: [],
+      now: this.now(),
+    });
+  }
+
+  /** Adds the rematch votes to a push once the game has ended; a running game's push is unchanged. */
+  private withVotes(message: GameMessage): GameMessage {
+    return this.rematchOffered()
+      ? { ...message, rematch: votersOf(this.#rematchVotes, this.seats) }
+      : message;
+  }
+
+  /**
+   * Whether the Podium is up: the game has ended, or this push is the one that
+   * ended it (`endedAt` lands just after the broadcast).
+   */
+  private rematchOffered(): boolean {
+    const game = this.game;
+    return game !== null && (this.endedAt !== null || game.phase.kind === "gameOver");
   }
 
   /**
@@ -699,9 +729,44 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.freeSeat(playerId);
   }
 
+  /**
+   * A Player asks for a rematch on the Podium (ticket #223): the vote is kept
+   * in Room memory and everyone hears who has agreed. Refused while no game
+   * has ended.
+   */
+  rematch(seat: SeatRecord): RejectionCode | void {
+    const refusal = this.voteRefusal(seat);
+    if (refusal) return refusal;
+    this.#rematchVotes = castVote(this.#rematchVotes, seat.playerId);
+    this.broadcastVotes();
+  }
+
+  /** A Player takes their rematch vote back (ticket #223); repeating it is harmless. */
+  withdrawRematch(seat: SeatRecord): RejectionCode | void {
+    const refusal = this.voteRefusal(seat);
+    if (refusal) return refusal;
+    this.#rematchVotes = withdrawVote(this.#rematchVotes, seat.playerId);
+    this.broadcastVotes();
+  }
+
+  /** Why this Seat cannot vote for a rematch, if it cannot: no game has ended, or it is a Bot's. */
+  private voteRefusal(seat: SeatRecord): RejectionCode | null {
+    if (this.game === null || this.endedAt === null) return "REMATCH_NOT_OFFERED";
+    // A Bot has no vote; a Guest's Seat keeps its vote while they are away.
+    if (seat.bot === true) return "NOT_OFFERED";
+    return null;
+  }
+
+  /** Tells everyone the Podium's votes (ticket #223). */
+  private broadcastVotes(): void {
+    if (this.game) this.broadcast(MESSAGE.game, this.gamePush(this.game));
+  }
+
   /** Start (R5): any Player, once every Seat is taken. */
   startGame(): RejectionCode | void {
     if (this.game || this.seats.length < this.settings.maxPlayers) return "NOT_OFFERED";
+    // A new game starts with no votes from the old Podium.
+    this.#rematchVotes = new Set();
     const game = setupGame({
       seats: this.seats.map(({ playerId, name, bot }) => ({ playerId, name, bot })),
       settings: this.settings,
