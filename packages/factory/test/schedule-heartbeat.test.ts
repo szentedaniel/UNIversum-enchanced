@@ -143,6 +143,34 @@ describe("runHeartbeat", () => {
     expect(logs).toHaveLength(1);
   });
 
+  it("a start that finds a queued heartbeat exits without ticking", async () => {
+    const clock = fakeClock(at("2026-11-10T00:00:00Z"));
+    const runs = [
+      { id: 2, status: "queued" },
+      { id: 3, status: "completed" },
+    ];
+    let ticked = false;
+    let relayed = false;
+
+    const outcome = await runHeartbeat({
+      ...clock,
+      live: () => liveHeartbeat(runs, 9) !== undefined,
+      tick: () => {
+        ticked = true;
+        return noErrors();
+      },
+      relay: () => {
+        relayed = true;
+      },
+      log: () => undefined,
+    });
+
+    expect(ticked).toBe(false);
+    expect(relayed).toBe(false);
+    expect(outcome.duplicate).toBe(true);
+    expect(outcome.ticks).toBe(0);
+  });
+
   it("starts the loop when the runs page holds no other live heartbeat", async () => {
     const clock = fakeClock(at("2026-11-10T00:00:00Z"));
     const runs = [
