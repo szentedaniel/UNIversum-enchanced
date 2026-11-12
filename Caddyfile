@@ -52,9 +52,11 @@
 
 	handle {
 		# Hashed build output can be cached for good; the app shell is revalidated.
+		# The manifest and icons have their own handles above and are left out of
+		# this matcher, so they keep the cache policy chosen there.
 		@hashed path /assets/*
 		header @hashed Cache-Control "public, max-age=31536000, immutable"
-		@shell not path /assets/*
+		@shell not path /assets/* /icons/* /manifest.webmanifest
 		header @shell Cache-Control "no-cache"
 
 		root * /srv
