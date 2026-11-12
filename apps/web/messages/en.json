@@ -117,6 +117,7 @@
   "rejection_stale_turn": "That move is no longer possible.",
   "rejection_not_your_turn": "It's not your Turn.",
   "rejection_not_offered": "That isn't possible right now.",
+  "rejection_rematch_not_offered": "You can ask for a rematch only after the game has ended.",
   "rejection_playback_running": "The Playback is still running. Wait for it to end.",
   "rejection_malformed": "Something went wrong. Please reload the page.",
   "rejection_internal": "Something went wrong. Please reload the page.",
