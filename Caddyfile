@@ -44,6 +44,18 @@
 		file_server
 	}
 
+	# The service worker (spec: Mobile polish and installable PWA) must be
+	# revalidated: the browser only finds a new worker by fetching this stable
+	# URL. Its own handle keeps it out of the app-shell cache and the SPA
+	# fallback, which would otherwise answer it with index.html.
+	handle /sw.js {
+		root * /srv
+		header Content-Type "text/javascript; charset=utf-8"
+		header Cache-Control "no-cache"
+		header Service-Worker-Allowed "/"
+		file_server
+	}
+
 	# Source maps are never served (matched before the SPA fallback rewrites the path).
 	@sourcemaps path *.map
 	handle @sourcemaps {
@@ -56,7 +68,7 @@
 		# this matcher, so they keep the cache policy chosen there.
 		@hashed path /assets/*
 		header @hashed Cache-Control "public, max-age=31536000, immutable"
-		@shell not path /assets/* /icons/* /manifest.webmanifest
+		@shell not path /assets/* /icons/* /manifest.webmanifest /sw.js
 		header @shell Cache-Control "no-cache"
 
 		root * /srv
