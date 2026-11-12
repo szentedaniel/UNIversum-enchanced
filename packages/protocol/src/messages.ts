@@ -55,7 +55,11 @@ export type RoomIntent =
   /** A Bot on the next empty Seat; any seated Player may (ticket #196). */
   | { type: "AddBot" }
   /** Take a Bot off its Seat; any seated Player may (ticket #196). */
-  | { type: "RemoveBot"; playerId: PlayerId };
+  | { type: "RemoveBot"; playerId: PlayerId }
+  /** Ask for a rematch on the Podium; any seated Player may (ticket #223). */
+  | { type: "Rematch" }
+  /** Take the rematch vote back; any seated Player may (ticket #223). */
+  | { type: "WithdrawRematch" };
 
 /** Everything a client may send as an `intent` message. */
 export type ClientIntent = RoomIntent | PlayerIntent;
@@ -107,6 +111,11 @@ export type GameMessage = {
    * when the push has no events (the first push of a game, a reconnect).
    */
   reveals: Reveal[];
+  /**
+   * The Player ids that have agreed to a rematch, in Seat order. Present only
+   * once the game has ended; absent while it runs (ticket #223).
+   */
+  rematch?: PlayerId[];
   /**
    * The server's clock when it sent this push (epoch ms), so clients can show
    * the Turn timer without trusting their own clock.
@@ -276,6 +285,7 @@ export const REJECTION_CODES = [
   "INTERNAL",
   "ROOM_NOT_FOUND",
   "ROOM_FULL",
+  "REMATCH_NOT_OFFERED",
   "ROOM_NAME_INVALID",
   "WRONG_PASSWORD",
   // abuse protection (#37)

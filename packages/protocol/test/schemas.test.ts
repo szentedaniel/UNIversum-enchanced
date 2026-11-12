@@ -14,6 +14,8 @@ describe("intentSchema", () => {
     [{ type: "Start" }],
     [{ type: "AddBot" }],
     [{ type: "RemoveBot", playerId: "abc123" }],
+    [{ type: "Rematch" }],
+    [{ type: "WithdrawRematch" }],
     [{ type: "Roll", turn: 1 }],
     [{ type: "Roll", turn: 42 }],
     [{ type: "BuyLevel", turn: 3, level: 1 }],
@@ -68,6 +70,8 @@ describe("intentSchema", () => {
     ["a RemoveBot with an empty Player id", { type: "RemoveBot", playerId: "" }],
     ["a RemoveBot with a numeric Player id", { type: "RemoveBot", playerId: 7 }],
     ["a RemoveBot with extra keys", { type: "RemoveBot", playerId: "p1", seat: 1 }],
+    ["a Rematch naming a Player", { type: "Rematch", playerId: "p1" }],
+    ["a WithdrawRematch with extra keys", { type: "WithdrawRematch", seat: 1 }],
     ["a BuyLevel without a level", { type: "BuyLevel", turn: 1 }],
     ["Level 0", { type: "BuyLevel", turn: 1, level: 0 }],
     ["Level 5", { type: "BuyLevel", turn: 1, level: 5 }],
@@ -284,7 +288,7 @@ describe("Rejection codes", () => {
 
   it("include the server's own codes", () => {
     expect(REJECTION_CODES).toEqual(
-      expect.arrayContaining(["MALFORMED", "INTERNAL", "ROOM_NOT_FOUND"]),
+      expect.arrayContaining(["MALFORMED", "INTERNAL", "ROOM_NOT_FOUND", "REMATCH_NOT_OFFERED"]),
     );
   });
 });
