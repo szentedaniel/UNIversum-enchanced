@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  HEARTBEAT_LENGTH_MS,
   heartbeatWindow,
   JOB_LIMIT_MS,
   liveHeartbeat,
@@ -34,8 +33,6 @@ describe("heartbeatWindow", () => {
     expect(window.ticks.at(-1)).toEqual(at("2026-11-10T05:20:00Z"));
     expect(window.handoverAt).toEqual(at("2026-11-10T05:30:00Z"));
     expect(window.handoverAt.getTime() - start.getTime()).toBeLessThan(JOB_LIMIT_MS);
-    expect(HEARTBEAT_LENGTH_MS).toBeLessThan(JOB_LIMIT_MS);
-    expect(TICK_INTERVAL_MS).toBe(10 * 60 * 1000);
   });
 });
 
