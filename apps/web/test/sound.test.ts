@@ -130,20 +130,21 @@ describe("the sound cues", () => {
     expect(FakeAudio.instances.every((sound) => sound.volume === 1)).toBe(true);
   });
 
-  it("unlocks an element created after the unlock, then plays its cue", async () => {
+  it("creates and unlocks every element inside the first gesture, before any cue", async () => {
     stubBrowser();
     const { installAudioUnlock, playCue } = await loadAudio();
     installAudioUnlock();
     press("pointerdown");
     await settle();
-    expect(FakeAudio.instances).toHaveLength(0);
+    expect(FakeAudio.instances.map((sound) => sound.plays)).toEqual([1, 1, 1]);
+    expect(FakeAudio.instances.map((sound) => sound.pauses)).toEqual([1, 1, 1]);
 
     playCue("dice");
     await settle();
 
     const [sound] = FakeAudio.instances;
+    expect(FakeAudio.instances).toHaveLength(3);
     expect(sound?.plays).toBe(2);
-    expect(sound?.pauses).toBe(1);
     expect(sound?.volume).toBe(1);
   });
 

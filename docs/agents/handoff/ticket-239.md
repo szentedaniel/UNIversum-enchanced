@@ -84,5 +84,6 @@ Chance, Bankrupt/game end, music) build on this table.
 
 `apps/e2e/tests/two-guests.spec.ts` still counts
 `HTMLMediaElement.prototype.play` as `window.dicePlays`; its assertions are
-`> playsBeforeRoll`, which holds with the lazy pool (the first cue's element
-adds one silent unlock play). Playwright is run by CI, not by implementers.
+`> playsBeforeRoll`, which holds: `unlockAudio` creates and silently plays every pooled element
+inside the first gesture (so iOS honours the first cue), and the roll adds one
+play after that. Playwright is run by CI, not by implementers.

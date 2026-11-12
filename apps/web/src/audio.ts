@@ -27,15 +27,21 @@ let unlocked = false;
 /** Elements whose silent unlock has not finished: a cue waits for it so it is audible. */
 const unlocking = new WeakMap<HTMLAudioElement, Promise<void>>();
 
-/** The cue's next element, created (and unlocked, once audio is unlocked) on first use. */
-function elementFor(name: CueName): HTMLAudioElement {
+function isCueName(name: string): name is CueName {
+  return name in CUES;
+}
+
+function poolFor(name: CueName): Pool {
   let pool = pools.get(name);
   if (!pool) {
     pool = { elements: Array.from({ length: POOL_SIZE }, () => null), next: 0 };
     pools.set(name, pool);
   }
-  const slot = pool.next;
-  pool.next = (slot + 1) % POOL_SIZE;
+  return pool;
+}
+
+/** The element in `slot`, created (and unlocked, once audio is unlocked) on first use. */
+function elementAt(name: CueName, pool: Pool, slot: number): HTMLAudioElement {
   const pooled = pool.elements[slot];
   if (pooled) return pooled;
 
@@ -44,6 +50,14 @@ function elementFor(name: CueName): HTMLAudioElement {
   pool.elements[slot] = element;
   if (unlocked) unlockElement(element);
   return element;
+}
+
+/** The cue's next element, round-robin. */
+function elementFor(name: CueName): HTMLAudioElement {
+  const pool = poolFor(name);
+  const slot = pool.next;
+  pool.next = (slot + 1) % POOL_SIZE;
+  return elementAt(name, pool, slot);
 }
 
 /** Starts `element` silently and pauses it again: the iOS unlock, without a sound. */
@@ -96,9 +110,16 @@ export function playCue(name: CueName): void {
 export function unlockAudio(): void {
   if (unlocked) return;
   unlocked = true;
-  for (const pool of pools.values()) {
-    for (const element of pool.elements) {
-      if (element) unlockElement(element);
+  if (typeof Audio === "undefined") return;
+  // Create every element now, inside the gesture: iOS honours a later play
+  // only on an element a gesture started, so a lazily made first one would be silent.
+  for (const name of Object.keys(CUES)) {
+    if (!isCueName(name)) continue;
+    const pool = poolFor(name);
+    for (let slot = 0; slot < POOL_SIZE; slot++) {
+      const existing = pool.elements[slot];
+      if (existing) unlockElement(existing);
+      else elementAt(name, pool, slot);
     }
   }
 }
