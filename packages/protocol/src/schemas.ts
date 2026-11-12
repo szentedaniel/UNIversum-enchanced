@@ -151,6 +151,7 @@ export const joinOptionsSchema = z.object({
   code: z.string().regex(/^\d{6}$/),
   password: password.optional(),
   guestToken: guestToken.optional(),
+  watch: z.boolean().optional(),
 });
 
 export type JoinOptionsMatch = Assert<

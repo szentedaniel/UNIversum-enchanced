@@ -197,8 +197,15 @@ export const GUEST_TOKEN_PATTERN = /^[0-9a-f]{32}$/;
  * here because the password is checked before a Seat is reserved, where the
  * server does not yet know which Room is meant. A Guest token that matches a
  * Seat takes that Seat back (no password asked, even in a running game).
+ * `watch` asks to enter as a spectator (spec #179): a client with no Seat,
+ * which takes no Seat and never gets a Guest token.
  */
-export type JoinOptions = { code: string; password?: string; guestToken?: string };
+export type JoinOptions = {
+  code: string;
+  password?: string;
+  guestToken?: string;
+  watch?: boolean;
+};
 
 /**
  * WebSocket close codes the Room server sends (Colyseus uses 4000–4010).
