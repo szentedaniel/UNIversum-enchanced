@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { CUES } from "#sound/cues.ts";
 
 /** Just the parts of HTMLAudioElement the cue pool uses. */
 class FakeAudio {
@@ -125,9 +126,13 @@ describe("the sound cues", () => {
     press("pointerdown");
     await settle();
 
-    expect(FakeAudio.instances.map((sound) => sound.plays)).toEqual([2, 2, 2]);
-    expect(FakeAudio.instances.map((sound) => sound.pauses)).toEqual([1, 1, 1]);
-    expect(FakeAudio.instances.every((sound) => sound.volume === 1)).toBe(true);
+    for (const [name, file] of Object.entries(CUES)) {
+      const elements = FakeAudio.instances.filter((sound) => sound.src === file);
+      // The dice already played its three cues; every other cue only unlocked.
+      expect(elements.map((sound) => sound.plays)).toEqual(name === "dice" ? [2, 2, 2] : [1, 1, 1]);
+      expect(elements.map((sound) => sound.pauses)).toEqual([1, 1, 1]);
+      expect(elements.every((sound) => sound.volume === 1)).toBe(true);
+    }
   });
 
   it("creates and unlocks every element inside the first gesture, before any cue", async () => {
@@ -136,14 +141,15 @@ describe("the sound cues", () => {
     installAudioUnlock();
     press("pointerdown");
     await settle();
-    expect(FakeAudio.instances.map((sound) => sound.plays)).toEqual([1, 1, 1]);
-    expect(FakeAudio.instances.map((sound) => sound.pauses)).toEqual([1, 1, 1]);
+    expect(FakeAudio.instances).toHaveLength(3 * Object.keys(CUES).length);
+    expect(FakeAudio.instances.every((sound) => sound.plays === 1)).toBe(true);
+    expect(FakeAudio.instances.every((sound) => sound.pauses === 1)).toBe(true);
 
     playCue("dice");
     await settle();
 
-    const [sound] = FakeAudio.instances;
-    expect(FakeAudio.instances).toHaveLength(3);
+    const sound = FakeAudio.instances.find((element) => element.src === CUES.dice);
+    expect(FakeAudio.instances).toHaveLength(3 * Object.keys(CUES).length);
     expect(sound?.plays).toBe(2);
     expect(sound?.volume).toBe(1);
   });
@@ -158,8 +164,11 @@ describe("the sound cues", () => {
     press("pointerdown");
     await settle();
 
-    expect(FakeAudio.instances.map((sound) => sound.plays)).toEqual([2, 2, 2]);
-    expect(FakeAudio.instances.every((sound) => sound.volume === 1)).toBe(true);
+    for (const [name, file] of Object.entries(CUES)) {
+      const elements = FakeAudio.instances.filter((sound) => sound.src === file);
+      expect(elements.map((sound) => sound.plays)).toEqual(name === "dice" ? [2, 2, 2] : [1, 1, 1]);
+      expect(elements.every((sound) => sound.volume === 1)).toBe(true);
+    }
   });
 
   it("stays muted and still counted under browser automation", async () => {

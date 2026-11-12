@@ -9,11 +9,15 @@
  * arrives.
  */
 import type { GameEvent } from "@universum/rules";
+import buySound from "#assets/sounds/buy.mp3";
 import diceSound from "#assets/sounds/dice.mp3";
+import rentSound from "#assets/sounds/rent.mp3";
 
 /** The effect file of every cue; a new sound adds a row here and a file beside it. */
 export const CUES = {
   dice: diceSound,
+  buy: buySound,
+  rent: rentSound,
 } as const;
 
 /** A named cue: one effect file from `CUES`. */
@@ -26,11 +30,11 @@ export const EVENT_CUES: CueTable = {
   DiceRolled: "dice",
   Moved: "none",
   RoundBonusPaid: "none",
-  LevelBought: "none",
-  MuseumBought: "none",
-  BoughtOut: "none",
+  LevelBought: "buy",
+  MuseumBought: "buy",
+  BoughtOut: "buy",
   OfferDeclined: "none",
-  RentPaid: "none",
+  RentPaid: "rent",
   CardDrawn: "none",
   ChanceMoneyReceived: "none",
   ChanceChargePaid: "none",
