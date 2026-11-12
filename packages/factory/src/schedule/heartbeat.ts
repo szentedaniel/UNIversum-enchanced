@@ -9,6 +9,15 @@
  * A failed tick is collected, a missed tick slot is skipped rather than caught
  * up, and the hand-over is retried; one bad tick or one refused dispatch never
  * leaves the factory without a heartbeat.
+ *
+ * The duplicate rule leans on the workflow's concurrency group: `factory-tick`
+ * with `cancel-in-progress: false` runs one heartbeat and holds at most one
+ * pending run, and a newer pending run replaces the older one. So a newer live
+ * run is either the successor the predecessor relayed or a manual start, while
+ * an older live run is one the group has already replaced and the runs API
+ * still lists for a moment. A cron run only ever occupies the pending slot
+ * (the safety net) and a dry run sits in `factory-tick-dry-run`, so neither
+ * can be the live heartbeat a real start defers to.
  */
 
 /** How often a heartbeat ticks; the cron's own period is the same. */
@@ -55,10 +64,11 @@ export const messageOf = (error: unknown): string =>
 
 /**
  * The other heartbeat that makes this start a duplicate. Only a newer run can
- * be one: an older run either ran before this one or was replaced in the
- * concurrency group, and the runs API keeps listing it as queued while its
- * cancellation lands. A scheduled (cron) run is only the safety net and a dry
- * run ticks once without relaying, so neither counts.
+ * be one: the concurrency group holds one running and at most one pending run,
+ * and a newer pending run replaces the older one, so an older run either ran
+ * before this one or was replaced, and the runs API keeps listing it as queued
+ * while its cancellation lands. A scheduled (cron) run is only the safety net
+ * and a dry run ticks once in its own group, so neither counts.
  */
 export const liveHeartbeat = (runs: readonly LiveRun[], selfId: number): LiveRun | undefined =>
   runs.find(

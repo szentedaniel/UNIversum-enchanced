@@ -48,6 +48,7 @@ const tickRunSince = (repo: string, workflow: string, since: Date): Date | undef
       `gh api "repos/${repo}/actions/workflows/${workflow}/runs?event=workflow_dispatch&created=${encodeURIComponent(
         `>=${since.toISOString()}`,
       )}&per_page=100" --jq '.workflow_runs'`,
+      GH_CALL_TIMEOUT_MS,
     ),
   );
   if (!Array.isArray(runs)) throw new Error(`The runs page for ${workflow} is not an array.`);
@@ -111,11 +112,14 @@ export const runTick = ({ now, dryRun, lastTickRun, dispatch, log }: TickDeps): 
   return { due, dispatched, errors };
 };
 
+/** One `gh` call's cap: a hung read or dispatch must not outlive the heartbeat's window. */
+export const GH_CALL_TIMEOUT_MS = 60 * 1000;
+
 /** The real wiring the tick and the heartbeat share: the runs API read and a PAT dispatch. */
 export const tickWiring = (repo: string): Pick<TickDeps, "lastTickRun" | "dispatch"> => ({
   lastTickRun: (workflow, since) => tickRunSince(repo, workflow, since),
   dispatch: (workflow) => {
-    sh(`gh workflow run ${workflow} --ref main -f scheduled=true`);
+    sh(`gh workflow run ${workflow} --ref main -f scheduled=true`, GH_CALL_TIMEOUT_MS);
   },
 });
 

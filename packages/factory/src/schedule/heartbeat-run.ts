@@ -4,6 +4,10 @@
  * and sleep, the runs API check and the relay. `DRY_RUN=1` ticks once and
  * starts no successor.
  *
+ * Every `gh` call is capped at `GH_CALL_TIMEOUT_MS`, so a hung call fails like
+ * any other error: the tick records it and the loop still reaches its hand-over
+ * in time to relay.
+ *
  * Env: GH_REPO, GH_TOKEN (the PAT, in the workflow), GITHUB_RUN_ID, DRY_RUN.
  */
 import {
@@ -14,7 +18,7 @@ import {
   type LiveRun,
   type LiveStatus,
 } from "#schedule/heartbeat.ts";
-import { runTick, tickWiring } from "#schedule/tick.ts";
+import { GH_CALL_TIMEOUT_MS, runTick, tickWiring } from "#schedule/tick.ts";
 import { fail, required, sh } from "#shared/common.ts";
 
 const TICK_WORKFLOW = "factory-tick.yml";
@@ -24,6 +28,7 @@ const liveRuns = (repo: string, status: LiveStatus): readonly LiveRun[] => {
   const runs: unknown = JSON.parse(
     sh(
       `gh api "repos/${repo}/actions/workflows/${TICK_WORKFLOW}/runs?status=${status}&per_page=100" --jq '.workflow_runs'`,
+      GH_CALL_TIMEOUT_MS,
     ),
   );
   if (!Array.isArray(runs)) throw new Error(`The ${status} tick runs page is not an array.`);
@@ -65,7 +70,7 @@ const main = async (): Promise<void> => {
       ) !== undefined,
     tick: (tickNow) => runTick({ now: tickNow, dryRun: false, ...wiring, log: console.log }),
     relay: () => {
-      sh(`gh workflow run ${TICK_WORKFLOW} --ref main`);
+      sh(`gh workflow run ${TICK_WORKFLOW} --ref main`, GH_CALL_TIMEOUT_MS);
     },
     log: console.log,
   });

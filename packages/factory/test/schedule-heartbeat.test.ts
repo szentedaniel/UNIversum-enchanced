@@ -229,6 +229,31 @@ describe("runHeartbeat", () => {
     expect(outcome.ticks).toBe(33);
   });
 
+  it("starts the loop when the cron replaced a successor still listed as queued", async () => {
+    const clock = fakeClock(at("2026-11-10T00:00:00Z"));
+    // The cron took the pending slot from the successor the predecessor
+    // relayed. The API still lists that cancelled successor as queued, but its
+    // id is older than the cron's, so it must not stop the cron's only window.
+    const runs = [run(19, "queued"), run(20, "in_progress", "schedule", "Factory Tick (cron)")];
+    let ticked = false;
+
+    const outcome = await runHeartbeat({
+      ...clock,
+      live: () => liveHeartbeat(runs, 20) !== undefined,
+      tick: () => {
+        ticked = true;
+        return noErrors();
+      },
+      relay: () => undefined,
+      log: () => undefined,
+    });
+
+    expect(ticked).toBe(true);
+    expect(outcome.duplicate).toBe(false);
+    expect(outcome.ticks).toBe(33);
+    expect(outcome.relayed).toBe(true);
+  });
+
   it("starts its successor on a fresh window, so no tick time is used twice", async () => {
     const start = at("2026-11-10T00:00:00Z");
     const clock = fakeClock(start);
@@ -351,13 +376,21 @@ describe("factory-tick.yml", () => {
   it("names a dry run and keeps it out of the heartbeat's concurrency group", () => {
     expect(workflow).toContain(DRY_RUN_MARKER);
     expect(workflow).toContain("group: factory-tick${{ inputs.dry_run && '-dry-run' || '' }}");
+    // liveHeartbeat's newer-run rule needs the group to queue a successor
+    // behind its predecessor and to replace an older pending run, never to
+    // cancel the running heartbeat.
+    expect(workflow).toContain("cancel-in-progress: false");
   });
 });
 
-describe("the entry's dry run", () => {
+describe("the entry", () => {
   const entry = fileURLToPath(new URL("../src/schedule/heartbeat-run.ts", import.meta.url));
 
-  const dryEntry = (shim: string): { status: number | null; output: string; calls: string[] } => {
+  /** Runs the entry against a `gh` shim; `env` overrides the dry-run defaults. */
+  const runEntry = (
+    shim: string,
+    env: Record<string, string> = {},
+  ): { status: number | null; output: string; calls: string[] } => {
     const dir = mkdtempSync(join(tmpdir(), "factory-heartbeat-"));
     const calls = join(dir, "gh-calls.log");
     writeFileSync(calls, "");
@@ -374,6 +407,7 @@ describe("the entry's dry run", () => {
         GITHUB_RUN_ID: "",
         DRY_RUN: "1",
         OUTPUT_DIR: dir,
+        ...env,
       },
     });
     return {
@@ -387,7 +421,7 @@ describe("the entry's dry run", () => {
   };
 
   it("ticks once, reads every workflow's runs and starts no successor", () => {
-    const { status, output, calls } = dryEntry('#!/bin/sh\necho "$*" >> "CALLS"\necho "[]"\n');
+    const { status, output, calls } = runEntry('#!/bin/sh\necho "$*" >> "CALLS"\necho "[]"\n');
 
     expect(status).toBe(0);
     expect(output).toContain("Dry run: one tick, no successor.");
@@ -396,9 +430,24 @@ describe("the entry's dry run", () => {
   });
 
   it("fails the run when a workflow's runs cannot be read", () => {
-    const { status, output } = dryEntry('#!/bin/sh\necho "not a runs page"\n');
+    const { status, output } = runEntry('#!/bin/sh\necho "not a runs page"\n');
 
     expect(status).toBe(1);
     expect(output).toContain("The dry tick hit errors");
+  });
+
+  it("fails a real start whose liveness read fails, and starts no successor", () => {
+    // Without the live check the run cannot tell a chain from a duplicate, so
+    // it must go red instead of ticking and relaying.
+    const { status, output, calls } = runEntry('#!/bin/sh\necho "$*" >> "CALLS"\necho "{}"\n', {
+      GITHUB_RUN_ID: "123",
+      DRY_RUN: "",
+    });
+
+    expect(status).toBe(1);
+    expect(output).toContain("is not an array");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatch(/^api .*status=in_progress/u);
+    expect(calls.some((call) => call.startsWith("workflow run"))).toBe(false);
   });
 });
