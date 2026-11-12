@@ -2,6 +2,11 @@
  * Pointer input on the Board's canvas (the prototype's `useZoomPan`): one
  * finger or the mouse drags, two fingers pinch around their midpoint, the
  * wheel zooms around the cursor, and a short still press is a tap.
+ *
+ * A press is a tap while it stays inside the slop of the pointer that landed
+ * (`TAP_SLOP` for a mouse or pen, `TOUCH_TAP_SLOP` for a finger, whose contact
+ * patch rolls) and ends within `TAP_MS`. The clock is injected so the tap's
+ * duration is testable without waiting.
  */
 import { zoomAround, type Camera } from "#board/camera.ts";
 import type { Point } from "#board/layout.ts";
@@ -17,18 +22,34 @@ export type GestureTarget = {
   moved(): void;
 };
 
-/** A press is a tap if it moves less than this and ends within `TAP_MS`. */
-const TAP_SLOP = 10;
-const TAP_MS = 500;
+/** A press is a tap if it ends within this many milliseconds of landing. */
+export const TAP_MS = 500;
+/** Mouse and pen slop, canvas CSS px: the prototype's 10 px, kept for the desktop. */
+export const TAP_SLOP = 10;
+/** A finger's slop: its contact patch rolls and wobbles more than a mouse's. */
+export const TOUCH_TAP_SLOP = 18;
 const WHEEL_ZOOM = 0.002;
 
-type Gesture = {
+/** The clock a tap's duration is measured on; the browser's by default. */
+export type GestureOptions = { now?: () => number };
+
+/** The press from the first pointer down to the last pointer up. */
+type Press = {
+  /** Where the first pointer landed, in canvas CSS px. */
+  start: Point;
+  /** The clock reading when it landed. */
+  at: number;
+  /** The slop of the pointer that started the press. */
+  slop: number;
+  /** The press left the slop, so it is a drag and cannot be a tap. */
+  moved: boolean;
+};
+
+/** The camera and the fingers a move is measured from. */
+type Baseline = {
   camera: Camera;
   mid: Point;
   spread: number;
-  start: Point;
-  at: number;
-  moved: boolean;
 };
 
 const midpoint = (points: Point[]): Point =>
@@ -42,9 +63,15 @@ const spreadOf = (points: Point[]) =>
     : 0;
 
 /** Listens on `el`; returns the function that stops listening. */
-export function attachGestures(el: HTMLElement, target: GestureTarget): () => void {
+export function attachGestures(
+  el: HTMLElement,
+  target: GestureTarget,
+  options: GestureOptions = {},
+): () => void {
+  const now = options.now ?? (() => performance.now());
   const pointers = new Map<number, Point>();
-  let gesture: Gesture | null = null;
+  let press: Press | null = null;
+  let baseline: Baseline | null = null;
 
   const local = (event: PointerEvent | WheelEvent): Point => {
     const rect = el.getBoundingClientRect();
@@ -58,62 +85,70 @@ export function attachGestures(el: HTMLElement, target: GestureTarget): () => vo
   /** (Re)starts the gesture from the current pointers, e.g. when a second finger lands. */
   function begin(): void {
     const points = [...pointers.values()];
-    const mid = midpoint(points);
-    gesture = {
+    baseline = {
       camera: target.camera(),
-      mid,
+      mid: midpoint(points),
       spread: spreadOf(points),
-      start: gesture?.start ?? mid,
-      at: gesture?.at ?? performance.now(),
-      moved: gesture?.moved ?? false,
     };
   }
 
   function down(event: PointerEvent): void {
     if (event.button !== 0 && event.pointerType === "mouse") return;
+    const at = local(event);
+    pointers.set(event.pointerId, at);
+    if (press === null) {
+      press = {
+        start: at,
+        at: now(),
+        slop: event.pointerType === "touch" ? TOUCH_TAP_SLOP : TAP_SLOP,
+        moved: false,
+      };
+    }
     el.setPointerCapture?.(event.pointerId);
-    pointers.set(event.pointerId, local(event));
-    if (pointers.size === 1) gesture = null;
     begin();
   }
 
   function move(event: PointerEvent): void {
-    if (!pointers.has(event.pointerId) || !gesture) return;
+    if (!pointers.has(event.pointerId) || !baseline || !press) return;
     pointers.set(event.pointerId, local(event));
     const points = [...pointers.values()];
     const mid = midpoint(points);
-    if (!gesture.moved) {
-      const far = Math.hypot(mid.x - gesture.start.x, mid.y - gesture.start.y) > TAP_SLOP;
+    if (!press.moved) {
+      const far = Math.hypot(mid.x - press.start.x, mid.y - press.start.y) >= press.slop;
       if (!far && points.length < 2) return;
-      gesture.moved = true;
+      press.moved = true;
       target.moved();
     }
-    const { camera, spread } = gesture;
+    const { camera, mid: from, spread } = baseline;
     const scale =
       points.length >= 2 && spread > 0
         ? clampScale(camera.scale * (spreadOf(points) / spread))
         : camera.scale;
     // Keep the Board point that was under the gesture's start midpoint under the current one.
-    const zoomed = zoomAround(camera, gesture.mid, scale);
+    const zoomed = zoomAround(camera, from, scale);
     target.move({
       scale,
-      x: zoomed.x + mid.x - gesture.mid.x,
-      y: zoomed.y + mid.y - gesture.mid.y,
+      x: zoomed.x + mid.x - from.x,
+      y: zoomed.y + mid.y - from.y,
     });
   }
 
   function up(event: PointerEvent): void {
-    if (!pointers.has(event.pointerId)) return;
-    const isTap =
-      gesture !== null &&
-      !gesture.moved &&
-      pointers.size === 1 &&
-      performance.now() - gesture.at < TAP_MS;
+    if (!pointers.has(event.pointerId) || !press) return;
     const at = local(event);
+    const isTap =
+      !press.moved &&
+      pointers.size === 1 &&
+      event.type === "pointerup" &&
+      now() - press.at < TAP_MS &&
+      Math.hypot(at.x - press.start.x, at.y - press.start.y) < press.slop;
     pointers.delete(event.pointerId);
     if (pointers.size > 0) begin();
-    else gesture = null;
-    if (isTap && event.type === "pointerup") target.tap(at);
+    else {
+      press = null;
+      baseline = null;
+    }
+    if (isTap) target.tap(at);
   }
 
   function wheel(event: WheelEvent): void {
