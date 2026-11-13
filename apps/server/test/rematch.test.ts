@@ -25,7 +25,6 @@ async function start(options?: Parameters<typeof startTestServer>[0]): Promise<T
 
 afterEach(async () => {
   // oxlint-disable-next-line no-await-in-loop -- one server at a time (the matchmaker is a singleton)
-  // oxlint-disable-next-line no-await-in-loop -- one server at a time (the matchmaker is a singleton)
   for (const server of running.splice(0)) await server.stop();
 });
 
@@ -253,6 +252,41 @@ describe("returning to Lobby", () => {
     const seated = await carol.until("lobby", (message) => message.seats.length === 2);
     expect(seated.seats.map((seat) => seat.playerId)).toEqual([aliceId, carolId]);
     expect(seated.seats.some((seat) => seat.playerId === bobId)).toBe(false);
+  });
+
+  it("returns once the Guest who had not voted drops from the Podium", async () => {
+    const server = await start();
+    const alice = await server.create({ maxPlayers: 3 });
+    const bob = await server.join(alice.code);
+    const carol = await server.join(alice.code);
+    const [aliceId, bobId] = await Promise.all(
+      [alice, bob].map(async (client) => (await client.next("welcome")).playerId),
+    );
+    if (aliceId === undefined || bobId === undefined) throw new Error("a Seat has no Player id");
+    await carol.next("welcome");
+    alice.send({ type: "Start" });
+    await Promise.all([alice.next("game"), bob.next("game"), carol.next("game")]);
+    await endedGame(server, alice, bob, carol);
+    const endsAt = endedAtOf(server, alice.code);
+
+    alice.send({ type: "Rematch" });
+    await pushesTo(alice, bob);
+    bob.send({ type: "Rematch" });
+    // Carol is still connected and has not voted, so the Room stays on the Podium.
+    expect((await pushesTo(alice, bob))[0]?.rematch).toEqual([aliceId, bobId]);
+    expect(server.room(alice.code)?.game).not.toBeNull();
+
+    // Her drop is the last word: nobody connected is left to wait for.
+    await carol.drop();
+    const [aliceLobby, bobLobby] = await Promise.all([
+      lobbyAt(alice, endsAt),
+      lobbyAt(bob, endsAt),
+    ]);
+
+    expect(aliceLobby.seats.map((seat) => seat.playerId)).toEqual([aliceId, bobId]);
+    expect(bobLobby.seats).toEqual(aliceLobby.seats);
+    expect(server.room(alice.code)?.game).toBeNull();
+    expect(server.room(alice.code)?.endedAt).toBeNull();
   });
 
   it("keeps the voters and the Bots, and the Room's name, password, code and settings", async () => {
@@ -509,13 +543,18 @@ describe("returning to Lobby", () => {
     await eventually(() => expect(server.store.isCodeInUse(code)).toBe(false));
   });
 
-  it("disposes a returned Lobby once its Guests leave", async () => {
+  it("disposes a returned Lobby only once its last Guest leaves", async () => {
     const server = await start();
-    const { alice, bob, code } = await startedGame(server);
+    const { alice, bob, bobId, code } = await startedGame(server);
     await endedGame(server, alice, bob);
     await bothAgree(server, alice, bob);
 
-    await Promise.all([alice.leave(), bob.leave()]);
+    // Alice's leave frees her Seat but Bob is still connected: the Room stays up.
+    await alice.leave();
+    const freed = await bob.until("lobby", (message) => message.seats.length === 1);
+    expect(freed.seats.map((seat) => seat.playerId)).toEqual([bobId]);
+
+    await bob.leave();
 
     await eventually(() => expect(server.room(code)).toBeUndefined());
     await eventually(() => expect(server.store.isCodeInUse(code)).toBe(false));

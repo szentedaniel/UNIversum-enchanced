@@ -11,6 +11,22 @@ import type { PlayerId } from "@universum/rules";
  */
 export type RematchSeat = { playerId: PlayerId; bot?: boolean };
 
+/** The two Podium vote intents (ticket #223). */
+export type RematchVote = "Rematch" | "WithdrawRematch";
+
+/**
+ * What made the Room re-check the agreement (ticket #225): a vote changed, or
+ * a Guest left the Podium, so a non-voter who is gone no longer blocks.
+ */
+export type RematchTrigger = RematchVote | "PodiumLeft";
+
+/**
+ * Whether the Room keeps this Seat when it returns: its Guest agreed, or a
+ * Bot holds it (a Bot neither votes nor waits).
+ */
+const keptByRematch = (seat: RematchSeat, votes: ReadonlySet<PlayerId>): boolean =>
+  seat.bot === true || votes.has(seat.playerId);
+
 /** Adds a vote; one already cast is harmless. */
 export function castVote(votes: ReadonlySet<PlayerId>, playerId: PlayerId): Set<PlayerId> {
   return new Set(votes).add(playerId);
@@ -43,7 +59,7 @@ export function shouldReturn<S extends RematchSeat>(
   isConnected: (seat: S) => boolean,
 ): boolean {
   if (votes.size === 0) return false;
-  return seats.every((seat) => seat.bot === true || votes.has(seat.playerId) || !isConnected(seat));
+  return seats.every((seat) => keptByRematch(seat, votes) || !isConnected(seat));
 }
 
 /**
@@ -55,5 +71,5 @@ export function seatsAfterRematch<S extends RematchSeat>(
   seats: readonly S[],
   votes: ReadonlySet<PlayerId>,
 ): S[] {
-  return seats.filter((seat) => seat.bot === true || votes.has(seat.playerId));
+  return seats.filter((seat) => keptByRematch(seat, votes));
 }

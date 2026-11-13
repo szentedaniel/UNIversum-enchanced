@@ -180,6 +180,11 @@ export class AbuseGuard {
     this.#lobbies.set(code, null);
   }
 
+  /** An ended game's Room is a Lobby again (a rematch, spec #175), under its creator's IP when known. */
+  lobbyReopened(code: string, creatorBucket: string | null): void {
+    this.#lobbies.set(code, creatorBucket);
+  }
+
   /** The creator's Seat is taken: the Lobby counts against the creator's IP. */
   lobbyCreatedBy(code: string, bucket: string): void {
     if (this.#lobbies.has(code)) this.#lobbies.set(code, bucket);

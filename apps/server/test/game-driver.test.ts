@@ -489,7 +489,7 @@ describe("returning to Lobby", () => {
     scheduler.advanceTo(deadline);
     expect(saved.at(-1)?.room).toMatchObject({ endedAt: deadline });
 
-    driver.returnToLobby([SEATS[0]!]);
+    driver.saveLobby([SEATS[0]!]);
 
     expect(saved.at(-1)).toEqual({
       room: {
@@ -518,7 +518,7 @@ describe("returning to Lobby", () => {
     scheduler.advanceTo(deadline);
 
     fail(true);
-    expect(() => driver.returnToLobby([SEATS[0]!])).toThrow("disk full");
+    expect(() => driver.saveLobby([SEATS[0]!])).toThrow("disk full");
 
     // The ended snapshot stands, and the Room is still deleted with its events.
     expect(saved.at(-1)?.room).toMatchObject({

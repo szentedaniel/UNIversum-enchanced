@@ -58,6 +58,8 @@ import {
   shouldReturn,
   votersOf,
   withdrawVote,
+  type RematchTrigger,
+  type RematchVote,
 } from "#room/rematch.ts";
 import { checkRoomName } from "#room/room-name.ts";
 import { GameDriver, type GameTiming, type SeatRecord } from "#room/game-driver.ts";
@@ -252,6 +254,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   #driver: GameDriver | null = null;
   /** Set when the process shuts down: Seats and the stored Room must then stay as they are. */
   #shuttingDown = false;
+  /** Set when retention disposes the Room: the forced client closes must not return it to Lobby. */
+  #closing = false;
   /** Seats held for absent Players, by public Player id (spec: Seat hold). */
   readonly #holds = new Map<PlayerId, Hold>();
   /**
@@ -389,6 +393,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
         this.releaseHolds();
       },
       onRetention: () => {
+        // Colyseus closes the clients on dispose; their `onLeave` must not revive the Room.
+        this.#closing = true;
         void this.disconnect();
       },
       isSeatConnected: (seat) => this.isSeatConnected(seat),
@@ -539,6 +545,9 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
         this.log.info({ playerId: seat.playerId }, "Seat dropped");
         // A Guest who left is absent too: the Bot plays their Decisions.
         this.driver.refreshBot();
+      } else if (!this.#closing) {
+        // The Podium: a Guest who is gone no longer blocks the others' rematch.
+        this.returnIfAgreed("PodiumLeft");
       }
       return;
     }
@@ -677,9 +686,11 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    * A Room whose `autoDispose` is off — a restored one, or one a game
    * returned to Lobby — is disposed here once nobody is connected and no Seat
    * waits for a Guest to come back: an emptied Lobby is done (and is then
-   * deleted). A Lobby that never played keeps Colyseus's own `autoDispose`;
-   * switching that flag off leaves a cleared timer handle that would block
-   * every later disposal, so it stays off for good.
+   * deleted). Colyseus removes a leaving client from `clients` before it calls
+   * `onLeave`, so the last Guest's leave sees an empty Room. A Lobby that never
+   * played keeps Colyseus's own `autoDispose`; switching that flag off leaves
+   * a cleared timer handle that would block every later disposal, so it stays
+   * off for good.
    */
   private disposeIfAbandoned(): void {
     if (this.game || this.autoDispose || this.clients.length > 0) return;
@@ -771,13 +782,25 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.afterVoteChange("WithdrawRematch");
   }
 
-  /** A vote changed: the Room returns to Lobby if the table agreed, else the votes go out. */
-  private afterVoteChange(intent: "Rematch" | "WithdrawRematch"): void {
+  /**
+   * A vote changed: the Room returns to Lobby if the table agreed, else the
+   * votes go out.
+   */
+  private afterVoteChange(intent: RematchVote): void {
+    if (!this.returnIfAgreed(intent)) this.broadcastVotes();
+  }
+
+  /**
+   * Returns the Room to Lobby state when the connected Guests have all agreed
+   * (at least one voting); tells whether it returned. A vote change can
+   * complete the agreement, and so can a Guest leaving the Podium: a non-voter
+   * who is gone no longer blocks the others. A failed write leaves it ended.
+   */
+  private returnIfAgreed(cause: RematchTrigger): boolean {
     if (!shouldReturn(this.seats, this.#rematchVotes, (seat) => this.isSeatConnected(seat))) {
-      this.broadcastVotes();
-      return;
+      return false;
     }
-    this.returnToLobby(intent);
+    return this.returnToLobby(cause);
   }
 
   /** Why this Seat cannot vote for a rematch, if it cannot: no game has ended, or it is a Bot's. */
@@ -798,25 +821,24 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    * Lobby snapshot and cancels the old game's retention, then the Room takes
    * the kept Seats and drops the votes. Seats whose Player did not agree are
    * released, so a Guest can take them from the Lobby list again. Room
-   * identity and settings stay; a failed write leaves the Room ended.
+   * identity and settings stay. Tells whether it returned: a failed write
+   * leaves the Room ended.
    */
-  private returnToLobby(intent: "Rematch" | "WithdrawRematch"): void {
+  private returnToLobby(cause: RematchTrigger): boolean {
     const seats = seatsAfterRematch(this.seats, this.#rematchVotes);
     try {
-      this.driver.returnToLobby(seats);
+      this.driver.saveLobby(seats);
     } catch (error) {
-      // The votes stand and the retention deletion stays armed; a later vote retries.
-      this.driver.failed(error, "Room not saved", intent);
-      this.broadcastVotes();
-      return;
+      // The votes stand and the retention deletion stays armed; a later vote or Podium leave retries.
+      this.driver.failed(error, "Room not saved", cause);
+      return false;
     }
     this.game = null;
     this.endedAt = null;
     this.seats = seats;
     this.#rematchVotes = new Set();
     // The game took the Room off the Lobby accounting; a Lobby counts again.
-    this.guard.lobbyOpened(this.roomId);
-    if (this.#creatorBucket !== null) this.guard.lobbyCreatedBy(this.roomId, this.#creatorBucket);
+    this.guard.lobbyReopened(this.roomId, this.#creatorBucket);
     // A returned Lobby stays off `autoDispose` (the game needed it off) and
     // disposes when it is abandoned, as a restored Lobby does. A kept Seat
     // nobody is connected to is held the same way: the Guest comes back by
@@ -827,6 +849,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     }
     this.log.info("Room returned to Lobby");
     this.broadcastLobby();
+    return true;
   }
 
   /** Start (R5): any Player, once every Seat is taken. */

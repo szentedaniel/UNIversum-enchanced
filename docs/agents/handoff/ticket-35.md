@@ -22,7 +22,7 @@ Branch `ticket/35-reconnect`.
 - `onAuth`: Guest-token match → admitted before the "game started" / full / password checks. Full check is now **`seats.length >= maxPlayers`** only.
 - **`maxClients = maxPlayers * 2`**: a held Seat counts as a reserved client, so a Guest-token rejoin needs room.
 - **Started and restored games are no longer `lock()`ed** (Colyseus would refuse `joinById` with 522 before `onAuth`). `unlist()` only unlists; `onAuth` (and `onJoin`) refuse everyone without a matching token with `ROOM_NOT_FOUND`. The `lock()` override is still there for the internal auto-lock.
-- Restored Rooms: `autoDispose = false`. A restored Lobby holds each Seat 60 s (`hold(seat, null)`); once no restored hold is left (`waitIfRestored`), `autoDispose = true` (disposes 1 s later if empty → deleted).
+- Restored Rooms: `autoDispose = false`. A restored Lobby holds each Seat 60 s (`hold(seat, null)`); `disposeIfAbandoned` (from `onLeave` and `expire`) disposes the emptied Room explicitly once no client and no Seat waiting for a Guest is left (ticket #225 replaced `waitIfRestored`).
 - **#43 wired** (merged): `seat_drops_total` + "Seat dropped" in `onDrop` (Lobby and game) and in `onLeave` for a consented leave of a running game; `seatReconnected(seat)` in `onReconnect` and `takeBack`; "Seat freed" in `freeSeat`. `gauges().held` = Seats with no live client (dropped, or restored and not taken back). Test: `reconnect.test.ts` "observability". Logs carry `playerId` only, never the token, hash or `reconnectionToken`.
 - **#37:** a forced close (flood) goes through `onDrop` → normal hold, as the spec asks; nothing extra needed.
 
