@@ -13,6 +13,7 @@ import { charge } from "#rules/charge.ts";
 import type { Landing } from "#rules/landing.ts";
 import { passTurn } from "#rules/pass-turn.ts";
 import { rentOf } from "#rules/pricing.ts";
+import { recordPurchase } from "#rules/summary.ts";
 import type { PlayerId } from "#state.ts";
 import { decide, emit, playerById } from "#tx.ts";
 
@@ -53,6 +54,7 @@ export const museumIntents = {
       const player = playerById(tx, tx.state.currentPlayer);
       player.cash -= phase.museum;
       tx.state.fields[phase.field] = { owner: player.id, level: 0 };
+      recordPurchase(tx.state.summary, player.id);
       emit(tx, {
         type: "MuseumBought",
         player: player.id,

@@ -6,9 +6,10 @@
  * Bump `STATE_VERSION` whenever the shape changes, and ship a migration.
  */
 import type { ChanceCardId, FieldId } from "#board.ts";
+import type { SummaryCounters } from "#rules/summary.ts";
 
 /** The version of the state's shape (not the per-intent `version`). */
-export const STATE_VERSION = 9;
+export const STATE_VERSION = 10;
 
 /** A Player's public id: what every client sees instead of a Guest token. */
 export type PlayerId = string;
@@ -170,6 +171,13 @@ export type GameState = {
    * through `summary` (ticket #236).
    */
   wealthSamples: WealthSample[];
+  /**
+   * The summary figures counted so far (spec #177, ticket #235): the biggest
+   * Rent, the Fields each Player bought, the Monopolies formed and the
+   * Bankruptcies. Kept out of `publicView`; the view ticket exposes them once
+   * the game is over.
+   */
+  summary: SummaryCounters;
   /** The PRNG state. Never sent to clients (see `publicView`). */
   rng: number[];
 };

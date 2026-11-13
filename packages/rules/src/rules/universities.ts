@@ -14,6 +14,7 @@ import { charge } from "#rules/charge.ts";
 import type { Landing } from "#rules/landing.ts";
 import { buyoutPriceOf, rentOf, valueAt } from "#rules/pricing.ts";
 import { passTurn } from "#rules/pass-turn.ts";
+import { recordMonopolies, recordPurchase } from "#rules/summary.ts";
 import type { PlayerId } from "#state.ts";
 import { decide, emit, playerById, type Tx } from "#tx.ts";
 
@@ -116,8 +117,13 @@ export const universityIntents = {
       const offer = levels.find((o) => o.level === intent.level);
       if (!offer) return rejection("NOT_OFFERED");
       const player = playerById(tx, tx.state.currentPlayer);
+      const bought = (tx.state.fields[field]?.owner ?? null) === null;
       player.cash -= offer.price;
       tx.state.fields[field] = { owner: player.id, level: offer.level };
+      if (bought) {
+        recordPurchase(tx.state.summary, player.id);
+        recordMonopolies(tx.state.summary, tx.state, player.id, [field]);
+      }
       emit(tx, {
         type: "LevelBought",
         player: player.id,
@@ -143,6 +149,8 @@ export const universityIntents = {
       playerById(tx, owner).cash += buyout;
       // Only the owner changes: the Level stays, and so does a Doubler on it (R55).
       tx.state.fields[field] = { owner: player.id, level };
+      recordPurchase(tx.state.summary, player.id);
+      recordMonopolies(tx.state.summary, tx.state, player.id, [field]);
       emit(tx, { type: "BoughtOut", player: player.id, owner, field, level, price: buyout });
       passTurn(tx);
       return undefined;

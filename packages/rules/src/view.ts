@@ -39,7 +39,7 @@ export type PickOption =
  */
 export type PublicView = Omit<
   GameState,
-  "rng" | "fields" | "players" | "minuteMs" | "wealthSamples"
+  "rng" | "fields" | "players" | "minuteMs" | "wealthSamples" | "summary"
 > & {
   fields: FieldView[];
   players: PlayerView[];
