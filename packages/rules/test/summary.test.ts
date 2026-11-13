@@ -175,6 +175,16 @@ describe("the summary counters", () => {
     expect(built.state.summary.monopolies).toEqual([{ player: "p1", group: 1 as GroupId }]);
   });
 
+  it("R29, R52: a Buyout that completes a Group records the Monopoly for the buyer", () => {
+    let state = owning(newGame({ players: 2 }), "p2", [VESZPREM, BUDAPEST]);
+    state = withField(state, DEBRECEN, { owner: "p1", level: 1 });
+    const rolled = rollOnto({ ...state, currentPlayer: "p2" }, DEBRECEN);
+    const bought = accept(rolled.state, { type: "Buyout", turn: rolled.state.turn }, "p2");
+
+    expect(bought.state.summary.monopolies).toEqual([{ player: "p2", group: 1 as GroupId }]);
+    expect(bought.state.summary.fieldsBought).toEqual({ p2: 1 });
+  });
+
   it("R29: an accepted Deal that completes a Group records the Monopoly for the receiver", () => {
     const state = owning(newGame({ players: 2 }), "p1", [VESZPREM, BUDAPEST]);
     const withDebrecen = withField(state, DEBRECEN, { owner: "p2", level: 0 });
