@@ -83,6 +83,13 @@ export const LOBBY_SEAT_HOLD_MS = 60_000;
 type Hold = { release: (() => void) | null; until: number | null; cancel: () => void };
 
 /**
+ * The one wake-up a first rematch vote armed (spec #175, decision 2). The
+ * object itself is the handle a late fire is compared against: a wake-up for a
+ * window that was cancelled or replaced returns nothing.
+ */
+type RematchWindow = { cancel: () => void };
+
+/**
  * What `allowReconnection` hands back: a `Deferred`, whose `reject` gives the
  * hold up — except for a client that never finished its join handshake (or a
  * Room already disposing), where Colyseus answers with a plain rejected
@@ -266,10 +273,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    */
   #rematchVotes: ReadonlySet<PlayerId> = new Set();
   /**
-   * Cancels the one wake-up the first rematch vote armed (spec #175, decision
-   * 2): a later vote never restarts the window.
+   * The one wake-up the first rematch vote armed (spec #175, decision 2): a
+   * later vote never restarts the window.
    */
-  #cancelRematchWindow: (() => void) | null = null;
+  #rematchWindow: RematchWindow | null = null;
   /**
    * The IP bucket of the Guest who took the creator's Seat, for the open-Lobby
    * accounting; `null` until then, and after a restore (the guard's counters
@@ -810,32 +817,36 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       this.cancelRematchWindow();
       return;
     }
-    if (this.#cancelRematchWindow !== null || this.game === null || this.endedAt === null) return;
+    if (this.#rematchWindow !== null || this.game === null || this.endedAt === null) return;
     this.armRematchWindow(this.now());
   }
 
   /** Arms the window a first vote at `firstVoteAt` opened, replacing any pending one. */
   private armRematchWindow(firstVoteAt: number): void {
-    this.#cancelRematchWindow?.();
-    this.#cancelRematchWindow = this.scheduler.at(windowExpiresAt(firstVoteAt), () =>
-      this.expireRematchWindow(firstVoteAt),
+    this.cancelRematchWindow();
+    const window: RematchWindow = { cancel: () => {} };
+    this.#rematchWindow = window;
+    window.cancel = this.scheduler.at(windowExpiresAt(firstVoteAt), () =>
+      this.expireRematchWindow(window, firstVoteAt),
     );
   }
 
   /** Drops the pending window: the votes are gone, or the Room returned to Lobby. */
   private cancelRematchWindow(): void {
-    this.#cancelRematchWindow?.();
-    this.#cancelRematchWindow = null;
+    this.#rematchWindow?.cancel();
+    this.#rematchWindow = null;
   }
 
   /**
    * The window ran out: the Room returns to Lobby with the Seats that agreed,
-   * releasing the Guests who ignored the Podium (spec #175, story 6). The live
+   * releasing the Guests who ignored the Podium (spec #175, story 6). A wake-up
+   * for a window that was cancelled or replaced does nothing, and the live
    * state decides, because the Room may have returned, restarted or been
-   * disposed since the wake-up was armed.
+   * disposed in between.
    */
-  private expireRematchWindow(firstVoteAt: number): void {
-    this.#cancelRematchWindow = null;
+  private expireRematchWindow(window: RematchWindow, firstVoteAt: number): void {
+    if (this.#rematchWindow !== window) return;
+    this.#rematchWindow = null;
     if (this.game === null || this.endedAt === null || this.#rematchVotes.size === 0) return;
     // A wake-up that fired before the window ended waits for the rest of it.
     if (!windowExpired(this.now(), firstVoteAt)) {

@@ -743,6 +743,36 @@ describe("the rematch window", () => {
     expect(server.room(code)?.game).toBeNull();
   });
 
+  it("ignores a stale wake-up from a window that was replaced", async () => {
+    const server = await start();
+    const { alice, bob, aliceId, code } = await startedGame(server);
+    await endedGame(server, alice, bob);
+    const endsAt = endedAtOf(server, code);
+
+    alice.send({ type: "Rematch" });
+    await pushesTo(alice, bob);
+    const staleWakeUp = server.scheduler.lastTaskAt(endsAt + REMATCH_WINDOW_MS);
+    alice.send({ type: "WithdrawRematch" });
+    await pushesTo(alice, bob);
+
+    // A fresh vote opens a new window that ends after the old one.
+    const votedAt = endsAt + 10_000;
+    server.scheduler.advanceTo(votedAt);
+    alice.send({ type: "Rematch" });
+    await pushesTo(alice, bob);
+
+    // The withdrawn window's wake-up, fired late, must not end the fresh one early.
+    server.scheduler.advanceTo(endsAt + REMATCH_WINDOW_MS);
+    staleWakeUp();
+    expect(server.room(code)?.game).not.toBeNull();
+    expect(server.room(code)?.endedAt).toBe(endsAt);
+
+    server.scheduler.advanceTo(votedAt + REMATCH_WINDOW_MS);
+    const lobby = await lobbyAt(alice, votedAt + REMATCH_WINDOW_MS);
+    expect(lobby.seats.map((seat) => seat.playerId)).toEqual([aliceId]);
+    expect(server.room(code)?.game).toBeNull();
+  });
+
   it("loses the votes and the window on a restart, keeping the ended Room's retention", async () => {
     const before = await start();
     const { alice, bob, code } = await startedGame(before);

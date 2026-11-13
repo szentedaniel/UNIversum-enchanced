@@ -13,13 +13,15 @@ releases the rest.
   `windowExpired(now, firstVoteAt)` (at or after the end). `RematchTrigger`
   gains `"RematchExpired"`, so the return's failure log names the window as its
   cause. `seatsAfterRematch` still decides who is kept.
-- **Room** (`apps/server/src/room/game-room.ts`): `#cancelRematchWindow` holds
-  the one wake-up. `afterVoteChange` first calls `syncRematchWindow`: an empty
-  vote set cancels the window, else the first vote of an ended Room arms it
-  through `armRematchWindow(this.now())` → `scheduler.at(windowExpiresAt(...))`.
-  Later votes see a pending window and never restart it. `expireRematchWindow`
-  drops the handle, re-reads `game`, `endedAt` and the votes (a Room that
-  returned or was disposed does nothing), re-arms when the wake-up fired before
+- **Room** (`apps/server/src/room/game-room.ts`): `#rematchWindow` (`RematchWindow`,
+  the object being the identity a late fire is compared against) holds the one
+  wake-up. `afterVoteChange` first calls `syncRematchWindow`: an empty vote set
+  cancels the window, else the first vote of an ended Room arms it through
+  `armRematchWindow(this.now())` → `scheduler.at(windowExpiresAt(...))`. Later
+  votes see a pending window and never restart it. `expireRematchWindow` drops
+  the handle, ignores a wake-up for a cancelled or replaced window, re-reads
+  `game`, `endedAt` and the votes (a Room that returned or was disposed does
+  nothing), re-arms when the wake-up fired before
   `windowExpired(now, firstVoteAt)`, and otherwise calls
   `returnToLobby("RematchExpired")` — the same path as the all-agreed return
   (#225), so connected non-voters are released too.
@@ -34,19 +36,22 @@ releases the rest.
   withdrawal cancels and a later vote opens a fresh 30 s, a later vote does not
   restart the window (an ignored third Guest is released), the all-agreed
   return cancels the pending window (no second Lobby push), a withdrawn vote
-  leaves retention in charge, an early wake-up waits for the rest, and a
-  restart loses the votes and the window. The failed-write test now advances
-  the window with the store still failing, because the expiry retry is #226's
-  new path.
+  leaves retention in charge, an early wake-up waits for the rest, a stale
+  wake-up from a replaced window does nothing, and a restart loses the votes
+  and the window. The failed-write test now advances the window with the store
+  still failing, because the expiry retry is #226's new path.
 - **No web change** (the Podium has no countdown), no stored-shape change and
   `packages/rules` untouched.
 
 ## Gotchas
 
 - **One window per Room, keyed to the first vote.** `syncRematchWindow` only
-  arms when no handle is pending; do not call `armRematchWindow` from a vote
-  path that can run for a later vote, or the 30 s restarts and a non-voter
-  waits longer than the spec allows.
+  arms when `#rematchWindow` is `null`; do not call `armRematchWindow` from a
+  vote path that can run for a later vote, or the 30 s restarts and a non-voter
+  waits longer than the spec allows. `expireRematchWindow` compares the
+  `RematchWindow` object it closes over with the live field, so a wake-up for a
+  window that a withdrawal or a fresh vote replaced is ignored (the
+  `ManualScheduler.lastTaskAt` test fires one by hand).
 - **A failed write at expiry consumes the window.** `returnToLobby` reports
   through `driver.failed` and leaves the Room ended with its votes and
   retention armed; no new window is armed. A later vote change or Podium leave
