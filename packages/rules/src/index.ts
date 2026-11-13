@@ -30,7 +30,6 @@ export {
   type BiggestRent,
   type GameSummary,
   type MonopolyFormed,
-  type SummaryCounters,
 } from "#rules/summary.ts";
 export { setupGame, type SetupInput } from "#setup.ts";
 export {

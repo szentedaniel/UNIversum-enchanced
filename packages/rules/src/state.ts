@@ -6,7 +6,7 @@
  * Bump `STATE_VERSION` whenever the shape changes, and ship a migration.
  */
 import type { ChanceCardId, FieldId } from "#board.ts";
-import type { SummaryCounters } from "#rules/summary.ts";
+import type { GameSummary } from "#rules/summary.ts";
 
 /** The version of the state's shape (not the per-intent `version`). */
 export const STATE_VERSION = 10;
@@ -177,7 +177,7 @@ export type GameState = {
    * Bankruptcies. Kept out of `publicView`; the view ticket exposes them once
    * the game is over.
    */
-  summary: SummaryCounters;
+  summary: GameSummary;
   /** The PRNG state. Never sent to clients (see `publicView`). */
   rng: number[];
 };

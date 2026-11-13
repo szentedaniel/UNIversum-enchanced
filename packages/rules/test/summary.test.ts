@@ -235,6 +235,56 @@ describe("the summary counters", () => {
     ]);
   });
 
+  it("R29: a Group lost by Deal and completed again is a second Monopoly", () => {
+    let state = owning(newGame({ players: 2 }), "p1", [VESZPREM, BUDAPEST]);
+    state = withField(state, DEBRECEN, { owner: "p2", level: 1 });
+
+    // p1 completes Group 1 by buying DEBRECEN out; this is the first formation.
+    const rolled = rollOnto({ ...state, currentPlayer: "p1" }, DEBRECEN);
+    const completed = accept(rolled.state, { type: "Buyout", turn: rolled.state.turn }, "p1");
+    expect(completed.state.summary.monopolies).toEqual([{ player: "p1", group: 1 as GroupId }]);
+
+    // p2's Turn ends on Start; p1 then gives DEBRECEN away in a Deal, breaking the Group.
+    const afterP2 = rollOnto(completed.state, 0);
+    const proposedLoss = accept(
+      afterP2.state,
+      {
+        type: "ProposeDeal",
+        turn: afterP2.state.turn,
+        recipient: "p2",
+        give: { fields: [DEBRECEN], cash: 0 },
+        take: { fields: [], cash: 0 },
+      },
+      "p1",
+    );
+    const lost = accept(
+      proposedLoss.state,
+      { type: "AcceptDeal", turn: proposedLoss.state.turn },
+      "p2",
+    );
+    expect(lost.state.summary.monopolies).toEqual([{ player: "p1", group: 1 as GroupId }]);
+
+    // p1's Turn ends on Start; p2 then gives DEBRECEN back, completing Group 1 again.
+    const afterP1 = rollOnto(lost.state, 0);
+    const regain = accept(
+      afterP1.state,
+      {
+        type: "ProposeDeal",
+        turn: afterP1.state.turn,
+        recipient: "p1",
+        give: { fields: [DEBRECEN], cash: 0 },
+        take: { fields: [], cash: 0 },
+      },
+      "p2",
+    );
+    const regained = accept(regain.state, { type: "AcceptDeal", turn: regain.state.turn }, "p1");
+
+    expect(regained.state.summary.monopolies).toEqual([
+      { player: "p1", group: 1 as GroupId },
+      { player: "p1", group: 1 as GroupId },
+    ]);
+  });
+
   it("R29: a Deal that swaps a Group Field for another does not record a Monopoly neither side holds", () => {
     let state = owning(newGame({ players: 2 }), "p2", [VESZPREM, BUDAPEST]);
     state = owning(state, "p1", [DEBRECEN]);
