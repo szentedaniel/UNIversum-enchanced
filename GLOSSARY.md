@@ -223,3 +223,7 @@ A Player's cash plus the Value of their Fields; it decides the winner when the M
 
 **Wealth series**:
 Every Player's Wealth, sampled with the game's elapsed Minute each time a Turn passes and once more when the game ends, so the last sample equals the final standings.
+
+**Summary**:
+The end-of-game figures counted while the game runs: the biggest Rent paid, the Fields each Player bought, the Monopolies formed and the Bankruptcies, in order.
+_Avoid_: Statistics, Recap
