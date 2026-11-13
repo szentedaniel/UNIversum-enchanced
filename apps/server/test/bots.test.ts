@@ -368,10 +368,9 @@ describe("a game with only Bots left", () => {
     expect(room?.game?.phase.kind).not.toBe("gameOver");
     // Its Seats stayed with it until then.
     expect(room?.seats.map(({ playerId }) => playerId)).toEqual(seats);
-    expect(server.store.ended()).toContainEqual({
-      code,
-      endedAt: droppedAt + BOT_ONLY_RETENTION_MS,
-    });
+    expect(server.store.ended()).toContainEqual(
+      expect.objectContaining({ code, endedAt: droppedAt + BOT_ONLY_RETENTION_MS }),
+    );
     const events = server.store.events(code).flatMap((entry) => entry.events);
     expect(events.some((event) => event.type === "GameEnded")).toBe(false);
     expect(

@@ -341,7 +341,7 @@ describe("retention", () => {
     await alice.next("game");
 
     server.room(code)?.endGame(); // #32 calls this when the game-over phase arrives
-    expect(server.store.ended()).toEqual([{ code, endedAt: T0 }]);
+    expect(server.store.ended()).toMatchObject([{ code, endedAt: T0 }]);
 
     server.scheduler.advanceTo(T0 + 24 * HOUR - 1);
     expect(server.store.isCodeInUse(code)).toBe(true);
@@ -351,7 +351,7 @@ describe("retention", () => {
     await eventually(() => expect(server.room(code)).toBeUndefined());
   });
 
-  it("an ended game is not restored, and is still deleted 24 h after it ended", async () => {
+  it("an ended game is restored as ended, and is still deleted 24 h after it ended", async () => {
     const before = await start();
     const { code } = await startedGame(before);
     before.room(code)?.endGame();
@@ -359,11 +359,13 @@ describe("retention", () => {
     const after = await restart(before, T0 + 23 * HOUR);
     after.scheduler.advanceTo(T0 + 23 * HOUR);
 
-    expect(after.restored).toBe(0);
-    expect(after.room(code)).toBeUndefined();
+    // It is back under its code with its Podium, and its own retention deadline.
+    expect(after.restored).toBe(1);
+    expect(after.room(code)?.endedAt).toBe(T0);
     expect(after.store.isCodeInUse(code)).toBe(true);
     after.scheduler.advanceTo(T0 + 24 * HOUR);
     expect(after.store.isCodeInUse(code)).toBe(false);
+    await eventually(() => expect(after.room(code)).toBeUndefined());
   });
 
   it("an ended game whose 24 h ran out while the server was down is deleted at boot", async () => {

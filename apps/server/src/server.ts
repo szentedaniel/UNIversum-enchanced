@@ -217,10 +217,14 @@ type RestoreOptions = {
 };
 
 /**
- * Restore on boot (spec): every unfinished Room comes back under its own
- * code, its game run through the engine's migrations first; ended Rooms are
- * scheduled for deletion. Called by `startServer` once the server listens;
- * `/readyz` turns green when it resolves. Returns how many Rooms were restored.
+ * Restore on boot (spec): every stored Room comes back under its own code, its
+ * game run through the engine's migrations first. A running game continues, a
+ * Lobby waits for its Guests, and an ended Room keeps its Podium so the
+ * rematch is offered again (spec #175, decision 6); its retention deletion is
+ * armed by the Room. An ended Room the server cannot restore still loses its
+ * row `RETENTION_MS` after it ended. Called by `startServer` once the server
+ * listens; `/readyz` turns green when it resolves. Returns how many Rooms were
+ * restored.
  */
 async function restoreRooms({
   store,
@@ -230,7 +234,7 @@ async function restoreRooms({
 }: RestoreOptions): Promise<number> {
   const started = performance.now();
   let restored = 0;
-  for (const stored of store.unfinished()) {
+  for (const stored of [...store.unfinished(), ...store.ended()]) {
     try {
       const game = stored.game === null ? null : migrate(stored.game);
       // oxlint-disable-next-line no-await-in-loop -- one Room at a time keeps boot order simple
@@ -238,10 +242,11 @@ async function restoreRooms({
       restored += 1;
     } catch (error) {
       log.error({ roomCode: stored.code, err: error }, "Room not restored (it stays stored)");
+      // No Room is up to arm its own retention: the row still goes after it.
+      if (stored.endedAt !== null) {
+        deleteAfterRetention(store, scheduler, stored.code, stored.endedAt);
+      }
     }
-  }
-  for (const { code, endedAt } of store.ended()) {
-    deleteAfterRetention(store, scheduler, code, endedAt);
   }
   metrics?.restored(restored, (performance.now() - started) / 1000);
   return restored;

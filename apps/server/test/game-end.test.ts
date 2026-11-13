@@ -77,7 +77,7 @@ describe("the game ending", () => {
     expect(ended.view.version).toBe(view.version + 1);
     // The Room knows it is over: it will be deleted with its events 24 h later.
     expect(server.room(code)?.endedAt).toBe(endsAt);
-    expect(server.store.ended()).toEqual([{ code, endedAt: endsAt }]);
+    expect(server.store.ended()).toMatchObject([{ code, endedAt: endsAt }]);
     expect(server.store.unfinished().some((room) => room.code === code)).toBe(false);
     // The ended Room no longer counts as playing.
     expect(sample(await server.metrics.scrape(), 'rooms{state="playing"}')).toBe(0);
@@ -149,7 +149,7 @@ describe("the game ending", () => {
 
     expect(after.restored).toBe(1);
     expect(after.room(code)?.endedAt).toBe(restartedAt);
-    expect(after.store.ended()).toEqual([{ code, endedAt: restartedAt }]);
+    expect(after.store.ended()).toMatchObject([{ code, endedAt: restartedAt }]);
 
     after.scheduler.advanceTo(restartedAt + 24 * HOUR);
     expect(after.store.isCodeInUse(code)).toBe(false);

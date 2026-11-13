@@ -172,10 +172,25 @@ export class GameDriver {
     return this.#commit({ state: game, events: [], reveals: [] }, "Start");
   }
 
-  /** Arms a restored game's deadline without writing or publishing anything. */
+  /**
+   * Arms a restored Room without writing or publishing anything: an ended
+   * Room's retention deletion (its Podium stays until then), a running game's
+   * deadline, or the end a crash left unrecorded.
+   */
   resume(game: GameState): void {
+    const { endedAt } = this.#readState();
+    if (endedAt !== null) {
+      this.#cancelDeletion = deleteAfterRetention(
+        this.#store,
+        this.#scheduler,
+        this.#roomCode,
+        endedAt,
+        this.#onRetention,
+      );
+      return;
+    }
     if (game.phase.kind === "gameOver") this.#end(game);
-    else if (this.#readState().endedAt === null) {
+    else {
       this.#clock.arm(game);
       // A restored game has had no connection to lose since this server
       // started it: its Guests keep their Turn timers and no Bot plays until

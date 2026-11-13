@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   castVote,
+  REMATCH_RETRY_MAX_MS,
+  REMATCH_RETRY_MS,
   REMATCH_WINDOW_MS,
+  rematchRetryDelay,
   seatsAfterRematch,
   shouldReturn,
   votersOf,
@@ -96,6 +99,13 @@ describe("the rematch window", () => {
     expect(windowExpired(expiresAt - 1, firstVoteAt)).toBe(false);
     expect(windowExpired(expiresAt, firstVoteAt)).toBe(true);
     expect(windowExpired(expiresAt + 1, firstVoteAt)).toBe(true);
+  });
+
+  it("retries a failed return after a back-off, up to a minute", () => {
+    expect(rematchRetryDelay(1)).toBe(REMATCH_RETRY_MS);
+    expect(rematchRetryDelay(2)).toBe(2 * REMATCH_RETRY_MS);
+    expect(rematchRetryDelay(5)).toBe(REMATCH_RETRY_MAX_MS);
+    expect(rematchRetryDelay(100)).toBe(REMATCH_RETRY_MAX_MS);
   });
 });
 

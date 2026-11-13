@@ -34,6 +34,19 @@ export function windowExpired(now: number, firstVoteAt: number): boolean {
   return now >= windowExpiresAt(firstVoteAt);
 }
 
+/** A Lobby write that failed when the window ran out is tried again after this, doubling each time… */
+export const REMATCH_RETRY_MS = 5_000;
+/** …up to this, until the write lands or retention deletes the Room. */
+export const REMATCH_RETRY_MAX_MS = 60_000;
+
+/**
+ * How long after a failed return the Room waits for its next try. `retries`
+ * counts the failed returns, so the first retry is `REMATCH_RETRY_MS` later.
+ */
+export function rematchRetryDelay(retries: number): number {
+  return Math.min(REMATCH_RETRY_MS * 2 ** (retries - 1), REMATCH_RETRY_MAX_MS);
+}
+
 /**
  * Whether the Room keeps this Seat when it returns: its Guest agreed, or a
  * Bot holds it (a Bot neither votes nor waits).

@@ -54,6 +54,7 @@ import {
 import { claimRoomCode, releaseRoomCode, reserveRoomCode } from "#room/room-code.ts";
 import {
   castVote,
+  rematchRetryDelay,
   seatsAfterRematch,
   shouldReturn,
   votersOf,
@@ -417,7 +418,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (restored) {
       this.log.info({ playing: this.game !== null, seats: this.seats.length }, "Room restored");
       // A running game re-arms its deadline; one a crash left game-over (the
-      // final save landed, `endedAt` did not) is finished now, so retention applies.
+      // final save landed, `endedAt` did not) is finished now, so retention
+      // applies; an ended Room re-arms its retention and keeps its Podium.
       if (this.game) this.driver.resume(this.game);
       // A restored Lobby with every Seat taken is not listed (ticket #196).
       this.syncListing();
@@ -449,6 +451,9 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       ...(bot === true && { bot: true }),
     }));
     this.game = stored.game;
+    // An ended Room comes back ended: its Podium offers the rematch again and
+    // its stored end time keeps the same retention deadline (spec #175, decision 6).
+    this.endedAt = stored.endedAt;
     // Nobody is connected yet: the Room waits for its Players instead of disposing.
     this.autoDispose = false;
     if (this.game) {
@@ -821,17 +826,23 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.armRematchWindow(this.now());
   }
 
-  /** Arms the window a first vote at `firstVoteAt` opened, replacing any pending one. */
-  private armRematchWindow(firstVoteAt: number): void {
+  /**
+   * Arms the one wake-up for the window a first vote at `firstVoteAt` opened,
+   * replacing any pending one. `retries` is the failed returns so far: after a
+   * failed write the next try waits a back-off, not the whole window again.
+   */
+  private armRematchWindow(firstVoteAt: number, retries = 0): void {
     this.cancelRematchWindow();
     const window: RematchWindow = { cancel: () => {} };
     this.#rematchWindow = window;
-    window.cancel = this.scheduler.at(windowExpiresAt(firstVoteAt), () =>
-      this.expireRematchWindow(window, firstVoteAt),
+    const at =
+      retries === 0 ? windowExpiresAt(firstVoteAt) : this.now() + rematchRetryDelay(retries);
+    window.cancel = this.scheduler.at(at, () =>
+      this.expireRematchWindow(window, firstVoteAt, retries),
     );
   }
 
-  /** Drops the pending window: the votes are gone, or the Room returned to Lobby. */
+  /** Drops the pending window: the votes are gone, the Room returned to Lobby, or it is going away. */
   private cancelRematchWindow(): void {
     this.#rematchWindow?.cancel();
     this.#rematchWindow = null;
@@ -842,18 +853,22 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    * releasing the Guests who ignored the Podium (spec #175, story 6). A wake-up
    * for a window that was cancelled or replaced does nothing, and the live
    * state decides, because the Room may have returned, restarted or been
-   * disposed in between.
+   * disposed in between. A failed Lobby write arms the next try, so a passing
+   * store error does not leave the ignoring Guests in the Room.
    */
-  private expireRematchWindow(window: RematchWindow, firstVoteAt: number): void {
+  private expireRematchWindow(window: RematchWindow, firstVoteAt: number, retries: number): void {
     if (this.#rematchWindow !== window) return;
     this.#rematchWindow = null;
+    // Retention or shutdown closes the Room asynchronously: a wake-up in that
+    // gap must not save it back as a Lobby.
+    if (this.#closing || this.#shuttingDown) return;
     if (this.game === null || this.endedAt === null || this.#rematchVotes.size === 0) return;
     // A wake-up that fired before the window ended waits for the rest of it.
     if (!windowExpired(this.now(), firstVoteAt)) {
       this.armRematchWindow(firstVoteAt);
       return;
     }
-    this.returnToLobby("RematchExpired");
+    if (!this.returnToLobby("RematchExpired")) this.armRematchWindow(firstVoteAt, retries + 1);
   }
 
   /**
@@ -895,7 +910,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     try {
       this.driver.saveLobby(seats);
     } catch (error) {
-      // The votes stand and the retention deletion stays armed; a later vote or Podium leave retries.
+      // The votes stand and the retention deletion stays armed; the window's
+      // wake-up tries again, and a later vote or Podium leave tries now.
       this.driver.failed(error, "Room not saved", cause);
       return false;
     }
