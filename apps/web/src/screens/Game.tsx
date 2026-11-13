@@ -2,7 +2,6 @@ import type { RejectionCode } from "@universum/protocol/messages";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useStore } from "zustand";
-import { playDice } from "#audio.ts";
 import { Board } from "#board/Board.tsx";
 import { FieldCard } from "#board/FieldCard.tsx";
 import { ChanceCardOverlay } from "#components/ChanceCardOverlay.tsx";
@@ -40,11 +39,6 @@ export function Game() {
   const [joinError, setJoinError] = useState<RejectionCode | null>(null);
   // The Playback core's frame: the gate, the view, the held Turn, the toast and the overlay (ADR-0004).
   const frame = useStore(playbackStore, (state) => state.frame);
-
-  // The dice sound starts on the server's roll, never on a tap (spec: no optimistic UI).
-  useEffect(() => {
-    if (push?.events.some((event) => event.type === "DiceRolled")) playDice();
-  }, [push]);
 
   // Opened by its address (a reload, a new tab, a later visit): take the Seat back by Guest token.
   useEffect(() => {
@@ -160,7 +154,10 @@ export function Game() {
     return null;
   }
   const card = bottomCard();
-  const podium = slot.kind === "podium" ? <Podium view={view} phase={slot.phase} /> : null;
+  const podium =
+    slot.kind === "podium" ? (
+      <Podium view={view} phase={slot.phase} rematch={push.rematch} me={me} busy={inFlight} />
+    ) : null;
 
   if (wide) {
     return (

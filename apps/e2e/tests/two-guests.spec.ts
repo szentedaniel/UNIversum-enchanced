@@ -112,7 +112,8 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     const phone = await phoneContext.newPage();
     registerPage("desktop", desktop);
     registerPage("phone", phone);
-    // Count dice-sound plays before any app code runs: unlock once, then one per roll.
+    // Count every element play before any app code runs: the dice cue once the
+    // Playback reaches the roll, plus the silent unlock of every pooled element in the first gesture.
     await phone.addInitScript(() => {
       window.dicePlays = 0;
       // oxlint-disable-next-line unicorn/consistent-function-scoping -- must live in the page
