@@ -58,7 +58,7 @@ export function recordPurchase(counters: SummaryCounters, player: PlayerId): voi
   counters.fieldsBought[player] = (counters.fieldsBought[player] ?? 0) + 1;
 }
 
-/** Records a Rent payment when it is the biggest so far (R56). */
+/** Records a Rent payment when it is the biggest so far; an equal one keeps the earlier (R56). */
 export function recordRent(counters: SummaryCounters, rent: BiggestRent): void {
   if (counters.biggestRent === null || rent.amount > counters.biggestRent.amount) {
     counters.biggestRent = rent;
