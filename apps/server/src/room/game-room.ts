@@ -57,6 +57,8 @@ import {
   seatsAfterRematch,
   shouldReturn,
   votersOf,
+  windowExpired,
+  windowExpiresAt,
   withdrawVote,
   type RematchTrigger,
   type RematchVote,
@@ -263,6 +265,11 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    * never in the store (spec #175, decision 6).
    */
   #rematchVotes: ReadonlySet<PlayerId> = new Set();
+  /**
+   * Cancels the one wake-up the first rematch vote armed (spec #175, decision
+   * 2): a later vote never restarts the window.
+   */
+  #cancelRematchWindow: (() => void) | null = null;
   /**
    * The IP bucket of the Guest who took the creator's Seat, for the open-Lobby
    * accounting; `null` until then, and after a restore (the guard's counters
@@ -721,6 +728,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     // Colyseus gives up the held reconnections itself; only the 60 s wake-ups are left.
     for (const hold of this.#holds.values()) hold.cancel();
     this.#holds.clear();
+    // A window must not return a Room that retention deleted.
+    this.cancelRematchWindow();
     releaseRoomCode(this.roomId);
     // A Lobby that nobody is in any more (the last Guest left, or nobody came
     // back to a restored one) is deleted right away (spec: Retention).
@@ -787,7 +796,53 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    * votes go out.
    */
   private afterVoteChange(intent: RematchVote): void {
+    this.syncRematchWindow();
     if (!this.returnIfAgreed(intent)) this.broadcastVotes();
+  }
+
+  /**
+   * Keeps the fixed window in step with the votes (spec #175, decision 2): the
+   * first vote of an ended Room arms one wake-up, later votes never restart
+   * it, and an empty vote set cancels it.
+   */
+  private syncRematchWindow(): void {
+    if (this.#rematchVotes.size === 0) {
+      this.cancelRematchWindow();
+      return;
+    }
+    if (this.#cancelRematchWindow !== null || this.game === null || this.endedAt === null) return;
+    this.armRematchWindow(this.now());
+  }
+
+  /** Arms the window a first vote at `firstVoteAt` opened, replacing any pending one. */
+  private armRematchWindow(firstVoteAt: number): void {
+    this.#cancelRematchWindow?.();
+    this.#cancelRematchWindow = this.scheduler.at(windowExpiresAt(firstVoteAt), () =>
+      this.expireRematchWindow(firstVoteAt),
+    );
+  }
+
+  /** Drops the pending window: the votes are gone, or the Room returned to Lobby. */
+  private cancelRematchWindow(): void {
+    this.#cancelRematchWindow?.();
+    this.#cancelRematchWindow = null;
+  }
+
+  /**
+   * The window ran out: the Room returns to Lobby with the Seats that agreed,
+   * releasing the Guests who ignored the Podium (spec #175, story 6). The live
+   * state decides, because the Room may have returned, restarted or been
+   * disposed since the wake-up was armed.
+   */
+  private expireRematchWindow(firstVoteAt: number): void {
+    this.#cancelRematchWindow = null;
+    if (this.game === null || this.endedAt === null || this.#rematchVotes.size === 0) return;
+    // A wake-up that fired before the window ended waits for the rest of it.
+    if (!windowExpired(this.now(), firstVoteAt)) {
+      this.armRematchWindow(firstVoteAt);
+      return;
+    }
+    this.returnToLobby("RematchExpired");
   }
 
   /**
@@ -837,6 +892,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.endedAt = null;
     this.seats = seats;
     this.#rematchVotes = new Set();
+    this.cancelRematchWindow();
     // The game took the Room off the Lobby accounting; a Lobby counts again.
     this.guard.lobbyReopened(this.roomId, this.#creatorBucket);
     // A returned Lobby stays off `autoDispose` (the game needed it off) and
@@ -855,8 +911,9 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   /** Start (R5): any Player, once every Seat is taken. */
   startGame(): RejectionCode | void {
     if (this.game || this.seats.length < this.settings.maxPlayers) return "NOT_OFFERED";
-    // A new game starts with no votes from the old Podium.
+    // A new game starts with no votes or window from the old Podium.
     this.#rematchVotes = new Set();
+    this.cancelRematchWindow();
     const game = setupGame({
       seats: this.seats.map(({ playerId, name, bot }) => ({ playerId, name, bot })),
       settings: this.settings,

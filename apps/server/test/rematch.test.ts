@@ -8,6 +8,7 @@ import {
   type TestClient,
   type TestServer,
 } from "./helpers.ts";
+import { REMATCH_WINDOW_MS } from "#room/rematch.ts";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -573,5 +574,41 @@ describe("returning to Lobby", () => {
       code: "SERVER_BUSY",
     });
     expect(server.room(code)?.game).toBeNull();
+  });
+});
+
+describe("the rematch window", () => {
+  it("returns to Lobby 30 s after the first vote, releasing a connected Guest who ignored it", async () => {
+    const server = await start();
+    const { alice, bob, aliceId, code } = await startedGame(server);
+    await endedGame(server, alice, bob);
+    const endsAt = endedAtOf(server, code);
+    const list = await server.watchLobbyList();
+    await eventually(() => expect(list.get(code)).toBeUndefined());
+
+    alice.send({ type: "Rematch" });
+    expect((await pushesTo(alice, bob))[0]?.rematch).toEqual([aliceId]);
+
+    // The window is still open a moment before it ends.
+    server.scheduler.advanceTo(endsAt + REMATCH_WINDOW_MS - 1);
+    expect(server.room(code)?.game).not.toBeNull();
+    expect(server.room(code)?.endedAt).toBe(endsAt);
+
+    server.scheduler.advanceTo(endsAt + REMATCH_WINDOW_MS);
+    const expiresAt = endsAt + REMATCH_WINDOW_MS;
+    const [aliceLobby, bobLobby] = await Promise.all([
+      lobbyAt(alice, expiresAt),
+      lobbyAt(bob, expiresAt),
+    ]);
+
+    // The voter's Seat is kept; the Guest who ignored the Podium is released, still connected.
+    expect(aliceLobby.seats.map((seat) => seat.playerId)).toEqual([aliceId]);
+    expect(bobLobby.seats).toEqual(aliceLobby.seats);
+    expect(server.room(code)?.game).toBeNull();
+    expect(server.room(code)?.endedAt).toBeNull();
+    expect(alice.pending("rejected")).toEqual([]);
+    expect(bob.pending("rejected")).toEqual([]);
+    // The released Seat is open again on the Lobby list.
+    await list.until((lobbies) => lobbies.get(code)?.players === 1);
   });
 });
