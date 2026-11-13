@@ -124,8 +124,8 @@ export function summaryOf(events: Iterable<GameEvent>): GameSummary {
         break;
       case "DealAccepted":
         for (const field of event.give.fields) owners[field] = event.recipient;
-        pushGroups(counters, ownerOf, event.recipient, event.give.fields);
         for (const field of event.take.fields) owners[field] = event.proposer;
+        pushGroups(counters, ownerOf, event.recipient, event.give.fields);
         pushGroups(counters, ownerOf, event.proposer, event.take.fields);
         break;
       case "FieldsSold":

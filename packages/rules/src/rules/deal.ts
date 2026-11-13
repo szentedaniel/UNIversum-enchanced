@@ -123,8 +123,8 @@ export const dealIntents = {
       const problem = dealProblem(tx, deal);
       if (problem) return rejection(problem);
       transfer(tx, deal.give.fields, deal.recipient);
-      recordMonopolies(tx.state.summary, tx.state, deal.recipient, deal.give.fields);
       transfer(tx, deal.take.fields, deal.proposer);
+      recordMonopolies(tx.state.summary, tx.state, deal.recipient, deal.give.fields);
       recordMonopolies(tx.state.summary, tx.state, deal.proposer, deal.take.fields);
       playerById(tx, deal.proposer).cash += deal.take.cash - deal.give.cash;
       playerById(tx, deal.recipient).cash += deal.give.cash - deal.take.cash;

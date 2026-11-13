@@ -235,6 +235,29 @@ describe("the summary counters", () => {
     ]);
   });
 
+  it("R29: a Deal that swaps a Group Field for another does not record a Monopoly neither side holds", () => {
+    let state = owning(newGame({ players: 2 }), "p2", [VESZPREM, BUDAPEST]);
+    state = owning(state, "p1", [DEBRECEN]);
+    const proposed = accept(
+      state,
+      {
+        type: "ProposeDeal",
+        turn: state.turn,
+        recipient: "p2",
+        give: { fields: [DEBRECEN], cash: 0 },
+        take: { fields: [VESZPREM], cash: 0 },
+      },
+      "p1",
+    );
+    const accepted = accept(
+      proposed.state,
+      { type: "AcceptDeal", turn: proposed.state.turn },
+      "p2",
+    );
+
+    expect(accepted.state.summary.monopolies).toEqual([]);
+  });
+
   it("R70: Bankruptcies are recorded in order, and returned Fields are not counted as bought", () => {
     let state = owning(newGame({ players: 3 }), "p2", [VESZPREM]);
     state = withField(state, SEATTLE, { owner: "p1", level: 4 });
