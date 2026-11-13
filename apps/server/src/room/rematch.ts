@@ -15,10 +15,24 @@ export type RematchSeat = { playerId: PlayerId; bot?: boolean };
 export type RematchVote = "Rematch" | "WithdrawRematch";
 
 /**
- * What made the Room re-check the agreement (ticket #225): a vote changed, or
- * a Guest left the Podium, so a non-voter who is gone no longer blocks.
+ * What made the Room re-check the agreement (ticket #225): a vote changed, a
+ * Guest left the Podium, so a non-voter who is gone no longer blocks, or the
+ * fixed window ran out (ticket #226).
  */
-export type RematchTrigger = RematchVote | "PodiumLeft";
+export type RematchTrigger = RematchVote | "PodiumLeft" | "RematchExpired";
+
+/** How long the first vote waits for the rest of the table (spec #175, decision 2). */
+export const REMATCH_WINDOW_MS = 30_000;
+
+/** When the window a first vote at `firstVoteAt` opened runs out. */
+export function windowExpiresAt(firstVoteAt: number): number {
+  return firstVoteAt + REMATCH_WINDOW_MS;
+}
+
+/** Whether the window a first vote at `firstVoteAt` opened has run out at `now`. */
+export function windowExpired(now: number, firstVoteAt: number): boolean {
+  return now >= windowExpiresAt(firstVoteAt);
+}
 
 /**
  * Whether the Room keeps this Seat when it returns: its Guest agreed, or a

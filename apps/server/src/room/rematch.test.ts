@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   castVote,
+  REMATCH_WINDOW_MS,
   seatsAfterRematch,
   shouldReturn,
   votersOf,
+  windowExpired,
+  windowExpiresAt,
   withdrawVote,
 } from "#room/rematch.ts";
 
@@ -76,6 +79,23 @@ describe("the all-agreed rule", () => {
 
     expect(shouldReturn(seated, new Set(["p1"]), connected("p1", "bot"))).toBe(true);
     expect(shouldReturn(seated, new Set(["bot"]), connected("p1", "bot"))).toBe(false);
+  });
+});
+
+describe("the rematch window", () => {
+  const firstVoteAt = 1_000_000;
+
+  it("lasts 30 s from the first vote", () => {
+    expect(REMATCH_WINDOW_MS).toBe(30_000);
+    expect(windowExpiresAt(firstVoteAt)).toBe(firstVoteAt + 30_000);
+  });
+
+  it("has not run out a moment before its end, and has run out at its end", () => {
+    const expiresAt = windowExpiresAt(firstVoteAt);
+
+    expect(windowExpired(expiresAt - 1, firstVoteAt)).toBe(false);
+    expect(windowExpired(expiresAt, firstVoteAt)).toBe(true);
+    expect(windowExpired(expiresAt + 1, firstVoteAt)).toBe(true);
   });
 });
 
