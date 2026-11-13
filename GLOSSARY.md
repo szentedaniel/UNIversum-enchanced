@@ -62,6 +62,9 @@ _Avoid_: Replay request, play again
 The return of an ended Room to Lobby once every Player with a live connection has agreed (and at least one has), keeping the Seats that agreed and the Room's name, code, password and settings; the other Seats are released.
 _Avoid_: Replay, restart
 
+**Rematch window**:
+The fixed 30 s that opens with the first Rematch vote on a Podium and never restarts on later votes; when it ends with at least one vote still cast, the Room returns to Lobby as for a Rematch, so a Player who ignores the Podium does not block the others. It lives in the Room's memory and is dropped when the votes empty or the Room returns.
+
 ### Play
 
 **Turn**:
