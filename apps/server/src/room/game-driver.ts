@@ -214,6 +214,18 @@ export class GameDriver {
   }
 
   /**
+   * Saves the Room as a Lobby again (spec #175): one write clears the ended
+   * game and its end time with the kept Seats, then the old game's retention
+   * deletion is cancelled. A failed write throws before either, so the Room
+   * stays ended with its deletion armed; a later end arms retention again.
+   */
+  saveLobby(seats: readonly SeatRecord[]): void {
+    this.#save(null, [], seats, null);
+    this.#cancelDeletion?.();
+    this.#cancelDeletion = null;
+  }
+
+  /**
    * Logs an error at `error` and reports it, with the Room code, the game's
    * `version` and `phase`, and the intent type: never the snapshot or payload.
    */

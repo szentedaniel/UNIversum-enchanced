@@ -7,7 +7,7 @@ A Monopoly-like online board game for up to four players, set in a university wo
 ### Sessions
 
 **Room**:
-One game session that players join with a short code, from creation until the game ends.
+One game session that players join with a short code, from creation until the Room closes; its game can end and the Room can return to Lobby for a rematch.
 _Avoid_: Game (for the session itself), match
 
 **Lobby**:
@@ -55,8 +55,12 @@ The state of a Room whose game has ended, in which the final standings are shown
 _Avoid_: Results screen, game-over screen
 
 **Rematch vote**:
-A Player's agreement, given on the Podium and withdrawable until the next game starts, to play again in the same Room; it lives in the Room's memory and names the Player, not the connection, so it survives a reconnect. A Bot cannot vote.
+A Player's agreement, given on the Podium and withdrawable until the Room returns to Lobby, to play again in the same Room; it lives in the Room's memory and names the Player, not the connection, so it survives a reconnect. A Bot cannot vote.
 _Avoid_: Replay request, play again
+
+**Rematch**:
+The return of an ended Room to Lobby once every Player with a live connection has agreed (and at least one has), keeping the Seats that agreed and the Room's name, code, password and settings; the other Seats are released.
+_Avoid_: Replay, restart
 
 ### Play
 

@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { castVote, votersOf, withdrawVote } from "#room/rematch.ts";
+import {
+  castVote,
+  seatsAfterRematch,
+  shouldReturn,
+  votersOf,
+  withdrawVote,
+} from "#room/rematch.ts";
 
 const seats = [{ playerId: "p1" }, { playerId: "p2" }, { playerId: "p3" }];
+
+/** The Seats of the Players in `ids` count as connected. */
+const connected =
+  (...ids: string[]) =>
+  (seat: { playerId: string }) =>
+    ids.includes(seat.playerId);
 
 describe("the rematch votes", () => {
   it("keeps a cast vote without changing the set it came from", () => {
@@ -39,5 +51,53 @@ describe("the rematch votes", () => {
 
   it("lists nothing when nobody has voted", () => {
     expect(votersOf(new Set(), seats)).toEqual([]);
+  });
+});
+
+describe("the all-agreed rule", () => {
+  it("returns only once at least one vote is cast", () => {
+    expect(shouldReturn(seats, new Set(), connected("p1", "p2", "p3"))).toBe(false);
+  });
+
+  it("waits for every connected Guest: one vote of two does not return", () => {
+    expect(shouldReturn(seats, new Set(["p1"]), connected("p1", "p2"))).toBe(false);
+    expect(shouldReturn(seats, new Set(["p1", "p2"]), connected("p1", "p2"))).toBe(true);
+  });
+
+  it("does not wait for a dropped Guest, whether they voted or not", () => {
+    const seated = [{ playerId: "p1" }, { playerId: "p2" }];
+
+    expect(shouldReturn(seated, new Set(["p1"]), connected("p1"))).toBe(true);
+    expect(shouldReturn(seated, new Set(["p1", "p2"]), connected("p1"))).toBe(true);
+  });
+
+  it("neither expects nor lets a Bot vote", () => {
+    const seated = [{ playerId: "p1" }, { playerId: "bot", bot: true }];
+
+    expect(shouldReturn(seated, new Set(["p1"]), connected("p1", "bot"))).toBe(true);
+    expect(shouldReturn(seated, new Set(["bot"]), connected("p1", "bot"))).toBe(false);
+  });
+});
+
+describe("the Seats after a rematch", () => {
+  const seated = [
+    { playerId: "p1", name: "one" },
+    { playerId: "p2", name: "two" },
+    { playerId: "bot", name: "bot", bot: true },
+    { playerId: "p3", name: "three" },
+  ];
+
+  it("keeps the voters and the Bot Seats, in join order, unchanged", () => {
+    expect(seatsAfterRematch(seated, new Set(["p3", "p1"]))).toEqual([
+      { playerId: "p1", name: "one" },
+      { playerId: "bot", name: "bot", bot: true },
+      { playerId: "p3", name: "three" },
+    ]);
+  });
+
+  it("keeps only the Bot Seats when nobody voted", () => {
+    expect(seatsAfterRematch(seated, new Set())).toEqual([
+      { playerId: "bot", name: "bot", bot: true },
+    ]);
   });
 });
