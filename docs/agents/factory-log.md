@@ -15,3 +15,8 @@ the entries; the weekly health report (`factory:report`, #92) reads them.
 - Medium: duplicate and overlapping implementation runs (owner on #154, #156 and #142; #140 review: stale against TurnClock). Opened a ticket for an overlap check in the dispatcher and the architecture pass. The CI failures on #130 and #116 and the doc-comment fixes by the reviewer on #140, #143, #146 and #164 were one-offs that the fix rounds resolved, so there is no fix tonight.
 - Opened #165: Merge gate: wait and retry on GitHub rate-limit errors instead of escalating
 - Opened #166: Dispatcher and architecture-proposal intake: skip tickets that duplicate or overlap open work
+
+## 2026-11-13
+
+- Medium: the reviewer committed the missing GLOSSARY.md entry itself on #267, #268, #269 and #283, and flagged it on #270, so a standards pull request adds a glossary check to the implementer protocol.
+- Opened pull request #284: Implementer: add new domain terms to GLOSSARY.md before the last commit (retro/2026-11-13-implementer-add-new-domain-terms-to-glossary-md-be)
