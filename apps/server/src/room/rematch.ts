@@ -15,7 +15,7 @@ export type RematchSeat = { playerId: PlayerId; bot?: boolean };
 export type RematchVote = "Rematch" | "WithdrawRematch";
 
 /**
- * What made the Room re-check the agreement (ticket #225): a vote changed, a
+ * What made the Room re-check the agreement: a vote changed (ticket #225), a
  * Guest left the Podium, so a non-voter who is gone no longer blocks, or the
  * fixed window ran out (ticket #226).
  */
