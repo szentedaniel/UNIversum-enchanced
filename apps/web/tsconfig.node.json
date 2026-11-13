@@ -6,7 +6,9 @@
     // vite/client: tests import app modules that import assets (src/players.ts).
     "types": ["node", "vite/client"],
     // Tests import Paraglide's generated JS (src/paraglide, gitignored).
-    "allowJs": true
+    "allowJs": true,
+    // Tests render app components with React's server renderer.
+    "jsx": "react-jsx"
   },
   "include": ["vite.config.ts", "scripts", "test"]
 }

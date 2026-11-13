@@ -22,9 +22,9 @@ export function LobbyList() {
   useEffect(() => watchLobbyList(setLobbies), []);
 
   return (
-    <div className="min-h-dvh pb-8">
+    <div className="min-h-dvh pb-safe-8">
       <ScreenHeader back="/" label={m.back_home()} />
-      <main className="mx-auto flex max-w-5xl flex-col items-center gap-5 px-4 pt-6">
+      <main className="mx-auto flex max-w-5xl flex-col items-center gap-5 px-safe-4 pt-6">
         <h1 className="m-0 text-center text-3xl font-black md:text-4xl">{m.rooms_title()}</h1>
         <div className="flex w-full flex-col items-center gap-4 md:flex-row md:items-start md:justify-center">
           <Link to="/create" className={buttonVariants({ className: "w-full max-w-md md:w-auto" })}>

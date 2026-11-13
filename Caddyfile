@@ -27,6 +27,46 @@
 		}
 	}
 
+	# Install surface (spec: Mobile polish and installable PWA): the manifest
+	# and the generated icons must not fall through to the app shell. Both have
+	# stable URLs, so the manifest is revalidated (a rename or theme change is
+	# picked up on the next launch) while the icons get a day; neither is
+	# immutable like /assets, whose names carry the content hash.
+	handle /manifest.webmanifest {
+		root * /srv
+		header Content-Type "application/manifest+json"
+		header Cache-Control "no-cache"
+		file_server
+	}
+	handle /icons/* {
+		root * /srv
+		header Cache-Control "public, max-age=86400"
+		file_server
+	}
+
+	# The service worker (spec: Mobile polish and installable PWA) must be
+	# revalidated: the browser only finds a new worker by fetching this stable
+	# URL. Its own handle keeps it out of the app-shell cache and the SPA
+	# fallback, which would otherwise answer it with index.html.
+	handle /sw.js {
+		root * /srv
+		header Content-Type "text/javascript; charset=utf-8"
+		header Cache-Control "no-cache"
+		header Service-Worker-Allowed "/"
+		file_server
+	}
+
+	# The deployed release (spec: Mobile polish and installable PWA, Decision 3):
+	# the client compares it with its own CLIENT_RELEASE to offer a refresh. It
+	# must never be cached, or the prompt would miss a deploy; its own handle
+	# keeps it out of the SPA fallback.
+	handle /version.json {
+		root * /srv
+		header Content-Type "application/json"
+		header Cache-Control "no-cache"
+		file_server
+	}
+
 	# Source maps are never served (matched before the SPA fallback rewrites the path).
 	@sourcemaps path *.map
 	handle @sourcemaps {
@@ -35,9 +75,11 @@
 
 	handle {
 		# Hashed build output can be cached for good; the app shell is revalidated.
+		# The manifest and icons have their own handles above and are left out of
+		# this matcher, so they keep the cache policy chosen there.
 		@hashed path /assets/*
 		header @hashed Cache-Control "public, max-age=31536000, immutable"
-		@shell not path /assets/*
+		@shell not path /assets/* /icons/* /manifest.webmanifest /sw.js /version.json
 		header @shell Cache-Control "no-cache"
 
 		root * /srv

@@ -15,7 +15,7 @@ export function Home() {
   }, []);
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col items-center gap-6 px-4 pt-10 pb-8 text-center md:pt-16">
+    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col items-center gap-6 px-safe-4 pt-safe-10 pb-safe-8 text-center md:pt-safe-16">
       <Logo />
       <nav className="flex w-full max-w-md flex-col gap-3">
         <Link to="/create" className={buttonVariants({ size: "lg", className: "w-full" })}>

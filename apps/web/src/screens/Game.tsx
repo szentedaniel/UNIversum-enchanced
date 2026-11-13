@@ -2,7 +2,6 @@ import type { RejectionCode } from "@universum/protocol/messages";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useStore } from "zustand";
-import { playDice } from "#audio.ts";
 import { Board } from "#board/Board.tsx";
 import { FieldCard } from "#board/FieldCard.tsx";
 import { ChanceCardOverlay } from "#components/ChanceCardOverlay.tsx";
@@ -41,11 +40,6 @@ export function Game() {
   // The Playback core's frame: the gate, the view, the held Turn, the toast and the overlay (ADR-0004).
   const frame = useStore(playbackStore, (state) => state.frame);
 
-  // The dice sound starts on the server's roll, never on a tap (spec: no optimistic UI).
-  useEffect(() => {
-    if (push?.events.some((event) => event.type === "DiceRolled")) playDice();
-  }, [push]);
-
   // Opened by its address (a reload, a new tab, a later visit): take the Seat back by Guest token.
   useEffect(() => {
     ensureJoined(code).catch((e: unknown) => {
@@ -55,7 +49,7 @@ export function Game() {
 
   if (!push || frame === null) {
     return (
-      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-4 text-center">
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-safe-4 text-center">
         <p className="m-0 font-bold">
           {joinError
             ? rejectionText(joinError)
@@ -160,11 +154,14 @@ export function Game() {
     return null;
   }
   const card = bottomCard();
-  const podium = slot.kind === "podium" ? <Podium view={view} phase={slot.phase} /> : null;
+  const podium =
+    slot.kind === "podium" ? (
+      <Podium view={view} phase={slot.phase} rematch={push.rematch} me={me} busy={inFlight} />
+    ) : null;
 
   if (wide) {
     return (
-      <main className="board-backdrop fixed inset-0 overflow-hidden">
+      <main className="game-shell board-backdrop fixed inset-0 overflow-hidden p-safe-0">
         <ReconnectOverlay />
         {podium}
         {/* The Board's box: clear of the corner cards, the status row and the card; the
@@ -193,7 +190,7 @@ export function Game() {
   }
 
   return (
-    <main className="board-backdrop fixed inset-0 flex flex-col overflow-hidden pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))]">
+    <main className="game-shell board-backdrop fixed inset-0 flex flex-col overflow-hidden px-safe-0 pt-safe-2 pb-safe-2">
       <ReconnectOverlay />
       {podium}
       <ul className="m-0 flex list-none justify-center gap-1.5 px-2" aria-label={m.game_players()}>

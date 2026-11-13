@@ -1,6 +1,10 @@
 {
-  // Browser code (src) and Node-side code (vite.config.ts, tests) get different
-  // libs and types, so the web app has two projects.
+  // Browser code (src), Node-side code (vite.config.ts, tests) and the service
+  // worker get different libs and types, so the web app has three projects.
   "files": [],
-  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }]
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" },
+    { "path": "./tsconfig.worker.json" }
+  ]
 }

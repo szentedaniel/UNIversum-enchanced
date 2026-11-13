@@ -32,10 +32,18 @@ export const LOBBY_ROOM = "lobby";
  */
 export const LOBBY_LIST_MESSAGE = { rooms: "rooms", add: "+", remove: "-" } as const;
 
-/** Message names. The client sends only `intent`; everything else is server → client. */
+/**
+ * Message names. The client sends `intent` and `chat`; everything else is
+ * server → client.
+ */
 export const MESSAGE = {
   /** Client → server: one `ClientIntent`. */
   intent: "intent",
+  /**
+   * Client → server: one `ClientChat`; server → every client: the accepted
+   * `ChatEvent`, with the sender's Seat filled in by the Room.
+   */
+  chat: "chat",
   /** Server → the joining client: `WelcomeMessage`. */
   welcome: "welcome",
   /** Server → every client while the Room is a Lobby: `LobbyMessage`. */
@@ -55,10 +63,48 @@ export type RoomIntent =
   /** A Bot on the next empty Seat; any seated Player may (ticket #196). */
   | { type: "AddBot" }
   /** Take a Bot off its Seat; any seated Player may (ticket #196). */
-  | { type: "RemoveBot"; playerId: PlayerId };
+  | { type: "RemoveBot"; playerId: PlayerId }
+  /** Ask for a rematch on the Podium; any seated Player may (ticket #223). */
+  | { type: "Rematch" }
+  /** Take the rematch vote back; any seated Player may (ticket #223). */
+  | { type: "WithdrawRematch" };
 
 /** Everything a client may send as an `intent` message. */
 export type ClientIntent = RoomIntent | PlayerIntent;
+
+// ---------------------------------------------------------------- chat
+
+/**
+ * The quick-chat lines. The wire carries the id; the web app shows its
+ * hu/en/de message. Ids are stable forever: the web message keys derive from
+ * them, so a removed line keeps its id reserved.
+ */
+export const CHAT_LINES = [
+  "good_luck",
+  "well_played",
+  "nice_move",
+  "thanks",
+  "hurry_up",
+  "oops",
+  "good_game",
+  "rematch",
+] as const;
+
+/** The quick-chat emotes, drawn as language-free glyphs with an accessible label. Ids are stable forever. */
+export const CHAT_EMOTES = ["cheer", "groan", "thinking", "laugh", "shock", "heart"] as const;
+
+export type ChatLineId = (typeof CHAT_LINES)[number];
+export type ChatEmoteId = (typeof CHAT_EMOTES)[number];
+export type ChatId = ChatLineId | ChatEmoteId;
+
+/** Every catalogue id, lines first: exactly what `chatSchema` accepts. */
+export const CHAT_IDS = [...CHAT_LINES, ...CHAT_EMOTES] as const;
+
+/** One chat tap, client → server. The sender is the connection's Seat, never part of the payload. */
+export type ClientChat = { id: ChatId };
+
+/** An accepted chat, server → every client: the sender's Seat and the catalogue id. */
+export type ChatEvent = { seat: number; id: ChatId };
 
 // ---------------------------------------------------------------- server messages
 
@@ -107,6 +153,11 @@ export type GameMessage = {
    * when the push has no events (the first push of a game, a reconnect).
    */
   reveals: Reveal[];
+  /**
+   * The Player ids that have agreed to a rematch, in Seat order. Present only
+   * once the game has ended; absent while it runs (ticket #223).
+   */
+  rematch?: PlayerId[];
   /**
    * The server's clock when it sent this push (epoch ms), so clients can show
    * the Turn timer without trusting their own clock.
@@ -197,8 +248,15 @@ export const GUEST_TOKEN_PATTERN = /^[0-9a-f]{32}$/;
  * here because the password is checked before a Seat is reserved, where the
  * server does not yet know which Room is meant. A Guest token that matches a
  * Seat takes that Seat back (no password asked, even in a running game).
+ * `watch` asks to enter as a spectator (spec #179): a client with no Seat,
+ * which takes no Seat and never gets a Guest token.
  */
-export type JoinOptions = { code: string; password?: string; guestToken?: string };
+export type JoinOptions = {
+  code: string;
+  password?: string;
+  guestToken?: string;
+  watch?: boolean;
+};
 
 /**
  * WebSocket close codes the Room server sends (Colyseus uses 4000–4010).
@@ -276,6 +334,7 @@ export const REJECTION_CODES = [
   "INTERNAL",
   "ROOM_NOT_FOUND",
   "ROOM_FULL",
+  "REMATCH_NOT_OFFERED",
   "ROOM_NAME_INVALID",
   "WRONG_PASSWORD",
   // abuse protection (#37)

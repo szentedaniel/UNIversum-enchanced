@@ -19,7 +19,9 @@ import stateV5 from "./fixtures/state-v5.json" with { type: "json" };
 import stateV6 from "./fixtures/state-v6.json" with { type: "json" };
 import stateV7 from "./fixtures/state-v7.json" with { type: "json" };
 import stateV8 from "./fixtures/state-v8.json" with { type: "json" };
-import { deadlineOf, newGame, roll } from "./helpers.ts";
+import stateV9 from "./fixtures/state-v9.json" with { type: "json" };
+import { deadlineOf, newGame, playTurn, roll } from "./helpers.ts";
+import { chooser, nextMove } from "./simulation.ts";
 
 /**
  * Stored snapshots, one per `stateVersion` the server has ever written
@@ -40,6 +42,7 @@ const fixtures: { version: number; state: unknown }[] = [
   { version: 6, state: stateV6 },
   { version: 7, state: stateV7 },
   { version: 8, state: stateV8 },
+  { version: 9, state: stateV9 },
 ];
 
 /** The keys of an object, and of its first array item or nested object, as paths. */
@@ -58,10 +61,12 @@ describe("state migrations", () => {
     expect(fixtures.map((f) => f.version)).toContain(STATE_VERSION);
   });
 
-  it("the current snapshot has the shape a new game has (a changed shape needs a new STATE_VERSION)", () => {
+  it("the current snapshot has the shape a played Turn has (a changed shape needs a new STATE_VERSION)", () => {
     const current = fixtures.find((f) => f.version === STATE_VERSION);
 
-    expect(shape(current?.state)).toEqual(shape(roll(newGame()).state));
+    // The Wealth series grows with the game, so the reference is the
+    // fixture's own recipe: a game one Turn in.
+    expect(shape(current?.state)).toEqual(shape(playTurn(newGame()).state));
   });
 
   it.each(fixtures)("a snapshot stored at version $version loads and plays on", ({ state }) => {
@@ -147,6 +152,34 @@ describe("state migrations", () => {
     };
 
     expect(migrate(pending).dealUsed).toBe(true);
+  });
+
+  it("spec #177: a version-8 state loads with an empty Wealth series and a production Minute", () => {
+    const migrated = migrate(stateV8);
+
+    expect(migrated.wealthSamples).toEqual([]);
+    expect(migrated.minuteMs).toBe(60_000);
+  });
+
+  it("spec #177: a version-8 state plays on to its end, and its final sample matches the standings", () => {
+    const pick = chooser(1);
+    let state = migrate(stateV8);
+
+    while (state.phase.kind !== "gameOver") {
+      const move = nextMove(state, pick, 1_000);
+      if (!move) throw new Error("a stored game offered no move");
+      const actor = move.intent.type === "TurnTimedOut" ? SYSTEM : state.currentPlayer;
+      const result = apply(state, move.intent, { actor, now: move.now });
+      if (isRejection(result)) throw new Error(`${move.intent.type} was refused: ${result.code}`);
+      state = result.state;
+    }
+
+    const standings = publicView(state).standings ?? [];
+    const final = state.wealthSamples.at(-1);
+    expect(standings).toHaveLength(state.players.length);
+    for (const standing of standings) {
+      expect(final?.wealth[standing.player]).toBe(standing.wealth);
+    }
   });
 
   it("a state at the current version comes back unchanged", () => {

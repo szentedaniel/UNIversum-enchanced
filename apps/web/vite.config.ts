@@ -1,8 +1,10 @@
+import { fileURLToPath } from "node:url";
 import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import { buildAtlas } from "./scripts/atlas.ts";
+import { buildPwa } from "./scripts/pwa.ts";
 
 // The browser talks to one origin: Vite (and Caddy in production) forwards
 // `/colyseus/*` — Colyseus' HTTP matchmaking and its WebSockets — to the Room
@@ -21,6 +23,41 @@ function boardAtlas(): Plugin {
     name: "universum:board-atlas",
     async buildStart() {
       if (!process.env["VITEST"]) await buildAtlas();
+    },
+  };
+}
+
+/**
+ * Builds the manifest and icons (scripts/pwa.ts) into public/ before Vite
+ * serves or bundles, so `/manifest.webmanifest` and `/icons/*` exist in dev
+ * and in the image. Vitest loads this config too and skips it.
+ */
+function pwaAssets(): Plugin {
+  return {
+    name: "universum:pwa-assets",
+    async buildStart() {
+      if (!process.env["VITEST"]) await buildPwa();
+    },
+  };
+}
+
+/**
+ * Emits `/version.json` with the build's release (#261): the deployment and a
+ * loaded tab compare releases and offer a refresh. `RELEASE` is the same SHA
+ * the server reports; a local build writes `dev`, which the client never
+ * treats as a newer release. Build only: dev serves no file, and its release
+ * is `dev` anyway.
+ */
+function releaseVersion(release: string): Plugin {
+  return {
+    name: "universum:release-version",
+    apply: "build",
+    generateBundle() {
+      this.emitFile({
+        type: "asset",
+        fileName: "version.json",
+        source: `${JSON.stringify({ release })}\n`,
+      });
     },
   };
 }
@@ -45,6 +82,8 @@ export default defineConfig(({ mode }) => {
     envDir: repoRoot,
     plugins: [
       boardAtlas(),
+      pwaAssets(),
+      releaseVersion(env["RELEASE"] || "dev"),
       react(),
       tailwindcss(),
       // Same options as the `paraglide` script in package.json (run on install,
@@ -64,6 +103,20 @@ export default defineConfig(({ mode }) => {
     },
     server: { proxy },
     preview: { proxy },
-    build: { sourcemap: "hidden" },
+    build: {
+      sourcemap: "hidden",
+      rollupOptions: {
+        // The worker is a second entry, but it must keep the stable `/sw.js`
+        // URL and root scope: the browser looks it up there and Caddy
+        // revalidates it, so its name is not hashed like the app's chunks.
+        input: {
+          index: fileURLToPath(new URL("index.html", import.meta.url)),
+          sw: fileURLToPath(new URL("src/pwa/sw.ts", import.meta.url)),
+        },
+        output: {
+          entryFileNames: (chunk) => (chunk.name === "sw" ? "sw.js" : "assets/[name]-[hash].js"),
+        },
+      },
+    },
   };
 });

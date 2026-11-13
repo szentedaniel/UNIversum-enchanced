@@ -1,15 +1,18 @@
 /**
  * The result screen (R80): a 2-1-3 podium of the top three Players in their
  * own colours (figure and Wealth), the Bankrupt Players greyed below, and the
- * way back to the Lobby list. It overlays the dimmed Board.
+ * way back to the Lobby list. It overlays the dimmed Board. Once the game has
+ * ended the Room offers a rematch: the screen passes the votes the push
+ * carries (spec #175) and this client's Player id.
  */
-import type { GameEndReason, PhaseOf, PublicView } from "@universum/rules";
+import type { GameEndReason, PhaseOf, PlayerId, PublicView } from "@universum/rules";
 import { Link } from "react-router";
 import { BotMark } from "#components/BotMark.tsx";
 import { PlayerFigure, PlayerToken } from "#components/PlayerToken.tsx";
-import { buttonVariants } from "#components/ui/button.tsx";
+import { Button, buttonVariants } from "#components/ui/button.tsx";
+import { sendIntent } from "#connection.ts";
 import { cn } from "#lib/utils.ts";
-import { podiumOrder, type PodiumEntry } from "#pick/podium.ts";
+import { podiumOrder, podiumRematch, type PodiumEntry } from "#pick/podium.ts";
 import { INK, playerLook } from "#players.ts";
 import { formatMoney, m, playerName } from "#text.ts";
 
@@ -27,19 +30,37 @@ const HEIGHTS = ["h-24", "h-36", "h-16"];
 /** The backdrop's ink and the display text, as in the Tabletop prototype. */
 const OVERLAY_BG = "#262335e6";
 
-export function Podium({ view, phase }: { view: PublicView; phase: PhaseOf<"gameOver"> }) {
+export function Podium({
+  view,
+  phase,
+  rematch,
+  me,
+  busy,
+}: {
+  view: PublicView;
+  phase: PhaseOf<"gameOver">;
+  /** The Player ids that have agreed to a rematch, from the latest push (ticket #223). */
+  rematch?: readonly PlayerId[];
+  /** This client's Player id: a client without a Seat gets no rematch button. */
+  me: PlayerId | null;
+  /** True while this client's intent is unanswered (the in-flight lock). */
+  busy: boolean;
+}) {
   const ranked = podiumOrder(view.players, view.standings ?? []);
   const winner = ranked[0];
   const [first, second, third] = ranked;
   // The podium stands 2-1-3, as on a real one.
   const columns = [second, first, third].filter((entry) => entry !== undefined);
   const below = ranked.slice(3);
+  // Never cached: a vote arrives with a push of its own (empty events).
+  const vote = podiumRematch(view.players, me, rematch);
+  const mine = vote.mine;
 
   return (
     <section
       data-testid="podium"
       aria-labelledby="podium-title"
-      className="fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden p-4"
+      className="fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden p-safe-4"
       style={{ background: OVERLAY_BG }}
     >
       {Array.from({ length: 40 }, (_, i) => (
@@ -93,6 +114,47 @@ export function Podium({ view, phase }: { view: PublicView; phase: PhaseOf<"game
             </li>
           ))}
         </ul>
+      )}
+      <ul
+        data-testid="rematch-votes"
+        aria-label={m.rematch_votes()}
+        className="mt-4 mb-0 flex list-none flex-wrap justify-center gap-2 p-0"
+      >
+        {vote.votes.map(({ player, agreed }) => (
+          <li
+            key={player.id}
+            data-testid="rematch-chip"
+            data-player={player.id}
+            data-agreed={agreed || undefined}
+            className={cn(
+              "sticker-sm flex items-center gap-1.5 rounded-2xl bg-card px-2 py-1 text-card-foreground",
+              !agreed && "opacity-60",
+            )}
+          >
+            <PlayerToken seat={player.seat} size={14} />
+            <span className="max-w-28 truncate text-xs font-extrabold">
+              {playerName(player.name)}
+            </span>
+            <span
+              className={cn(
+                "text-[10px] leading-none font-black uppercase",
+                agreed ? "text-success" : "text-ink/60",
+              )}
+            >
+              {agreed ? m.rematch_agreed() : m.rematch_waiting()}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {mine !== null && (
+        <Button
+          data-testid="rematch-button"
+          className="mt-4"
+          disabled={busy}
+          onClick={() => sendIntent(mine.intent)}
+        >
+          {mine.agreed ? m.rematch_withdraw() : m.rematch_button()}
+        </Button>
       )}
       <Link to="/rooms" className={buttonVariants({ className: "mt-6" })}>
         {m.back_to_list()}

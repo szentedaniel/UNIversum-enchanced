@@ -252,4 +252,42 @@ describe("played games", () => {
       RUN,
     );
   });
+
+  it("spec #177: the Wealth series runs in Minute order and holds every Player in every sample", () => {
+    assert(
+      property(gameArb, (game) => {
+        const run = playRandomGame(game);
+        const ids = run.state.players.map((player) => player.id).toSorted();
+        let previous = 0;
+
+        expect(run.state.wealthSamples.length).toBeGreaterThan(0);
+        for (const sample of run.state.wealthSamples) {
+          expect(sample.minute).toBeGreaterThanOrEqual(previous);
+          previous = sample.minute;
+          expect(Object.keys(sample.wealth).toSorted()).toEqual(ids);
+        }
+      }),
+      RUN,
+    );
+  });
+
+  it("spec #177: every passed Turn and the game's end leave one sample each, the last the standings' Wealth", () => {
+    assert(
+      property(gameArb, (game) => {
+        const run = playRandomGame(game);
+        const passed = run.steps.flatMap((step) =>
+          step.events.filter((event) => event.type === "TurnPassed"),
+        );
+        const standings = publicView(run.state).standings ?? [];
+        const final = run.state.wealthSamples.at(-1);
+
+        expect(run.state.wealthSamples).toHaveLength(passed.length + 1);
+        expect(standings).toHaveLength(run.state.players.length);
+        for (const standing of standings) {
+          expect(final?.wealth[standing.player]).toBe(standing.wealth);
+        }
+      }),
+      RUN,
+    );
+  });
 });
