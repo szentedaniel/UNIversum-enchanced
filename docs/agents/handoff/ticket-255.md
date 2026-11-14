@@ -49,7 +49,8 @@ game-end rows; #257 adds the menu switch and the hint list.
 - `apps/web/test/hint-card.test.ts` server-renders the card with `react-dom/server` and
   `overwriteGetLocale` (the `podium-rematch.test.ts` pattern): nothing for a null row, nothing
   for a row in the other place, the three #255 rows in their areas, the #256 rows nowhere, the
-  sentence and the labelled dismiss button, and Hungarian copy.
+  sentence and the labelled dismiss button, and Hungarian copy. A second test renders
+  `DecisionTray` from a real `bottomSlot` sale and pins the card inside `sale-tray`.
 - No Playwright spec was added or run here (the factory's CI runs the existing specs; the
   first-game hint spec belongs to #257). Selectors for it: `getByTestId("hint-card")`,
   `data-hint="<id>"`, `getByTestId("hint-dismiss")`; a dismissal is stored under
