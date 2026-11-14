@@ -53,16 +53,43 @@ export const stateVersionOf = (source: string | undefined): number | undefined =
   return digits === undefined ? undefined : Number(digits);
 };
 
-/** A line that carries no code: a comment of either kind, or a blank. */
-const isComment = (line: string): boolean => {
-  const trimmed = line.trim();
-  return (
-    trimmed === "" ||
-    trimmed.startsWith("//") ||
-    trimmed.startsWith("/*") ||
-    trimmed.startsWith("*")
-  );
+/**
+ * A source's code lines, comments and blanks removed and a block comment
+ * closed on its own line cut out, or `undefined` when a `/*` sits anywhere a
+ * line scan cannot tell a comment from a string: the check fails closed.
+ */
+const codeLinesOf = (source: string): string[] | undefined => {
+  const lines: string[] = [];
+  let inBlock = false;
+  for (const raw of source.split("\n")) {
+    let line = raw;
+    if (inBlock) {
+      const end = line.indexOf("*/");
+      if (end === -1) continue;
+      line = line.slice(end + 2);
+      inBlock = false;
+    } else if (line.trimStart().startsWith("/*")) {
+      line = line.trimStart();
+    }
+    while (line.startsWith("/*")) {
+      const end = line.indexOf("*/", 2);
+      if (end === -1) {
+        inBlock = true;
+        line = "";
+      } else {
+        line = line.slice(end + 2).trimStart();
+      }
+    }
+    const trimmed = line.trim();
+    if (trimmed === "" || trimmed.startsWith("//")) continue;
+    if (line.includes("/*")) return undefined;
+    lines.push(line);
+  }
+  return inBlock ? undefined : lines;
 };
+
+/** An import statement's lines: outside the shell, so a migration may import what its entry needs. */
+const IMPORT_START = /^import\b/u;
 
 /** The line declaring the chain, and the line closing its object literal. */
 const MIGRATIONS_DECLARATION = /^const MIGRATIONS\b/u;
@@ -71,11 +98,16 @@ const OBJECT_END = "};";
 /** An entry's key line, at the object's own indentation; an entry's body is indented further. */
 const ENTRY_KEY = /^ {2}(\d+):/u;
 
+/** The only other line at the object's indentation: an entry's closing bracket. */
+const ENTRY_CLOSE = /^ {2}[})\]]/u;
+
 /** One `migrate.ts` split into its chain and the code around it. */
 interface MigrationSource {
   readonly entries: ReadonlyMap<number, string>;
   /** The file's lines outside the entries, comments and imports aside: what a migration may not touch. */
   readonly shell: readonly string[];
+  /** Whether the file's shape is one the scan understands; a computed key or a stray `/*` is not. */
+  readonly readable: boolean;
 }
 
 /**
@@ -88,8 +120,12 @@ interface MigrationSource {
 const migrationSourceOf = (source: string): MigrationSource => {
   const entries = new Map<number, string>();
   const shell: string[] = [];
+  const lines = codeLinesOf(source);
+  if (lines === undefined) return { entries, shell, readable: false };
+  let readable = true;
   let started = false;
   let inObject = false;
+  let inImport = false;
   let key: number | undefined;
   let body: string[] = [];
   const flush = (): void => {
@@ -97,10 +133,18 @@ const migrationSourceOf = (source: string): MigrationSource => {
     key = undefined;
     body = [];
   };
-  for (const line of source.split("\n")) {
-    if (isComment(line)) continue;
+  for (const line of lines) {
     if (!started) {
-      if (!MIGRATIONS_DECLARATION.test(line)) continue;
+      if (inImport || IMPORT_START.test(line)) {
+        // An import ends at its `;`, which must close the line: code after it is shell.
+        const semicolon = line.indexOf(";");
+        inImport = semicolon === -1;
+        if (semicolon === -1 || semicolon === line.trimEnd().length - 1) continue;
+      }
+      if (!MIGRATIONS_DECLARATION.test(line)) {
+        shell.push(line.trim());
+        continue;
+      }
       started = true;
       inObject = true;
       shell.push(line.trimEnd());
@@ -124,10 +168,13 @@ const migrationSourceOf = (source: string): MigrationSource => {
       body = [line.trim()];
       continue;
     }
+    // A line at the object's own indentation that is no key nor a closer is a
+    // computed key, a spread or the like: it could replace an old entry.
+    if (/^ {0,2}\S/u.test(line) && !ENTRY_CLOSE.test(line)) readable = false;
     if (key !== undefined) body.push(line.trim());
   }
   flush();
-  return { entries, shell };
+  return { entries, shell, readable: readable && started };
 };
 
 /**
@@ -151,7 +198,7 @@ export const migrationCollision = (facts: MigrationFacts): boolean => {
 
 /** Whether the rules test names a snapshot outside a comment. */
 const listsFixture = (test: string, name: string): boolean =>
-  test.split("\n").some((line) => !isComment(line) && line.includes(name));
+  codeLinesOf(test)?.some((line) => line.includes(name)) ?? false;
 
 /** The snapshot a version is stored as. */
 const fixtureName = (version: number): string => `state-v${String(version)}.json`;
@@ -184,6 +231,8 @@ export const migrationProblems = (facts: MigrationFacts): string[] => {
   if (
     chainMain === undefined ||
     chainHead === undefined ||
+    !chainMain.readable ||
+    !chainHead.readable ||
     chainMain.entries.size === 0 ||
     chainHead.entries.size === 0
   ) {
@@ -228,6 +277,8 @@ export const migrationProblems = (facts: MigrationFacts): string[] => {
     for (const file of facts.files) {
       if (!file.startsWith(MIGRATION_FILES.fixtures)) continue;
       const name = file.slice(MIGRATION_FILES.fixtures.length);
+      if (name.includes("/"))
+        problems.push(`state migration: ${name} is in a fixtures subdirectory`);
       if (before.has(name) && after.has(name)) {
         problems.push(`state migration: fixture ${name} changed`);
       }

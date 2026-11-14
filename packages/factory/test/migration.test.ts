@@ -214,6 +214,39 @@ describe("migrationProblems", () => {
     expect(problems).toContain("state migration: migrate.test.ts no longer lists state-v1.json");
   });
 
+  it("refuses an old entry edited behind a block comment", () => {
+    const edited = MIGRATE.replace("\n  4: (state)", "\n  /* x */ 4: (state)").replace(
+      "deal: null",
+      "deal: 1",
+    );
+    const problems = migrationProblems(sound({ migrateHead: withEntry(edited, NEXT_ENTRY) }));
+    expect(problems.join("\n")).toMatch(/edited|cannot be read|outside/u);
+  });
+
+  it("refuses a computed key that would override an old entry", () => {
+    const sneaky = withEntry(
+      MIGRATE,
+      `${NEXT_ENTRY}\n  [1]: (state) => ({ ...state, stateVersion: 2 }),`,
+    );
+    expect(migrationProblems(sound({ migrateHead: sneaky }))).toContain(
+      "state migration: migrate.ts's MIGRATIONS entries cannot be read",
+    );
+  });
+
+  it("refuses code added before the chain", () => {
+    const sneaky = MIGRATE.replace("const MIGRATIONS", "globalThis.x = 1;\nconst MIGRATIONS");
+    expect(migrationProblems(sound({ migrateHead: withEntry(sneaky, NEXT_ENTRY) }))).toContain(
+      "state migration: migrate.ts changed outside the new MIGRATIONS entry",
+    );
+  });
+
+  it("refuses a snapshot added in a fixtures subdirectory", () => {
+    const problems = migrationProblems(
+      sound({ files: [MIGRATION_FILES.migrate, `${MIGRATION_FILES.fixtures}sub/a.json`] }),
+    );
+    expect(problems).toContain("state migration: sub/a.json is in a fixtures subdirectory");
+  });
+
   it("reads a migration main already took as a collision, to renumber", () => {
     const raced = sound({
       stateMain: STATE.replace(
