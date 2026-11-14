@@ -85,12 +85,16 @@ test("two Guests exchange a line and an emote, and mute hides the tray and bubbl
     await expect(bubbleOf(guest, seatA)).toHaveCount(0);
 
     // Guest B sends an emote: A sees it by B's card, and B's own screen shows it
-    // too. The glyph is language-free; the label comes from the same page.
+    // too. The glyph is language-free; the label comes from the same page. The
+    // bubble is one element showing both, and `toContainText`'s array form takes
+    // one entry per element, so the glyph and the label are asserted apart.
     const emote = await send(joiner, "cheer");
     expect(emote.text).not.toBe("");
     if (emote.label === null) throw new Error("an emote's button carries its accessible label");
-    await expect(bubbleOf(guest, seatB)).toContainText([emote.text, emote.label]);
-    await expect(bubbleOf(page, seatB)).toContainText([emote.text, emote.label]);
+    await expect(bubbleOf(guest, seatB)).toContainText(emote.text);
+    await expect(bubbleOf(guest, seatB)).toContainText(emote.label);
+    await expect(bubbleOf(page, seatB)).toContainText(emote.text);
+    await expect(bubbleOf(page, seatB)).toContainText(emote.label);
 
     // Guest B mutes quick chat in the game menu (#232): the tray goes from B's
     // screen only, and the setting is local to that device.

@@ -53,7 +53,8 @@ group. Files: `apps/e2e/tests/chat.spec.ts` only. No app code, no test id added,
 - `chat-send-<id>` — one per catalogue id from `CHAT_IDS` (#231), `chat-send-good_luck`, `chat-send-cheer` and
   `chat-send-well_played` here; disabled during the tray's cooldown.
 - `chat-bubble` — the `<output>` inside the sender's `player-card` / `player-chip` (`ChatBubble`, #230). A line
-  shows its text; an emote shows its glyph plus an `sr-only` label, so `toContainText` sees both.
+  shows its text; an emote shows its glyph plus an `sr-only` label, both in the element's text. `toContainText`'s
+  array form takes one entry per matched element, so the one bubble's glyph and label are two separate calls.
 - `chat-toggle-mute` — the Game menu's mute button (`ChatMuteToggle`, #232), `aria-pressed` carries the setting.
 - `game-menu` — the Game menu trigger (#41), needed to reach the mute toggle.
 - `player-card` / `player-chip` — via `playerCards(page)`; the bubble is never outside them.
