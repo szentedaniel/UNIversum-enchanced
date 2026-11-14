@@ -321,10 +321,13 @@ describe("the summary counters", () => {
     expect(second.state.summary.fieldsBought).toEqual({});
   });
 
-  it("spec #177: the counters stay out of the public view (ticket #236 exposes them)", () => {
+  it("spec #177: the counters reach the view only through the final Summary", () => {
     const { state } = landOnOwned(LONDON, 2);
+    const view = publicView(state);
 
-    expect(publicView(state)).not.toHaveProperty("summary");
+    expect(view).not.toHaveProperty("fieldsBought");
+    expect(view).not.toHaveProperty("biggestRent");
+    expect(view.summary).toBeNull();
   });
 });
 

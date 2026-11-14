@@ -43,6 +43,7 @@ const view = (phase: View["phase"], extra: Partial<View> = {}): View => ({
   autoSell: null,
   pickOptions: null,
   standings: null,
+  summary: null,
   ...extra,
 });
 

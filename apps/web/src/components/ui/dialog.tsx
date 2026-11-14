@@ -17,8 +17,9 @@ export function DialogContent({
   className,
   children,
   showCloseButton = true,
+  closeLabel = m.close(),
   ...props
-}: DialogPrimitive.Popup.Props & { showCloseButton?: boolean }) {
+}: DialogPrimitive.Popup.Props & { showCloseButton?: boolean; closeLabel?: string }) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Backdrop
@@ -39,7 +40,7 @@ export function DialogContent({
             render={<Button variant="plain" size="icon-sm" className="absolute top-3 right-3" />}
           >
             <X size={18} strokeWidth={3} aria-hidden />
-            <span className="sr-only">{m.close()}</span>
+            <span className="sr-only">{closeLabel}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Popup>

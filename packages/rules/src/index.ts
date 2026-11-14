@@ -56,6 +56,7 @@ export type { GameEndReason, Standing } from "#rules/game-end.ts";
 export type { LevelOffer } from "#rules/universities.ts";
 export {
   publicView,
+  type GameSummaryView,
   type PickOption,
   type PublicView,
   type TurnTimer,

@@ -88,6 +88,7 @@ const BASE_VIEW: PublicView = {
   autoSell: null,
   pickOptions: null,
   standings: null,
+  summary: null,
 };
 
 /** Two Players at the given Fields, with the push's view fields patched in. */

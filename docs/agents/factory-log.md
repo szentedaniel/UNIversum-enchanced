@@ -20,3 +20,8 @@ the entries; the weekly health report (`factory:report`, #92) reads them.
 
 - Medium: the reviewer committed the missing GLOSSARY.md entry itself on #267, #268, #269 and #283, and flagged it on #270, so a standards pull request adds a glossary check to the implementer protocol.
 - Opened pull request #284: Implementer: add new domain terms to GLOSSARY.md before the last commit (retro/2026-11-13-implementer-add-new-domain-terms-to-glossary-md-be)
+
+## 2026-11-14
+
+- Medium: the reviewer fixed a test id or role that differed from the ticket on #291 and #298, so a standards pull request adds a step to the implementer's Finish section: compare every name the ticket fixes with the diff before reporting. The review failures without a verdict (#285) are already ticketed, and the one red CI run (#265, run 43541015201) was resolved by fix round 1, so there is no new fix for either.
+- Opened pull request #299: Implementer: compare the names the ticket fixes with the diff before finishing (retro/2026-11-14-implementer-compare-the-names-the-ticket-fixes-wit)

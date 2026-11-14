@@ -4,13 +4,20 @@ import { Link, useNavigate, useParams } from "react-router";
 import { useStore } from "zustand";
 import { Board } from "#board/Board.tsx";
 import { FieldCard } from "#board/FieldCard.tsx";
+import { chatOpenTo } from "#chat/tray.ts";
 import { ChanceCardOverlay } from "#components/ChanceCardOverlay.tsx";
+import { ChatTray } from "#components/ChatTray.tsx";
 import { DiceOverlay } from "#components/DiceOverlay.tsx";
 import { EventLog } from "#components/EventLog.tsx";
 import { GameMenu } from "#components/GameMenu.tsx";
 import { EventToast, MinutePill } from "#components/GameHud.tsx";
 import { HintCard } from "#components/HintCard.tsx";
-import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
+import {
+  PlayerCard,
+  PlayerChip,
+  type ChatPlacement,
+  type PlayerSummary,
+} from "#components/PlayerCard.tsx";
 import { Podium } from "#components/Podium.tsx";
 import { buttonVariants } from "#components/ui/button.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
@@ -24,6 +31,7 @@ import { playbackStore } from "#playback/playback-store.ts";
 import { DecisionTray } from "#screens/DecisionTray.tsx";
 import { TurnCard } from "#screens/TurnCard.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
+import { chatMuteStore } from "#stores/chat-mute-store.ts";
 import { hintStore } from "#stores/hint-store.ts";
 import { inFlightOf, inLobbyOf, roomStore } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
@@ -50,6 +58,8 @@ export function Game() {
   const [openCard, setOpenCard] = useState<number | null>(null);
   // The Playback core's frame: the gate, the view, the held Turn, the toast and the overlay (ADR-0004).
   const frame = useStore(playbackStore, (state) => state.frame);
+  // The Guest's quick-chat mute (#232): hides the tray and every bubble on this device.
+  const chatMuted = useStore(chatMuteStore, (state) => state.muted);
   // The Room returned to Lobby (a rematch): the Lobby message dropped the game
   // push the screen drew. Leave for the Lobby's own address, replacing the
   // game's, and show nothing meanwhile so the connecting card never flashes.
@@ -129,6 +139,10 @@ export function Game() {
   // Four Players on a portrait phone leave each chip too narrow for the full cash.
   const compactMoney = stripMoney(cardLayout.width, players.length) === "compact";
   const rejected = rejection !== null && rejection.seq > push.seq;
+  // The quick-chat tray (#231): a seated Guest in a running game, in any phase
+  // and on another Player's Turn; never on the result screen, and never while
+  // the Guest muted chat (#232), which hides the toggle here and every bubble.
+  const chatOpen = chatOpenTo(view, me, chatMuted);
   // The Playback's DOM layer: the frame's overlay is the dice or a drawn Chance card.
   const boardOverlay =
     overlay?.kind === "dice" ? (
@@ -147,6 +161,7 @@ export function Game() {
         {rejected ? rejectionText(rejection.code) : toast?.text}
       </EventToast>
       <EventLog />
+      {chatOpen && <ChatTray />}
       <GameMenu />
     </>
   );
@@ -212,7 +227,8 @@ export function Game() {
             <PlayerCard
               key={player.seat}
               player={player}
-              className={cn("absolute", CORNERS[player.seat], player.current && "z-10")}
+              className={cn("absolute", CORNERS[player.seat]?.card, player.current && "z-10")}
+              bubblePlacement={CORNERS[player.seat]?.bubble}
             />
           ))}
         </ul>
@@ -245,11 +261,12 @@ export function Game() {
             Player's full card in the strip's place so the cards never cover
             the Board. The wide screen keeps the corner cards. */}
         {openPlayer === null ? (
-          players.map((player) => (
+          players.map((player, index) => (
             <PlayerChip
               key={player.seat}
               player={player}
               className="w-0 max-w-28 flex-1"
+              bubblePlacement={index < players.length / 2 ? "below-start" : "below-end"}
               onExpand={() => setOpenCard(player.seat)}
               compactMoney={compactMoney}
             />
@@ -287,5 +304,10 @@ export function Game() {
   );
 }
 
-/** Desktop corner of each Seat, clockwise from top left. */
-const CORNERS = ["top-3 left-3", "top-3 right-3", "right-3 bottom-3", "bottom-3 left-3"];
+/** Desktop corner of each Seat, clockwise from top left, and where its chat bubble hangs. */
+const CORNERS: { card: string; bubble: ChatPlacement }[] = [
+  { card: "top-3 left-3", bubble: "below-start" },
+  { card: "top-3 right-3", bubble: "below-end" },
+  { card: "right-3 bottom-3", bubble: "above-end" },
+  { card: "bottom-3 left-3", bubble: "above-start" },
+];

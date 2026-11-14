@@ -111,6 +111,10 @@ _Avoid_: Sound effect (for the named entry), clip
 The only way Players talk in a Room: each picks a ready-made line or emote from a fixed catalogue, and the server shows it beside that Player's Seat; no free text is ever sent, and it is not the Event log.
 _Avoid_: Chat message, free chat
 
+**Bubble**:
+The line or emote a Player's quick chat shows by that Player's card for a few seconds, in each viewer's own language; the client keeps the latest one per Seat in memory, so a reload, a reconnect or another Room shows none. A Guest who muted quick chat in the Game menu sees no tray and no Bubble on that device, and a Bubble received while muted never appears after unmuting.
+_Avoid_: Toast (a Bubble is by the card; a toast reports an event), Chat message
+
 **Turn timer**:
 The countdown a Player has for one decision of their Turn, starting when the Playback before it ends.
 _Avoid_: Turn countdown
@@ -232,5 +236,5 @@ A Player's cash plus the Value of their Fields; it decides the winner when the M
 Every Player's Wealth, sampled with the game's elapsed Minute each time a Turn passes and once more when the game ends, so the last sample equals the final standings.
 
 **Summary**:
-The end-of-game figures counted while the game runs: the biggest Rent paid, the Fields each Player bought, the Monopolies formed and the Bankruptcies, in order. A Monopoly counts each time a purchase or an accepted Deal completes it, so a Group lost and completed again counts twice.
+The end-of-game figures counted while the game runs: the biggest Rent paid, the Fields each Player bought, the Monopolies formed and the Bankruptcies, in order. A Monopoly counts each time a purchase or an accepted Deal completes it, so a Group lost and completed again counts twice. The final view carries the Summary, with the Wealth series beside the figures, once the game is over; it is absent while the game runs.
 _Avoid_: Statistics, Recap

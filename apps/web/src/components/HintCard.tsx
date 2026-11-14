@@ -1,11 +1,11 @@
 /**
  * The hint card (spec #180): one short sentence on the concept a first-time
- * Guest meets — an Offer, Quarantine, a Sale — and a dismiss button that
- * remembers the hint as seen for this browser. It is an inline card beside the
- * Decision, never a dialog: it takes no focus, blocks no button and pauses no
- * timer. The screen picks the row through `nextHint`; the card decides which
- * area draws it, so the Game's bottom area and the Sale tray never both show
- * the same hint.
+ * Guest meets — an Offer, Quarantine, a Sale, a Doubler or Erasmus pick, the
+ * game end — and a dismiss button that remembers the hint as seen for this
+ * browser. It is an inline card beside the Decision, never a dialog: it takes
+ * no focus, blocks no button and pauses no timer. The screen picks the row
+ * through `nextHint`; the card decides which area draws it, so the Game's
+ * bottom area and the Sale or pick tray never both show the same hint.
  */
 import { X } from "lucide-react";
 import { Button } from "#components/ui/button.tsx";
@@ -17,14 +17,17 @@ import { m } from "#text.ts";
 export type HintPlace = "bottom" | "tray";
 
 /**
- * The area each concept's hint renders in (#255: the three the Offer,
- * Quarantine and Sale tickets cover). #256 adds the Doubler and Erasmus picks
- * and the game end, both in the areas those concepts already open.
+ * The area each concept's hint renders in: an Offer, Quarantine and the game
+ * end in the Game's bottom area, a Sale, the Doubler and Erasmus in their
+ * tray. Every id has a place, so a new row cannot silently render nowhere.
  */
-const PLACES: Partial<Record<HintId, HintPlace>> = {
+const PLACES: Record<HintId, HintPlace> = {
   offer: "bottom",
   quarantine: "bottom",
+  doubler: "tray",
+  erasmus: "tray",
   sale: "tray",
+  gameEnd: "bottom",
 };
 
 export function HintCard({ hint, place }: { hint: HintRow | null; place: HintPlace }) {
