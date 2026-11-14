@@ -9,9 +9,11 @@
  * arrives.
  */
 import type { GameEvent } from "@universum/rules";
+import bankruptSound from "#assets/sounds/bankrupt.mp3";
 import buySound from "#assets/sounds/buy.mp3";
 import chanceSound from "#assets/sounds/chance.mp3";
 import diceSound from "#assets/sounds/dice.mp3";
+import gameEndSound from "#assets/sounds/game-end.mp3";
 import quarantineSound from "#assets/sounds/quarantine.mp3";
 import releaseSound from "#assets/sounds/release.mp3";
 import rentSound from "#assets/sounds/rent.mp3";
@@ -24,6 +26,8 @@ export const CUES = {
   chance: chanceSound,
   quarantine: quarantineSound,
   release: releaseSound,
+  bankrupt: bankruptSound,
+  gameEnd: gameEndSound,
 } as const;
 
 /** A named cue: one effect file from `CUES`. */
@@ -52,7 +56,7 @@ export const EVENT_CUES: CueTable = {
   PcrTestBought: "none",
   PcrTestUsed: "none",
   FieldsSold: "none",
-  WentBankrupt: "none",
+  WentBankrupt: "bankrupt",
   TimedOut: "none",
   TimeoutPenaltyPaid: "none",
   DoublerPlaced: "none",
@@ -60,7 +64,7 @@ export const EVENT_CUES: CueTable = {
   DealAccepted: "none",
   DealDeclined: "none",
   DealExpired: "none",
-  GameEnded: "none",
+  GameEnded: "gameEnd",
   TurnPassed: "none",
 };
 
