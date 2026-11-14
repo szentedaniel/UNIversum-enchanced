@@ -32,7 +32,9 @@ function lineText(id: ChatLineId): string {
 function emoteFace(id: ChatEmoteId): { glyph: string; label: string } {
   const face = bubbleOf(id);
   expect(face.kind).toBe("emote");
-  return face.kind === "emote" ? { glyph: face.glyph.trim(), label: face.label.trim() } : { glyph: "", label: "" };
+  return face.kind === "emote"
+    ? { glyph: face.glyph.trim(), label: face.label.trim() }
+    : { glyph: "", label: "" };
 }
 
 describe("the quick-chat catalogue", () => {
