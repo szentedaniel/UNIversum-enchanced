@@ -11,6 +11,14 @@ import { createStore } from "zustand/vanilla";
 /** How long a bubble stays by the card: a UI timing, not a Playback length (ADR-0004). */
 export const BUBBLE_MS = 4_000;
 
+/**
+ * How long the quick-chat tray refuses a second send after one (spec #176,
+ * #231): a UI timing beside `BUBBLE_MS`, not a Playback length, kept just above
+ * the Room's one-chat-per-second ladder so a normal Guest rarely meets
+ * `SLOW_DOWN`.
+ */
+export const CHAT_COOLDOWN_MS = 1_200;
+
 /** One Seat's bubble: the catalogue id and when it appeared. */
 export type ChatBubble = { id: ChatId; shownAt: number };
 

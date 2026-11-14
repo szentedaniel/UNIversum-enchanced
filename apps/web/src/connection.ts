@@ -23,6 +23,8 @@ import {
   RECONNECT,
   backoffDelay,
   type ChatEvent,
+  type ChatId,
+  type ClientChat,
   type ClientIntent,
   type CreateOptions,
   type GameMessage,
@@ -109,6 +111,15 @@ export function sendIntent(intent: ClientIntent): void {
   // answer is 0 then); the push a rejoin brings has a later `seq` and clears it.
   markIntentSent();
   room?.send(MESSAGE.intent, intent);
+}
+
+/**
+ * Sends one catalogue quick-chat id to the Room; without a Room it does
+ * nothing. Chat is not an intent (ADR-0001): it changes no game state, so it
+ * sets no in-flight lock, and the Room's flood ladder answers a burst.
+ */
+export function sendChat(id: ChatId): void {
+  room?.send(MESSAGE.chat, { id } satisfies ClientChat);
 }
 
 export async function leaveRoom(): Promise<void> {
