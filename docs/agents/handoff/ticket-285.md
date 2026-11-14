@@ -42,7 +42,10 @@ owner — who can review it again by dispatch without a relabel.
   `RETRY` (the dispatch input) and `RUN_URL` decide. A retry dispatches
   `gh workflow run factory-review.yml -f pr=<n> -f retry=true` and leaves `agent:review`; a failed
   dispatch falls through to the handoff. The handoff posts the marked comment and swaps
-  `agent:review` for `ready-for-human`. It runs from the pull request's checkout, like `review.ts`.
+  `agent:review` for `ready-for-human`. The workflow checks out main's copy of `packages/factory`
+  from `origin/main` before it, like the gate, because a pull request event uses main's workflow
+  file and a branch cut before this change has no `fail.ts`; a missing script falls back to the old
+  shell handoff, so a failed review is never left queued.
 - **`gate.ts`** now takes `LABELS` and `MANUAL`: no `agent:review` and not a manual recovery is
   `not-queued` (printed `false`); a recovery prints `true` and skips the daytime quota, so a manual
   dispatch runs at once. The quota comment read is repo-wide `gh api` only for a queued run.

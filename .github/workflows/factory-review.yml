@@ -261,8 +261,14 @@ jobs:
           fi
 
       # A failed review is not left in the queue: it would fail again at night.
-      # The review step itself gets one whole-run re-run first (the session's
-      # own second turn is `review.ts`'s); the retry run hands over instead.
+      # The failure path is main's code, as the gate's is: a pull request cut
+      # before this path existed (or one that edits it) must not decide its own
+      # retry. The review step itself gets one whole-run re-run first; the
+      # retry run hands over instead.
+      - name: Use main's review failure path
+        if: failure() && steps.preflight.outputs.proceed == 'true' && steps.gate.outputs.review == 'true'
+        run: git checkout origin/main -- packages/factory
+
       - name: Retry the failed review or hand it to a human
         if: failure() && steps.preflight.outputs.proceed == 'true' && steps.gate.outputs.review == 'true'
         env:
@@ -270,4 +276,19 @@ jobs:
           REVIEW_FAILED: ${{ steps.review.outcome == 'failure' }}
           RETRY: ${{ inputs.retry }}
           OUTPUT_DIR: ${{ runner.temp }}
-        run: node packages/factory/src/review/fail.ts
+        run: |
+          set -euo pipefail
+          if [ -f packages/factory/src/review/fail.ts ]; then
+            exec node packages/factory/src/review/fail.ts
+          fi
+          # Main's copy is unavailable: the old handoff, so a failed review is
+          # never left in the queue and retried forever.
+          reason="(no reason file written; check the run log)"
+          if [ -f "${RUNNER_TEMP}/failure_reason.txt" ]; then
+            reason=$(cat "${RUNNER_TEMP}/failure_reason.txt")
+          fi
+          body="${RUNNER_TEMP}/failure-comment.md"
+          printf '<!-- factory-review:failed -->\nThe factory could not review this pull request.\n\n**Reason:** %s\n\n**Run:** %s\n\nRe-dispatch `factory-review.yml` to retry.\n' "$reason" "$RUN_URL" > "$body"
+          gh pr comment "$PR_NUMBER" --body-file "$body" || true
+          gh pr edit "$PR_NUMBER" --remove-label "agent:review" || true
+          gh pr edit "$PR_NUMBER" --add-label "ready-for-human" || true

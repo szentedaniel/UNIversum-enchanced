@@ -1,8 +1,9 @@
 /**
  * The review step's failure path, on the same runner: one automatic re-run
  * when the review step itself failed, then the handoff to a person. The
- * workflow owns the checkout and the run's failure; this script owns the
- * decision, the comment and the labels.
+ * workflow checks out main's copy of `packages/factory` before running this,
+ * the way the gate does; this script owns the decision, the comment and the
+ * labels.
  *
  * Env: PR_NUMBER, RUN_URL, REVIEW_FAILED, RETRY, OUTPUT_DIR.
  */
