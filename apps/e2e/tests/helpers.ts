@@ -54,7 +54,7 @@ export async function dragBoard(
     if (hooks === undefined || !(canvas instanceof HTMLElement)) {
       throw new Error("the Board's canvas is not mounted");
     }
-    // The Board's top band is the part no card covers; a grid finds it in any layout.
+    // The first uncovered point is in the top band no card reaches, in any layout.
     const rect = canvas.getBoundingClientRect();
     const start = Array.from({ length: 400 }, (_, index) => ({
       x: rect.left + (((index % 20) + 0.5) / 20) * rect.width,
@@ -317,9 +317,10 @@ const PICK_FIELDS = { budapest: 2, berlin: 15, london: 21, museum4: 28 } as cons
 /**
  * Shows a made-up pick view through the test-only `showView` hook, as if the
  * server had pushed it: a random game can't be steered into the Doubler corner
- * or an Erasmus Field, and nothing is sent to the server. The Player owns the
- * Doubler's Fields. `pick-tray.spec.ts` builds the same view inline and moves
- * onto this step when it is next edited.
+ * or an Erasmus Field, and nothing is sent to the server. A Doubler view makes
+ * the Player own its two Fields; an Erasmus view clears the destinations.
+ * `pick-tray.spec.ts` builds the same view inline and moves onto this step when
+ * it is next edited.
  */
 export function showPick(page: Page, kind: "doubler" | "erasmus"): Promise<void> {
   return page.evaluate(
