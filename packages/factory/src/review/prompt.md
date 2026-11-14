@@ -41,9 +41,9 @@ Never comment on the pull request, label it, or open another one: the workflow p
 
 `mergeDanger` decides the merge gate's label: `risk:low` for a two-way door with a local blast radius,
 `risk:high` for everything else. The label is not the decision, though — the gate reads the door
-itself, and outside a protected path it merges a two-way door even at `risk:high` once CI is green.
-So rate the door and the blast radius as they are: only a one-way door hands the pull request to the
-owner.
+itself, and a two-way door still merges at `risk:high` outside a protected path once the rest of the
+gate passes. So rate the door and the blast radius as they are: a wide radius is not an escalation on
+its own, and a two-way door never waits for the owner because of its rating.
 
 - `door`: `one-way` when undoing it is expensive, `two-way` when a revert is clean.
 - `blastRadius`: `local` when the diff stays in one package, app or factory step; `wide` when it
