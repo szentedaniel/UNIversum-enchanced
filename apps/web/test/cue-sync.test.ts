@@ -2,10 +2,11 @@ import type { GameEvent } from "@universum/rules";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { currentPlayback } from "#playback/playback-store.ts";
 import { playbackOfPush } from "#playback/playback.ts";
+import { timelineOf } from "#playback/timeline.ts";
 import { resetCues, syncCues } from "#sound/cue-sync.ts";
 import type { CueName } from "#sound/cues.ts";
 import { roomStore } from "#stores/room-store.ts";
-import { ROLL, viewOf } from "./playback-fixtures.ts";
+import { CHANCE, ROLL, viewOf } from "./playback-fixtures.ts";
 
 const { playCue } = vi.hoisted(() => ({ playCue: vi.fn<(name: CueName) => void>() }));
 vi.mock("#audio.ts", () => ({ playCue }));
@@ -138,5 +139,49 @@ describe("syncCues", () => {
 
     syncCues(push(3, events), core.frameAt(1_000));
     expect(playCue).toHaveBeenCalledTimes(1);
+  });
+
+  it("plays the card in the frame that opens its overlay, not a moment before", () => {
+    const events = CHANCE();
+    const core = playbackOfPush({
+      view: viewOf(undefined, { actsAfter: 0 }),
+      events,
+      reveals: [],
+      seq: 4,
+      clockOffset: 0,
+      receivedAt: 1_000,
+    });
+    const cardStart = timelineOf(events).find((step) => step.kind === "card")?.startMs ?? -1;
+
+    // The roll's step starts with the push: the dice play at once, the card not yet.
+    syncCues(push(4, events), core.frameAt(1_000));
+    expect(playCue.mock.calls).toEqual([["dice"]]);
+
+    // The walk's last moment: the card's step has not started, so no card.
+    syncCues(push(4, events), core.frameAt(1_000 + cardStart - 1));
+    expect(playCue.mock.calls).toEqual([["dice"]]);
+
+    // The frame whose overlay is the card plays the card, once.
+    const opens = core.frameAt(1_000 + cardStart);
+    expect(opens.overlay?.kind).toBe("card");
+    syncCues(push(4, events), opens);
+    expect(playCue.mock.calls).toEqual([["dice"], ["chance"]]);
+
+    // Reading the same frame again plays nothing more.
+    syncCues(push(4, events), core.frameAt(1_000 + cardStart));
+    expect(playCue.mock.calls).toEqual([["dice"], ["chance"]]);
+  });
+
+  it("plays the card and the Quarantine it sends the Player to, in order", () => {
+    // The exam-period card walks the Player to the Quarantine Field and enters it.
+    const events: GameEvent[] = [
+      { type: "CardDrawn", player: "p1", card: "examPeriod" },
+      { type: "Moved", player: "p1", from: 4, to: 16, steps: 12 },
+      { type: "QuarantineEntered", player: "p1", rounds: 3 },
+    ];
+
+    syncCues(push(1, events), frame(1, 3));
+
+    expect(playCue.mock.calls).toEqual([["chance"], ["quarantine"]]);
   });
 });
