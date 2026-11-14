@@ -92,4 +92,23 @@ describe("chat", () => {
     expect(await bob!.next("rejected")).toEqual({ code: "NOT_OFFERED" });
     expect(alice!.pending("chat")).toEqual([]);
   });
+
+  it("leaves the game state, its version and the stored Room untouched", async () => {
+    const { clients, code } = await startedGame();
+    const [alice, bob] = clients;
+    const room = server.room(code);
+    if (!room) throw new Error("the Room is live");
+    const stored = server.store.unfinished().find((r) => r.code === code);
+    expect(stored).toBeDefined();
+    const before = JSON.stringify(stored);
+    const version = room.game?.version;
+
+    bob!.sendChat({ id: "cheer" });
+    await alice!.next("chat");
+
+    expect(room.game?.version).toBe(version);
+    expect(JSON.stringify(server.store.unfinished().find((r) => r.code === code))).toBe(before);
+    // No game push either: a chat never moves the Playback or the Turn clock.
+    expect(alice!.pending("game")).toEqual([]);
+  });
 });
