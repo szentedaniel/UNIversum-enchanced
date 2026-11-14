@@ -229,6 +229,21 @@ describe("performStep", () => {
     ]);
   });
 
+  it("keeps a merge that landed when the follow-up issue is refused", () => {
+    const { adapter, writes } = actions();
+    const refusing: MergeActions = {
+      ...adapter,
+      fileFollowUp: () => {
+        throw new Error("HTTP 502");
+      },
+    };
+
+    expect(() =>
+      performStep({ kind: "merge", advisory: ["A judgement call."] }, pull(), context(refusing)),
+    ).not.toThrow();
+    expect(writes.map((write) => write.kind)).toEqual(["merge", "commentOnIssue", "closeIssue"]);
+  });
+
   it("files the advisory findings as one follow-up issue after the merge", () => {
     const { adapter, writes } = actions();
     const advisory = ["The helper duplicates `excerptOf`.", "The assertion is trivially true."];

@@ -70,8 +70,16 @@ const mergePull = (pull: PullView, advisory: readonly string[], ctx: PerformCont
   }
   // The advisory findings outlive the merge as one issue for the nightly
   // intake. Filing it after the merge keeps a refused merge issue-free.
+  // The merge already landed: a refused issue is logged, never a red run that
+  // a re-run could not repair.
   if (advisory.length > 0) {
-    ctx.actions.fileFollowUp(followUpIssue(pull, advisory));
+    try {
+      ctx.actions.fileFollowUp(followUpIssue(pull, advisory));
+    } catch (error) {
+      console.log(
+        `::warning::The advisory follow-up issue was not filed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
   console.log(`Merged in ${commit}. The push to main starts the dispatcher itself.`);
 };
