@@ -338,6 +338,8 @@
   "update_in_game": "Du bekommst sie, sobald du dieses Spiel beendest oder verlässt.",
   "chat_open": "Schnellchat",
   "chat_close": "Schnellchat schließen",
+  "chat_on": "Schnellchat an",
+  "chat_off": "Schnellchat aus",
   "chat_lines": "Sätze",
   "chat_emotes": "Emojis",
   "chat_line_good_luck": "Viel Glück!",

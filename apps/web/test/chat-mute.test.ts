@@ -2,11 +2,13 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { chatOpenTo } from "#chat/tray.ts";
+import { ChatMuteToggle } from "#components/GameMenu.tsx";
 import { PlayerCard, type PlayerSummary } from "#components/PlayerCard.tsx";
 import { baseLocale, overwriteGetLocale } from "#paraglide/runtime.js";
 import { BUBBLE_MS, chatStore } from "#stores/chat-store.ts";
 import { CHAT_MUTED_KEY, chatMuteStore } from "#stores/chat-mute-store.ts";
 import { SOUND_MUTED_KEY } from "#stores/sound-store.ts";
+import en from "../messages/en.json" with { type: "json" };
 import { viewOf } from "./playback-fixtures.ts";
 
 // React's server renderer reads a zustand store's *initial* state
@@ -170,5 +172,24 @@ describe("the muted tray", () => {
     expect(chatOpenTo(viewOf(), "p1", false)).toBe(true);
     expect(chatOpenTo(viewOf(), "p1", true)).toBe(false);
     expect(chatOpenTo(viewOf(), null, false)).toBe(false);
+  });
+});
+
+describe("the Game menu's chat toggle", () => {
+  it("labels the setting with its state, so a muted menu reads off or on", () => {
+    overwriteGetLocale(() => "en");
+    chatMuteStore.getState().setMuted(false);
+
+    const on = renderToStaticMarkup(createElement(ChatMuteToggle));
+
+    expect(on).toContain('data-testid="chat-mute-toggle"');
+    expect(on).toContain('aria-pressed="false"');
+    expect(on).toContain(en.chat_on);
+
+    chatMuteStore.getState().setMuted(true);
+    const off = renderToStaticMarkup(createElement(ChatMuteToggle));
+
+    expect(off).toContain('aria-pressed="true"');
+    expect(off).toContain(en.chat_off);
   });
 });

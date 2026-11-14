@@ -112,7 +112,7 @@ The only way Players talk in a Room: each picks a ready-made line or emote from 
 _Avoid_: Chat message, free chat
 
 **Bubble**:
-The line or emote a Player's quick chat shows by that Player's card for a few seconds, in each viewer's own language; the client keeps the latest one per Seat in memory, so a reload, a reconnect or another Room shows none.
+The line or emote a Player's quick chat shows by that Player's card for a few seconds, in each viewer's own language; the client keeps the latest one per Seat in memory, so a reload, a reconnect or another Room shows none. A Guest who muted quick chat in the Game menu sees no tray and no Bubble on that device, and a Bubble received while muted never appears after unmuting.
 _Avoid_: Toast (a Bubble is by the card; a toast reports an event), Chat message
 
 **Turn timer**:

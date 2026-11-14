@@ -1,9 +1,9 @@
 /**
- * The in-game menu: the language picker and the dice-sound mute toggle. A
- * language switch reloads the page and rejoins the Seat by Guest token; the
- * mute choice is remembered.
+ * The in-game menu: the language picker and the two mute toggles. A language
+ * switch reloads the page and rejoins the Seat by Guest token; the sound and
+ * the quick-chat choices are remembered separately.
  */
-import { Menu, Volume2, VolumeX } from "lucide-react";
+import { Menu, MessageCircle, MessageCircleOff, Volume2, VolumeX } from "lucide-react";
 import { useStore } from "zustand";
 import { LanguagePicker } from "#components/LanguagePicker.tsx";
 import { Button } from "#components/ui/button.tsx";
@@ -14,8 +14,29 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "#components/ui/dialog.tsx";
+import { chatMuteStore } from "#stores/chat-mute-store.ts";
 import { soundStore } from "#stores/sound-store.ts";
 import { m } from "#text.ts";
+
+/** The quick-chat mute toggle: it hides the tray and every bubble on this device (#232). */
+export function ChatMuteToggle() {
+  const muted = useStore(chatMuteStore, (s) => s.muted);
+  return (
+    <Button
+      variant="plain"
+      aria-pressed={muted}
+      data-testid="chat-mute-toggle"
+      onClick={() => chatMuteStore.getState().toggleMuted()}
+    >
+      {muted ? (
+        <MessageCircleOff size={20} strokeWidth={3} aria-hidden />
+      ) : (
+        <MessageCircle size={20} strokeWidth={3} aria-hidden />
+      )}
+      {muted ? m.chat_off() : m.chat_on()}
+    </Button>
+  );
+}
 
 export function GameMenu() {
   const muted = useStore(soundStore, (s) => s.muted);
@@ -55,6 +76,7 @@ export function GameMenu() {
           )}
           {muted ? m.sound_off() : m.sound_on()}
         </Button>
+        <ChatMuteToggle />
       </DialogContent>
     </Dialog>
   );
