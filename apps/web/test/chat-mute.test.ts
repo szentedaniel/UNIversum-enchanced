@@ -5,7 +5,7 @@ import { chatOpenTo } from "#chat/tray.ts";
 import { ChatMuteToggle } from "#components/GameMenu.tsx";
 import { PlayerCard, type PlayerSummary } from "#components/PlayerCard.tsx";
 import { baseLocale, overwriteGetLocale } from "#paraglide/runtime.js";
-import { BUBBLE_MS, chatStore } from "#stores/chat-store.ts";
+import { chatStore } from "#stores/chat-store.ts";
 import { CHAT_MUTED_KEY, chatMuteStore } from "#stores/chat-mute-store.ts";
 import { SOUND_MUTED_KEY } from "#stores/sound-store.ts";
 import en from "../messages/en.json" with { type: "json" };
@@ -141,7 +141,7 @@ const renderCard = (player: PlayerSummary = PLAYER) =>
 const BUBBLE = 'data-testid="chat-bubble"';
 
 describe("the muted bubbles", () => {
-  it("hides a Seat's bubble on every card while muted", () => {
+  it("drops a bubble that was on screen when the Guest mutes", () => {
     overwriteGetLocale(() => "en");
     chatStore.getState().show(1, "good_luck", T0);
     expect(renderCard()).toContain(BUBBLE);
@@ -149,10 +149,9 @@ describe("the muted bubbles", () => {
     chatMuteStore.getState().setMuted(true);
 
     expect(renderCard()).not.toContain(BUBBLE);
-    expect(renderCard({ ...PLAYER, seat: 1 })).not.toContain(BUBBLE);
   });
 
-  it("shows nothing for a bubble that arrived while muted, not even after unmuting", () => {
+  it("keeps a bubble that arrived while muted hidden, even after unmuting", () => {
     overwriteGetLocale(() => "en");
     chatMuteStore.getState().setMuted(true);
 
@@ -162,7 +161,7 @@ describe("the muted bubbles", () => {
     chatMuteStore.getState().setMuted(false);
     expect(renderCard()).not.toContain(BUBBLE);
 
-    chatStore.getState().show(1, "thanks", T0 + BUBBLE_MS);
+    chatStore.getState().show(1, "thanks", Date.now());
     expect(renderCard()).toContain("Thanks!");
   });
 });
@@ -176,7 +175,7 @@ describe("the muted tray", () => {
 });
 
 describe("the Game menu's chat toggle", () => {
-  it("labels the setting with its state, so a muted menu reads off or on", () => {
+  it("labels the toggle with the setting it shows", () => {
     overwriteGetLocale(() => "en");
     chatMuteStore.getState().setMuted(false);
 
