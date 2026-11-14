@@ -102,14 +102,19 @@ describe("salvageReview", () => {
   it("keeps the verdict and findings when only the merge danger is missing", () => {
     expect(salvageReview(missingDanger.rawMatched)).toEqual({
       verdict: "pass",
-      findings: ["`packages/factory/src/review/review.ts`: the retry has no cap."],
+      findings: [
+        { text: "`packages/factory/src/review/review.ts`: the retry has no cap.", severity: "blocking" },
+      ],
     });
   });
 
   it("unwraps a fenced block", () => {
     expect(
       salvageReview('```json\n{"verdict":"changes-requested","findings":["one"]}\n```'),
-    ).toEqual({ verdict: "changes-requested", findings: ["one"] });
+    ).toEqual({
+      verdict: "changes-requested",
+      findings: [{ text: "one", severity: "blocking" }],
+    });
   });
 
   it("drops a block whose verdict or findings are invalid", () => {
@@ -151,7 +156,7 @@ describe("reviewWithRetry", () => {
     expect(outcome.salvaged).toBe(true);
     expect(outcome.review.verdict).toBe("pass");
     expect(outcome.review.findings).toEqual([
-      "`packages/factory/src/review/review.ts`: the retry has no cap.",
+      { text: "`packages/factory/src/review/review.ts`: the retry has no cap.", severity: "blocking" },
     ]);
     expect(comment).toContain("## Factory review: pass");
     expect(comment).toContain("the retry has no cap.");

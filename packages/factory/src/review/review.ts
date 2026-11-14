@@ -13,7 +13,7 @@ import { join } from "node:path";
 import * as sandcastle from "@ai-hero/sandcastle";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import { riskLabel } from "#review/merge-danger.ts";
-import { reviewSchema } from "#review/schema.ts";
+import { reviewOf, reviewSchema } from "#review/schema.ts";
 import { parentIssue } from "#review/spec.ts";
 import { summaryComment } from "#review/summary.ts";
 import { reviewWithRetry, type StructuredFailure } from "#review/verdict.ts";
@@ -122,7 +122,7 @@ try {
             resumeSession: resume.sessionId,
           },
     );
-    return { review: result.output, commits: result.commits.length };
+    return { review: reviewOf(result.output), commits: result.commits.length };
   }, failureOf);
 
   // The workflow pushes the commits; a fix left uncommitted would be lost

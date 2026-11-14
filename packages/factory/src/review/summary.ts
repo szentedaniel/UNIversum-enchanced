@@ -1,4 +1,4 @@
-import type { MergeDanger, Review } from "#review/schema.ts";
+import type { FindingSeverity, MergeDanger, Review } from "#review/schema.ts";
 import { REVIEW_MARKER } from "#review/window.ts";
 
 export type ReviewVerdict = Review["verdict"];
@@ -19,21 +19,37 @@ const dangerLine = (danger: MergeDanger | undefined): string =>
     ? "**Merge danger:** not rated. The reviewer gave no merge danger, so the merge gate treats this pull request as high risk."
     : `**Merge danger:** ${danger.door} door, ${danger.blastRadius} blast radius. ${danger.reason}`;
 
+/** The line the findings follow, and what the reader looks for. */
+const FINDINGS_INTRO =
+  "The reviewer committed the fixes it was sure of. These are the findings it left:";
+
+/** The placeholder a review with no findings writes, which the reader skips. */
+const NO_FINDINGS = "- None: the reviewer fixed every finding it reported.";
+
+/** The severity a finding's line leads with, in the merge gate's words. */
+const SEVERITY_LABELS: Readonly<Record<FindingSeverity, string>> = {
+  blocking: "**Blocking:**",
+  advisory: "**Advisory:**",
+};
+
 /**
  * The one comment a review posts. It opens with the hidden marker the quota
  * counts (see `window.ts`), then the verdict, the findings the reviewer left
- * for a person, and the merge danger in the merge gate's wording.
+ * for a person with their severities, and the merge danger in the merge
+ * gate's wording.
  */
 export const summaryComment = (review: Review): string => {
   const findings =
     review.findings.length === 0
-      ? ["- None: the reviewer fixed every finding it reported."]
-      : review.findings.map((finding) => `- ${finding}`);
+      ? [NO_FINDINGS]
+      : review.findings.map(
+          (finding) => `- ${SEVERITY_LABELS[finding.severity]} ${finding.text}`,
+        );
   return [
     REVIEW_MARKER,
     HEADINGS[review.verdict],
     "",
-    "The reviewer committed the fixes it was sure of. These are the findings it left:",
+    FINDINGS_INTRO,
     "",
     ...findings,
     "",
@@ -55,6 +71,51 @@ export const reviewVerdictOf = (comment: string): ReviewVerdict | undefined => {
   if (lines.has(HEADINGS.pass)) return "pass";
   if (lines.has(HEADINGS["changes-requested"])) return "changes-requested";
   return undefined;
+};
+
+/** The findings a review summary lists, split by severity; their text only. */
+export interface CommentFindings {
+  readonly blocking: readonly string[];
+  readonly advisory: readonly string[];
+}
+
+const FINDING_LINE = /^- (?:\*\*(?:Blocking|Advisory):\*\* )?(.+)$/u;
+const ADVISORY_LINE = /^- \*\*Advisory:?\*\* /u;
+
+/**
+ * The findings a review summary lists. A line with no severity is what a
+ * comment from before the severities carries: it counts as blocking, today's
+ * fallback.
+ */
+export const findingsOf = (comment: string): CommentFindings => {
+  const blocking: string[] = [];
+  const advisory: string[] = [];
+  const lines = comment.split("\n").map((line) => line.trim());
+  const start = lines.indexOf(FINDINGS_INTRO);
+  if (start === -1) return { blocking, advisory };
+  for (const line of lines.slice(start + 1)) {
+    if (line.startsWith("**Merge danger:**")) break;
+    if (line === NO_FINDINGS) continue;
+    const match = FINDING_LINE.exec(line);
+    if (match === null) continue;
+    const text = match[1];
+    if (text === undefined) continue;
+    (ADVISORY_LINE.test(line) ? advisory : blocking).push(text);
+  }
+  return { blocking, advisory };
+};
+
+/**
+ * Whether a review asks for changes only over advisory findings. It leaves
+ * nothing a person must fix, so the merge gate decides as if the review had
+ * passed, and the findings become one follow-up issue after the merge. A
+ * review whose findings carry no severity counts every finding as blocking,
+ * so a comment from before the severities keeps today's path.
+ */
+export const advisoryOnly = (comment: string): boolean => {
+  if (reviewVerdictOf(comment) !== "changes-requested") return false;
+  const { blocking, advisory } = findingsOf(comment);
+  return blocking.length === 0 && advisory.length > 0;
 };
 
 const DANGER_LINE =
