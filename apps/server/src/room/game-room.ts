@@ -10,12 +10,14 @@ import {
 } from "@colyseus/core";
 import {
   CLOSE_CODE,
+  chatSchema,
   createOptionsSchema,
   DEFAULT_SETTINGS,
   intentSchema,
   joinOptionsSchema,
   MESSAGE,
   refusalMessage,
+  type ChatEvent,
   type ClientIntent,
   type GameMessage,
   type LobbyListingMetadata,
@@ -428,6 +430,10 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     }
     this.onMessage(MESSAGE.intent, (client: Client, message: unknown) => {
       if (this.admit(client)) this.onIntent(client, message);
+    });
+    // A quick chat is not an intent: it never reaches the engine (spec #176).
+    this.onMessage(MESSAGE.chat, (client: Client, message: unknown) => {
+      if (this.admit(client)) this.onChat(client, message);
     });
     // Any other message type: refuse it, but keep the connection (spec: MALFORMED).
     this.onMessage("*", (client: Client) => {
@@ -1028,6 +1034,27 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (verdict === "warn") this.reject(client, "SLOW_DOWN");
     if (verdict === "close") client.leave(CloseCode.WITH_ERROR);
     return verdict === "accept";
+  }
+
+  /**
+   * A quick chat (spec #176): a catalogue id, broadcast to every client with
+   * the sender's Seat. Chat never touches the game state, the store or the
+   * Turn clock, and the sender is the connection's Seat, never the payload.
+   */
+  private onChat(client: Client, message: unknown): void {
+    const seat = this.seatOf(client);
+    // Not seated right now (a spectator, or a Seat taken back elsewhere): nothing to send under.
+    if (!seat) return;
+    const parsed = chatSchema.safeParse(message);
+    if (!parsed.success) {
+      this.reject(client, "MALFORMED");
+      return;
+    }
+    // The sender's Seat is the Player's `seat` in the view: join order during a game.
+    this.broadcast(MESSAGE.chat, {
+      seat: this.seats.indexOf(seat),
+      id: parsed.data.id,
+    } satisfies ChatEvent);
   }
 
   private onIntent(client: Client, message: unknown): void {
