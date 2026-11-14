@@ -1067,6 +1067,11 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       this.reject(client, "MALFORMED");
       return;
     }
+    // Chat is a Game thing: a Lobby has no tray (spec #176, out of scope).
+    if (this.game === null) {
+      this.reject(client, "NOT_OFFERED");
+      return;
+    }
     // The sender's Seat is the Player's `seat` in the view: join order during a game.
     this.broadcast(MESSAGE.chat, {
       seat: this.seats.indexOf(seat),

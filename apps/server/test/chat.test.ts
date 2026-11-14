@@ -82,4 +82,14 @@ describe("chat", () => {
     expect(alice!.pending("chat")).toEqual([]);
     expect(bob!.pending("chat")).toEqual([]);
   });
+
+  it("refuses chat in the Lobby with NOT_OFFERED", async () => {
+    const { clients } = await fullLobby(2);
+    const [alice, bob] = clients;
+
+    bob!.sendChat({ id: "good_luck" });
+
+    expect(await bob!.next("rejected")).toEqual({ code: "NOT_OFFERED" });
+    expect(alice!.pending("chat")).toEqual([]);
+  });
 });
