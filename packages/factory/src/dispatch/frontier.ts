@@ -135,8 +135,10 @@ const overlappingPull = (
  * Splits the candidates into what to dispatch and what to skip, both oldest
  * first. `busy` holds the issues a queued or running implement run already
  * covers; `openWork` holds every open issue, so an older ticket or a running
- * one claims its module and a newer duplicate waits for it. A spec and a
- * stalled ticket claim nothing: neither will start on the module by itself.
+ * one claims its module and a newer duplicate waits for it. A spec, a
+ * stalled ticket and a ticket still blocked by another issue claim nothing:
+ * none will start on the module by itself, so a newer ticket would wait on it
+ * for as long as its blockers stay open.
  */
 export const frontierOf = (
   issues: readonly IssueFacts[],
@@ -154,7 +156,10 @@ export const frontierOf = (
   };
   const claims = openWork
     .filter(
-      (issue) => isTicketWork(issue) && issue.labels.some((label) => HOLDING_LABELS.has(label)),
+      (issue) =>
+        isTicketWork(issue) &&
+        issue.openBlockers.length === 0 &&
+        issue.labels.some((label) => HOLDING_LABELS.has(label)),
     )
     .toSorted(byPriorityThenAge);
 

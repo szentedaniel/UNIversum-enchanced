@@ -203,6 +203,19 @@ describe("frontierOf", () => {
     expect(frontier.skipped[0]?.reason).toBe("overlaps #100 (same target module)");
   });
 
+  it("does not let a ticket blocked by another issue hold a newer one", () => {
+    const blocked = issue(100, {
+      openBlockers: [99],
+      body: "`packages/factory/src/dispatch/frontier.ts`",
+    });
+    const free = issue(101, { body: "`packages/factory/src/dispatch/frontier.ts`" });
+
+    const frontier = frontierOf([blocked, free], [], new Set());
+
+    expect(frontier.eligible.map((entry) => entry.number)).toEqual([101]);
+    expect(frontier.skipped.map((entry) => entry.reason)).toEqual(["blocked by #99"]);
+  });
+
   it("does not let a stalled ticket hold a newer one", () => {
     const human = issue(100, {
       labels: ["ready-for-human"],
