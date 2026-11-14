@@ -1,9 +1,23 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { baseLocale, overwriteGetLocale } from "#paraglide/runtime.js";
+import { PlayerCard, type PlayerSummary } from "#components/PlayerCard.tsx";
 import { BUBBLE_MS, chatStore } from "#stores/chat-store.ts";
 
 // The quick-chat bubbles (#230): the latest line or emote per Seat, shown by
 // that Player's card for BUBBLE_MS. Time is handed in, so a test advances a
 // fake clock and nothing waits on a real timer.
+
+// React's server renderer reads a zustand store's *initial* state
+// (`getServerSnapshot`), not the state a test has written. The card reads the
+// store through `useStore`; this hands it the state the store holds, as a
+// mounted client reads it. No DOM environment is installed (same seam as
+// rematch-return.test.ts).
+vi.mock("zustand", () => ({
+  useStore: <T, U>(api: { getState: () => T }, selector?: (state: T) => U): U | T =>
+    selector ? selector(api.getState()) : api.getState(),
+}));
 
 const T0 = 1_000;
 
@@ -15,6 +29,7 @@ beforeEach(() => {
 
 afterEach(() => {
   chatStore.getState().reset();
+  overwriteGetLocale(() => baseLocale);
   vi.useRealTimers();
 });
 
@@ -94,5 +109,73 @@ describe("the chat store", () => {
     expect(chatStore.getState().bubbles.size).toBe(0);
     vi.advanceTimersByTime(BUBBLE_MS);
     expect(chatStore.getState().bubbles.size).toBe(0);
+  });
+});
+
+/** A Seat as the Game screen summarises it (name, money and notes are already formatted). */
+const PLAYER: PlayerSummary = {
+  seat: 1,
+  name: "happy tiger",
+  bot: false,
+  cash: "10 000 Ft",
+  cashShort: "10k",
+  fields: 2,
+  current: false,
+  you: false,
+  bankrupt: false,
+};
+
+/** The card as the Game screen draws it, reading the bubbles the store holds. */
+const renderCard = (player: PlayerSummary = PLAYER) =>
+  renderToStaticMarkup(createElement(PlayerCard, { player }));
+
+const BUBBLE = 'data-testid="chat-bubble"';
+
+describe("the bubble by a Player's card", () => {
+  it("shows a received line in the viewer's language", () => {
+    overwriteGetLocale(() => "en");
+    chatStore.getState().show(1, "good_luck", T0);
+
+    const html = renderCard();
+
+    expect(html).toContain(BUBBLE);
+    expect(html).toContain("Good luck!");
+  });
+
+  it("shows an emote's glyph with its accessible label", () => {
+    overwriteGetLocale(() => "en");
+    chatStore.getState().show(1, "cheer", T0);
+
+    const html = renderCard();
+
+    expect(html).toContain(BUBBLE);
+    expect(html).toContain("🎉");
+    expect(html).toContain("Cheer");
+  });
+
+  it("leaves another Seat's card without a bubble", () => {
+    chatStore.getState().show(1, "good_luck", T0);
+
+    expect(renderCard({ ...PLAYER, seat: 0 })).not.toContain(BUBBLE);
+  });
+
+  it("shows a Seat's newer chat in place of the old one", () => {
+    overwriteGetLocale(() => "en");
+    chatStore.getState().show(1, "good_luck", T0);
+    vi.advanceTimersByTime(1_000);
+    chatStore.getState().show(1, "thanks", Date.now());
+
+    const html = renderCard();
+
+    expect(html).toContain("Thanks!");
+    expect(html).not.toContain("Good luck!");
+  });
+
+  it("drops the bubble from the card when its time is up", () => {
+    chatStore.getState().show(1, "good_luck", T0);
+
+    vi.advanceTimersByTime(BUBBLE_MS);
+
+    expect(renderCard()).not.toContain(BUBBLE);
   });
 });
