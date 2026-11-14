@@ -329,12 +329,37 @@ It merges with a merge commit only when every gate holds ([spec #85, Decision
 3. The pull request carries `risk:low` (a two-way door with a local blast radius), or `risk:high` whose
    review names a **two-way** door: a wide blast radius alone does not wait for the owner once the
    review passed and CI, e2e included, is green. A one-way door, or a `risk:high` whose merge danger
-   the gate cannot read, waits for a human.
+   the gate cannot read, waits for a human — except the one-way door of a mechanically checked state
+   migration (below).
 4. It touches no protected path: `.github/`, `packages/factory/`, `CODING_STANDARDS.md`, `AGENTS.md`,
    `CLAUDE.md`, `docs/agents/`, `docs/adr/`, `packages/rules/src/migrate.ts` and
    `packages/rules/test/fixtures/`. `docs/agents/handoff/` is the one exception: every implementer
-   writes a handoff note and its `INDEX` line, so blocking those would block every ticket.
+   writes a handoff note and its `INDEX` line, so blocking those would block every ticket. The
+   migration's two paths are the other: a pull request whose only protected-path changes are a
+   mechanically checked state migration merges (below).
 5. No `package.json` moves a dependency to another major (the first non-zero number for `0.x`).
+
+**A state migration is the one protected path the gate may take on its own.** Every rules change that
+adds state bumps `STATE_VERSION` and touches `packages/rules/src/migrate.ts` and
+`packages/rules/test/fixtures/`, and the reviewer rates it a one-way door, so it would always wait for
+the owner. `packages/factory/src/merge/migration.ts` reads the two sides of the diff instead, and when
+it finds nothing wrong the same gates above merge the pull request:
+
+- `STATE_VERSION` in `packages/rules/src/state.ts` is main's value plus exactly one.
+- `packages/rules/src/migrate.ts` differs only by the single `MIGRATIONS` entry for main's value.
+  Imports and comments may change; no existing entry, and none of the code around the entries
+  (`migrate()` included), may.
+- Exactly one new `packages/rules/test/fixtures/state-v<new>.json` appears, and no existing snapshot
+  is edited or removed.
+- `packages/rules/test/migrate.test.ts` names the new snapshot and still lists every one main had,
+  so the chain still runs them all.
+
+`migrate.test.ts` runs every stored snapshot through the chain to the current shape, so that chain
+stands in for the review of the migration: its one-way door rating no longer stops the merge. The
+exception covers the migration alone — a pull request that touches another protected path, or whose
+migration fails one of these conditions, waits for the owner with the check's reasons, which all open
+with `state migration:`, and a one-way door on a pull request that is not a sound migration keeps its
+refusal.
 
 The merge is `gh pr merge --merge --subject "chore(merge): #<issue> <the ticket's title>"` (the
 ticket's title, not the pull request's `Implement #N: …`; a Dependabot pull request closes no ticket,
@@ -348,7 +373,11 @@ itself, so the next ticket is dispatched without a chain.
 Green but gated → `ready-for-human` on the pull request and one comment listing every reason
 ("touches .github/", "one-way door: …", "dependency major: …"). A branch merely **behind main** merges
 as it is: CI ran on the pull request merged into main. Only a conflict, or main changing a file the
-pull request changes too (handoff notes aside), sends it to the fix loop first (`main-moved`). A pull
+pull request changes too (handoff notes aside), sends it to the fix loop first (`main-moved`). A
+migration that main already took first (two migrations raced to the same `STATE_VERSION`, so the two
+entries would share a key) is the same `main-moved` case even when the compare API's capped file list
+does not name main's change; the fix loop's prompt then tells omp to renumber the migration entry, the
+snapshot's file name and its import and list entry in `migrate.test.ts` onto main's next version. A pull
 request that is only _waiting_ — CI still running, the review not posted yet, `agent:review` queued —
 exits quietly: the next trigger decides.
 

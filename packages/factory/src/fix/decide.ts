@@ -16,6 +16,7 @@ import {
   fixReasonText,
   fixRounds,
   fixPlan,
+  mainMovedProblem,
   MAX_FIX_ROUNDS,
 } from "#fix/rounds.ts";
 import { advisoryOnly, newestMarkerComment, type ReviewComment } from "#review/summary.ts";
@@ -68,11 +69,7 @@ const problemOf = (
     if (runId === "") fail(`No failed CI run found on ${branch}.`);
     return excerptOf(runLog(repo, runId, { failedOnly: true }));
   }
-  return [
-    "main moved since this branch was cut, or merging it conflicts.",
-    "",
-    "Merge `origin/main` into this branch, resolve the conflicts, run the fast checks and commit.",
-  ].join("\n");
+  return mainMovedProblem();
 };
 
 const main = (): void => {
