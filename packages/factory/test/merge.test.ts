@@ -305,7 +305,11 @@ describe("performStep", () => {
     const { adapter } = actions();
 
     expect(() =>
-      performStep({ kind: "merge", advisory: [] }, pull({ closing: [], body: null }), context(adapter)),
+      performStep(
+        { kind: "merge", advisory: [] },
+        pull({ closing: [], body: null }),
+        context(adapter),
+      ),
     ).toThrow("Pull request #132 closes no issue; cannot name the merge commit.");
   });
 

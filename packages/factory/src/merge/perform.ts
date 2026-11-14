@@ -38,11 +38,7 @@ export interface PerformContext {
  * dependency bump, the pull request itself), and the read-back proves GitHub
  * made the merge commit a fork or a branch protection rule can swallow.
  */
-const mergePull = (
-  pull: PullView,
-  advisory: readonly string[],
-  ctx: PerformContext,
-): void => {
+const mergePull = (pull: PullView, advisory: readonly string[], ctx: PerformContext): void => {
   const issue = pull.closing[0] ?? closingIssue(pull.body);
   const ticket =
     issue === undefined

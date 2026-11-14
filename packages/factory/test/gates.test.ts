@@ -13,7 +13,7 @@ import {
   needsMain,
   protectedPaths,
 } from "#merge/gates.ts";
-import type { CiRun, MergeFacts } from "#merge/gates.ts";
+import type { CiRun, MergeFacts, MergeStep } from "#merge/gates.ts";
 import type { MergeDanger, ReviewFinding } from "#review/schema.ts";
 import { summaryComment } from "#review/summary.ts";
 
@@ -184,6 +184,10 @@ const facts = (overrides: Partial<MergeFacts> = {}): MergeFacts => ({
   mainFiles: [],
   ...overrides,
 });
+
+/** The merge step for the advisory review, with one fact overridden. */
+const advisoryStep = (overrides: Partial<MergeFacts> = {}): MergeStep =>
+  mergeStep(facts({ comments: [advisoryReview], ...overrides }));
 
 describe("ciState", () => {
   it("reads the newest run on the head commit", () => {
@@ -430,7 +434,9 @@ describe("mergeStep", () => {
 
   it("re-queues a review when the head moved after it", () => {
     expect(
-      mergeStep(facts({ comments: [reviewComment("pass", { createdAt: "2026-11-09T09:00:00Z" })] })),
+      mergeStep(
+        facts({ comments: [reviewComment("pass", { createdAt: "2026-11-09T09:00:00Z" })] }),
+      ),
     ).toEqual({
       kind: "requeue-review",
     });
@@ -473,20 +479,17 @@ describe("advisory-only reviews", () => {
   });
 
   it("keeps every existing refusal for an advisory-only review", () => {
-    const gate = (overrides: Partial<MergeFacts>) =>
-      mergeStep(facts({ comments: [advisoryReview], ...overrides }));
-
-    expect(gate({ files: [".github/workflows/ci.yml"] })).toEqual({
+    expect(advisoryStep({ files: [".github/workflows/ci.yml"] })).toEqual({
       kind: "escalate",
       reasons: ["touches .github/"],
     });
-    expect(gate({ labels: [] })).toEqual({ kind: "escalate", reasons: ["no risk label"] });
-    expect(gate({ ciRuns: [ciRun({ conclusion: "failure" })] })).toEqual({
+    expect(advisoryStep({ labels: [] })).toEqual({ kind: "escalate", reasons: ["no risk label"] });
+    expect(advisoryStep({ ciRuns: [ciRun({ conclusion: "failure" })] })).toEqual({
       kind: "wait",
       reason: "CI failed on abc1234",
     });
     expect(
-      gate({
+      advisoryStep({
         labels: ["risk:high"],
         comments: [
           reviewComment("changes-requested", {

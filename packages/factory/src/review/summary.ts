@@ -42,9 +42,7 @@ export const summaryComment = (review: Review): string => {
   const findings =
     review.findings.length === 0
       ? [NO_FINDINGS]
-      : review.findings.map(
-          (finding) => `- ${SEVERITY_LABELS[finding.severity]} ${finding.text}`,
-        );
+      : review.findings.map((finding) => `- ${SEVERITY_LABELS[finding.severity]} ${finding.text}`);
   return [
     REVIEW_MARKER,
     HEADINGS[review.verdict],

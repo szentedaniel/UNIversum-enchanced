@@ -103,7 +103,10 @@ describe("salvageReview", () => {
     expect(salvageReview(missingDanger.rawMatched)).toEqual({
       verdict: "pass",
       findings: [
-        { text: "`packages/factory/src/review/review.ts`: the retry has no cap.", severity: "blocking" },
+        {
+          text: "`packages/factory/src/review/review.ts`: the retry has no cap.",
+          severity: "blocking",
+        },
       ],
     });
   });
@@ -156,7 +159,10 @@ describe("reviewWithRetry", () => {
     expect(outcome.salvaged).toBe(true);
     expect(outcome.review.verdict).toBe("pass");
     expect(outcome.review.findings).toEqual([
-      { text: "`packages/factory/src/review/review.ts`: the retry has no cap.", severity: "blocking" },
+      {
+        text: "`packages/factory/src/review/review.ts`: the retry has no cap.",
+        severity: "blocking",
+      },
     ]);
     expect(comment).toContain("## Factory review: pass");
     expect(comment).toContain("the retry has no cap.");

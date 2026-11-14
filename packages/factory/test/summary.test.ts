@@ -9,6 +9,14 @@ import {
 } from "#review/summary.ts";
 import { REVIEW_MARKER } from "#review/window.ts";
 
+/** A changes-requested summary with the findings an advisory test hands it. */
+const changesRequested = (findings: Parameters<typeof summaryComment>[0]["findings"]): string =>
+  summaryComment({
+    verdict: "changes-requested",
+    findings,
+    mergeDanger: { door: "two-way", blastRadius: "local", reason: "one factory step" },
+  });
+
 describe("summaryComment", () => {
   it("carries the hidden marker the quota counts, plus the verdict", () => {
     const comment = summaryComment({
@@ -148,23 +156,18 @@ describe("findingsOf", () => {
 });
 
 describe("advisoryOnly", () => {
-  const review = (findings: Parameters<typeof summaryComment>[0]["findings"]) =>
-    summaryComment({
-      verdict: "changes-requested",
-      findings,
-      mergeDanger: { door: "two-way", blastRadius: "local", reason: "one factory step" },
-    });
-
   it("holds when every finding is advisory", () => {
-    expect(advisoryOnly(review([{ text: "The helper could be shared.", severity: "advisory" }]))).toBe(
-      true,
-    );
+    expect(
+      advisoryOnly(
+        changesRequested([{ text: "The helper could be shared.", severity: "advisory" }]),
+      ),
+    ).toBe(true);
   });
 
   it("fails on one blocking finding among the advisory ones", () => {
     expect(
       advisoryOnly(
-        review([
+        changesRequested([
           { text: "The helper could be shared.", severity: "advisory" },
           { text: "The retry has no cap.", severity: "blocking" },
         ]),
@@ -173,7 +176,7 @@ describe("advisoryOnly", () => {
   });
 
   it("fails on a changes-requested review that lists no findings at all", () => {
-    expect(advisoryOnly(review([]))).toBe(false);
+    expect(advisoryOnly(changesRequested([]))).toBe(false);
   });
 
   it("fails on a passing review, which the gate already merges", () => {
