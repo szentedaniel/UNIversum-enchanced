@@ -51,10 +51,13 @@ sender's Player card, in the viewer's language. Read for: #231 (the tray), #232
   child. `PlayerSummary` stays pure; the bubble is not part of it.
 - The bubble is an absolutely positioned `<output>` (implicit `role="status"`,
   which Oxlint's `prefer-tag-over-role` requires over `span role="status"`),
-  `data-testid="chat-bubble"`, `pointer-events-none`, so it never shifts the card
-  or the Board's fit: it hangs into the space the screen already reserves.
-  `PlayerCard`/`PlayerChip` added `relative` for it. A line shows its text; an
-  emote shows its glyph (`aria-hidden`) plus the label in an `sr-only` span.
+  `data-testid="chat-bubble"`, `pointer-events-none`, so it never shifts the card,
+  the phone strip or the Board's fit: it hangs where the card's own box ends
+  (below a top card or a chip, above a bottom corner). `PlayerCard`/`PlayerChip`
+  added `relative` for it. On a phone it overlays the status row for its few
+  seconds, inside the screen edges; taps still reach the controls under it. A
+  line shows its text; an emote shows its glyph (`aria-hidden`) plus the label in
+  an `sr-only` span.
 - `apps/web/src/screens/Game.tsx`: `CORNERS` now holds `{ card, bubble }` — the
   wide corner cards hang their bubble below the top cards and above the bottom
   ones, pointing inward. The phone chips pick by half of the strip
