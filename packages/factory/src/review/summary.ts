@@ -10,6 +10,16 @@ const HEADINGS: Readonly<Record<ReviewVerdict, string>> = {
 };
 
 /**
+ * The merge danger in the merge gate's wording. An unrated review says so:
+ * the reader (`mergeDangerOf`) cannot parse this line, so the gate keeps the
+ * pull request for a person, whatever label the workflow added.
+ */
+const dangerLine = (danger: MergeDanger | undefined): string =>
+  danger === undefined
+    ? "**Merge danger:** not rated. The reviewer gave no merge danger, so the merge gate treats this pull request as high risk."
+    : `**Merge danger:** ${danger.door} door, ${danger.blastRadius} blast radius. ${danger.reason}`;
+
+/**
  * The one comment a review posts. It opens with the hidden marker the quota
  * counts (see `window.ts`), then the verdict, the findings the reviewer left
  * for a person, and the merge danger in the merge gate's wording.
@@ -19,7 +29,6 @@ export const summaryComment = (review: Review): string => {
     review.findings.length === 0
       ? ["- None: the reviewer fixed every finding it reported."]
       : review.findings.map((finding) => `- ${finding}`);
-  const { door, blastRadius, reason } = review.mergeDanger;
   return [
     REVIEW_MARKER,
     HEADINGS[review.verdict],
@@ -28,7 +37,7 @@ export const summaryComment = (review: Review): string => {
     "",
     ...findings,
     "",
-    `**Merge danger:** ${door} door, ${blastRadius} blast radius. ${reason}`,
+    dangerLine(review.mergeDanger),
     "",
   ].join("\n");
 };

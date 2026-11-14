@@ -39,7 +39,7 @@ Never comment on the pull request, label it, or open another one: the workflow p
 
 # THE OUTPUT
 
-End your final message with exactly one `<review>` block: valid JSON, no code fence, nothing after it.
+End your final message with exactly one `<review>` block: valid JSON, no code fence, nothing after it. Every field is required — a reply without `mergeDanger` fails validation and costs a second turn.
 
 <review>
 {"verdict": "pass", "findings": ["..."], "mergeDanger": {"door": "two-way", "blastRadius": "local", "reason": "..."}}
