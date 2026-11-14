@@ -101,6 +101,7 @@ export function DealComposer({
             <Button
               key={recipient}
               size="sm"
+              className="min-h-11 min-w-11"
               variant={recipient === draft.recipient ? "default" : "plain"}
               aria-pressed={recipient === draft.recipient}
               data-testid="deal-recipient"
@@ -136,7 +137,7 @@ export function DealComposer({
           {PROBLEM_TEXT[problem]()}
         </p>
       )}
-      <div className="flex gap-2">
+      <div className="sticky bottom-0 flex gap-2 bg-card pt-1">
         <Button
           className="flex-1"
           data-testid="deal-propose"
@@ -194,7 +195,7 @@ function FieldChoices({
                 data-testid={`${testId}-field-${field}`}
                 onClick={() => onToggle(field)}
                 className={cn(
-                  "sticker-sm press rounded-full px-2.5 py-1 text-sm font-extrabold",
+                  "sticker-sm press min-h-11 min-w-11 rounded-full px-2.5 py-1 text-sm font-extrabold",
                   picked ? "bg-success text-ink" : "bg-background text-ink/70",
                 )}
               >
@@ -214,7 +215,7 @@ function FieldChoices({
           min={0}
           max={maxCash}
           step={1}
-          className="h-10 w-28 text-right text-base"
+          className="h-11 w-28 text-right text-base"
           data-testid={`${testId}-cash`}
           value={cash}
           onChange={(event) => onCash(event.target.value)}
@@ -271,7 +272,7 @@ export function DealAnswerPanel({
       <p className="m-0 text-sm font-bold" data-testid="deal-answer-get">
         {m.deal_you_get()}: <span className="font-extrabold">{dealSideText(deal.give)}</span>
       </p>
-      <div className="flex gap-2">
+      <div className="sticky bottom-0 flex gap-2 bg-card pt-1">
         <Button
           className="flex-1"
           data-testid="deal-accept"

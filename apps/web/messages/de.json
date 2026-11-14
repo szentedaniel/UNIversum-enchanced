@@ -37,6 +37,8 @@
   "game_turn_of": "{name} ist am Zug",
   "game_roll": "Würfeln",
   "game_players": "Spieler",
+  "game_show_card": "Spielerkarte von {name} anzeigen",
+  "game_hide_card": "Spielerkarte einklappen",
   "game_cash": "Geld",
   "game_fields": "Felder: {count}",
   "game_time_left": "Verbleibende Spielzeit",
