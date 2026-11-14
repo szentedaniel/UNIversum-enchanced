@@ -181,7 +181,7 @@ describe("the Game menu's chat toggle", () => {
 
     const on = renderToStaticMarkup(createElement(ChatMuteToggle));
 
-    expect(on).toContain('data-testid="chat-mute-toggle"');
+    expect(on).toContain('data-testid="chat-toggle-mute"');
     expect(on).toContain('aria-pressed="false"');
     expect(on).toContain(en.chat_on);
 

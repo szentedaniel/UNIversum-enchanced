@@ -25,7 +25,7 @@ export function ChatMuteToggle() {
     <Button
       variant="plain"
       aria-pressed={muted}
-      data-testid="chat-mute-toggle"
+      data-testid="chat-toggle-mute"
       onClick={() => chatMuteStore.getState().toggleMuted()}
     >
       {muted ? (

@@ -37,7 +37,7 @@ any chat bubble, tray or Game menu setting touch.
 ## The menu surface
 
 - `apps/web/src/components/GameMenu.tsx` exports `ChatMuteToggle`, rendered
-  after the sound toggle inside `DialogContent`: `data-testid="chat-mute-toggle"`,
+  after the sound toggle inside `DialogContent`: `data-testid="chat-toggle-mute"`,
   `aria-pressed={muted}`, `MessageCircle`/`MessageCircleOff`, and
   `m.chat_on()`/`m.chat_off()` for the label. It is exported separately because
   the dialog's content is not rendered until it opens, so the SSR markup test
