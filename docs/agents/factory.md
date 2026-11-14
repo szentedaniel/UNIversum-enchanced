@@ -351,7 +351,8 @@ it finds nothing wrong the same gates above merge the pull request:
   (`migrate()` included), may.
 - Exactly one new `packages/rules/test/fixtures/state-v<new>.json` appears, and no existing snapshot
   is edited or removed.
-- `packages/rules/test/migrate.test.ts` names the new snapshot.
+- `packages/rules/test/migrate.test.ts` names the new snapshot and still lists every one main had,
+  so the chain still runs them all.
 
 `migrate.test.ts` runs every stored snapshot through the chain to the current shape, so that chain
 stands in for the review of the migration: its one-way door rating no longer stops the merge. The

@@ -23,7 +23,8 @@ that migration stops blocking. No workflow changed.
   `state migration: migrate.ts's MIGRATIONS entries cannot be read` or a shell reason.
 - The fixtures comparison is the two directory listings plus `files`: an added name must be exactly
   `state-v<head's STATE_VERSION>.json`, a removed or edited one is a reason, and
-  `migrate.test.ts` must name the new snapshot outside a comment.
+  `migrate.test.ts` must name the new snapshot outside a comment and still name every snapshot main
+  had (dropping one would hollow out the chain it stands for).
 - `test/migration.test.ts` reads the repository's own `migrate.ts`, `state.ts` and `migrate.test.ts`,
   so the parser is pinned against the real formatting rather than a hand-written sample.
 
