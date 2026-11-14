@@ -7,6 +7,7 @@
  * reachable without GitHub.
  */
 import { dependencyMap, type CiRun, type DependencyChange, type MergeFacts } from "#merge/gates.ts";
+import { isMigrationPath, MIGRATION_FILES, type MigrationFacts } from "#merge/migration.ts";
 import type { ReviewComment } from "#review/summary.ts";
 import { parseJson } from "#shared/github.ts";
 
@@ -42,6 +43,8 @@ export interface MergeReader {
   compareOf(repo: string, headSha: string): CompareView;
   /** A file's content at a ref, or `undefined` when it does not exist there. */
   contentAt(repo: string, path: string, ref: string): string | undefined;
+  /** The state fixtures directory's file names at a ref, or `undefined` when it is absent. */
+  fixtureNames(repo: string, ref: string): string[] | undefined;
   issueComments(repo: string, pr: string): ReviewComment[];
 }
 
@@ -73,6 +76,35 @@ const dependencyChanges = (
     });
 
 /**
+ * The migration check's sources, read only when the pull request touches a
+ * migration path: main's tip and the head are what the check compares, and
+ * the merge base tells a migration racing main's from a branch that has not
+ * bumped at all. A pull request outside those paths costs no reads.
+ */
+const migrationFacts = (
+  reader: MergeReader,
+  repo: string,
+  files: readonly string[],
+  mergeBase: string,
+  headSha: string,
+): MigrationFacts | undefined => {
+  if (!files.some(isMigrationPath)) return undefined;
+  const content = (path: string, ref: string): string | undefined =>
+    reader.contentAt(repo, path, ref);
+  return {
+    stateBase: content(MIGRATION_FILES.state, mergeBase),
+    stateMain: content(MIGRATION_FILES.state, "main"),
+    stateHead: content(MIGRATION_FILES.state, headSha),
+    migrateMain: content(MIGRATION_FILES.migrate, "main"),
+    migrateHead: content(MIGRATION_FILES.migrate, headSha),
+    testHead: content(MIGRATION_FILES.test, headSha),
+    fixturesMain: reader.fixtureNames(repo, "main"),
+    fixturesHead: reader.fixtureNames(repo, headSha),
+    files,
+  };
+};
+
+/**
  * One pull request's decision facts, once `mergeGate` has read the pull and
  * checked it is open and a factory pull. The pull is passed in so that guard
  * stays the first read: these must not run for a pull request the gate leaves
@@ -97,5 +129,6 @@ export const readMergeFacts = (
     mergeState: pull.mergeStateStatus.toLowerCase(),
     mainAheadBy: base.mainAheadBy,
     mainFiles: base.files,
+    migration: migrationFacts(reader, repo, files, base.mergeBase, pull.headRefOid),
   };
 };

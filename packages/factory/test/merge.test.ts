@@ -15,6 +15,19 @@ import { RATE_LIMIT_WAITS_MS } from "#shared/github.ts";
 
 const HEAD_SHA = "head-sha";
 
+/** A rules `migrate.ts` whose chain holds one migration plus `entries`, as oxfmt writes them. */
+const migrateChain = (...entries: readonly string[]): string =>
+  [
+    "const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> = {",
+    "  1: (state) => ({ ...state, stateVersion: 2 }),",
+    ...entries,
+    "};",
+    "",
+    "export function migrate(stored: unknown): GameState {",
+    "  return stored;",
+    "}",
+  ].join("\n");
+
 const pull = (overrides: Partial<PullView> = {}): PullView => ({
   number: 132,
   state: "OPEN",
@@ -36,6 +49,7 @@ const reader = (overrides: Partial<MergeReader> = {}): MergeReader => ({
   ciRuns: () => [],
   compareOf: () => ({ mergeBase: "merge-base", mainAheadBy: 0, files: [] }),
   contentAt: () => undefined,
+  fixtureNames: () => undefined,
   issueComments: () => [],
   ...overrides,
 });
@@ -97,6 +111,7 @@ describe("readMergeFacts", () => {
       mergeState: "dirty",
       mainAheadBy: 3,
       mainFiles: ["apps/web/src/Game.tsx"],
+      migration: undefined,
     });
   });
 
@@ -133,6 +148,66 @@ describe("readMergeFacts", () => {
     );
 
     expect(facts.dependencyChanges).toEqual([]);
+  });
+
+  it("reads the migration's sources, at the merge base, main and the head", () => {
+    const contents: Record<string, string> = {
+      "packages/rules/src/state.ts@merge-base": "export const STATE_VERSION = 2;",
+      "packages/rules/src/state.ts@main": "export const STATE_VERSION = 2;",
+      "packages/rules/src/state.ts@head-sha": "export const STATE_VERSION = 3;",
+      "packages/rules/src/migrate.ts@main": "main chain",
+      "packages/rules/src/migrate.ts@head-sha": "head chain",
+      "packages/rules/test/migrate.test.ts@head-sha": 'const snapshots = ["state-v3.json"];',
+    };
+    const listings: Record<string, string[]> = {
+      main: ["state-v1.json", "state-v2.json"],
+      "head-sha": ["state-v1.json", "state-v2.json", "state-v3.json"],
+    };
+
+    const facts = readMergeFacts(
+      "owner/repo",
+      "132",
+      pull(),
+      reader({
+        changedFiles: () => [
+          "packages/rules/src/migrate.ts",
+          "packages/rules/test/fixtures/state-v3.json",
+        ],
+        contentAt: (_repo, file, ref) => contents[`${file}@${ref}`],
+        fixtureNames: (_repo, ref) => listings[ref],
+      }),
+    );
+
+    expect(facts.migration).toEqual({
+      stateBase: "export const STATE_VERSION = 2;",
+      stateMain: "export const STATE_VERSION = 2;",
+      stateHead: "export const STATE_VERSION = 3;",
+      migrateMain: "main chain",
+      migrateHead: "head chain",
+      testHead: 'const snapshots = ["state-v3.json"];',
+      fixturesMain: ["state-v1.json", "state-v2.json"],
+      fixturesHead: ["state-v1.json", "state-v2.json", "state-v3.json"],
+      files: ["packages/rules/src/migrate.ts", "packages/rules/test/fixtures/state-v3.json"],
+    });
+  });
+
+  it("reads nothing extra for a pull request outside the migration paths", () => {
+    let listings = 0;
+    const facts = readMergeFacts(
+      "owner/repo",
+      "132",
+      pull(),
+      reader({
+        changedFiles: () => ["packages/rules/src/state.ts", "packages/rules/test/migrate.test.ts"],
+        fixtureNames: () => {
+          listings++;
+          return [];
+        },
+      }),
+    );
+
+    expect(facts.migration).toBeUndefined();
+    expect(listings).toBe(0);
   });
 });
 
@@ -748,6 +823,90 @@ exit 0
     const bodyFile = /--body-file (\S+)/u.exec(created ?? "")?.[1] ?? "";
     expect(readFileSync(bodyFile, "utf8")).toContain("- The helper duplicates `excerptOf`.");
     expect(readFileSync(bodyFile, "utf8")).toContain("#132");
+  });
+
+  it("merges a mechanically checked migration that gh reports as a one-way door", () => {
+    const dir = mkdtempSync(join(tmpdir(), "factory-merge-migration-"));
+    const calls = join(dir, "gh-calls.log");
+    const payload = (name: string, content: string): void => {
+      writeFileSync(join(dir, name), content);
+    };
+    payload("state-base", "export const STATE_VERSION = 2;");
+    payload("state-main", "export const STATE_VERSION = 2;");
+    payload("state-head", "export const STATE_VERSION = 3;");
+    payload("migrate-main", migrateChain());
+    payload("migrate-head", migrateChain("  2: (state) => ({ ...state, stateVersion: 3 }),"));
+    payload("test-head", 'const snapshots = ["state-v1.json", "state-v2.json", "state-v3.json"];');
+    payload("fixtures-main", '["state-v1.json","state-v2.json"]');
+    payload("fixtures-head", '["state-v1.json","state-v2.json","state-v3.json"]');
+    writeFileSync(
+      join(dir, "comments"),
+      `{"body":${JSON.stringify(
+        summaryComment({
+          verdict: "pass",
+          findings: [],
+          mergeDanger: { door: "one-way", blastRadius: "wide", reason: "stored state" },
+        }),
+      )},"created_at":"2026-11-09T09:20:00Z"}\n`,
+    );
+    writeFileSync(
+      join(dir, "gh"),
+      `#!/bin/sh
+echo "$*" >> "${calls}"
+case "$*" in
+  *mergeCommit*) echo "abc1234" ;;
+  *"pr view"*)
+    echo '{"number":132,"state":"OPEN","title":"Implement #302: a migration","body":"Closes #302","headRefName":"agent/issue-302-migration","headRefOid":"head-sha","mergeStateStatus":"CLEAN","labels":["risk:high"],"closing":[302],"headCommittedAt":"2026-11-09T09:00:00Z","author":"universum-factory[bot]"}'
+    ;;
+  */pulls/132/files*)
+    printf '%s\\n' "packages/rules/src/state.ts" "packages/rules/src/migrate.ts" "packages/rules/test/migrate.test.ts" "packages/rules/test/fixtures/state-v3.json"
+    ;;
+  */actions/workflows/ci.yml/runs*) echo '[{"headSha":"head-sha","status":"completed","conclusion":"success","createdAt":"2026-11-09T09:10:00Z"}]' ;;
+  */compare/*) echo '{"mergeBase":"merge-base","mainAheadBy":0,"files":[]}' ;;
+  */issues/132/comments*) cat "${dir}/comments" ;;
+  *contents/*)
+    case "$*" in
+      *"state.ts?ref=merge-base"*) cat "${dir}/state-base" ;;
+      *"state.ts?ref=main"*) cat "${dir}/state-main" ;;
+      *"state.ts?ref=head-sha"*) cat "${dir}/state-head" ;;
+      *"migrate.ts?ref=main"*) cat "${dir}/migrate-main" ;;
+      *"migrate.ts?ref=head-sha"*) cat "${dir}/migrate-head" ;;
+      *"migrate.test.ts?ref=head-sha"*) cat "${dir}/test-head" ;;
+      *"fixtures/?ref=main"*) cat "${dir}/fixtures-main" ;;
+      *"fixtures/?ref=head-sha"*) cat "${dir}/fixtures-head" ;;
+    esac
+    ;;
+  *"issue view"*) echo "A migration" ;;
+esac
+exit 0
+`,
+    );
+    chmodSync(join(dir, "gh"), 0o755);
+
+    const result = spawnSync(
+      process.execPath,
+      [fileURLToPath(new URL("../src/merge/merge.ts", import.meta.url))],
+      {
+        encoding: "utf8",
+        timeout: 60_000,
+        env: {
+          ...process.env,
+          PATH: `${dir}:${process.env["PATH"] ?? ""}`,
+          GH_REPO: "owner/repo",
+          PR_NUMBER: "132",
+          DRY_RUN: "",
+        },
+      },
+    );
+
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Merged in abc1234.");
+    const commands = readFileSync(calls, "utf8").trim().split("\n");
+    expect(commands.some((command) => command.startsWith("pr merge 132"))).toBe(true);
+    expect(
+      commands.filter((command) => command.includes("contents/packages/rules/test/fixtures/")),
+    ).toHaveLength(2);
   });
 
   it("exits green when the run cannot outlast the refusal, so no escalation runs", () => {

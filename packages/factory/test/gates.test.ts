@@ -14,6 +14,7 @@ import {
   protectedPaths,
 } from "#merge/gates.ts";
 import type { CiRun, MergeFacts, MergeStep } from "#merge/gates.ts";
+import { MIGRATION_FILES, type MigrationFacts } from "#merge/migration.ts";
 import type { MergeDanger, ReviewFinding } from "#review/schema.ts";
 import { summaryComment } from "#review/summary.ts";
 
@@ -182,6 +183,7 @@ const facts = (overrides: Partial<MergeFacts> = {}): MergeFacts => ({
   mergeState: "clean",
   mainAheadBy: 0,
   mainFiles: [],
+  migration: undefined,
   ...overrides,
 });
 
@@ -340,6 +342,172 @@ describe("canAutoMerge", () => {
       "touches AGENTS.md",
       "dependency major: zod ^3.25.0 → ^4.0.0",
     ]);
+  });
+});
+
+/** A `migrate.ts` whose chain holds these entries, as oxfmt writes them. */
+const chainOf = (entries: readonly string[]): string =>
+  [
+    "const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> = {",
+    ...entries,
+    "};",
+    "",
+    "export function migrate(stored: unknown): GameState {",
+    "  return stored;",
+    "}",
+  ].join("\n");
+
+describe("the state migration exception", () => {
+  const FIRST = "  1: (state) => ({ ...state, stateVersion: 2 }),";
+  const SECOND = "  2: (state) => ({ ...state, stateVersion: 3 }),";
+
+  /** A sound +1 migration from version 2 to 3. */
+  const soundMigration = (overrides: Partial<MigrationFacts> = {}): MigrationFacts => ({
+    stateBase: "export const STATE_VERSION = 2;",
+    stateMain: "export const STATE_VERSION = 2;",
+    stateHead: "export const STATE_VERSION = 3;",
+    migrateMain: chainOf([FIRST]),
+    migrateHead: chainOf([FIRST, SECOND]),
+    testHead: 'const snapshots = ["state-v1.json", "state-v2.json", "state-v3.json"];',
+    fixturesMain: ["state-v1.json", "state-v2.json"],
+    fixturesHead: ["state-v1.json", "state-v2.json", "state-v3.json"],
+    files: [MIGRATION_FILES.migrate, `${MIGRATION_FILES.fixtures}state-v3.json`],
+    ...overrides,
+  });
+
+  /** A migration pull request: the rules files and snapshot, plus its fixture. */
+  const pullOf = (migrationFacts: MigrationFacts = soundMigration()): MergeFacts =>
+    facts({
+      labels: ["risk:high"],
+      comments: [
+        reviewComment("pass", {
+          danger: { door: "one-way", blastRadius: "wide", reason: "stored state" },
+        }),
+      ],
+      files: [
+        MIGRATION_FILES.state,
+        MIGRATION_FILES.migrate,
+        MIGRATION_FILES.test,
+        `${MIGRATION_FILES.fixtures}state-v3.json`,
+      ],
+      migration: migrationFacts,
+    });
+
+  it("merges a sound +1 migration and its one new fixture, despite its one-way door", () => {
+    expect(canAutoMerge(pullOf())).toEqual({ merge: true, reasons: [] });
+    expect(mergeStep(pullOf())).toEqual({ kind: "merge", advisory: [] });
+  });
+
+  const faults: readonly [string, Partial<MigrationFacts>, string][] = [
+    [
+      "a jump of more than one version",
+      { stateHead: "export const STATE_VERSION = 4;" },
+      "state migration: STATE_VERSION goes from 2 to 4, not up by one",
+    ],
+    [
+      "an edited MIGRATIONS entry",
+      {
+        migrateHead: chainOf([
+          "  1: (state) => ({ ...state, stateVersion: 2, extra: 1 }),",
+          SECOND,
+        ]),
+      },
+      "state migration: the MIGRATIONS entry for 1 was edited",
+    ],
+    [
+      "an edited old fixture",
+      { files: [MIGRATION_FILES.migrate, `${MIGRATION_FILES.fixtures}state-v2.json`] },
+      "state migration: fixture state-v2.json changed",
+    ],
+    [
+      "a missing fixture",
+      { fixturesHead: ["state-v1.json", "state-v2.json"] },
+      "state migration: no new fixture, expected state-v3.json",
+    ],
+    [
+      "a fixture the rules test does not list",
+      { testHead: "const snapshots = [];" },
+      "state migration: migrate.test.ts does not list state-v3.json",
+    ],
+  ];
+
+  it.each(faults)("refuses %s", (_name, overrides, reason) => {
+    const gate = canAutoMerge(pullOf(soundMigration(overrides)));
+
+    expect(gate.merge).toBe(false);
+    expect(gate.reasons).toContain(reason);
+  });
+
+  it("refuses a migration that arrives with another protected path", () => {
+    const gate = canAutoMerge(
+      facts({
+        labels: ["risk:high"],
+        comments: pullOf().comments,
+        files: [...pullOf().files, "docs/agents/factory.md"],
+        migration: soundMigration(),
+      }),
+    );
+
+    expect(gate.reasons).toEqual([
+      "one-way door: stored state",
+      "touches docs/agents/",
+      "touches packages/rules/src/migrate.ts",
+      "touches packages/rules/test/fixtures/",
+    ]);
+  });
+
+  it("keeps the one-way door for a migration that arrives with a protocol change", () => {
+    const gate = canAutoMerge(
+      facts({
+        labels: ["risk:high"],
+        comments: pullOf().comments,
+        files: [...pullOf().files, "packages/protocol/src/messages.ts"],
+        migration: soundMigration(),
+      }),
+    );
+
+    expect(gate.merge).toBe(false);
+    expect(gate.reasons).toContain("one-way door: stored state");
+  });
+
+  it("keeps the one-way door for a pull request with no migration to check", () => {
+    const gate = canAutoMerge(
+      facts({
+        labels: ["risk:high"],
+        comments: pullOf().comments,
+        files: ["packages/protocol/src/messages.ts"],
+      }),
+    );
+
+    expect(gate.reasons).toEqual(["one-way door: stored state"]);
+  });
+
+  it("sends a version main took first to the fix loop, which renumbers it", () => {
+    const raced = pullOf(
+      soundMigration({
+        stateMain: "export const STATE_VERSION = 3;",
+        migrateMain: chainOf([
+          FIRST,
+          "  2: (state) => ({ ...state, stateVersion: 3, theirs: true }),",
+        ]),
+        fixturesMain: ["state-v1.json", "state-v2.json", "state-v3.json"],
+        fixturesHead: ["state-v1.json", "state-v2.json", "state-v3.json"],
+      }),
+    );
+
+    // main's own commits carry the files, so the behind-main rule catches the
+    // ordinary racing branch; the fix loop merges main and renumbers onto it.
+    expect(needsMain(facts({ ...raced, mainAheadBy: 1, mainFiles: [...raced.files] }))).toBe(true);
+    expect(mergeStep(facts({ ...raced, mainAheadBy: 1, mainFiles: [...raced.files] }))).toEqual({
+      kind: "fix",
+      reason: "main-moved",
+    });
+
+    // The compare's file list is capped, so the version itself must also route
+    // the collision to the fix loop.
+    const hidden = facts({ ...raced, mainAheadBy: 1, mainFiles: [] });
+    expect(needsMain(hidden)).toBe(false);
+    expect(mergeStep(hidden)).toEqual({ kind: "fix", reason: "main-moved" });
   });
 });
 

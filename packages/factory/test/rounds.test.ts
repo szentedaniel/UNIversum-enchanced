@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { excerptOf } from "#fix/excerpt.ts";
 import { fixReasonOf } from "#fix/reasons.ts";
-import { fixDecision, fixPlan, fixRounds, mainMovedComment, roundComment } from "#fix/rounds.ts";
+import {
+  fixDecision,
+  fixPlan,
+  fixRounds,
+  mainMovedComment,
+  mainMovedProblem,
+  roundComment,
+} from "#fix/rounds.ts";
 
 describe("fixRounds", () => {
   it("counts the round markers, the highest number winning", () => {
@@ -81,6 +88,18 @@ describe("mainMovedComment", () => {
 
     expect(comment).toContain("main was merged into the branch");
     expect(fixRounds([{ body: comment }])).toBe(0);
+  });
+});
+
+describe("mainMovedProblem", () => {
+  it("tells omp to renumber a migration main took first, on both files", () => {
+    const problem = mainMovedProblem();
+
+    expect(problem).toContain("main moved");
+    expect(problem).toContain("renumber the migration");
+    expect(problem).toContain("packages/rules/src/migrate.ts");
+    expect(problem).toContain("state-v<new>.json");
+    expect(problem).toContain("packages/rules/test/migrate.test.ts");
   });
 });
 

@@ -1,5 +1,11 @@
 import type { FixReason } from "#fix/reasons.ts";
 import {
+  isMigrationPath,
+  migrationCollision,
+  migrationProblems,
+  type MigrationFacts,
+} from "#merge/migration.ts";
+import {
   advisoryOnly,
   findingsOf,
   mergeDangerOf,
@@ -16,7 +22,9 @@ import {
 
 /**
  * Paths (directories end in `/`) no agent merges: the owner reviews these
- * pull requests themselves, because a merge is the only check they get.
+ * pull requests themselves, because a merge is the only check they get. The
+ * last two belong to a state migration, which the mechanically checked
+ * exception below lets through.
  */
 export const PROTECTED_PATHS = [
   ".github/",
@@ -186,17 +194,21 @@ const reviewReason = (state: ReviewState): string => {
  * Why the labels alone already say no, or nothing when they let the gate run.
  * A `risk:high` two-way door merges too: a wide blast radius alone is not the
  * owner's call once the review passed and CI (e2e included) is green, and a
- * revert undoes it. A one-way door, or a verdict the gate cannot read, still
- * waits for a human.
+ * revert undoes it. A one-way door still waits for a human, unless the only
+ * protected-path changes are a mechanically checked state migration: the
+ * review rates the stored state, and the check plus the migration test's
+ * chain is what stands in for it.
  */
-const riskReason = (facts: MergeFacts): string | undefined => {
+const riskReason = (facts: MergeFacts, checkedMigration: boolean): string | undefined => {
   const low = facts.labels.includes("risk:low");
   const high = facts.labels.includes("risk:high");
   if (low && high) return "both risk:low and risk:high are set";
   if (low) return undefined;
   if (!high) return "no risk label";
   const danger = mergeDangerOf(newestMarkerComment(facts.comments)?.body ?? "");
-  if (danger?.door === "one-way") return `one-way door: ${danger.reason}`;
+  if (danger?.door === "one-way") {
+    return checkedMigration ? undefined : `one-way door: ${danger.reason}`;
+  }
   if (danger?.door === "two-way") return undefined;
   return "risk:high";
 };
@@ -216,6 +228,8 @@ export interface MergeFacts {
   readonly mainAheadBy: number;
   /** The files main changed since the merge base; `needsMain` compares them with `files`. */
   readonly mainFiles: readonly string[];
+  /** The migration's sources when a migration path changed; `undefined` otherwise. */
+  readonly migration: MigrationFacts | undefined;
 }
 
 export interface MergeGate {
@@ -223,14 +237,53 @@ export interface MergeGate {
   readonly reasons: readonly string[];
 }
 
+/** The migration exception, and why it does not hold when the pull request claims it. */
+interface MigrationGate {
+  readonly checked: boolean;
+  readonly faults: readonly string[];
+}
+
+/**
+ * The wire protocol's sources. The review's one-way rating cannot say whether
+ * it meant the migration or a wire change beside it, so a migration that
+ * arrives with a protocol change keeps the owner.
+ */
+const WIRE_PATH = "packages/protocol/src/";
+
+/**
+ * The exception applies only when every protected path the pull request
+ * touches is the migration's own, no wire change rides along, and the check
+ * finds nothing wrong. A second protected path, a protocol change or any fault
+ * in the check keeps the owner.
+ */
+const migrationGate = (facts: MergeFacts, paths: readonly string[]): MigrationGate => {
+  if (
+    facts.migration === undefined ||
+    paths.length === 0 ||
+    !paths.every((path) => isMigrationPath(path)) ||
+    facts.files.some((file) => file.startsWith(WIRE_PATH))
+  ) {
+    return { checked: false, faults: [] };
+  }
+  const faults = migrationProblems(facts.migration);
+  return { checked: faults.length === 0, faults };
+};
+
 /**
  * The spec's auto-merge gate: CI green on the head, a passing review newer
  * than the head, `risk:low` or a two-way `risk:high`, no protected path and no
  * dependency major. Every
  * failing condition is a reason, so the escalation comment says all of them.
+ *
+ * A state migration is the one protected path the gate may take on its own:
+ * when it is the only one and `migrationProblems` finds nothing, its
+ * `risk:high`/one-way rating no longer stops the merge; a fault in the check
+ * joins the reasons beside the protected paths.
  */
 export const canAutoMerge = (facts: MergeFacts): MergeGate => {
   const reasons: string[] = [];
+  const paths = protectedPaths(facts.files);
+  const migration = migrationGate(facts, paths);
 
   const ci = ciState(facts.ciRuns, facts.headSha);
   if (ci !== "success") reasons.push(ciReason(ci, facts.headSha));
@@ -238,7 +291,7 @@ export const canAutoMerge = (facts: MergeFacts): MergeGate => {
   const review = reviewState(facts);
   if (review !== "pass") reasons.push(reviewReason(review));
 
-  const risk = riskReason(facts);
+  const risk = riskReason(facts, migration.checked);
   if (risk !== undefined) reasons.push(risk);
 
   if (facts.labels.includes("agent:review")) reasons.push("a review is queued (agent:review)");
@@ -246,7 +299,10 @@ export const canAutoMerge = (facts: MergeFacts): MergeGate => {
     reasons.push("waiting for a human (ready-for-human)");
   if (facts.labels.includes("agent:blocked")) reasons.push("blocked (agent:blocked)");
 
-  for (const path of protectedPaths(facts.files)) reasons.push(`touches ${path}`);
+  if (!migration.checked) {
+    for (const path of paths) reasons.push(`touches ${path}`);
+  }
+  reasons.push(...migration.faults);
   for (const bump of majorBumps(facts.dependencyChanges)) {
     reasons.push(`dependency major: ${bump.name} ${bump.from} → ${bump.to}`);
   }
@@ -358,7 +414,9 @@ export const mergeStep = (facts: MergeFacts): MergeStep => {
   // CI already ran on the pull request merged into main, so a branch that is
   // merely behind can merge as it is. Only a conflict, or main touching the
   // same files, needs main merged in first; that restarts CI and the review.
-  if (needsMain(facts)) {
+  // A state version main took first is the same case even when the compare's
+  // capped file list does not name it: the fix loop renumbers the migration.
+  if (needsMain(facts) || (facts.migration !== undefined && migrationCollision(facts.migration))) {
     return { kind: "fix", reason: "main-moved" };
   }
 
