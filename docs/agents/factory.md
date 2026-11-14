@@ -271,11 +271,12 @@ no `pr` at 02:23 Budapest.
    (`gh workflow run factory-fix.yml -f pr=<n> -f reason=review`); a pass leaves the merge gate to
    decide and clears a stale `ready-for-human`.
 5. When the review step fails even after its second turn, the workflow re-dispatches itself once with
-   `retry: true`, leaving `agent:review` so the re-run is reviewable. Only a failure of that re-run
-   comments the reason, removes `agent:review` and adds `ready-for-human`: the tick must not retry a
-   broken review forever. The comment opens with `<!-- factory-review:failed -->`, so a manual
-   `gh workflow run factory-review.yml -f pr=<n>` reviews that pull request again without a relabel;
-   a pull request held for another reason (a spent fix budget, a merge-gate refusal) is left alone.
+   `retry: true`, leaving `agent:review` so the re-run is reviewable. Only a failure with no retry
+   left comments the reason, removes `agent:review` and adds `ready-for-human`: the tick must not
+   retry a broken review forever. The comment opens with `<!-- factory-review:failed -->`, so a
+   manual `gh workflow run factory-review.yml -f pr=<n>` reviews that pull request again without a
+   relabel; a pull request held for another reason (a spent fix budget, a merge-gate refusal) is left
+   alone.
 
 Claude runs with `--permission-mode bypassPermissions` (`claudeAgent` in `src/shared/agents.ts`):
 Sandcastle's `noSandbox()` provider reports no sandbox, so it passes no permission flag, and
