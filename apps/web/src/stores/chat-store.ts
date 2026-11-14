@@ -23,7 +23,7 @@ export type ChatState = {
   bubbleAt(seat: number, now: number): ChatBubble | null;
   /** Drops every bubble whose time is up at `now`; the store's own wake-up calls it. */
   expire(now: number): void;
-  /** Forgets every bubble: leaving the Room, or joining another one. */
+  /** Forgets every bubble: leaving the Room. */
   reset(): void;
 };
 
@@ -60,8 +60,7 @@ export const chatStore = createStore<ChatState>()((set, get) => ({
     for (const [seat, bubble] of get().bubbles) {
       if (now - bubble.shownAt < BUBBLE_MS) live.set(seat, bubble);
     }
-    if (live.size === get().bubbles.size) return;
-    set({ bubbles: live });
+    if (live.size !== get().bubbles.size) set({ bubbles: live });
     armExpiry(now);
   },
   reset: () => {
