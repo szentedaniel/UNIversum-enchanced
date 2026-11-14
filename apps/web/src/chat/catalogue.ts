@@ -36,7 +36,7 @@ const CHAT_CATALOGUE: Record<ChatId, ChatEntry> = {
   heart: { kind: "emote", glyph: "❤️", label: m.chat_emote_heart },
 };
 
-/** The face of `id`'s bubble, in the language active when the bubble appears. */
+/** The face of `id`'s bubble, in the language active when it is read (each render). */
 export function bubbleOf(id: ChatId): ChatFace {
   const entry = CHAT_CATALOGUE[id];
   return entry.kind === "line"
