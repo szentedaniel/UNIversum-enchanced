@@ -139,7 +139,11 @@ describe("who the tray is offered to", () => {
   it("offers it to a seated Guest in a running game, in any phase", () => {
     expect(chatOpenTo(viewOf(), "p1", false)).toBe(true);
     expect(
-      chatOpenTo(viewOf(undefined, { phase: { kind: "placingDoubler", fields: [1] } }), "p2", false),
+      chatOpenTo(
+        viewOf(undefined, { phase: { kind: "placingDoubler", fields: [1] } }),
+        "p2",
+        false,
+      ),
     ).toBe(true);
   });
 

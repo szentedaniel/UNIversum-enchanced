@@ -56,9 +56,6 @@ export function tapChat(
  */
 export function chatOpenTo(view: PublicView, me: PlayerId | null, muted: boolean): boolean {
   return (
-    !muted &&
-    me !== null &&
-    view.phase.kind !== "gameOver" &&
-    view.players.some((p) => p.id === me)
+    !muted && me !== null && view.phase.kind !== "gameOver" && view.players.some((p) => p.id === me)
   );
 }

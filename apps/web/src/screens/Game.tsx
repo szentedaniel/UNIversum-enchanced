@@ -58,6 +58,8 @@ export function Game() {
   const [openCard, setOpenCard] = useState<number | null>(null);
   // The Playback core's frame: the gate, the view, the held Turn, the toast and the overlay (ADR-0004).
   const frame = useStore(playbackStore, (state) => state.frame);
+  // The Guest's quick-chat mute (#232): hides the tray and every bubble on this device.
+  const chatMuted = useStore(chatMuteStore, (state) => state.muted);
   // The Room returned to Lobby (a rematch): the Lobby message dropped the game
   // push the screen drew. Leave for the Lobby's own address, replacing the
   // game's, and show nothing meanwhile so the connecting card never flashes.
@@ -140,7 +142,6 @@ export function Game() {
   // The quick-chat tray (#231): a seated Guest in a running game, in any phase
   // and on another Player's Turn; never on the result screen, and never while
   // the Guest muted chat (#232), which hides the toggle here and every bubble.
-  const chatMuted = useStore(chatMuteStore, (state) => state.muted);
   const chatOpen = chatOpenTo(view, me, chatMuted);
   // The Playback's DOM layer: the frame's overlay is the dice or a drawn Chance card.
   const boardOverlay =
