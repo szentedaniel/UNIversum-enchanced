@@ -10,6 +10,7 @@ import {
   HEARTBEAT_LENGTH_MS,
   heartbeatWindow,
   JOB_LIMIT_MS,
+  LIVE_STATUSES,
   liveHeartbeat,
   RELAY_ATTEMPTS,
   runHeartbeat,
@@ -425,7 +426,8 @@ describe("the entry", () => {
 
     expect(status).toBe(0);
     expect(output).toContain("Dry run: one tick, no successor.");
-    expect(calls).toHaveLength(JOBS.length);
+    // The five nightly jobs and the dispatcher's two live statuses.
+    expect(calls).toHaveLength(JOBS.length + LIVE_STATUSES.length);
     expect(calls.every((call) => call.startsWith("api "))).toBe(true);
   });
 

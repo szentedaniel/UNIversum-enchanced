@@ -6,10 +6,20 @@
  * the schedule and the rule, and this script only reads the runs and starts the
  * workflows.
  *
- * Only the tick's own dispatch counts. It dispatches with `scheduled=true` and
- * every workflow puts the `(factory tick)` marker in its run name, which the
- * runs API exposes as `display_title`; a manual, dry or per-pull-request run
- * therefore never suppresses the scheduled one.
+ * Every tick also starts the dispatcher (`factory-dispatch.yml`), so free
+ * implementer slots fill within ten minutes of a review finishing, a pull
+ * request leaving the gate or an issue being unblocked, instead of waiting for
+ * an event or the dispatcher's hourly backstop. The dispatcher is not a
+ * scheduled job: it is not in `JOBS`, its start carries no `scheduled` input and
+ * its run gets no `(factory tick)` marker, so a dispatch can neither stand in
+ * for a nightly job nor suppress one. A dispatch run already queued or in
+ * progress is left alone: its concurrency group would queue a second one behind
+ * it, and the dispatch the tick wanted is already on its way.
+ *
+ * Only the tick's own dispatch of a nightly job counts. It dispatches with
+ * `scheduled=true` and every workflow puts the `(factory tick)` marker in its
+ * run name, which the runs API exposes as `display_title`; a manual, dry or
+ * per-pull-request run therefore never suppresses the scheduled one.
  *
  * A failed run read or dispatch is collected and the other due jobs still go
  * out; the tick then fails so the error is visible. A dispatch that did land
@@ -18,10 +28,14 @@
  * Env: GH_REPO, GH_TOKEN (the PAT, in the workflow), DRY_RUN.
  */
 import { dueJobs, JOBS, lastDueAt } from "#schedule/due.ts";
+import { LIVE_STATUSES } from "#schedule/heartbeat.ts";
 import { fail, required, sh } from "#shared/common.ts";
 
 /** The run-name suffix every tick dispatch carries; see the five workflows. */
 export const TICK_MARKER = "(factory tick)";
+
+/** The dispatcher the tick starts on every run; it declares no inputs, so its start passes none. */
+const DISPATCH_WORKFLOW = "factory-dispatch.yml";
 
 /** The REST run fields the tick reads. */
 interface ApiRun {
@@ -60,6 +74,10 @@ export interface TickDeps {
   readonly dryRun: boolean;
   /** The newest run that counts as the job's scheduled run; only the tick's own dispatch does. */
   readonly lastTickRun: (workflow: string, since: Date) => Date | undefined;
+  /** True while a `factory-dispatch.yml` run is queued or in progress. */
+  readonly dispatcherLive: () => boolean;
+  /** Starts `factory-dispatch.yml`; throws when the dispatch is refused. */
+  readonly startDispatcher: () => void;
   readonly dispatch: (workflow: string) => void;
   readonly log: (line: string) => void;
 }
@@ -72,8 +90,16 @@ export interface TickOutcome {
   readonly errors: readonly string[];
 }
 
-/** One tick: read every job's runs, dispatch the due ones, and keep a failed call from blocking the rest. */
-export const runTick = ({ now, dryRun, lastTickRun, dispatch, log }: TickDeps): TickOutcome => {
+/** One tick: read every job's runs, dispatch the due ones and the dispatcher, and keep a failed call from blocking the rest. */
+export const runTick = ({
+  now,
+  dryRun,
+  lastTickRun,
+  dispatcherLive,
+  startDispatcher,
+  dispatch,
+  log,
+}: TickDeps): TickOutcome => {
   const dueAt = new Map<string, Date>();
   const lastRunAt = new Map<string, Date | undefined>();
   const errors: string[] = [];
@@ -109,17 +135,64 @@ export const runTick = ({ now, dryRun, lastTickRun, dispatch, log }: TickDeps): 
     }
   }
 
+  // The dispatcher fills the free slots; the nightly jobs above are one-offs.
+  let live: boolean | undefined;
+  try {
+    live = dispatcherLive();
+  } catch (error) {
+    errors.push(`dispatcher: could not read its runs: ${messageOf(error)}`);
+  }
+  // A failed read cannot rule out a live dispatch, so this tick starts none and
+  // the next one tries again; a live run has the dispatch on its way already.
+  if (live === true) {
+    log(`A ${DISPATCH_WORKFLOW} run is queued or running; the tick starts no second one.`);
+  } else if (live === false && dryRun) {
+    log(`Dry run: would dispatch ${DISPATCH_WORKFLOW}.`);
+  } else if (live === false) {
+    try {
+      startDispatcher();
+      log(`Dispatched ${DISPATCH_WORKFLOW}; free slots fill within ten minutes.`);
+    } catch (error) {
+      errors.push(`dispatcher: could not dispatch: ${messageOf(error)}`);
+    }
+  }
+
   return { due, dispatched, errors };
 };
 
 /** One `gh` call's cap: a hung read or dispatch must not outlive the heartbeat's window. */
 export const GH_CALL_TIMEOUT_MS = 60 * 1000;
 
-/** The real wiring the tick and the heartbeat share: the runs API read and a PAT dispatch. */
-export const tickWiring = (repo: string): Pick<TickDeps, "lastTickRun" | "dispatch"> => ({
+/**
+ * One page of the dispatcher's runs in `status`: the runs API filters by a
+ * single status, so the live statuses need one read each.
+ */
+const dispatchRunsIn = (repo: string, status: string): readonly unknown[] => {
+  const runs: unknown = JSON.parse(
+    sh(
+      `gh api "repos/${repo}/actions/workflows/${DISPATCH_WORKFLOW}/runs?status=${status}&per_page=100" --jq '.workflow_runs'`,
+      GH_CALL_TIMEOUT_MS,
+    ),
+  );
+  if (!Array.isArray(runs)) throw new Error(`The ${status} dispatch runs page is not an array.`);
+  return runs;
+};
+
+/** True while a `factory-dispatch.yml` run is queued or in progress. */
+const dispatchIsLive = (repo: string): boolean =>
+  LIVE_STATUSES.some((status) => dispatchRunsIn(repo, status).length > 0);
+
+/** The real wiring the tick and the heartbeat share: the runs API reads and a PAT dispatch. */
+export const tickWiring = (
+  repo: string,
+): Pick<TickDeps, "lastTickRun" | "dispatch" | "dispatcherLive" | "startDispatcher"> => ({
   lastTickRun: (workflow, since) => tickRunSince(repo, workflow, since),
   dispatch: (workflow) => {
     sh(`gh workflow run ${workflow} --ref main -f scheduled=true`, GH_CALL_TIMEOUT_MS);
+  },
+  dispatcherLive: () => dispatchIsLive(repo),
+  startDispatcher: () => {
+    sh(`gh workflow run ${DISPATCH_WORKFLOW} --ref main`, GH_CALL_TIMEOUT_MS);
   },
 });
 

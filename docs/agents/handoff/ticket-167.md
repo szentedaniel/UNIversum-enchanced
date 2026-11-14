@@ -11,7 +11,8 @@
   never suppresses the scheduled one; a failed tick dispatch still counts, so it is not retried in a
   loop. The marker lives in `tick.ts` as `TICK_MARKER`.
 - `packages/factory/src/schedule/tick.ts` exports `newestTickRun(runs)` and the DI seam
-  `runTick({ now, dryRun, lastTickRun, dispatch, log })`. A failed run read skips that job (never a
+  `runTick({ now, dryRun, lastTickRun, dispatch, log })` (#301 added `dispatcherLive` and
+  `startDispatcher`; see `ticket-301.md`). A failed run read skips that job (never a
   blind second dispatch) but the other due jobs still go out; a failed dispatch is collected the same
   way; the CLI fails the run with all of them at the end. `import.meta.main` guards the CLI, so the
   tests import it (`packages/factory/test/schedule-tick.test.ts`). Env: `GH_REPO`, `GH_TOKEN`,
