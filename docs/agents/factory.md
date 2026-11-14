@@ -64,9 +64,9 @@ starts none: the error is collected and the next tick tries again.
 Every tick ends with the stuck-pull-request sweep (`packages/factory/src/schedule/sweep.ts`): it
 nudges an open factory pull request GitHub left with no CI run, no review or no merge decision, and
 hands one a nudge did not help to a person. It runs after the due jobs and the dispatcher, and a
-failed sweep is collected like any other error, so it cannot hold either back. Two reads a tick — the
-open-pull list and one page of the newest workflow runs — plus the comment and the write a nudge
-needs keep its API cost to a list call and at most one call per open pull request. The rules are under
+failed sweep is collected like any other error, so it cannot hold either back. One open-pull list,
+one page of the newest workflow runs and one detail read per open factory pull request — plus the
+comment and the write a nudge needs — keep its API cost small. The rules are under
 [The stuck-pull-request sweep](#the-stuck-pull-request-sweep).
 
 The latest start keeps the Claude jobs inside the 01:00–07:00 night window: a tick at or after it does
@@ -458,9 +458,10 @@ is closed, a human's, `agent:blocked` or already `ready-for-human` is left alone
 is still running or failed (the fix loop owns it). A dry tick (`gh workflow run factory-tick.yml -f
 dry_run=true`) prints what the sweep would do and writes nothing.
 
-The sweep reads the open pull requests (comments included) and one page of the newest 100 workflow
-runs per tick, and a nudge costs one comment and one write: the API use per tick is one list call
-plus at most one call per open factory pull request.
+The sweep reads the open pull requests, one page of the newest 100 workflow runs, and one detail
+read per open factory pull request (its comments and head commit); a nudge costs one comment and one
+write. That is two list calls plus at most a call per open factory pull request a tick, well inside
+the factory's share of the API budget.
 
 ## The nightly retro
 

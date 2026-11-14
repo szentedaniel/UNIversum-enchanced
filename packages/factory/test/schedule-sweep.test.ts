@@ -344,6 +344,17 @@ describe("runSweep", () => {
     expect(calls.dispatches).toEqual([{ workflow: "factory-review.yml", inputs: { pr: "311" } }]);
   });
 
+  it("dispatches the merge gate for a passed review with no gate run", () => {
+    const { calls, errors } = sweep(
+      [pull({ comments: [review("2026-11-14T09:00:00Z")] })],
+      [run()],
+    );
+
+    expect(errors).toEqual([]);
+    expect(calls.comments[0]?.body).toContain(`<!-- factory-sweep:merge:${SHA} -->`);
+    expect(calls.dispatches).toEqual([{ workflow: "factory-merge.yml", inputs: { pr: "311" } }]);
+  });
+
   it("merges main in for a pull request without CI and leaves its marker", () => {
     const { calls } = sweep([pull()], []);
 
@@ -434,6 +445,10 @@ if (args[0] === "pr" && args[1] === "list") {
   process.stdout.write(process.env["GH_SHIM_PULLS"] ?? "[]");
   process.exit(0);
 }
+if (args[0] === "pr" && args[1] === "view") {
+  process.stdout.write(process.env["GH_SHIM_DETAIL"] ?? '{"comments":[],"commits":[]}');
+  process.exit(0);
+}
 if (args[0] === "api" && args[1].includes("/actions/runs?")) {
   process.stdout.write(process.env["GH_SHIM_RUNS"] ?? "[]");
   process.exit(0);
@@ -460,8 +475,6 @@ const pullJson = (overrides: Record<string, unknown> = {}): string =>
       author: { login: "universum-factory[bot]" },
       createdAt: "2026-11-14T08:00:00Z",
       labels: [],
-      comments: [],
-      commits: [{ committedDate: "2026-11-14T08:00:00Z" }],
       ...overrides,
     },
   ]);
@@ -488,6 +501,7 @@ describe("sweepWiring", () => {
     else process.env["PATH"] = originalPath;
     delete process.env["GH_SHIM_LOG"];
     delete process.env["GH_SHIM_PULLS"];
+    delete process.env["GH_SHIM_DETAIL"];
     delete process.env["GH_SHIM_RUNS"];
     delete process.env["GH_SHIM_CONFLICT"];
   });
@@ -512,7 +526,16 @@ describe("sweepWiring", () => {
       "--limit",
       "100",
       "--json",
-      "number,state,headRefName,headRefOid,author,createdAt,labels,comments,commits",
+      "number,state,headRefName,headRefOid,author,createdAt,labels",
+    ]);
+    expect(calls()).toContainEqual([
+      "pr",
+      "view",
+      "311",
+      "--repo",
+      "owner/repo",
+      "--json",
+      "comments,commits",
     ]);
     expect(calls()).toContainEqual([
       "api",
@@ -540,6 +563,32 @@ describe("sweepWiring", () => {
       "--body",
       expect.stringContaining(`<!-- factory-sweep:ci:${SHA} -->`),
     ]);
+  });
+
+  it("reads no detail for a human's pull request or one a person owns", () => {
+    process.env["GH_SHIM_PULLS"] = JSON.stringify([
+      {
+        number: 400,
+        state: "OPEN",
+        headRefName: "fix/some-bug",
+        headRefOid: SHA,
+        author: { login: "szentedaniel" },
+        createdAt: "2026-11-14T08:00:00Z",
+        labels: [],
+      },
+      {
+        number: 401,
+        state: "OPEN",
+        headRefName: BRANCH,
+        headRefOid: SHA,
+        author: { login: "universum-factory[bot]" },
+        createdAt: "2026-11-14T08:00:00Z",
+        labels: [{ name: "ready-for-human" }],
+      },
+    ]);
+
+    expect(sweepOnce()).toEqual([]);
+    expect(calls().filter((call) => call[0] === "pr" && call[1] === "view")).toEqual([]);
   });
 
   it("dispatches a review for the pull request, never with a scheduled input", () => {

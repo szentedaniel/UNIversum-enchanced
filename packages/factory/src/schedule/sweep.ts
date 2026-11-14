@@ -14,12 +14,13 @@
  * runs. `schedule/tick.ts` calls the sweep after the nightly jobs and the
  * dispatcher, so a failed sweep cannot hold either back.
  *
- * The reads are one open-pull list and one page of the newest workflow runs
- * per tick (`SWEEP_RUN_PAGE`); a nudge then costs one comment and one write,
- * so a tick's API use is a list call plus at most one call per open pull
- * request. The grace is GitHub's own ten-minute cron latency with room for a
- * slow queue, and the page is the newest 100 runs: a trigger older than that
- * is a pull request a later tick still nudges, once per head commit.
+ * The reads are one open-pull list, one page of the newest workflow runs
+ * (`SWEEP_RUN_PAGE`) and one detail read per open factory pull request; a
+ * nudge then costs one comment and one write, so a tick's API use is one list
+ * call plus at most one call per open factory pull request. The grace is
+ * GitHub's own ten-minute cron latency with room for a slow queue, and the
+ * page is the newest 100 runs: a trigger older than that is a pull request a
+ * later tick still nudges, once per head commit.
  */
 import { isFactoryPull, reviewState } from "#merge/gates.ts";
 import { newestMarkerComment, type ReviewComment } from "#review/summary.ts";
@@ -310,7 +311,7 @@ export const runSweep = ({
   return errors;
 };
 
-/** A pull request as `gh pr list` reports it. */
+/** A pull request as `gh pr list` reports it: the fields the factory filter needs. */
 interface ApiPull {
   readonly number: number;
   readonly state: string;
@@ -319,6 +320,10 @@ interface ApiPull {
   readonly author: { readonly login: string } | null;
   readonly createdAt: string;
   readonly labels: readonly { readonly name: string }[];
+}
+
+/** The rest of one pull request: its comments and its commits. */
+interface ApiPullDetail {
   readonly comments: readonly { readonly body: string; readonly createdAt: string }[];
   readonly commits: readonly { readonly committedDate: string }[];
 }
@@ -334,26 +339,51 @@ interface ApiRun {
   readonly display_title?: string;
 }
 
-const openPulls = (repo: string): SweepPull[] =>
-  parseJson<ApiPull[]>(
+/** The pull requests a person owns; the sweep leaves them without reading further. */
+const HELD_LABELS: readonly string[] = ["ready-for-human", "agent:blocked"];
+
+/** One pull request's comments and commits; the detail read costs a call. */
+const pullDetail = (repo: string, number: number): ApiPullDetail =>
+  parseJson<ApiPullDetail>(
+    sh(`gh pr view ${String(number)} --repo "${repo}" --json comments,commits`, GH_CALL_TIMEOUT_MS),
+  );
+
+/**
+ * Every open factory pull request that the sweep may act on: one list call,
+ * then one detail read per pull request that is neither a human's, blocked nor
+ * already waiting for a person. The detail read carries the comments the
+ * markers live in and the head commit's time.
+ */
+const openPulls = (repo: string): SweepPull[] => {
+  const listed = parseJson<ApiPull[]>(
     sh(
-      `gh pr list --repo "${repo}" --state open --limit 100 --json number,state,headRefName,headRefOid,author,createdAt,labels,comments,commits`,
+      `gh pr list --repo "${repo}" --state open --limit 100 --json number,state,headRefName,headRefOid,author,createdAt,labels`,
       GH_CALL_TIMEOUT_MS,
     ),
-  ).map((pull) => ({
-    number: pull.number,
-    state: pull.state.toLowerCase(),
-    headRefName: pull.headRefName,
-    headSha: pull.headRefOid,
-    author: pull.author?.login ?? "",
-    createdAt: pull.createdAt,
-    headCommittedAt: pull.commits.at(-1)?.committedDate ?? pull.createdAt,
-    labels: pull.labels.map((label) => label.name),
-    comments: pull.comments.map((comment) => ({
-      body: comment.body,
-      createdAt: comment.createdAt,
-    })),
-  }));
+  );
+  const pulls: SweepPull[] = [];
+  for (const pull of listed) {
+    const labels = pull.labels.map((label) => label.name);
+    if (!isFactoryPull(pull.headRefName, labels, pull.author?.login ?? "")) continue;
+    if (HELD_LABELS.some((held) => labels.includes(held))) continue;
+    const detail = pullDetail(repo, pull.number);
+    pulls.push({
+      number: pull.number,
+      state: pull.state.toLowerCase(),
+      headRefName: pull.headRefName,
+      headSha: pull.headRefOid,
+      author: pull.author?.login ?? "",
+      createdAt: pull.createdAt,
+      headCommittedAt: detail.commits.at(-1)?.committedDate ?? pull.createdAt,
+      labels,
+      comments: detail.comments.map((comment) => ({
+        body: comment.body,
+        createdAt: comment.createdAt,
+      })),
+    });
+  }
+  return pulls;
+};
 
 /** The newest page of workflow runs; the sweep only reads its three workflows. */
 const recentRuns = (repo: string): SweepRun[] =>
