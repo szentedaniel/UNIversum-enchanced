@@ -13,7 +13,7 @@ and PWA), last ticket of its suggested order. Files: `apps/e2e/tests/mobile.spec
   profile runs on Chromium and WebKit.
 - Each describe sets `test.use(PORTRAIT)` / `test.use(LANDSCAPE)` from `phoneOf`: the device descriptor's
   `viewport`, `userAgent`, `deviceScaleFactor`, `isMobile` and `hasTouch`, plus `locale: "en-US"` and
-  `screen: viewport`. Two deliberate omissions: the descriptor's `defaultBrowserType` is dropped — `test.use` can
+  `screen: viewport`. Two deliberate deviations: the descriptor's `defaultBrowserType` is dropped — `test.use` can
   override that worker option, and spreading the whole `devices["iPhone 15"]` would switch the desktop project to
   WebKit — and `screen` is the viewport, because `test.use` merges with the project's options and Desktop
   Chrome's 1920×1080 screen would otherwise stay (Playwright derives the emulated screen orientation from it).
