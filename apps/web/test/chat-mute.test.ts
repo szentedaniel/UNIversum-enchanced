@@ -1,6 +1,20 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PlayerCard, type PlayerSummary } from "#components/PlayerCard.tsx";
+import { baseLocale, overwriteGetLocale } from "#paraglide/runtime.js";
+import { BUBBLE_MS, chatStore } from "#stores/chat-store.ts";
 import { CHAT_MUTED_KEY, chatMuteStore } from "#stores/chat-mute-store.ts";
 import { SOUND_MUTED_KEY } from "#stores/sound-store.ts";
+
+// React's server renderer reads a zustand store's *initial* state
+// (`getServerSnapshot`), not the state a test has written. The card reads the
+// store through `useStore`; this hands it the state the store holds, as a
+// mounted client reads it (same seam as chat-store.test.ts).
+vi.mock("zustand", () => ({
+  useStore: <T, U>(api: { getState: () => T }, selector?: (state: T) => U): U | T =>
+    selector ? selector(api.getState()) : api.getState(),
+}));
 
 // The quick-chat mute setting (#176, #232): one switch that hides the tray and
 // every bubble on this device, remembered in localStorage like the sound mute.
@@ -34,13 +48,21 @@ async function loadStores() {
   return { mute: mute.chatMuteStore, sound: sound.soundStore };
 }
 
+const T0 = 1_000;
+
 beforeEach(() => {
   stubStorage();
   storage.clear();
+  vi.useFakeTimers();
+  vi.setSystemTime(T0);
   chatMuteStore.getState().setMuted(false);
+  chatStore.getState().reset();
 });
 
 afterEach(() => {
+  chatStore.getState().reset();
+  overwriteGetLocale(() => baseLocale);
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -92,5 +114,51 @@ describe("the chat mute setting", () => {
     const reloaded = await loadStores();
 
     expect(reloaded.mute.getState().muted).toBe(false);
+  });
+});
+
+/** A Seat as the Game screen summarises it (name, money and notes are already formatted). */
+const PLAYER: PlayerSummary = {
+  seat: 1,
+  name: "happy tiger",
+  bot: false,
+  cash: "10 000 Ft",
+  cashShort: "10k",
+  fields: 2,
+  current: false,
+  you: false,
+  bankrupt: false,
+};
+
+/** The card as the Game screen draws it, reading the bubbles the store holds. */
+const renderCard = (player: PlayerSummary = PLAYER) =>
+  renderToStaticMarkup(createElement(PlayerCard, { player }));
+
+const BUBBLE = 'data-testid="chat-bubble"';
+
+describe("the muted bubbles", () => {
+  it("hides a Seat's bubble on every card while muted", () => {
+    overwriteGetLocale(() => "en");
+    chatStore.getState().show(1, "good_luck", T0);
+    expect(renderCard()).toContain(BUBBLE);
+
+    chatMuteStore.getState().setMuted(true);
+
+    expect(renderCard()).not.toContain(BUBBLE);
+    expect(renderCard({ ...PLAYER, seat: 1 })).not.toContain(BUBBLE);
+  });
+
+  it("shows nothing for a bubble that arrived while muted, not even after unmuting", () => {
+    overwriteGetLocale(() => "en");
+    chatMuteStore.getState().setMuted(true);
+
+    chatStore.getState().show(1, "good_luck", T0);
+    expect(renderCard()).not.toContain(BUBBLE);
+
+    chatMuteStore.getState().setMuted(false);
+    expect(renderCard()).not.toContain(BUBBLE);
+
+    chatStore.getState().show(1, "thanks", T0 + BUBBLE_MS);
+    expect(renderCard()).toContain("Thanks!");
   });
 });
