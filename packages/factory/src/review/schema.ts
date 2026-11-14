@@ -21,5 +21,18 @@ export const reviewSchema = z.object({
   }),
 });
 
-export type Review = z.infer<typeof reviewSchema>;
-export type MergeDanger = Review["mergeDanger"];
+/** The strict reply the reviewer emits; a failed validation may still salvage its core. */
+export type ReviewReply = z.infer<typeof reviewSchema>;
+export type ReviewVerdict = ReviewReply["verdict"];
+export type MergeDanger = ReviewReply["mergeDanger"];
+
+/**
+ * What the review step posts: the strict reply, or the verdict and findings
+ * alone when the retry carried no merge danger. A missing rating is not a
+ * reason to throw the review away; the merge gate reads it as high risk.
+ */
+export interface Review {
+  readonly verdict: ReviewVerdict;
+  readonly findings: readonly string[];
+  readonly mergeDanger?: MergeDanger;
+}

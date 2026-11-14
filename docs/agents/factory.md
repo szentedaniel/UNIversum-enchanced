@@ -248,7 +248,10 @@ no `pr` at 02:23 Budapest.
    run exits 0 and leaves `agent:review` in place; the tick dispatches one review per pull request
    still carrying the label, so a queued review happens at night. The count comes from the summary
    comments themselves — they open with `<!-- factory-review -->` — per Budapest calendar day, and
-   night reviews do not spend the daytime quota.
+   night reviews do not spend the daytime quota. The gate reads the queue first: a `pull_request`
+   event for another label does nothing, and a manual dispatch reviews only a pull request that is
+   labelled or whose newest factory comment is the failed-review handoff (step 5). That recovery
+   runs at once rather than queueing, because the owner is asking for a review the failed run lost.
 2. Checks out the pull request's branch, installs Claude Code 2.1.311 and the
    `mattpocock-skills@claude-plugins-official` plugin, and **fails the step unless the plugin is
    1.3.1**: that version is the pin for the `code-review` skill, so a renamed skill fails loudly
@@ -258,14 +261,22 @@ no `pr` at 02:23 Budapest.
    issue and its parent spec as the Spec axis. The skill reports the Standards and Spec axes side by
    side; the same session then commits the fixes it is sure of (conventional commits, fast checks
    green) and emits `<review>` structured output — `verdict`, the `findings` it did **not** fix, and
-   `mergeDanger`.
+   `mergeDanger`. A missing or invalid block gets one more turn in that same session, with the
+   validation error in the prompt; if the retried reply still carries no `mergeDanger`, the step
+   posts its verdict and findings anyway, labels the pull request `risk:high`, and the summary says
+   the merge danger was not rated.
 4. Pushes the reviewer's commits with `AGENT_PAT` (a plain push, never forced), posts one summary
    comment, and swaps `agent:review` for `risk:low` (only a two-way door with a local blast radius)
    or `risk:high`. A `changes-requested` verdict dispatches the fix loop
    (`gh workflow run factory-fix.yml -f pr=<n> -f reason=review`); a pass leaves the merge gate to
    decide and clears a stale `ready-for-human`.
-5. On failure, comments the reason on the pull request, removes `agent:review` and adds
-   `ready-for-human`: the tick must not retry a broken review forever.
+5. When the review step fails even after its second turn, the workflow re-dispatches itself once with
+   `retry: true`, leaving `agent:review` so the re-run is reviewable. Only a failure with no retry
+   left comments the reason, removes `agent:review` and adds `ready-for-human`: the tick must not
+   retry a broken review forever. The comment opens with `<!-- factory-review:failed -->`, so a
+   manual `gh workflow run factory-review.yml -f pr=<n>` reviews that pull request again without a
+   relabel; a pull request held for another reason (a spent fix budget, a merge-gate refusal) is left
+   alone.
 
 Claude runs with `--permission-mode bypassPermissions` (`claudeAgent` in `src/shared/agents.ts`):
 Sandcastle's `noSandbox()` provider reports no sandbox, so it passes no permission flag, and
