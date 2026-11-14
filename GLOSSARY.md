@@ -95,6 +95,10 @@ _Avoid_: Delta, patch
 The moment the next decision opens, once the Playback before it has ended; the decision's controls and its Turn timer start there.
 _Avoid_: Playback over, unlock
 
+**Hint**:
+A short, one-time note beside a concept a first-time Guest meets — an Offer, Quarantine, the Doubler or Erasmus pick, a Sale, or the game end — with a dismiss button; it never blocks the Decision, and the browser remembers the ones the Guest dismissed.
+_Avoid_: Tooltip, tutorial, tip
+
 **Event log**:
 The list, on the Game screen, of the lines of the events the Playback has revealed so far, newest last, each line in the language active when it appeared; the client keeps it, so a reload starts it empty.
 _Avoid_: History, chat, transcript

@@ -293,6 +293,7 @@
   "hint_erasmus": "Az Erasmus segítségével előreutazhatsz egy olyan egyetemre vagy múzeumba, amelynek nincs más játékos a tulajdonosa: válassz egy mezőt.",
   "hint_sale": "Ha nem tudsz kifizetni egy tandíjat, adót vagy esélykártyát, adj el mezőket a hiány fedezésére: válaszd ki őket a táblán, vagy hagyd az automatikus eladásra.",
   "hint_game_end": "A játék akkor ér véget, ha csak egy játékos marad, ha lejár az idő (ekkor a legnagyobb vagyonú játékos nyer), vagy ha valaki mind a négy múzeumot vagy három monopóliumot szerez.",
+  "hint_dismiss": "Értem",
   "rejection_room_name_blocked": "Ez a szobanév nem engedélyezett. Kérlek, válassz másikat.",
   "rejection_password_locked": "Túl sok hibás jelszó. Kérlek, várj egy kicsit.",
   "rejection_rate_limited": "Túl sok próbálkozás. Kérlek, várj egy kicsit.",
