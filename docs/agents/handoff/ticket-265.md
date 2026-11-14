@@ -68,6 +68,10 @@ and PWA), last ticket of its suggested order. Files: `apps/e2e/tests/mobile.spec
   move them into `helpers.ts` (one home for shared steps).
 - A phone profile's `hasTouch` makes `Interactor.mobile` true; `press()` then uses `locator.tap()`, so a handler
   must be a real button click to work on the phone projects.
+- Checking a Create screen segment on a short viewport: Playwright's scroll leaves the radio flush with the visual
+  viewport's bottom, `App.tsx`'s keyboard nudge centres a focused field within 12 px of the edge, and that scroll
+  moves the radio between the press and the release, so `check()` reports "Clicking the checkbox did not change
+  its state". `helpers.ts`'s `checkSegment` centres the radio first; reuse it for another segment check.
 
 Read for: #184's phone smoke, any install-surface (manifest/worker/version) e2e check, or a new phone-viewport
 e2e step.

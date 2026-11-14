@@ -128,6 +128,20 @@ export const ROLL_PLAYBACK_MS = playbackOf([
 export type RoomChoices = { turnLimitMs?: 10_000 | 20_000 | 30_000 };
 
 /**
+ * Checks a Create screen segment after centring it first. `App.tsx` scrolls a
+ * focused field to the middle when it sits within 12 px of the visible area's
+ * edge (the on-screen keyboard's nudge). On a short screen (a landscape phone)
+ * Playwright's own scroll leaves the radio flush with the bottom, so the nudge
+ * moves it between the press and the release and the click never activates it.
+ * A centred radio is clear of the margin, so nothing moves.
+ */
+async function checkSegment(page: Page, label: string): Promise<void> {
+  const radio = page.getByLabel(label, { exact: true });
+  await radio.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  await radio.check();
+}
+
+/**
  * Creates a 2-Player Room on `creator` and fills the second Seat with a Guest
  * in a new context. The names are the failure dump's attachment names.
  */
@@ -141,9 +155,9 @@ export async function createAndJoin(
   registerPage(names.creator, creator);
   await probeSockets(creator);
   await creator.goto("/create");
-  await creator.getByLabel("2", { exact: true }).check();
+  await checkSegment(creator, "2");
   if (choices.turnLimitMs !== undefined) {
-    await creator.getByLabel(`${String(choices.turnLimitMs / 1_000)} s`, { exact: true }).check();
+    await checkSegment(creator, `${String(choices.turnLimitMs / 1_000)} s`);
   }
   await creator.getByRole("button", { name: "Create Room" }).click();
   await expect(creator).toHaveURL(/\/room\/[1-9]\d{5}$/);
