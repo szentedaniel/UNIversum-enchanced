@@ -25,11 +25,18 @@
  * out; the tick then fails so the error is visible. A dispatch that did land
  * counts even if its job fails, so a broken job is not retried in a loop.
  *
+ * After the dispatcher the tick runs the stuck-pull-request sweep
+ * (`sweep.ts`): it nudges an open factory pull request that GitHub left with
+ * no CI run, no review or no merge decision, and hands one a nudge did not
+ * help to a person. It runs last, and a failed sweep is collected like every
+ * other failure, so it cannot hold back a due job or the dispatcher.
+ *
  * Env: GH_REPO, GH_TOKEN (the PAT, in the workflow), DRY_RUN.
  */
 import { dueJobs, JOBS, lastDueAt } from "#schedule/due.ts";
 import { LIVE_STATUSES } from "#schedule/heartbeat.ts";
-import { fail, required, sh } from "#shared/common.ts";
+import { runSweep, sweepWiring } from "#schedule/sweep.ts";
+import { fail, GH_CALL_TIMEOUT_MS, required, sh } from "#shared/common.ts";
 
 /** The run-name suffix every tick dispatch carries; see the five workflows. */
 export const TICK_MARKER = "(factory tick)";
@@ -79,6 +86,8 @@ export interface TickDeps {
   /** Starts `factory-dispatch.yml`; throws when the dispatch is refused. */
   readonly startDispatcher: () => void;
   readonly dispatch: (workflow: string) => void;
+  /** The sweep's per-pull-request errors; it writes through its own wiring. */
+  readonly sweep: (now: Date, dryRun: boolean, log: (line: string) => void) => readonly string[];
   readonly log: (line: string) => void;
 }
 
@@ -98,6 +107,7 @@ export const runTick = ({
   dispatcherLive,
   startDispatcher,
   dispatch,
+  sweep,
   log,
 }: TickDeps): TickOutcome => {
   const dueAt = new Map<string, Date>();
@@ -157,11 +167,17 @@ export const runTick = ({
     }
   }
 
+  // The sweep nudges pull requests stuck with no CI, no review or no merge
+  // decision. It runs after every job above, and its own failure is collected,
+  // so neither the nightly jobs nor the dispatcher can be held back by it.
+  try {
+    errors.push(...sweep(now, dryRun, log).map((error) => `sweep: ${error}`));
+  } catch (error) {
+    errors.push(`sweep: ${messageOf(error)}`);
+  }
+
   return { due, dispatched, errors };
 };
-
-/** One `gh` call's cap: a hung read or dispatch must not outlive the heartbeat's window. */
-export const GH_CALL_TIMEOUT_MS = 60 * 1000;
 
 /**
  * One page of the dispatcher's runs in `status`: the runs API filters by a
@@ -185,12 +201,13 @@ const dispatchIsLive = (repo: string): boolean =>
 /** The real wiring the tick and the heartbeat share: the runs API reads and a PAT dispatch. */
 export const tickWiring = (
   repo: string,
-): Pick<TickDeps, "lastTickRun" | "dispatch" | "dispatcherLive" | "startDispatcher"> => ({
+): Pick<TickDeps, "lastTickRun" | "dispatch" | "dispatcherLive" | "startDispatcher" | "sweep"> => ({
   lastTickRun: (workflow, since) => tickRunSince(repo, workflow, since),
   dispatch: (workflow) => {
     sh(`gh workflow run ${workflow} --ref main -f scheduled=true`, GH_CALL_TIMEOUT_MS);
   },
   dispatcherLive: () => dispatchIsLive(repo),
+  sweep: (now, dryRun, log) => runSweep({ now, dryRun, ...sweepWiring(repo), log }),
   startDispatcher: () => {
     sh(`gh workflow run ${DISPATCH_WORKFLOW} --ref main`, GH_CALL_TIMEOUT_MS);
   },
