@@ -22,7 +22,7 @@ import {
   type PhaseOf,
   type PublicView,
 } from "@universum/rules";
-import type { PlaybackHook, Rejection, SocketCall } from "./test-hooks.ts";
+import type { Camera, PlaybackHook, Rejection, SocketCall } from "./test-hooks.ts";
 
 /** A screen the spec acts through: a phone taps, a desktop clicks. */
 export type Interactor = { page: Page; mobile: boolean };
@@ -36,6 +36,55 @@ export const scale = async (page: Page) => (await camera(page))?.scale ?? 0;
 /** A Field's centre on the Board, from the test-only hook. */
 export const fieldCenter = (page: Page, id: number) =>
   page.evaluate((field) => window.universumTest!.fieldCenter(field), id);
+
+/**
+ * Drags one finger across the Board (#265): a touch pointer sequence from the
+ * first point of the canvas no card covers, so the camera pans and the page
+ * never scrolls. The gesture layer captures the pointer on every touch down;
+ * a synthetic pointer is not active, so the canvas's `setPointerCapture` is
+ * stubbed for the sequence. Returns the camera before and after.
+ */
+export async function dragBoard(
+  page: Page,
+  by: { dx: number; dy: number },
+): Promise<{ before: Camera; after: Camera }> {
+  return page.evaluate(({ dx, dy }) => {
+    const hooks = window.universumTest;
+    const canvas = document.querySelector("[data-testid=board] canvas");
+    if (hooks === undefined || !(canvas instanceof HTMLElement)) {
+      throw new Error("the Board's canvas is not mounted");
+    }
+    // The first uncovered point is in the top band no card reaches, in any layout.
+    const rect = canvas.getBoundingClientRect();
+    const start = Array.from({ length: 400 }, (_, index) => ({
+      x: rect.left + (((index % 20) + 0.5) / 20) * rect.width,
+      y: rect.top + ((Math.floor(index / 20) + 0.5) / 20) * rect.height,
+    })).find((at) => document.elementFromPoint(at.x, at.y) === canvas);
+    if (start === undefined) throw new Error("every point of the Board is covered by a card");
+    canvas.setPointerCapture = () => undefined;
+    const send = (type: string, x: number, y: number, buttons: number) => {
+      canvas.dispatchEvent(
+        new PointerEvent(type, {
+          pointerId: 1,
+          pointerType: "touch",
+          isPrimary: true,
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: y,
+          button: 0,
+          buttons,
+        }),
+      );
+    };
+    const before = hooks.camera();
+    send("pointerdown", start.x, start.y, 1);
+    send("pointermove", start.x + dx / 2, start.y + dy / 2, 1);
+    send("pointermove", start.x + dx, start.y + dy, 1);
+    send("pointerup", start.x + dx, start.y + dy, 0);
+    return { before, after: hooks.camera() };
+  }, by);
+}
 
 /**
  * Records every WebSocket the page constructs, before the app's scripts run
@@ -79,6 +128,20 @@ export const ROLL_PLAYBACK_MS = playbackOf([
 export type RoomChoices = { turnLimitMs?: 10_000 | 20_000 | 30_000 };
 
 /**
+ * Checks a Create screen segment after centring it first. `App.tsx` scrolls a
+ * focused field to the middle when it sits within 12 px of the visible area's
+ * edge (the on-screen keyboard's nudge). On a short screen (a landscape phone)
+ * Playwright's own scroll leaves the radio flush with the bottom, so the nudge
+ * moves it between the press and the release and the click never activates it.
+ * A centred radio is clear of the margin, so nothing moves.
+ */
+async function checkSegment(page: Page, label: string): Promise<void> {
+  const radio = page.getByLabel(label, { exact: true });
+  await radio.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  await radio.check();
+}
+
+/**
  * Creates a 2-Player Room on `creator` and fills the second Seat with a Guest
  * in a new context. The names are the failure dump's attachment names.
  */
@@ -92,9 +155,9 @@ export async function createAndJoin(
   registerPage(names.creator, creator);
   await probeSockets(creator);
   await creator.goto("/create");
-  await creator.getByLabel("2", { exact: true }).check();
+  await checkSegment(creator, "2");
   if (choices.turnLimitMs !== undefined) {
-    await creator.getByLabel(`${String(choices.turnLimitMs / 1_000)} s`, { exact: true }).check();
+    await checkSegment(creator, `${String(choices.turnLimitMs / 1_000)} s`);
   }
   await creator.getByRole("button", { name: "Create Room" }).click();
   await expect(creator).toHaveURL(/\/room\/[1-9]\d{5}$/);
@@ -259,6 +322,55 @@ export function showChance(
       ]);
     },
     { drawn: card, extra: effects },
+  );
+}
+
+/** The Fields the made-up pick views below make pickable, by the Board's ids. */
+const PICK_FIELDS = { budapest: 2, berlin: 15, london: 21, museum4: 28 } as const;
+
+/**
+ * Shows a made-up pick view through the test-only `showView` hook, as if the
+ * server had pushed it: a random game can't be steered into the Doubler corner
+ * or an Erasmus Field, and nothing is sent to the server. A Doubler view makes
+ * the Player own its two Fields; an Erasmus view clears the destinations.
+ * `pick-tray.spec.ts` builds the same view inline and moves onto this step when
+ * it is next edited.
+ */
+export function showPick(page: Page, kind: "doubler" | "erasmus"): Promise<void> {
+  return page.evaluate(
+    ({ pickKind, fields }) => {
+      const hooks = window.universumTest!;
+      const { me, push } = hooks.room();
+      const view = structuredClone(push!.view);
+      view.currentPlayer = me!;
+      const own = (id: number, level: number, rent: number) => {
+        view.fields[id] = { owner: me, level, value: 0, rent, sale: 0 };
+      };
+      if (pickKind === "doubler") {
+        view.phase = { kind: "placingDoubler", fields: [fields.budapest, fields.berlin] };
+        own(fields.budapest, 1, 121_000);
+        own(fields.berlin, 4, 880_000);
+        view.pickOptions = [
+          { kind: "doubler", field: fields.budapest, rent: 121_000, rentAfter: 242_000 },
+          { kind: "doubler", field: fields.berlin, rent: 880_000, rentAfter: 1_760_000 },
+        ];
+      } else {
+        view.phase = { kind: "choosingErasmus", fields: [fields.london, fields.museum4] };
+        view.fields[fields.london] = { owner: null, level: 0, value: 0, rent: 0, sale: 0 };
+        view.fields[fields.museum4] = { owner: null, level: 0, value: 0, rent: 0, sale: 0 };
+        view.pickOptions = [
+          { kind: "erasmus", field: fields.london, steps: 29, passesStart: true, bonus: 250_000 },
+          { kind: "erasmus", field: fields.museum4, steps: 4, passesStart: false, bonus: null },
+        ];
+      }
+      // A new decision each time (fresh picks), open now, with time on the server's clock.
+      const now = hooks.serverNow();
+      view.actsAfter = now;
+      view.turnDeadline = now + 18_000;
+      view.turnTimer = { endsAt: view.turnDeadline - 3_000, limitMs: 20_000 };
+      hooks.showView(view);
+    },
+    { pickKind: kind, fields: PICK_FIELDS },
   );
 }
 
