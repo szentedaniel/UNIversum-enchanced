@@ -15,6 +15,19 @@ import { RATE_LIMIT_WAITS_MS } from "#shared/github.ts";
 
 const HEAD_SHA = "head-sha";
 
+/** A rules `migrate.ts` whose chain holds one migration plus `entries`, as oxfmt writes them. */
+const migrateChain = (...entries: readonly string[]): string =>
+  [
+    "const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> = {",
+    "  1: (state) => ({ ...state, stateVersion: 2 }),",
+    ...entries,
+    "};",
+    "",
+    "export function migrate(stored: unknown): GameState {",
+    "  return stored;",
+    "}",
+  ].join("\n");
+
 const pull = (overrides: Partial<PullView> = {}): PullView => ({
   number: 132,
   state: "OPEN",
@@ -810,6 +823,90 @@ exit 0
     const bodyFile = /--body-file (\S+)/u.exec(created ?? "")?.[1] ?? "";
     expect(readFileSync(bodyFile, "utf8")).toContain("- The helper duplicates `excerptOf`.");
     expect(readFileSync(bodyFile, "utf8")).toContain("#132");
+  });
+
+  it("merges a mechanically checked migration that gh reports as a one-way door", () => {
+    const dir = mkdtempSync(join(tmpdir(), "factory-merge-migration-"));
+    const calls = join(dir, "gh-calls.log");
+    const payload = (name: string, content: string): void => {
+      writeFileSync(join(dir, name), content);
+    };
+    payload("state-base", "export const STATE_VERSION = 2;");
+    payload("state-main", "export const STATE_VERSION = 2;");
+    payload("state-head", "export const STATE_VERSION = 3;");
+    payload("migrate-main", migrateChain());
+    payload("migrate-head", migrateChain("  2: (state) => ({ ...state, stateVersion: 3 }),"));
+    payload("test-head", 'const snapshots = ["state-v3.json"];');
+    payload("fixtures-main", '["state-v1.json","state-v2.json"]');
+    payload("fixtures-head", '["state-v1.json","state-v2.json","state-v3.json"]');
+    writeFileSync(
+      join(dir, "comments"),
+      `{"body":${JSON.stringify(
+        summaryComment({
+          verdict: "pass",
+          findings: [],
+          mergeDanger: { door: "one-way", blastRadius: "wide", reason: "stored state" },
+        }),
+      )},"created_at":"2026-11-09T09:20:00Z"}\n`,
+    );
+    writeFileSync(
+      join(dir, "gh"),
+      `#!/bin/sh
+echo "$*" >> "${calls}"
+case "$*" in
+  *mergeCommit*) echo "abc1234" ;;
+  *"pr view"*)
+    echo '{"number":132,"state":"OPEN","title":"Implement #302: a migration","body":"Closes #302","headRefName":"agent/issue-302-migration","headRefOid":"head-sha","mergeStateStatus":"CLEAN","labels":["risk:high"],"closing":[302],"headCommittedAt":"2026-11-09T09:00:00Z","author":"universum-factory[bot]"}'
+    ;;
+  */pulls/132/files*)
+    printf '%s\\n' "packages/rules/src/state.ts" "packages/rules/src/migrate.ts" "packages/rules/test/migrate.test.ts" "packages/rules/test/fixtures/state-v3.json"
+    ;;
+  */actions/workflows/ci.yml/runs*) echo '[{"headSha":"head-sha","status":"completed","conclusion":"success","createdAt":"2026-11-09T09:10:00Z"}]' ;;
+  */compare/*) echo '{"mergeBase":"merge-base","mainAheadBy":0,"files":[]}' ;;
+  */issues/132/comments*) cat "${dir}/comments" ;;
+  *contents/*)
+    case "$*" in
+      *"state.ts?ref=merge-base"*) cat "${dir}/state-base" ;;
+      *"state.ts?ref=main"*) cat "${dir}/state-main" ;;
+      *"state.ts?ref=head-sha"*) cat "${dir}/state-head" ;;
+      *"migrate.ts?ref=main"*) cat "${dir}/migrate-main" ;;
+      *"migrate.ts?ref=head-sha"*) cat "${dir}/migrate-head" ;;
+      *"migrate.test.ts?ref=head-sha"*) cat "${dir}/test-head" ;;
+      *"fixtures/?ref=main"*) cat "${dir}/fixtures-main" ;;
+      *"fixtures/?ref=head-sha"*) cat "${dir}/fixtures-head" ;;
+    esac
+    ;;
+  *"issue view"*) echo "A migration" ;;
+esac
+exit 0
+`,
+    );
+    chmodSync(join(dir, "gh"), 0o755);
+
+    const result = spawnSync(
+      process.execPath,
+      [fileURLToPath(new URL("../src/merge/merge.ts", import.meta.url))],
+      {
+        encoding: "utf8",
+        timeout: 60_000,
+        env: {
+          ...process.env,
+          PATH: `${dir}:${process.env["PATH"] ?? ""}`,
+          GH_REPO: "owner/repo",
+          PR_NUMBER: "132",
+          DRY_RUN: "",
+        },
+      },
+    );
+
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Merged in abc1234.");
+    const commands = readFileSync(calls, "utf8").trim().split("\n");
+    expect(commands.some((command) => command.startsWith("pr merge 132"))).toBe(true);
+    expect(
+      commands.filter((command) => command.includes("contents/packages/rules/test/fixtures/")),
+    ).toHaveLength(2);
   });
 
   it("exits green when the run cannot outlast the refusal, so no escalation runs", () => {
