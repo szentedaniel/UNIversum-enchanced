@@ -212,11 +212,18 @@ export const sweepStep = ({ now, pull, runs }: SweepFacts): SweepStep => {
   return afterNudge("merge", pull, now) ?? { kind: "nudge", action: "merge" };
 };
 
-/** What each nudge does, for the comment, the dry run and the log. */
+/** What each nudge does, for the dry run and the log. */
 const ACTION_TEXT: Readonly<Record<SweepAction, string>> = {
   ci: "merge main in and start CI",
   review: "dispatch factory-review.yml",
   merge: "dispatch factory-merge.yml",
+};
+
+/** Why each nudge is taken, in the comment it leaves on the pull request. */
+const NUDGE_TEXT: Readonly<Record<SweepAction, string>> = {
+  ci: "no CI run started on the head; merging `main` in to start one",
+  review: "CI is green and `agent:review` is waiting; dispatching a review",
+  merge: "CI is green and the review passed; dispatching the merge gate",
 };
 
 /** What each escalation tried, in the comment a person reads. */
@@ -228,7 +235,7 @@ const TRIED_TEXT: Readonly<Record<SweepAction, string>> = {
 
 /** The hidden marker a nudge leaves, and the one line that explains it. */
 const nudgeComment = (action: SweepAction, sha: string): string =>
-  [sweepMarker(action, sha), `Factory sweep: ${ACTION_TEXT[action]}.`].join("\n");
+  [sweepMarker(action, sha), `Factory sweep: ${NUDGE_TEXT[action]}.`].join("\n");
 
 /** The comment and marker an escalation leaves before the label goes on. */
 const escalationComment = (action: SweepAction, pull: SweepPull): string =>
@@ -292,9 +299,12 @@ export const runSweep = ({
       // The marker goes first: a refused dispatch must not repeat the nudge.
       comment(pull.number, nudgeComment(step.action, pull.headSha));
       if (step.action === "ci") {
-        if (push(pull) === "conflict") {
+        const pushed = push(pull);
+        if (pushed === "conflict") {
           dispatch("factory-fix.yml", { pr: String(pull.number), reason: "main-moved" });
           log(`Merging main into #${String(pull.number)} conflicts; the fix loop decides.`);
+        } else if (pushed === "unchanged") {
+          log(`Main is already in #${String(pull.number)}; nothing to push.`);
         } else {
           log(`Merged main into #${String(pull.number)} to start CI.`);
         }
