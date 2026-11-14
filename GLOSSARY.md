@@ -111,6 +111,10 @@ _Avoid_: Sound effect (for the named entry), clip
 The only way Players talk in a Room: each picks a ready-made line or emote from a fixed catalogue, and the server shows it beside that Player's Seat; no free text is ever sent, and it is not the Event log.
 _Avoid_: Chat message, free chat
 
+**Bubble**:
+The line or emote a Player's quick chat shows by that Player's card for a few seconds, in each viewer's own language; the client keeps the latest one per Seat in memory, so a reload, a reconnect or another Room shows none.
+_Avoid_: Toast (a Bubble is by the card; a toast reports an event), Chat message
+
 **Turn timer**:
 The countdown a Player has for one decision of their Turn, starting when the Playback before it ends.
 _Avoid_: Turn countdown

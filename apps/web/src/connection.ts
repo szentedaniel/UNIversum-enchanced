@@ -22,6 +22,7 @@ import {
   MESSAGE,
   RECONNECT,
   backoffDelay,
+  type ChatEvent,
   type ClientIntent,
   type CreateOptions,
   type GameMessage,
@@ -34,6 +35,7 @@ import {
   type WelcomeMessage,
 } from "@universum/protocol/messages";
 import { guestToken } from "#guest-token.ts";
+import { chatStore } from "#stores/chat-store.ts";
 import {
   markIntentSent,
   receiveLobby,
@@ -114,6 +116,7 @@ export async function leaveRoom(): Promise<void> {
   const leaving = room;
   room = null;
   reset();
+  chatStore.getState().reset();
   if (leaving?.connection.isOpen) await leaving.leave();
 }
 
@@ -148,6 +151,9 @@ function listen(joined: Room): void {
   });
   joined.onMessage(MESSAGE.game, (push: GameMessage) => {
     if (mine()) receivePush(push, Date.now());
+  });
+  joined.onMessage(MESSAGE.chat, (event: ChatEvent) => {
+    if (mine()) chatStore.getState().show(event.seat, event.id, Date.now());
   });
   joined.onMessage(MESSAGE.rejected, ({ code }: RejectionMessage) => {
     if (mine()) receiveRejection(code);

@@ -335,5 +335,19 @@
   "update_available": "Eine neue Version von UNIversum ist bereit.",
   "update_refresh": "Aktualisieren",
   "update_later": "Später",
-  "update_in_game": "Du bekommst sie, sobald du dieses Spiel beendest oder verlässt."
+  "update_in_game": "Du bekommst sie, sobald du dieses Spiel beendest oder verlässt.",
+  "chat_line_good_luck": "Viel Glück!",
+  "chat_line_well_played": "Gut gespielt!",
+  "chat_line_nice_move": "Schöner Zug!",
+  "chat_line_thanks": "Danke!",
+  "chat_line_hurry_up": "Beeil dich!",
+  "chat_line_oops": "Hoppla!",
+  "chat_line_good_game": "Gutes Spiel!",
+  "chat_line_rematch": "Revanche?",
+  "chat_emote_cheer": "Jubel",
+  "chat_emote_groan": "Stöhnen",
+  "chat_emote_thinking": "Nachdenken",
+  "chat_emote_laugh": "Lachen",
+  "chat_emote_shock": "Schock",
+  "chat_emote_heart": "Herz"
 }
