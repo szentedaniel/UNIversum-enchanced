@@ -682,6 +682,59 @@ describe("the gate's flow", () => {
 });
 
 describe("the gate's entry", () => {
+  it("merges an advisory-only review and files one needs-triage follow-up", () => {
+    const dir = mkdtempSync(join(tmpdir(), "factory-merge-entry-"));
+    const calls = join(dir, "gh-calls.log");
+    writeFileSync(
+      join(dir, "gh"),
+      `#!/bin/sh
+echo "$*" >> "${calls}"
+case "$*" in
+  *mergeCommit*) echo "abc1234" ;;
+  *"pr view"*)
+    echo '{"number":132,"state":"OPEN","title":"Implement #132: deepen the merge gate script","body":"Closes #132","headRefName":"agent/issue-132-deepen-the-merge-gate","headRefOid":"head-sha","mergeStateStatus":"CLEAN","labels":["risk:low"],"closing":[132],"headCommittedAt":"2026-11-09T09:00:00Z","author":"universum-factory[bot]"}'
+    ;;
+  */pulls/132/files*) echo "apps/web/src/foo.ts" ;;
+  */actions/workflows/ci.yml/runs*) echo '[{"headSha":"head-sha","status":"completed","conclusion":"success","createdAt":"2026-11-09T09:10:00Z"}]' ;;
+  */compare/*) echo '{"mergeBase":"merge-base","mainAheadBy":0,"files":[]}' ;;
+  */issues/132/comments*)
+    printf '%s\\n' '{"body":"<!-- factory-review -->\\n## Factory review: changes requested\\n\\nThe reviewer committed the fixes it was sure of. These are the findings it left:\\n\\n- **Advisory:** The helper duplicates \`excerptOf\`.\\n- **Advisory:** The assertion is trivially true.\\n\\n**Merge danger:** two-way door, local blast radius. one factory step\\n","created_at":"2026-11-09T09:20:00Z"}'
+    ;;
+  *"issue view"*) echo "Deepen the merge gate script" ;;
+esac
+exit 0
+`,
+    );
+    chmodSync(join(dir, "gh"), 0o755);
+
+    const result = spawnSync(
+      process.execPath,
+      [fileURLToPath(new URL("../src/merge/merge.ts", import.meta.url))],
+      {
+        encoding: "utf8",
+        timeout: 60_000,
+        env: {
+          ...process.env,
+          PATH: `${dir}:${process.env["PATH"] ?? ""}`,
+          GH_REPO: "owner/repo",
+          PR_NUMBER: "132",
+          DRY_RUN: "",
+        },
+      },
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Merged in abc1234.");
+    const commands = readFileSync(calls, "utf8").trim().split("\n");
+    expect(commands.some((command) => command.startsWith("pr merge 132"))).toBe(true);
+    const created = commands.find((command) => command.startsWith("issue create"));
+    expect(created).toContain("--title Factory review follow-ups: #132");
+    expect(created).toContain("--label needs-triage");
+    const bodyFile = /--body-file (\S+)/u.exec(created ?? "")?.[1] ?? "";
+    expect(readFileSync(bodyFile, "utf8")).toContain("- The helper duplicates `excerptOf`.");
+    expect(readFileSync(bodyFile, "utf8")).toContain("#132");
+  });
+
   it("exits green when the run cannot outlast the refusal, so no escalation runs", () => {
     const dir = mkdtempSync(join(tmpdir(), "factory-merge-entry-"));
     const calls = join(dir, "gh-calls.log");
