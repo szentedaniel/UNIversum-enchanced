@@ -39,10 +39,12 @@ and PWA), last ticket of its suggested order. Files: `apps/e2e/tests/mobile.spec
   `window.scrollY` stays 0. There is no fixed wait anywhere: `showPick` puts `actsAfter` on the server clock, so
   the tray's gate is open at once and Playwright's auto-waiting covers the rest (the ADR-0004 wait rule does not
   bite).
-- The portrait test adds `expectInsideViewport` for the whole tray after a pick: a portrait phone reserves 14rem
-  for it (#264). At the landscape profile's 343 px height `cardMaxHeight` is 154, so its tray scrolls; the shared
-  journey therefore only requires the tray's top and sides on screen and its pinned primary action in the
-  viewport (`toBeInViewport`).
+- The portrait test adds `expectBoxesInsideViewport` for the card's scroll frame and for the tray once that frame
+  is scrolled to its end (`cardBoxesAtScrollEnd`). The tray is taller than the portrait budget — 292 px against
+  224 on the iPhone 15 profile, because the Doubler's hint renders inside it — so the card scrolls inside
+  `Game.tsx`'s frame in both orientations (#264), and that frame, not the tray's own box, is what must fit the
+  screen. The shared journey therefore only requires the tray's top and sides on screen and its pinned primary
+  action in the viewport (`toBeInViewport`).
 
 ## Shared steps added to `helpers.ts`
 

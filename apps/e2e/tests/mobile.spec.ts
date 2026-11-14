@@ -44,6 +44,9 @@ const TAP_TARGET_PX = 44;
 const viewportOf = (page: Page) =>
   page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
 
+/** A box in viewport pixels, as `getBoundingClientRect` reports it. */
+type Box = { x: number; y: number; width: number; height: number };
+
 /** The element's box in viewport pixels; a locator that is not on screen has none. */
 async function boxOf(target: Locator, label: string) {
   const box = await target.boundingBox();
@@ -52,17 +55,13 @@ async function boxOf(target: Locator, label: string) {
   return box;
 }
 
-/** Every element of `target` sits inside the visible viewport: a phone never needs a page scroll. */
-async function expectInsideViewport(page: Page, target: Locator, label: string): Promise<void> {
-  const [boxes, viewport] = await Promise.all([
-    target.evaluateAll((elements) =>
-      elements.map((element) => {
-        const { x, y, width, height } = element.getBoundingClientRect();
-        return { x, y, width, height };
-      }),
-    ),
-    viewportOf(page),
-  ]);
+/** Every box sits inside the visible viewport: a phone never needs a page scroll. */
+async function expectBoxesInsideViewport(
+  page: Page,
+  boxes: readonly Box[],
+  label: string,
+): Promise<void> {
+  const viewport = await viewportOf(page);
   expect(boxes.length, `${label} is not on screen`).toBeGreaterThan(0);
   const outside = boxes.filter(
     (box) =>
@@ -72,6 +71,47 @@ async function expectInsideViewport(page: Page, target: Locator, label: string):
       box.y + box.height > viewport.height + 1,
   );
   expect(outside, `${label} leaves the visible viewport`).toEqual([]);
+}
+
+/** Every element of `target` sits inside the visible viewport. */
+async function expectInsideViewport(page: Page, target: Locator, label: string): Promise<void> {
+  await expectBoxesInsideViewport(
+    page,
+    await target.evaluateAll((elements) =>
+      elements.map((element) => {
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return { x, y, width, height };
+      }),
+    ),
+    label,
+  );
+}
+
+/**
+ * The card's scroll frame and the card once that frame has scrolled to its end.
+ * A phone caps the bottom card at its budget and scrolls a taller card inside
+ * the frame (#264; the Doubler's hint renders inside the tray), so the frame is
+ * what clips the card and must fit the screen; scrolling to the end brings the
+ * card itself on screen too.
+ */
+async function cardBoxesAtScrollEnd(target: Locator, label: string): Promise<readonly Box[]> {
+  const boxes = await target.evaluate((element) => {
+    for (let node = element.parentElement; node !== null; node = node.parentElement) {
+      const { overflowY } = getComputedStyle(node);
+      if (overflowY !== "auto" && overflowY !== "scroll") continue;
+      const { x, y, width, height } = node.getBoundingClientRect();
+      node.scrollTop = node.scrollHeight;
+      const card = element.getBoundingClientRect();
+      return [
+        { x, y, width, height },
+        { x: card.x, y: card.y, width: card.width, height: card.height },
+      ];
+    }
+    return null;
+  });
+  expect(boxes, `${label} has no scroll frame`).not.toBeNull();
+  if (boxes === null) throw new Error(`${label} has no scroll frame`);
+  return boxes;
 }
 
 /** Every button inside `target` is a thumb-sized tap target (spec #184, story 4). */
@@ -91,10 +131,10 @@ async function expectTapTargets(target: Locator, label: string): Promise<void> {
 
 /**
  * The phone game, end to end: the strip's Player cards, a one-finger Board drag
- * and the Doubler's Decision tray. A short landscape screen scrolls the tray
- * above its pinned primary action instead of clearing the whole screen (#264),
- * so this checks the tray is on screen and its action reachable, and the
- * portrait test adds that the whole tray fits.
+ * and the Doubler's Decision tray. A card taller than its budget scrolls inside
+ * the frame instead of clearing the whole screen (#264), so this checks the tray
+ * is on screen and its pinned primary action reachable; the portrait test adds
+ * the frame and the card at the end of that scroll.
  */
 async function expectPhoneGame(page: Page, isMobile: boolean): Promise<void> {
   const actor = { page, mobile: isMobile };
@@ -252,8 +292,13 @@ test.describe("phone portrait", () => {
     const { context } = await startGame(page, browser);
     try {
       await expectPhoneGame(page, isMobile);
-      // A portrait phone reserves the tray's whole height above the Board (#264).
-      await expectInsideViewport(page, page.getByTestId("pick-tray"), "the tray");
+      // A portrait phone reserves 14rem for the card (#264), but the Doubler's
+      // hint renders inside the tray and takes it past that budget (292 px
+      // against 224 on the iPhone 15 profile). The card then scrolls inside
+      // Game.tsx's frame: the frame clips it, so the frame, and the tray at the
+      // end of the scroll, are what must sit on the screen.
+      const boxes = await cardBoxesAtScrollEnd(page.getByTestId("pick-tray"), "the tray");
+      await expectBoxesInsideViewport(page, boxes, "the tray's card");
     } finally {
       closeAfterDump(context);
     }
