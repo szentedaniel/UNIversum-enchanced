@@ -9,7 +9,12 @@ import { DiceOverlay } from "#components/DiceOverlay.tsx";
 import { EventLog } from "#components/EventLog.tsx";
 import { GameMenu } from "#components/GameMenu.tsx";
 import { EventToast, MinutePill } from "#components/GameHud.tsx";
-import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
+import {
+  PlayerCard,
+  PlayerChip,
+  type ChatPlacement,
+  type PlayerSummary,
+} from "#components/PlayerCard.tsx";
 import { Podium } from "#components/Podium.tsx";
 import { buttonVariants } from "#components/ui/button.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
@@ -195,7 +200,8 @@ export function Game() {
             <PlayerCard
               key={player.seat}
               player={player}
-              className={cn("absolute", CORNERS[player.seat], player.current && "z-10")}
+              className={cn("absolute", CORNERS[player.seat]?.card, player.current && "z-10")}
+              bubblePlacement={CORNERS[player.seat]?.bubble}
             />
           ))}
         </ul>
@@ -218,11 +224,12 @@ export function Game() {
             Player's full card in the strip's place so the cards never cover
             the Board. The wide screen keeps the corner cards. */}
         {openPlayer === null ? (
-          players.map((player) => (
+          players.map((player, index) => (
             <PlayerChip
               key={player.seat}
               player={player}
               className="w-0 max-w-28 flex-1"
+              bubblePlacement={index < players.length / 2 ? "below-start" : "below-end"}
               onExpand={() => setOpenCard(player.seat)}
               compactMoney={compactMoney}
             />
@@ -259,5 +266,10 @@ export function Game() {
   );
 }
 
-/** Desktop corner of each Seat, clockwise from top left. */
-const CORNERS = ["top-3 left-3", "top-3 right-3", "right-3 bottom-3", "bottom-3 left-3"];
+/** Desktop corner of each Seat, clockwise from top left, and where its chat bubble hangs. */
+const CORNERS: { card: string; bubble: ChatPlacement }[] = [
+  { card: "top-3 left-3", bubble: "below-start" },
+  { card: "top-3 right-3", bubble: "below-end" },
+  { card: "right-3 bottom-3", bubble: "above-end" },
+  { card: "bottom-3 left-3", bubble: "above-start" },
+];

@@ -3,15 +3,20 @@
  * name, cash, Field count; the current Player's card is larger) and a compact
  * chip on phone (the active one gets the ring). On phone the chips form a strip
  * above the Board that expands one Player into the full card, so the cards
- * never cover the Board; the wide screen keeps the corner cards.
+ * never cover the Board; the wide screen keeps the corner cards. A Seat's
+ * quick-chat bubble hangs off its card absolutely, so it never changes the
+ * card's size or the Board's fit (spec #176).
  */
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
+import { useStore } from "zustand";
+import { bubbleOf, type ChatFace } from "#chat/catalogue.ts";
 import { BotMark } from "#components/BotMark.tsx";
 import { PlayerToken } from "#components/PlayerToken.tsx";
 import { TimerRing } from "#components/TimerRing.tsx";
 import { Button } from "#components/ui/button.tsx";
 import { cn } from "#lib/utils.ts";
+import { BUBBLE_MS, chatStore } from "#stores/chat-store.ts";
 import { m } from "#text.ts";
 
 export type PlayerSummary = {
@@ -33,13 +38,61 @@ export type PlayerSummary = {
   ring?: ReactNode;
 };
 
+/**
+ * Where a card's bubble hangs: below the top cards and the phone strip, above
+ * the bottom corners, and toward the Board at the screen edge. Absolute, so it
+ * never shifts the card or the Board's fit.
+ */
+export type ChatPlacement = "below-start" | "below-end" | "above-start" | "above-end";
+
+const CHAT_PLACEMENT: Record<ChatPlacement, string> = {
+  "below-start": "top-full left-0 mt-2",
+  "below-end": "top-full right-0 mt-2",
+  "above-start": "bottom-full left-0 mb-2",
+  "above-end": "bottom-full right-0 mb-2",
+};
+
+/** The Seat's bubble as of this render, or null once it is older than BUBBLE_MS. */
+function useChatBubble(seat: number): ChatFace | null {
+  const bubble = useStore(chatStore, (state) => state.bubbleAt(seat, Date.now()));
+  return bubble === null ? null : bubbleOf(bubble.id);
+}
+
+/** The Seat's current quick-chat bubble: a line's text, or an emote's glyph and accessible label. */
+function ChatBubble({ seat, placement }: { seat: number; placement: ChatPlacement }) {
+  const face = useChatBubble(seat);
+  if (face === null) return null;
+  return (
+    <output
+      data-testid="chat-bubble"
+      style={{ animationDuration: `${BUBBLE_MS}ms` }}
+      className={cn(
+        "chat-bubble sticker-sm pointer-events-none absolute z-20 w-max max-w-56 rounded-2xl bg-card px-2 py-1 text-xs font-black text-card-foreground",
+        CHAT_PLACEMENT[placement],
+      )}
+    >
+      {face.kind === "emote" ? (
+        <>
+          <span aria-hidden="true">{face.glyph}</span>
+          <span className="sr-only">{face.label}</span>
+        </>
+      ) : (
+        face.text
+      )}
+    </output>
+  );
+}
+
 export function PlayerCard({
   player,
   className,
+  bubblePlacement = "below-start",
   onCollapse,
 }: {
   player: PlayerSummary;
   className?: string;
+  /** Which side of the card the Seat's chat bubble hangs on. */
+  bubblePlacement?: ChatPlacement;
   /** The phone strip's expanded card: adds the button that returns to the chips. */
   onCollapse?: () => void;
 }) {
@@ -50,7 +103,7 @@ export function PlayerCard({
       data-current={current || undefined}
       aria-current={current || undefined}
       className={cn(
-        "sticker flex w-64 items-center gap-3 rounded-ui bg-card p-3 text-card-foreground transition-transform",
+        "sticker relative flex w-64 items-center gap-3 rounded-ui bg-card p-3 text-card-foreground transition-transform",
         current && "scale-110 border-4! border-primary!",
         bankrupt && "opacity-50 grayscale",
         className,
@@ -83,6 +136,7 @@ export function PlayerCard({
           <X size={18} strokeWidth={3} aria-hidden="true" />
         </Button>
       )}
+      <ChatBubble seat={seat} placement={bubblePlacement} />
     </li>
   );
 }
@@ -90,11 +144,14 @@ export function PlayerCard({
 export function PlayerChip({
   player,
   className,
+  bubblePlacement = "below-start",
   onExpand,
   compactMoney = false,
 }: {
   player: PlayerSummary;
   className?: string;
+  /** Which side of the chip the Seat's chat bubble hangs on. */
+  bubblePlacement?: ChatPlacement;
   /** Opens this Player's full card in the strip's place. */
   onExpand: () => void;
   /** Shows `cashShort` instead of the full amount (see `stripMoney`). */
@@ -106,7 +163,7 @@ export function PlayerChip({
       data-testid="player-chip"
       data-current={current || undefined}
       aria-current={current || undefined}
-      className={cn("flex min-w-0", className)}
+      className={cn("relative flex min-w-0", className)}
     >
       <button
         type="button"
@@ -135,6 +192,7 @@ export function PlayerChip({
           {status}
         </div>
       </button>
+      <ChatBubble seat={seat} placement={bubblePlacement} />
     </li>
   );
 }
