@@ -51,9 +51,11 @@ export function tapChat(
 
 /**
  * Whether the game the view shows offers the tray to this client's Guest: a
- * seated Player, and not the result screen. A spectator (#248) holds no Seat,
- * and the Lobby draws no Game screen; #232 adds the mute gate beside the call.
+ * seated Player, not the result screen, and not a Guest who muted chat (#232).
+ * A spectator (#248) holds no Seat, and the Lobby draws no Game screen.
  */
-export function chatOpenTo(view: PublicView, me: PlayerId | null): boolean {
-  return me !== null && view.phase.kind !== "gameOver" && view.players.some((p) => p.id === me);
+export function chatOpenTo(view: PublicView, me: PlayerId | null, muted: boolean): boolean {
+  return (
+    !muted && me !== null && view.phase.kind !== "gameOver" && view.players.some((p) => p.id === me)
+  );
 }

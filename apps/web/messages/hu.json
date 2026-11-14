@@ -338,6 +338,8 @@
   "update_in_game": "A játék befejezése vagy elhagyása után lép életbe.",
   "chat_open": "Gyorscsevegés",
   "chat_close": "Gyorscsevegés bezárása",
+  "chat_on": "Gyorscsevegés be",
+  "chat_off": "Gyorscsevegés ki",
   "chat_lines": "Mondatok",
   "chat_emotes": "Hangulatjelek",
   "chat_line_good_luck": "Sok szerencsét!",

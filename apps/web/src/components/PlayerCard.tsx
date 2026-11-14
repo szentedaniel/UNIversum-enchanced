@@ -17,6 +17,7 @@ import { TimerRing } from "#components/TimerRing.tsx";
 import { Button } from "#components/ui/button.tsx";
 import { cn } from "#lib/utils.ts";
 import { BUBBLE_MS, chatStore } from "#stores/chat-store.ts";
+import { chatMuteStore } from "#stores/chat-mute-store.ts";
 import { m } from "#text.ts";
 
 export type PlayerSummary = {
@@ -54,8 +55,11 @@ const CHAT_PLACEMENT: Record<ChatPlacement, string> = {
 
 /** The Seat's current quick-chat bubble: a line's text, or an emote's glyph and accessible label. */
 function ChatBubble({ seat, placement }: { seat: number; placement: ChatPlacement }) {
+  // Mute is gated here, at the render: the store still records what arrives
+  // while muted, and the setting drops the bubbles when it changes (chat-mute-store).
+  const muted = useStore(chatMuteStore, (state) => state.muted);
   const bubble = useStore(chatStore, (state) => state.bubbleAt(seat, Date.now()));
-  if (bubble === null) return null;
+  if (muted || bubble === null) return null;
   const face: ChatFace = bubbleOf(bubble.id);
   return (
     <output
