@@ -25,9 +25,9 @@ sender's Player card, in the viewer's language. Read for: #231 (the tray), #232
   handed to `show`/`bubbleAt`/`expire`, so `apps/web/test/chat-store.test.ts`
   drives it with fake timers and never sleeps.
 - `BUBBLE_MS` is a UI timing, not a Playback length: nothing here imports
-  `apps/web/src/playback/`, and ADR-0004's fences (`playback-fence` patterns,
-  `server-clock-fence`) needed no change. Keep it that way; the store reads no
-  `clockOffset`.
+  `apps/web/src/playback/`, and ADR-0004's fences (the import fence's
+  Playback restriction, `server-clock-fence`) needed no change. Keep it that way;
+  the store reads no `clockOffset`.
 
 ## The catalogue and the text
 
@@ -41,15 +41,18 @@ sender's Player card, in the viewer's language. Read for: #231 (the tray), #232
   accessible labels, the glyphs live in the catalogue. After editing messages run
   `pnpm --filter @universum/web run paraglide`; `messages.test.ts` keeps the
   three files' key sets identical, and `apps/web/test/chat-catalogue.test.ts`
-  pins that every `CHAT_IDS` entry resolves in hu, en and de.
+  pins that every `CHAT_IDS` entry resolves in hu, en and de. The card's own
+  markup is pinned in `apps/web/test/chat-store.test.ts` through the SSR
+  `zustand` seam `rematch-return.test.ts` uses (its `useStore` mock reads the
+  store's live state, because `getServerSnapshot` returns the initial one).
 - Chat text is never user input: the bubble renders the catalogue's string only.
 
 ## The display
 
 - `apps/web/src/components/PlayerCard.tsx` exports `ChatPlacement`
   (`below-start | below-end | above-start | above-end`). Module-private: the
-  `CHAT_PLACEMENT` class map and the `ChatBubble` node both `PlayerCard` and
-  `PlayerChip` render as their last child; it reads `chatStore.bubbleAt(seat,
+  `CHAT_PLACEMENT` class map, and the `ChatBubble` node that both `PlayerCard`
+  and `PlayerChip` render as their last child; it reads `chatStore.bubbleAt(seat,
   Date.now())` and maps the id through `bubbleOf`. `PlayerSummary` stays pure;
   the bubble is not part of it.
 - The bubble is an absolutely positioned `<output>` (implicit `role="status"`,
@@ -66,15 +69,17 @@ sender's Player card, in the viewer's language. Read for: #231 (the tray), #232
 - `apps/web/src/screens/Game.tsx`: `CORNERS` now holds `{ card, bubble }` — the
   wide corner cards hang their bubble below the top cards and above the bottom
   ones, pointing inward. The phone chips pick by half of the strip
-  (`index < players.length / 2 ? "below-start" : "below-end"`), so a bubble never
-  runs off the edge; the expanded card uses the default `below-start`.
+  (`index < players.length / 2 ? "below-start" : "below-end"`), so a bubble leans
+  inward instead of off the near edge; the expanded card uses the default
+  `below-start`.
 - The fade is `apps/web/src/styles.css`'s `.chat-bubble`: `animation-name` only,
-  the duration inline from `BUBBLE_MS`, so the fade ends as the store drops the
-  node. The global reduced-motion rule excludes `.chat-bubble` and sets its
-  `animation: none`, so the bubble holds still and simply disappears.
+  the duration inline from `BUBBLE_MS`, so the fade ends about when the store
+  drops the node. The global reduced-motion rule excludes `.chat-bubble` and sets
+  its `animation: none`, so the bubble holds still and simply disappears.
 
 ## What this does not do
 
 - No sending: the tray and its cooldown are #231, mute is #232, the two-Guest
-  Playwright spec is #233. `apps/web/test/` has the unit tests only; the UI is
-  verified by hand here and by #233 in CI.
+  Playwright spec is #233. `apps/web/test/` pins the store, the catalogue and the
+  card's markup; the live layout (phone edges, the fade, a rapid repeat) has no
+  automated check here — #233's CI spec covers one received bubble.
