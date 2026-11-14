@@ -137,15 +137,15 @@ describe("the tray's open state", () => {
 
 describe("who the tray is offered to", () => {
   it("offers it to a seated Guest in a running game, in any phase", () => {
-    expect(chatOpenTo(viewOf(), "p1")).toBe(true);
+    expect(chatOpenTo(viewOf(), "p1", false)).toBe(true);
     expect(
-      chatOpenTo(viewOf(undefined, { phase: { kind: "placingDoubler", fields: [1] } }), "p2"),
+      chatOpenTo(viewOf(undefined, { phase: { kind: "placingDoubler", fields: [1] } }), "p2", false),
     ).toBe(true);
   });
 
   it("refuses it to a Guest with no Seat and to a Seat the view does not carry", () => {
-    expect(chatOpenTo(viewOf(), null)).toBe(false);
-    expect(chatOpenTo(viewOf(), "gone")).toBe(false);
+    expect(chatOpenTo(viewOf(), null, false)).toBe(false);
+    expect(chatOpenTo(viewOf(), "gone", false)).toBe(false);
   });
 
   it("refuses it on the result screen", () => {
@@ -154,7 +154,7 @@ describe("who the tray is offered to", () => {
       standings: [{ player: "p1", wealth: 100_000 }],
     });
 
-    expect(chatOpenTo(gameOver, "p1")).toBe(false);
+    expect(chatOpenTo(gameOver, "p1", false)).toBe(false);
   });
 });
 

@@ -31,6 +31,7 @@ import { playbackStore } from "#playback/playback-store.ts";
 import { DecisionTray } from "#screens/DecisionTray.tsx";
 import { TurnCard } from "#screens/TurnCard.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
+import { chatMuteStore } from "#stores/chat-mute-store.ts";
 import { hintStore } from "#stores/hint-store.ts";
 import { inFlightOf, inLobbyOf, roomStore } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
@@ -137,9 +138,10 @@ export function Game() {
   const compactMoney = stripMoney(cardLayout.width, players.length) === "compact";
   const rejected = rejection !== null && rejection.seq > push.seq;
   // The quick-chat tray (#231): a seated Guest in a running game, in any phase
-  // and on another Player's Turn; never on the result screen. #232 gates it
-  // with one mute condition at this one mount.
-  const chatOpen = chatOpenTo(view, me);
+  // and on another Player's Turn; never on the result screen, and never while
+  // the Guest muted chat (#232), which hides the toggle here and every bubble.
+  const chatMuted = useStore(chatMuteStore, (state) => state.muted);
+  const chatOpen = chatOpenTo(view, me, chatMuted);
   // The Playback's DOM layer: the frame's overlay is the dice or a drawn Chance card.
   const boardOverlay =
     overlay?.kind === "dice" ? (

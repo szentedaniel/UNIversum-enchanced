@@ -1,11 +1,13 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { chatOpenTo } from "#chat/tray.ts";
 import { PlayerCard, type PlayerSummary } from "#components/PlayerCard.tsx";
 import { baseLocale, overwriteGetLocale } from "#paraglide/runtime.js";
 import { BUBBLE_MS, chatStore } from "#stores/chat-store.ts";
 import { CHAT_MUTED_KEY, chatMuteStore } from "#stores/chat-mute-store.ts";
 import { SOUND_MUTED_KEY } from "#stores/sound-store.ts";
+import { viewOf } from "./playback-fixtures.ts";
 
 // React's server renderer reads a zustand store's *initial* state
 // (`getServerSnapshot`), not the state a test has written. The card reads the
@@ -160,5 +162,13 @@ describe("the muted bubbles", () => {
 
     chatStore.getState().show(1, "thanks", T0 + BUBBLE_MS);
     expect(renderCard()).toContain("Thanks!");
+  });
+});
+
+describe("the muted tray", () => {
+  it("offers the quick-chat tray to a seated Guest only while unmuted", () => {
+    expect(chatOpenTo(viewOf(), "p1", false)).toBe(true);
+    expect(chatOpenTo(viewOf(), "p1", true)).toBe(false);
+    expect(chatOpenTo(viewOf(), null, false)).toBe(false);
   });
 });
