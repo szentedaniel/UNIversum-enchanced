@@ -15,10 +15,37 @@ export type RematchSeat = { playerId: PlayerId; bot?: boolean };
 export type RematchVote = "Rematch" | "WithdrawRematch";
 
 /**
- * What made the Room re-check the agreement (ticket #225): a vote changed, or
- * a Guest left the Podium, so a non-voter who is gone no longer blocks.
+ * What made the Room re-check the agreement: a vote changed (ticket #225), a
+ * Guest left the Podium, so a non-voter who is gone no longer blocks, or the
+ * fixed window ran out (ticket #226).
  */
-export type RematchTrigger = RematchVote | "PodiumLeft";
+export type RematchTrigger = RematchVote | "PodiumLeft" | "RematchExpired";
+
+/** How long the first vote waits for the rest of the table (spec #175, decision 2). */
+export const REMATCH_WINDOW_MS = 30_000;
+
+/** When the window a first vote at `firstVoteAt` opened runs out. */
+export function windowExpiresAt(firstVoteAt: number): number {
+  return firstVoteAt + REMATCH_WINDOW_MS;
+}
+
+/** Whether the window a first vote at `firstVoteAt` opened has run out at `now`. */
+export function windowExpired(now: number, firstVoteAt: number): boolean {
+  return now >= windowExpiresAt(firstVoteAt);
+}
+
+/** A Lobby write that failed when the window ran out is tried again after this, doubling each time… */
+export const REMATCH_RETRY_MS = 5_000;
+/** …up to this, until the write lands or retention deletes the Room. */
+export const REMATCH_RETRY_MAX_MS = 60_000;
+
+/**
+ * How long after a failed return the Room waits for its next try. `retries`
+ * counts the failed returns, so the first retry is `REMATCH_RETRY_MS` later.
+ */
+export function rematchRetryDelay(retries: number): number {
+  return Math.min(REMATCH_RETRY_MS * 2 ** (retries - 1), REMATCH_RETRY_MAX_MS);
+}
 
 /**
  * Whether the Room keeps this Seat when it returns: its Guest agreed, or a

@@ -4,7 +4,7 @@ import type { GameMetrics } from "#observability/metrics.ts";
 
 /**
  * The internal HTTP port (spec: Health): `/healthz` (the process is up) and
- * `/readyz` (every unfinished Room is restored). Caddy never routes it and
+ * `/readyz` (every stored Room is restored). Caddy never routes it and
  * compose never publishes it; the compose healthcheck polls `/readyz` and the
  * `monitoring` profile's Prometheus scrapes `/metrics`.
  */

@@ -151,13 +151,17 @@ describe("the SQLite RoomStore", () => {
     expect(store.events("555555")).toEqual([]);
   });
 
-  it("does not load ended Rooms as unfinished, but lists them with their end time until deleted", () => {
+  it("does not load ended Rooms as unfinished, but lists them with their snapshot until deleted", () => {
     const { store } = freshStore();
     store.save({ ...lobby("777777"), game: game(), endedAt: T0 }, []);
 
     expect(store.unfinished()).toEqual([]);
-    expect(store.ended()).toEqual([{ code: "777777", endedAt: T0 }]);
+    // The snapshot lets a restart offer the Podium again (spec #175, decision 6).
+    expect(store.ended()).toMatchObject([{ code: "777777", game: game(), endedAt: T0 }]);
     expect(store.isCodeInUse("777777")).toBe(true);
+
+    store.delete("777777");
+    expect(store.ended()).toEqual([]);
   });
 
   it("runs in WAL mode", () => {

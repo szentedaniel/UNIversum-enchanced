@@ -199,7 +199,7 @@ export type TestServer = {
 
 /**
  * Starts the Room server in-process the way `main.ts` does: the store, both
- * ports, listen, restore every unfinished Room, then ready. One at a time per
+ * ports, listen, restore every stored Room, then ready. One at a time per
  * test file: Colyseus' matchmaker is a process-wide singleton.
  */
 export async function startTestServer(options: TestServerOptions = {}): Promise<TestServer> {

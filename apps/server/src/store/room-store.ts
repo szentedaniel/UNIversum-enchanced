@@ -45,8 +45,12 @@ export type StoredRoom<G = GameState> = {
 export interface RoomStore {
   /** Every Room whose game has not ended, Lobbies included, for restore on boot. */
   unfinished(): StoredRoom<unknown>[];
-  /** Every ended Room still stored, for retention. */
-  ended(): { code: string; endedAt: number }[];
+  /**
+   * Every ended Room still stored, with its snapshot, for restore on boot: its
+   * Podium offers the rematch again after a restart (spec #175, decision 6).
+   * Retention still deletes it `RETENTION_MS` after `endedAt`.
+   */
+  ended(): StoredRoom<unknown>[];
   /**
    * Saves the Room's snapshot and appends the events of the intent that led
    * to it, in one transaction: both are written or neither is (then it throws).

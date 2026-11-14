@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   castVote,
+  REMATCH_RETRY_MAX_MS,
+  REMATCH_RETRY_MS,
+  REMATCH_WINDOW_MS,
+  rematchRetryDelay,
   seatsAfterRematch,
   shouldReturn,
   votersOf,
+  windowExpired,
+  windowExpiresAt,
   withdrawVote,
 } from "#room/rematch.ts";
 
@@ -76,6 +82,30 @@ describe("the all-agreed rule", () => {
 
     expect(shouldReturn(seated, new Set(["p1"]), connected("p1", "bot"))).toBe(true);
     expect(shouldReturn(seated, new Set(["bot"]), connected("p1", "bot"))).toBe(false);
+  });
+});
+
+describe("the rematch window", () => {
+  const firstVoteAt = 1_000_000;
+
+  it("lasts 30 s from the first vote", () => {
+    expect(REMATCH_WINDOW_MS).toBe(30_000);
+    expect(windowExpiresAt(firstVoteAt)).toBe(firstVoteAt + 30_000);
+  });
+
+  it("has not run out a moment before its end, and has run out at its end", () => {
+    const expiresAt = windowExpiresAt(firstVoteAt);
+
+    expect(windowExpired(expiresAt - 1, firstVoteAt)).toBe(false);
+    expect(windowExpired(expiresAt, firstVoteAt)).toBe(true);
+    expect(windowExpired(expiresAt + 1, firstVoteAt)).toBe(true);
+  });
+
+  it("retries a failed return after a back-off, up to a minute", () => {
+    expect(rematchRetryDelay(1)).toBe(REMATCH_RETRY_MS);
+    expect(rematchRetryDelay(2)).toBe(2 * REMATCH_RETRY_MS);
+    expect(rematchRetryDelay(5)).toBe(REMATCH_RETRY_MAX_MS);
+    expect(rematchRetryDelay(100)).toBe(REMATCH_RETRY_MAX_MS);
   });
 });
 

@@ -39,6 +39,22 @@ type Snapshot = Omit<
 > &
   Partial<Pick<StoredRoom<unknown>, "roomName" | "creatorId" | "password">>;
 
+/** One stored row as a `StoredRoom`; the snapshot is the source of truth. */
+function storedRoom(row: Record<string, unknown>, endedAt: number | null): StoredRoom<unknown> {
+  const snapshot: Snapshot = JSON.parse(String(row["state"]));
+  const { settings, seats, game, roomName = null, creatorId = null, password = null } = snapshot;
+  return {
+    code: String(row["code"]),
+    settings,
+    roomName,
+    creatorId,
+    password,
+    seats,
+    game,
+    endedAt,
+  };
+}
+
 export function openSqliteRoomStore(path: string): SqliteRoomStore {
   const db = new DatabaseSync(path);
   db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;");
@@ -54,7 +70,7 @@ export function openSqliteRoomStore(path: string): SqliteRoomStore {
     "SELECT code, state FROM rooms WHERE ended_at IS NULL ORDER BY code",
   );
   const selectEnded = db.prepare(
-    "SELECT code, ended_at FROM rooms WHERE ended_at IS NOT NULL ORDER BY ended_at",
+    "SELECT code, state, ended_at FROM rooms WHERE ended_at IS NOT NULL ORDER BY ended_at",
   );
   const selectCode = db.prepare("SELECT 1 FROM rooms WHERE code = ?");
   const deleteRoom = db.prepare("DELETE FROM rooms WHERE code = ?");
@@ -75,33 +91,11 @@ export function openSqliteRoomStore(path: string): SqliteRoomStore {
 
   return {
     unfinished() {
-      return selectUnfinished.all().map((row) => {
-        const snapshot: Snapshot = JSON.parse(String(row["state"]));
-        const {
-          settings,
-          seats,
-          game,
-          roomName = null,
-          creatorId = null,
-          password = null,
-        } = snapshot;
-        return {
-          code: String(row["code"]),
-          settings,
-          roomName,
-          creatorId,
-          password,
-          seats,
-          game,
-          endedAt: null,
-        };
-      });
+      return selectUnfinished.all().map((row) => storedRoom(row, null));
     },
 
     ended() {
-      return selectEnded
-        .all()
-        .map((row) => ({ code: String(row["code"]), endedAt: Number(row["ended_at"]) }));
+      return selectEnded.all().map((row) => storedRoom(row, Number(row["ended_at"])));
     },
 
     save(room, events) {

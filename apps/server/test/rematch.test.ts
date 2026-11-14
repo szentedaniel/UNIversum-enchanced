@@ -8,6 +8,7 @@ import {
   type TestClient,
   type TestServer,
 } from "./helpers.ts";
+import { REMATCH_RETRY_MS, REMATCH_WINDOW_MS } from "#room/rematch.ts";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -329,7 +330,7 @@ describe("returning to Lobby", () => {
     const { alice, bob, code } = await startedGame(server);
     const ended = await endedGame(server, alice, bob);
     const endsAt = endedAtOf(server, code);
-    expect(server.store.ended()).toEqual([{ code, endedAt: endsAt }]);
+    expect(server.store.ended()).toMatchObject([{ code, endedAt: endsAt }]);
 
     await bothAgree(server, alice, bob);
 
@@ -359,11 +360,13 @@ describe("returning to Lobby", () => {
       scheduler: new ManualScheduler(endsAt + 1_000),
     });
 
-    expect(after.restored).toBe(0);
-    expect(after.room(code)).toBeUndefined();
-    expect(after.store.ended()).toEqual([{ code, endedAt: endsAt }]);
+    // The ended Room comes back under its code, its Podium offered again.
+    expect(after.restored).toBe(1);
+    expect(after.room(code)?.endedAt).toBe(endsAt);
+    expect(after.store.ended()).toMatchObject([{ code, endedAt: endsAt }]);
     after.scheduler.advanceTo(endsAt + RETENTION);
     expect(after.store.isCodeInUse(code)).toBe(false);
+    await eventually(() => expect(after.room(code)).toBeUndefined());
   });
 
   it("a restart after the return restores a Lobby, holding the Seats as any Lobby does", async () => {
@@ -417,7 +420,7 @@ describe("returning to Lobby", () => {
     server.scheduler.advanceTo(secondEnd);
     await Promise.all([alice.next("game"), bob.next("game")]);
 
-    expect(server.store.ended()).toEqual([{ code, endedAt: secondEnd }]);
+    expect(server.store.ended()).toMatchObject([{ code, endedAt: secondEnd }]);
     server.scheduler.advanceTo(secondEnd + RETENTION);
     expect(server.store.isCodeInUse(code)).toBe(false);
     // The Room disposes as an ended Room does, so its code is free again.
@@ -437,7 +440,7 @@ describe("returning to Lobby", () => {
     await eventually(() => expect(server.room(code)).toBeUndefined());
   });
 
-  it("a failed Lobby write leaves the Room ended, with its retention and its votes", async () => {
+  it("a failed Lobby write leaves the Room ended, and the window tries again", async () => {
     let failing = false;
     const server = await start({
       wrapStore: (store) => ({
@@ -461,15 +464,32 @@ describe("returning to Lobby", () => {
     expect((await pushesTo(alice, bob))[0]?.rematch).toEqual([aliceId, bobId]);
     expect(server.room(code)?.game).not.toBeNull();
     expect(server.room(code)?.endedAt).toBe(endsAt);
-    expect(server.store.ended()).toEqual([{ code, endedAt: endsAt }]);
+    expect(server.store.ended()).toMatchObject([{ code, endedAt: endsAt }]);
     expect(alice.pending("rejected")).toEqual([]);
     expect(bob.pending("rejected")).toEqual([]);
     expect(alice.pending("lobby").some((lobby) => lobby.now === endsAt)).toBe(false);
 
-    // The old game's retention deletion is still armed.
+    // The window's return fails too: the Room stays ended and arms a retry.
+    const expiresAt = endsAt + REMATCH_WINDOW_MS;
+    server.scheduler.advanceTo(expiresAt);
+    expect(server.room(code)?.game).not.toBeNull();
+    expect(server.room(code)?.endedAt).toBe(endsAt);
+    expect(alice.pending("lobby").some((lobby) => lobby.now === expiresAt)).toBe(false);
+
+    // The store is back when the retry fires: the Room returns, retention is cancelled.
     failing = false;
+    const retriedAt = expiresAt + REMATCH_RETRY_MS;
+    server.scheduler.advanceTo(retriedAt);
+    const [aliceLobby, bobLobby] = await Promise.all([
+      lobbyAt(alice, retriedAt),
+      lobbyAt(bob, retriedAt),
+    ]);
+    expect(aliceLobby.seats.map((seat) => seat.playerId)).toEqual([aliceId, bobId]);
+    expect(bobLobby.seats).toEqual(aliceLobby.seats);
+    expect(server.room(code)?.game).toBeNull();
+    expect(server.store.ended()).toEqual([]);
     server.scheduler.advanceTo(endsAt + RETENTION);
-    expect(server.store.isCodeInUse(code)).toBe(false);
+    expect(server.store.isCodeInUse(code)).toBe(true);
   });
 
   it("holds a kept Guest's Seat when they dropped, and lets their Guest token take it back", async () => {
@@ -573,5 +593,272 @@ describe("returning to Lobby", () => {
       code: "SERVER_BUSY",
     });
     expect(server.room(code)?.game).toBeNull();
+  });
+});
+
+describe("the rematch window", () => {
+  it("returns to Lobby 30 s after the first vote, releasing a connected Guest who ignored it", async () => {
+    const server = await start();
+    const { alice, bob, aliceId, code } = await startedGame(server);
+    await endedGame(server, alice, bob);
+    const endsAt = endedAtOf(server, code);
+    const list = await server.watchLobbyList();
+    await eventually(() => expect(list.get(code)).toBeUndefined());
+
+    alice.send({ type: "Rematch" });
+    expect((await pushesTo(alice, bob))[0]?.rematch).toEqual([aliceId]);
+
+    // The window is still open a moment before it ends.
+    server.scheduler.advanceTo(endsAt + REMATCH_WINDOW_MS - 1);
+    expect(server.room(code)?.game).not.toBeNull();
+    expect(server.room(code)?.endedAt).toBe(endsAt);
+
+    server.scheduler.advanceTo(endsAt + REMATCH_WINDOW_MS);
+    const expiresAt = endsAt + REMATCH_WINDOW_MS;
+    const [aliceLobby, bobLobby] = await Promise.all([
+      lobbyAt(alice, expiresAt),
+      lobbyAt(bob, expiresAt),
+    ]);
+
+    // The voter's Seat is kept; the Guest who ignored the Podium is released, still connected.
+    expect(aliceLobby.seats.map((seat) => seat.playerId)).toEqual([aliceId]);
+    expect(bobLobby.seats).toEqual(aliceLobby.seats);
+    expect(server.room(code)?.game).toBeNull();
+    expect(server.room(code)?.endedAt).toBeNull();
+    expect(alice.pending("rejected")).toEqual([]);
+    expect(bob.pending("rejected")).toEqual([]);
+    // The released Seat is open again on the Lobby list.
+    await list.until((lobbies) => lobbies.get(code)?.players === 1);
+  });
+
+  it("cancels the window when the only vote is withdrawn, and a later vote opens a fresh one", async () => {
+    const server = await start();
+    const { alice, bob, aliceId, code } = await startedGame(server);
+    await endedGame(server, alice, bob);
+    const endsAt = endedAtOf(server, code);
+
+    alice.send({ type: "Rematch" });
+    expect((await pushesTo(alice, bob))[0]?.rematch).toEqual([aliceId]);
+    alice.send({ type: "WithdrawRematch" });
+    expect((await pushesTo(alice, bob))[0]?.rematch).toEqual([]);
+
+    // The first window is gone: no return when it would have ended.
+    server.scheduler.advanceTo(endsAt + REMATCH_WINDOW_MS);
+    expect(server.room(code)?.game).not.toBeNull();
+    expect(server.room(code)?.endedAt).toBe(endsAt);
+
+    // A later first vote starts a fresh 30 s from that moment.
+    const votedAt = endsAt + 35_000;
+    server.scheduler.advanceTo(votedAt);
+    alice.send({ type: "Rematch" });
+    expect((await pushesTo(alice, bob))[0]?.rematch).toEqual([aliceId]);
+
+    server.scheduler.advanceTo(votedAt + REMATCH_WINDOW_MS - 1);
+    expect(server.room(code)?.game).not.toBeNull();
+
+    server.scheduler.advanceTo(votedAt + REMATCH_WINDOW_MS);
+    const lobby = await lobbyAt(alice, votedAt + REMATCH_WINDOW_MS);
+    expect(lobby.seats.map((seat) => seat.playerId)).toEqual([aliceId]);
+    expect(server.room(code)?.game).toBeNull();
+  });
+
+  it("does not restart on a later vote, so an ignored Guest is released 30 s after the first", async () => {
+    const server = await start();
+    const alice = await server.create({ maxPlayers: 3 });
+    const bob = await server.join(alice.code);
+    const carol = await server.join(alice.code);
+    const [aliceId, bobId] = await Promise.all(
+      [alice, bob].map(async (client) => (await client.next("welcome")).playerId),
+    );
+    if (aliceId === undefined || bobId === undefined) throw new Error("a Seat has no Player id");
+    await carol.next("welcome");
+    alice.send({ type: "Start" });
+    await Promise.all([alice.next("game"), bob.next("game"), carol.next("game")]);
+    await endedGame(server, alice, bob, carol);
+    const code = alice.code;
+    const endsAt = endedAtOf(server, code);
+
+    alice.send({ type: "Rematch" });
+    expect((await pushesTo(alice, bob, carol))[0]?.rematch).toEqual([aliceId]);
+
+    // Bob agrees 20 s later: the first vote still set the window's end.
+    server.scheduler.advanceTo(endsAt + 20_000);
+    bob.send({ type: "Rematch" });
+    expect((await pushesTo(alice, bob, carol))[0]?.rematch).toEqual([aliceId, bobId]);
+    expect(server.room(code)?.game).not.toBeNull();
+
+    const expiresAt = endsAt + REMATCH_WINDOW_MS;
+    server.scheduler.advanceTo(expiresAt);
+    const [aliceLobby, bobLobby, carolLobby] = await Promise.all([
+      lobbyAt(alice, expiresAt),
+      lobbyAt(bob, expiresAt),
+      lobbyAt(carol, expiresAt),
+    ]);
+
+    // Carol never voted, though she is still connected: her Seat is released.
+    expect(aliceLobby.seats.map((seat) => seat.playerId)).toEqual([aliceId, bobId]);
+    expect(bobLobby.seats).toEqual(aliceLobby.seats);
+    expect(carolLobby.seats).toEqual(aliceLobby.seats);
+    expect(server.room(code)?.game).toBeNull();
+  });
+
+  it("cancels the pending window when the all-agreed rule returns the Room first", async () => {
+    const server = await start();
+    const { alice, bob, aliceId, bobId, code } = await startedGame(server);
+    await endedGame(server, alice, bob);
+    const endsAt = endedAtOf(server, code);
+
+    alice.send({ type: "Rematch" });
+    await pushesTo(alice, bob);
+    bob.send({ type: "Rematch" });
+    const [aliceLobby] = await Promise.all([lobbyAt(alice, endsAt), lobbyAt(bob, endsAt)]);
+    expect(aliceLobby.seats.map((seat) => seat.playerId)).toEqual([aliceId, bobId]);
+
+    // The window the first vote armed must not return the Lobby a second time.
+    server.scheduler.advanceTo(endsAt + REMATCH_WINDOW_MS);
+    expect(alice.pending("lobby")).toEqual([]);
+    expect(bob.pending("lobby")).toEqual([]);
+    expect(server.room(code)?.seats.map((seat) => seat.playerId)).toEqual([aliceId, bobId]);
+    expect(server.room(code)?.game).toBeNull();
+  });
+
+  it("keeps the retention deletion when a vote was withdrawn", async () => {
+    const server = await start();
+    const { alice, bob, code } = await startedGame(server);
+    await endedGame(server, alice, bob);
+    const endsAt = endedAtOf(server, code);
+
+    alice.send({ type: "Rematch" });
+    await pushesTo(alice, bob);
+    alice.send({ type: "WithdrawRematch" });
+    await pushesTo(alice, bob);
+
+    server.scheduler.advanceTo(endsAt + REMATCH_WINDOW_MS);
+    expect(server.room(code)?.game).not.toBeNull();
+
+    server.scheduler.advanceTo(endsAt + RETENTION);
+    expect(server.store.isCodeInUse(code)).toBe(false);
+    await eventually(() => expect(server.room(code)).toBeUndefined());
+  });
+
+  it("waits for the rest of the window when the wake-up fires early", async () => {
+    const server = await start();
+    const { alice, bob, aliceId, code } = await startedGame(server);
+    await endedGame(server, alice, bob);
+    const endsAt = endedAtOf(server, code);
+
+    alice.send({ type: "Rematch" });
+    await pushesTo(alice, bob);
+
+    server.scheduler.fireEarly(endsAt + REMATCH_WINDOW_MS);
+    expect(server.room(code)?.game).not.toBeNull();
+
+    server.scheduler.advanceTo(endsAt + REMATCH_WINDOW_MS);
+    const lobby = await lobbyAt(alice, endsAt + REMATCH_WINDOW_MS);
+    expect(lobby.seats.map((seat) => seat.playerId)).toEqual([aliceId]);
+    expect(server.room(code)?.game).toBeNull();
+  });
+
+  it("ignores a stale wake-up from a window that was replaced", async () => {
+    const server = await start();
+    const { alice, bob, aliceId, code } = await startedGame(server);
+    await endedGame(server, alice, bob);
+    const endsAt = endedAtOf(server, code);
+
+    alice.send({ type: "Rematch" });
+    await pushesTo(alice, bob);
+    const staleWakeUp = server.scheduler.lastTaskAt(endsAt + REMATCH_WINDOW_MS);
+    alice.send({ type: "WithdrawRematch" });
+    await pushesTo(alice, bob);
+
+    // A fresh vote opens a new window that ends after the old one.
+    const votedAt = endsAt + 10_000;
+    server.scheduler.advanceTo(votedAt);
+    alice.send({ type: "Rematch" });
+    await pushesTo(alice, bob);
+
+    // The withdrawn window's wake-up, fired late, must not end the fresh one early.
+    server.scheduler.advanceTo(endsAt + REMATCH_WINDOW_MS);
+    staleWakeUp();
+    expect(server.room(code)?.game).not.toBeNull();
+    expect(server.room(code)?.endedAt).toBe(endsAt);
+
+    server.scheduler.advanceTo(votedAt + REMATCH_WINDOW_MS);
+    const lobby = await lobbyAt(alice, votedAt + REMATCH_WINDOW_MS);
+    expect(lobby.seats.map((seat) => seat.playerId)).toEqual([aliceId]);
+    expect(server.room(code)?.game).toBeNull();
+  });
+
+  it("drops the pending window when the Room is disposed", async () => {
+    const server = await start();
+    const { alice, bob, code } = await startedGame(server);
+    await endedGame(server, alice, bob);
+    const endsAt = endedAtOf(server, code);
+
+    alice.send({ type: "Rematch" });
+    await pushesTo(alice, bob);
+    const expiresAt = endsAt + REMATCH_WINDOW_MS;
+
+    // Retention disposes an ended Room from its own wake-up: the window must not outlive it.
+    const room = server.room(code);
+    if (!room) throw new Error("the Room is live");
+    room.onDispose();
+
+    expect(() => server.scheduler.fireEarly(expiresAt)).toThrow("nothing is scheduled");
+    server.scheduler.advanceTo(expiresAt);
+    // No Lobby was written: the Room is still stored as the ended one it was.
+    expect(server.store.ended()).toMatchObject([{ code, endedAt: endsAt }]);
+    expect(server.store.unfinished()).toEqual([]);
+    expect(alice.pending("lobby").some((lobby) => lobby.now === expiresAt)).toBe(false);
+    expect(bob.pending("lobby").some((lobby) => lobby.now === expiresAt)).toBe(false);
+  });
+
+  it("loses the votes and the window on a restart, and the restored Room offers the Podium again", async () => {
+    const tokens: [string, string] = [newGuestToken(), newGuestToken()];
+    const before = await start();
+    const { alice, bob, aliceId, code } = await startedGame(before, tokens);
+    await endedGame(before, alice, bob);
+    const endsAt = endedAtOf(before, code);
+    alice.send({ type: "Rematch" });
+    await pushesTo(alice, bob);
+
+    running.splice(running.indexOf(before), 1);
+    await before.stop();
+    const restartedAt = endsAt + 1_000;
+    const after = await start({
+      databasePath: before.databasePath,
+      scheduler: new ManualScheduler(restartedAt),
+    });
+
+    // The ended Room is back under its code; the votes and the window were Room memory.
+    expect(after.restored).toBe(1);
+    expect(after.room(code)?.endedAt).toBe(endsAt);
+    expect(after.room(code)?.game?.phase.kind).toBe("gameOver");
+
+    // A Guest's token takes their Seat back and the Podium opens with no votes.
+    const [again, other] = await Promise.all([
+      after.join(code, { guestToken: tokens[0] }),
+      after.join(code, { guestToken: tokens[1] }),
+    ]);
+    expect(await again.next("welcome")).toEqual({ playerId: aliceId });
+    const podium = await again.next("game");
+    expect(podium.view.phase.kind).toBe("gameOver");
+    expect(podium.rematch).toEqual([]);
+    await other.next("game");
+
+    // The first vote after the restart opens a fresh 30 s from then.
+    again.send({ type: "Rematch" });
+    expect((await pushesTo(again, other))[0]?.rematch).toEqual([aliceId]);
+    after.scheduler.advanceTo(restartedAt + REMATCH_WINDOW_MS - 1);
+    expect(after.room(code)?.game).not.toBeNull();
+
+    after.scheduler.advanceTo(restartedAt + REMATCH_WINDOW_MS);
+    const lobby = await lobbyAt(again, restartedAt + REMATCH_WINDOW_MS);
+    expect(lobby.seats.map((seat) => seat.playerId)).toEqual([aliceId]);
+    expect(after.room(code)?.game).toBeNull();
+
+    // The old retention was cancelled by the return.
+    after.scheduler.advanceTo(endsAt + RETENTION);
+    expect(after.store.isCodeInUse(code)).toBe(true);
   });
 });
