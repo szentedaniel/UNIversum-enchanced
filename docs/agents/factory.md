@@ -53,19 +53,28 @@ second slot:
 | maintain     | `factory-maintain.yml`                              | Sunday 03:19 | Sunday 07:00 |
 | report       | `factory-report.yml`                                | Monday 06:09 | Monday 23:59 |
 
+Every tick also starts `factory-dispatch.yml` unless one of its runs is queued or in progress: the
+heartbeat is the dispatcher's regular trigger, so a finished review, a pull request leaving the gate
+or an unblocked issue fills a free implementer slot within ten minutes instead of waiting for an event.
+The dispatcher is no nightly job: it is not in the tick's schedule, its start carries no `scheduled`
+input and its run gets no `(factory tick)` marker, so a dispatch the tick starts can neither stand in
+for a due job nor suppress one. A live dispatch run is left alone, and a failed read of its runs
+starts none: the error is collected and the next tick tries again.
+
 The latest start keeps the Claude jobs inside the 01:00–07:00 night window: a tick at or after it does
-not start a missed job; the next day's due time does, so a missed night waits for the next one. The
-tick dispatches with `scheduled=true` and each workflow's run name carries `(factory tick)`; only those
-runs mark a job as done, so a manual, dry or per-pull-request run never suppresses the scheduled one,
-while a failed tick dispatch still counts and is not retried in a loop (failures stay visible in
+not start a missed job; the next day's due time does, so a missed night waits for the next one. A tick
+dispatches a due job with `scheduled=true` and that workflow's run name carries `(factory tick)`; only
+those runs mark a job as done, so a manual, dry or per-pull-request run never suppresses the scheduled
+one, while a failed tick dispatch still counts and is not retried in a loop (failures stay visible in
 Actions and the weekly report). A failed tick inside the heartbeat does not end it: the error is
 logged and collected, the next tick still runs, and the heartbeat relays its successor before the run
 turns red. A failed relay is retried three times, a minute apart; when every attempt fails, the run
-turns red and the next cron run starts a new chain. A dry run ticks once and starts no successor. A
-second run must still be harmless: intake and the review queue find nothing left, the dispatcher
-skips issues a run holds, the retro stops at the day's log entry, and the report edits the week's
-issue. A run can always be started by hand (`gh workflow run <file>`), and `factory-dispatch.yml`
-keeps its own hourly cron as a backstop for a dropped event.
+turns red and the next cron run starts a new chain. A dry run ticks once and starts neither the
+dispatcher nor a successor. A second run must still be harmless: intake and the review queue find
+nothing left, the dispatcher skips issues a run holds, the retro stops at the day's log entry, and
+the report edits the week's issue. A run can always be started by hand (`gh workflow run <file>`),
+and `factory-dispatch.yml` keeps its own hourly cron as a backstop for a heartbeat chain that has
+stopped.
 
 ## Labels
 
@@ -179,8 +188,13 @@ implementers (default 2) run at once. An issue whose run is already queued count
 before its `agent:in-progress` label lands.
 
 It runs when an implementation run finishes (a slot frees), on every push to `main` (a merge unblocks
-dependants) and hourly as a backstop (the repository is public, so Actions minutes are free); `concurrency: factory-dispatch` makes two triggers take
-turns. Each dispatch is `gh workflow run factory-implement.yml -f issue=<n>` with `AGENT_PAT`.
+dependants), every heartbeat tick and hourly as a backstop (the repository is public, so Actions
+minutes are free); `concurrency: factory-dispatch` makes two triggers take turns. The tick starts a
+dispatch only when none is queued or running, so the ten-minute trigger keeps at most one dispatch on
+its way. A queued dispatch waits for the running one, which has already seen the implement run it
+started, and the frontier counts a queued implement run as running, so a tick-started dispatch cannot
+start the same issue an event-started one already did. Each dispatch is
+`gh workflow run factory-implement.yml -f issue=<n>` with `AGENT_PAT`.
 
 Minutes come from the jobs API: every job of every `factory-*.yml` run created this calendar month
 (UTC), rounded up per job the way GitHub bills. `FACTORY_MONTHLY_MINUTES` (default 1400) caps them; the repository is public, so the repo variable is
