@@ -53,19 +53,28 @@ second slot:
 | maintain     | `factory-maintain.yml`                              | Sunday 03:19 | Sunday 07:00 |
 | report       | `factory-report.yml`                                | Monday 06:09 | Monday 23:59 |
 
+Every tick also starts `factory-dispatch.yml` unless one of its runs is queued or in progress: the
+heartbeat is the dispatcher's regular trigger, so a finished review, a pull request leaving the gate
+or an unblocked issue fills a free implementer slot within ten minutes instead of waiting for an event.
+The dispatcher is no nightly job: it is not in the tick's schedule, its start carries no `scheduled`
+input and its run gets no `(factory tick)` marker, so a dispatch the tick starts can neither stand in
+for a due job nor suppress one. A live dispatch run is left alone, and a failed read of its runs
+starts none: the error is collected and the next tick tries again.
+
 The latest start keeps the Claude jobs inside the 01:00–07:00 night window: a tick at or after it does
-not start a missed job; the next day's due time does, so a missed night waits for the next one. The
-tick dispatches with `scheduled=true` and each workflow's run name carries `(factory tick)`; only those
-runs mark a job as done, so a manual, dry or per-pull-request run never suppresses the scheduled one,
-while a failed tick dispatch still counts and is not retried in a loop (failures stay visible in
+not start a missed job; the next day's due time does, so a missed night waits for the next one. A tick
+dispatches a due job with `scheduled=true` and that workflow's run name carries `(factory tick)`; only
+those runs mark a job as done, so a manual, dry or per-pull-request run never suppresses the scheduled
+one, while a failed tick dispatch still counts and is not retried in a loop (failures stay visible in
 Actions and the weekly report). A failed tick inside the heartbeat does not end it: the error is
 logged and collected, the next tick still runs, and the heartbeat relays its successor before the run
 turns red. A failed relay is retried three times, a minute apart; when every attempt fails, the run
-turns red and the next cron run starts a new chain. A dry run ticks once and starts no successor. A
-second run must still be harmless: intake and the review queue find nothing left, the dispatcher
-skips issues a run holds, the retro stops at the day's log entry, and the report edits the week's
-issue. A run can always be started by hand (`gh workflow run <file>`), and `factory-dispatch.yml`
-keeps its own hourly cron as a backstop for a dropped event.
+turns red and the next cron run starts a new chain. A dry run ticks once and starts neither the
+dispatcher nor a successor. A second run must still be harmless: intake and the review queue find
+nothing left, the dispatcher skips issues a run holds, the retro stops at the day's log entry, and
+the report edits the week's issue. A run can always be started by hand (`gh workflow run <file>`),
+and `factory-dispatch.yml` keeps its own hourly cron as a backstop for a heartbeat chain that has
+stopped.
 
 ## Labels
 
@@ -179,8 +188,13 @@ implementers (default 2) run at once. An issue whose run is already queued count
 before its `agent:in-progress` label lands.
 
 It runs when an implementation run finishes (a slot frees), on every push to `main` (a merge unblocks
-dependants) and hourly as a backstop (the repository is public, so Actions minutes are free); `concurrency: factory-dispatch` makes two triggers take
-turns. Each dispatch is `gh workflow run factory-implement.yml -f issue=<n>` with `AGENT_PAT`.
+dependants), every heartbeat tick and hourly as a backstop (the repository is public, so Actions
+minutes are free); `concurrency: factory-dispatch` makes two triggers take turns. The tick starts a
+dispatch only when none is queued or running, so the ten-minute trigger keeps at most one dispatch on
+its way. A queued dispatch waits for the running one, which has already seen the implement run it
+started, and the frontier counts a queued implement run as running, so a tick-started dispatch cannot
+start the same issue an event-started one already did. Each dispatch is
+`gh workflow run factory-implement.yml -f issue=<n>` with `AGENT_PAT`.
 
 Minutes come from the jobs API: every job of every `factory-*.yml` run created this calendar month
 (UTC), rounded up per job the way GitHub bills. `FACTORY_MONTHLY_MINUTES` (default 1400) caps them; the repository is public, so the repo variable is
@@ -248,7 +262,10 @@ no `pr` at 02:23 Budapest.
    run exits 0 and leaves `agent:review` in place; the tick dispatches one review per pull request
    still carrying the label, so a queued review happens at night. The count comes from the summary
    comments themselves — they open with `<!-- factory-review -->` — per Budapest calendar day, and
-   night reviews do not spend the daytime quota.
+   night reviews do not spend the daytime quota. The gate reads the queue first: a `pull_request`
+   event for another label does nothing, and a manual dispatch reviews only a pull request that is
+   labelled or whose newest factory comment is the failed-review handoff (step 5). That recovery
+   runs at once rather than queueing, because the owner is asking for a review the failed run lost.
 2. Checks out the pull request's branch, installs Claude Code 2.1.311 and the
    `mattpocock-skills@claude-plugins-official` plugin, and **fails the step unless the plugin is
    1.3.1**: that version is the pin for the `code-review` skill, so a renamed skill fails loudly
@@ -257,19 +274,38 @@ no `pr` at 02:23 Budapest.
    invokes `/mattpocock-skills:code-review` against `origin/main`, with the pull request's linked
    issue and its parent spec as the Spec axis. The skill reports the Standards and Spec axes side by
    side; the same session then commits the fixes it is sure of (conventional commits, fast checks
-   green) and emits `<review>` structured output — `verdict`, the `findings` it did **not** fix, and
-   `mergeDanger`.
+   green) and emits `<review>` structured output — `verdict`, the `findings` it did **not** fix
+   with a `blocking` or `advisory` severity each, and `mergeDanger`. A missing or invalid block gets
+   one more turn in that same session, with the validation error in the prompt; if the retried reply
+   still carries no `mergeDanger`, the step posts its verdict and findings anyway, labels the pull
+   request `risk:high`, and the summary says the merge danger was not rated.
 4. Pushes the reviewer's commits with `AGENT_PAT` (a plain push, never forced), posts one summary
    comment, and swaps `agent:review` for `risk:low` (only a two-way door with a local blast radius)
    or `risk:high`. A `changes-requested` verdict dispatches the fix loop
    (`gh workflow run factory-fix.yml -f pr=<n> -f reason=review`); a pass leaves the merge gate to
    decide and clears a stale `ready-for-human`.
-5. On failure, comments the reason on the pull request, removes `agent:review` and adds
-   `ready-for-human`: the tick must not retry a broken review forever.
+5. When the review step fails even after its second turn, the workflow re-dispatches itself once with
+   `retry: true`, leaving `agent:review` so the re-run is reviewable. Only a failure with no retry
+   left comments the reason, removes `agent:review` and adds `ready-for-human`: the tick must not
+   retry a broken review forever. The comment opens with `<!-- factory-review:failed -->`, so a
+   manual `gh workflow run factory-review.yml -f pr=<n>` reviews that pull request again without a
+   relabel; a pull request held for another reason (a spent fix budget, a merge-gate refusal) is left
+   alone.
 
 Claude runs with `--permission-mode bypassPermissions` (`claudeAgent` in `src/shared/agents.ts`):
 Sandcastle's `noSandbox()` provider reports no sandbox, so it passes no permission flag, and
 `claude -p` would deny every edit and Bash call. The runner is an ephemeral VM.
+
+**Findings carry a severity.** A `blocking` finding is a bug, a broken acceptance criterion, a
+standards breach with a real cost or a security issue. An `advisory` finding is a judgement call, an
+optional follow-up, a scope note, or a test that could be stronger: the prompt asks for
+`changes-requested` only when at least one finding is blocking. A finding with no severity — an old
+prompt, a malformed reply — counts as blocking, so today's path is the fallback. A
+`changes-requested` review whose findings are all advisory is read as a pass by the fix loop and the
+merge gate: no fix round runs for a judgement call, and the gate's usual rules decide the pull
+request. The findings are not lost: a merge with advisory findings files one `needs-triage` issue
+naming the pull request and listing them, and the nightly intake decides whether they become a ticket
+or are closed.
 
 ## Merging and fixing
 
@@ -287,8 +323,9 @@ It merges with a merge commit only when every gate holds ([spec #85, Decision
 5](https://github.com/szentedaniel/UNIversum-enchanced/issues/85)):
 
 1. The `CI` workflow concluded `success` on the pull request's head sha (a re-run that passed counts).
-2. The newest `<!-- factory-review -->` comment says pass and was posted **after** the head commit;
-   a push after the review queues `agent:review` again, so a fix commit is reviewed before merging.
+2. The newest `<!-- factory-review -->` comment says pass — or asks for changes only over advisory
+   findings — and was posted **after** the head commit; a push after the review queues `agent:review`
+   again, so a fix commit is reviewed before merging.
 3. The pull request carries `risk:low` (a two-way door with a local blast radius), or `risk:high` whose
    review names a **two-way** door: a wide blast radius alone does not wait for the owner once the
    review passed and CI, e2e included, is green. A one-way door, or a `risk:high` whose merge danger
@@ -302,8 +339,11 @@ It merges with a merge commit only when every gate holds ([spec #85, Decision
 The merge is `gh pr merge --merge --subject "chore(merge): #<issue> <the ticket's title>"` (the
 ticket's title, not the pull request's `Implement #N: …`; a Dependabot pull request closes no ticket,
 so it names its own number and title). The issue gets a
-comment naming the merge commit and is closed (`Closes #…` in the body already closed it). The push
-to `main` starts `factory-dispatch.yml` by itself, so the next ticket is dispatched without a chain.
+comment naming the merge commit and is closed (`Closes #…` in the body already closed it). A merge
+whose newest review left advisory findings then files one `needs-triage` issue, `Factory review
+follow-ups: #<pull>`, listing them and linking the pull request; a refused merge files none. The
+nightly intake triages it like any other issue. The push to `main` starts `factory-dispatch.yml` by
+itself, so the next ticket is dispatched without a chain.
 
 Green but gated → `ready-for-human` on the pull request and one comment listing every reason
 ("touches .github/", "one-way door: …", "dependency major: …"). A branch merely **behind main** merges
@@ -343,6 +383,9 @@ on the branch and the workflow pushes with `AGENT_PAT`; CI runs again and the me
   `<!-- factory-fix:round N -->`, so the CI and review triggers share one budget: **two** rounds
   (`MAX_FIX_ROUNDS` in `src/fix/rounds.ts`). A spent budget posts one escalation comment
   (`<!-- factory-fix:escalated -->`), adds `agent:blocked` + `ready-for-human` and runs no agent.
+  A review trigger whose newest review asks for changes only over advisory findings stands down
+  instead, spent budget or not: no round, no escalation, no label, and the merge gate decides. A red
+  CI run keeps its rounds and its escalation whatever the last review said.
 - Merging main in is housekeeping, not a round: a conflict-free merge is git's own merge commit, and
   only a conflict reaches the agent.
 - A failed run (no commit, a dirty tree, `STATUS: BLOCKED`) comments the reason and adds the same

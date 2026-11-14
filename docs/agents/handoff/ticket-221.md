@@ -41,7 +41,8 @@ net, and exactly one heartbeat is live at a time.
   required only on the real path.
 - `tickWiring(repo)` in `schedule/tick.ts` is the shared GH wiring: `lastTickRun` reads the runs API
   and `dispatch` runs `gh workflow run <file> --ref main -f scheduled=true`. `tick.ts`'s own `main`
-  and the heartbeat both use it, and `runTick`'s rules are unchanged.
+  and the heartbeat both use it, and `runTick`'s rules are unchanged. (#301 added `dispatcherLive`
+  and `startDispatcher` to the wiring and the seam: see `ticket-301.md`.)
 - Every `gh` call the heartbeat makes — the two liveness reads, the five runs reads and the
   dispatches of each tick, and the relay — is capped at `GH_CALL_TIMEOUT_MS` (a minute): `sh` takes
   the cap and `execSync` kills the call, so the tick records it as a failed read and the loop still
@@ -100,7 +101,8 @@ net, and exactly one heartbeat is live at a time.
 ## Gotchas
 
 - Do not add per-tick runs-API calls or a per-tick liveness check: the budget is the five workflow
-  reads per tick, and liveness is checked once per start.
+  reads per tick, and liveness is checked once per start. (#301 supersedes this for the dispatcher
+  alone: each tick also reads the dispatcher's two live statuses and starts it when none is live.)
 - Every `gh` call in the heartbeat path goes through `sh` with `GH_CALL_TIMEOUT_MS`; a new call
   without the cap reintroduces the hang that can push the loop past the job limit with no relay.
 - The relay retries and the overrun skip are deliberate, not incidental: the spec's hazard (3) wants

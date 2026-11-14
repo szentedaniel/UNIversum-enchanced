@@ -1,8 +1,9 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { PublicView } from "@universum/rules";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { HintCard, type HintPlace } from "#components/HintCard.tsx";
-import { bottomSlot, openDecision } from "#decision/decision.ts";
+import { bottomSlot, openDecision, type BottomSlot } from "#decision/decision.ts";
 import { HINTS, type HintId, type HintRow } from "#hints/hints.ts";
 import { baseLocale, overwriteGetLocale, type Locale } from "#paraglide/runtime.js";
 import { playbackOfPush } from "#playback/playback.ts";
@@ -13,8 +14,9 @@ import { fieldOf, viewOf } from "./playback-fixtures.ts";
 
 // The hint card (spec #180): one short sentence on the concept the Guest meets
 // and a dismiss button, inline so it never takes focus or covers a Decision.
-// The card also owns which area draws which concept (#255: an Offer and
-// Quarantine in the Game's bottom area, a Sale in its tray).
+// The card also owns which area draws which concept: an Offer, Quarantine and
+// the game end in the Game's bottom area, a Sale, the Doubler and Erasmus in
+// their tray.
 
 const inLanguage = (locale: Locale) => overwriteGetLocale(() => locale);
 
@@ -48,11 +50,16 @@ describe("the hint card", () => {
     expect(render(rowOf("sale"), "bottom")).toBe("");
   });
 
-  it("leaves the Doubler, Erasmus and game-end hints to #256", () => {
-    for (const id of ["doubler", "erasmus", "gameEnd"] as const) {
+  it("draws the Doubler and Erasmus in the tray, never in the bottom area", () => {
+    for (const id of ["doubler", "erasmus"] as const) {
+      expect(render(rowOf(id), "tray")).toContain(`data-hint="${id}"`);
       expect(render(rowOf(id), "bottom")).toBe("");
-      expect(render(rowOf(id), "tray")).toBe("");
     }
+  });
+
+  it("draws the game-end hint in the bottom area, never in the tray", () => {
+    expect(render(rowOf("gameEnd"), "bottom")).toContain('data-hint="gameEnd"');
+    expect(render(rowOf("gameEnd"), "tray")).toBe("");
   });
 
   it("shows the open hint's sentence with a labelled dismiss button", () => {
@@ -75,6 +82,23 @@ describe("the hint card", () => {
   });
 });
 
+/** The Game's bottom slot for `view`, as the screens compute it. */
+function trayOf(view: PublicView): BottomSlot {
+  const playback = playbackOfPush({
+    view,
+    events: [],
+    reveals: [],
+    seq: 1,
+    clockOffset: 0,
+    receivedAt: 0,
+  });
+  const frame = playback.frameAt(playback.opensAt);
+  return bottomSlot(openDecision(frame, "p1", false), frame, {
+    selectedField: null,
+    inspect: false,
+  });
+}
+
 describe("the Sale tray", () => {
   it("draws the Sale hint inside the tray", () => {
     const view = viewOf(undefined, {
@@ -82,19 +106,7 @@ describe("the Sale tray", () => {
       fields: [fieldOf({ owner: "p1", sale: 100_000 }), fieldOf()],
       autoSell: [0],
     });
-    const playback = playbackOfPush({
-      view,
-      events: [],
-      reveals: [],
-      seq: 1,
-      clockOffset: 0,
-      receivedAt: 0,
-    });
-    const frame = playback.frameAt(playback.opensAt);
-    const slot = bottomSlot(openDecision(frame, "p1", false), frame, {
-      selectedField: null,
-      inspect: false,
-    });
+    const slot = trayOf(view);
     if (slot.kind !== "sale") throw new Error(`the test opens a Sale, not a ${slot.kind}`);
 
     const html = renderToStaticMarkup(
@@ -103,6 +115,39 @@ describe("the Sale tray", () => {
 
     expect(html).toContain('data-testid="sale-tray"');
     expect(html).toContain('data-hint="sale"');
+    expect(html).toContain(en.hint_dismiss);
+  });
+});
+
+describe("the pick tray", () => {
+  it.each([
+    {
+      kind: "doubler",
+      view: viewOf(undefined, {
+        phase: { kind: "placingDoubler", fields: [1, 2] },
+        pickOptions: [
+          { kind: "doubler", field: 1, rent: 100_000, rentAfter: 200_000 },
+          { kind: "doubler", field: 2, rent: 100_000, rentAfter: 200_000 },
+        ],
+      }),
+    },
+    {
+      kind: "erasmus",
+      view: viewOf(undefined, {
+        phase: { kind: "choosingErasmus", fields: [24] },
+        pickOptions: [{ kind: "erasmus", field: 24, steps: 3, passesStart: false, bonus: null }],
+      }),
+    },
+  ] as const)("draws the $kind hint inside the tray", ({ kind, view }) => {
+    const slot = trayOf(view);
+    if (slot.kind !== "pick") throw new Error(`the test opens a pick, not a ${slot.kind}`);
+
+    const html = renderToStaticMarkup(
+      createElement(DecisionTray, { view, slot, clockOffset: 0, seat: 0, hint: rowOf(kind) }),
+    );
+
+    expect(html).toContain('data-testid="pick-tray"');
+    expect(html).toContain(`data-hint="${kind}"`);
     expect(html).toContain(en.hint_dismiss);
   });
 });

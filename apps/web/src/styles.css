@@ -212,11 +212,37 @@
     animation-timing-function: linear;
     animation-fill-mode: forwards;
   }
+
+  /* A Player's quick-chat bubble (components/PlayerCard.tsx): it hangs off the
+     card for BUBBLE_MS — set inline from the chat store — and fades out as the
+     store drops it, so the card never changes size. */
+  .chat-bubble {
+    animation-name: chat-bubble;
+    animation-timing-function: ease-out;
+    animation-fill-mode: forwards;
+  }
 }
 
 @keyframes turn-ring {
   to {
     stroke-dashoffset: 100;
+  }
+}
+
+@keyframes chat-bubble {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+
+  10%,
+  85% {
+    opacity: 1;
+    transform: none;
+  }
+
+  100% {
+    opacity: 0;
   }
 }
 
@@ -315,12 +341,18 @@
   }
 }
 
-/* Less motion, but the Turn ring keeps its timing (its animation is the clock). */
+/* Less motion, but the Turn ring keeps its timing (its animation is the clock)
+   and the chat bubble waits out BUBBLE_MS without moving (its fade would
+   otherwise collapse into one frame). */
 @media (prefers-reduced-motion: reduce) {
-  *:not(.turn-ring-left),
+  *:not(.turn-ring-left):not(.chat-bubble),
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .chat-bubble {
+    animation: none !important;
   }
 }

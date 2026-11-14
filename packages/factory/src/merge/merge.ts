@@ -141,6 +141,16 @@ const ghActions = (repo: string, pr: string): MergeActions => ({
       `gh issue comment ${String(issue)} --repo "${repo}" --body-file "${writeTemp("merge-done.md", body)}"`,
     );
   },
+  fileFollowUp: (issue) => {
+    sh(
+      [
+        `gh issue create --repo "${repo}"`,
+        `--title ${shellArg(issue.title)}`,
+        `--body-file "${writeTemp("follow-up.md", issue.body)}"`,
+        ...issue.labels.map((label) => `--label ${shellArg(label)}`),
+      ].join(" "),
+    );
+  },
   closeIssue: (issue) => {
     try {
       sh(`gh issue close ${String(issue)} --repo "${repo}"`);
