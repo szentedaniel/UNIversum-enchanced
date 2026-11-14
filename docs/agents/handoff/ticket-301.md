@@ -53,7 +53,9 @@ hourly backstop; whoever next owns a workflow change can add the heartbeat sente
 - `test/schedule-tick.test.ts`: the decision tests drive `runTick` with injected deps; a `gh` shim on
   `PATH` (the `dispatch.test.ts` pattern, `GH_SHIM_MATCH`/`GH_SHIM_STDOUT`) pins the two live-status
   URLs and the exact `workflow run factory-dispatch.yml --ref main` argv, and that a queued page starts
-  none. The dry-run test expects the dispatcher's log line.
+  none. A workflow test pins `factory-dispatch.yml`'s `workflow_dispatch` trigger and its
+  `factory-dispatch` group (`cancel-in-progress: false`), the serialization the tick relies on. The
+  dry-run test expects the dispatcher's log line.
 - `test/schedule-heartbeat.test.ts`: the dry tick's entry test now expects
   `JOBS.length + LIVE_STATUSES.length` reads, because a dry tick reads the dispatcher's pages too. Its
   "a workflow's runs cannot be read" test still goes red through the collected errors.

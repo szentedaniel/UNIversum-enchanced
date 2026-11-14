@@ -274,3 +274,20 @@ describe("tickWiring", () => {
     expect(calls().some((argv) => argv[1]?.includes("status=queued") === true)).toBe(true);
   });
 });
+
+describe("factory-dispatch.yml", () => {
+  const workflow = readFileSync(
+    new URL("../../../.github/workflows/factory-dispatch.yml", import.meta.url),
+    "utf8",
+  );
+
+  it("stays dispatchable and serializes a tick-started run behind an event-started one", () => {
+    // `gh workflow run` needs the manual trigger, and the group is what keeps a
+    // tick's dispatch from racing an event's into the same frontier: a queued
+    // dispatch waits for the running one, which has already seen its implement
+    // run (the frontier counts a queued implement run as running).
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("group: factory-dispatch");
+    expect(workflow).toContain("cancel-in-progress: false");
+  });
+});
