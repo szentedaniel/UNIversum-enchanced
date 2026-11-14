@@ -14,7 +14,7 @@ import {
 
 /** A Lobby Seat is held this long for a Player who dropped (spec: Seat hold). */
 const LOBBY_HOLD = 60_000;
-/** The default Room's Minute limit: its games end here (spec: settings). */
+/** One Minute of game time in ms; the default Room's games last at most 50 of them (spec: settings). */
 const MINUTE = 60_000;
 /** What Colyseus answers a reconnection token it no longer holds a Seat for. */
 const EXPIRED = "reconnection token invalid or expired";
