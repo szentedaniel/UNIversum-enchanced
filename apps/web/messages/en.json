@@ -334,5 +334,19 @@
   "update_available": "A new version of UNIversum is ready.",
   "update_refresh": "Refresh",
   "update_later": "Later",
-  "update_in_game": "Finish or leave this game to get it."
+  "update_in_game": "Finish or leave this game to get it.",
+  "chat_line_good_luck": "Good luck!",
+  "chat_line_well_played": "Well played!",
+  "chat_line_nice_move": "Nice move!",
+  "chat_line_thanks": "Thanks!",
+  "chat_line_hurry_up": "Hurry up!",
+  "chat_line_oops": "Oops!",
+  "chat_line_good_game": "Good game!",
+  "chat_line_rematch": "Rematch?",
+  "chat_emote_cheer": "Cheer",
+  "chat_emote_groan": "Groan",
+  "chat_emote_thinking": "Thinking",
+  "chat_emote_laugh": "Laugh",
+  "chat_emote_shock": "Shock",
+  "chat_emote_heart": "Heart"
 }
