@@ -15,13 +15,14 @@ owner — who can review it again by dispatch without a relabel.
   - `salvageReview` reads only `verdict` and `findings` from a raw block (fence-unwrapped, as
     Sandcastle parses it). When the retried reply still has no `mergeDanger` — or has no tag at all —
     the verdict and findings survive without a rating.
-  - The `note on Sandcastle 0.14`: `output` requires `maxIterations: 1`, so there is no multi-turn
-    run with structured output. The second turn is a second `sandcastle.run` with
+  - Sandcastle 0.14's `output` requires `maxIterations: 1`, so there is no multi-turn run with
+    structured output. The second turn is a second `sandcastle.run` with
     `resumeSession: error.sessionId` and `prompt` (and `promptFile`/`promptArgs` dropped, or
     `resolvePrompt` fails). `claudeCode` captures sessions by default (`captureSessions: true`), and
-    the prompt must contain the literal `<review>` opening tag. A future Sandcastle upgrade adds
-    `Output.object({ maxRetries })`; do not switch without keeping the salvage behaviour, because a
-    missing `mergeDanger` alone must still post.
+    the prompt must contain the literal `<review>` opening tag. Sandcastle 0.14 also has
+    `Output.object({ maxRetries })`, which resumes the failed session itself; this step keeps its
+    own retry because it also salvages the _first_ attempt's block when the retry emits nothing.
+    Keep that when you switch.
 - **`schema.ts`**: `reviewSchema` stays the strict agent contract. `Review` is the postable shape,
   with `mergeDanger?: MergeDanger`; `riskLabel(undefined)` is `risk:high`, and `summaryComment`
   prints `**Merge danger:** not rated …` for it. `mergeDangerOf` cannot parse that line, so the
