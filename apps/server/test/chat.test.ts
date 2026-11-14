@@ -66,4 +66,20 @@ describe("chat", () => {
     expect(await bob!.next("rejected")).toEqual({ code: "MALFORMED" });
     expect(alice!.pending("chat")).toEqual([]);
   });
+
+  it("drops a second chat within the second with one SLOW_DOWN, and broadcasts nothing", async () => {
+    const { clients } = await startedGame();
+    const [alice, bob] = clients;
+
+    bob!.sendChat({ id: "good_luck" });
+    const chat = { seat: 1, id: "good_luck" };
+    expect(await alice!.next("chat")).toEqual(chat);
+    expect(await bob!.next("chat")).toEqual(chat);
+
+    bob!.sendChat({ id: "cheer" });
+
+    expect(await bob!.next("rejected")).toEqual({ code: "SLOW_DOWN" });
+    expect(alice!.pending("chat")).toEqual([]);
+    expect(bob!.pending("chat")).toEqual([]);
+  });
 });

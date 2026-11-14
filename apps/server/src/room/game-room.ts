@@ -290,6 +290,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   guard!: AbuseGuard;
   /** Intent flood control, per connected client. */
   readonly #flood = new Map<string, FloodMeter>();
+  /** Quick-chat flood control, per connected client: the same ladder at its own rate (spec #176). */
+  readonly #chatFlood = new Map<string, FloodMeter>();
   /** Whether this Lobby is on the Lobby list; a full one is not (ticket #196). */
   #listed = true;
 
@@ -429,15 +431,18 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       this.log.info({ ...this.settings, hasPassword: this.password !== null }, "Room created");
     }
     this.onMessage(MESSAGE.intent, (client: Client, message: unknown) => {
-      if (this.admit(client)) this.onIntent(client, message);
+      if (this.admit(client, this.#flood)) this.onIntent(client, message);
     });
     // A quick chat is not an intent: it never reaches the engine (spec #176).
     this.onMessage(MESSAGE.chat, (client: Client, message: unknown) => {
-      if (this.admit(client)) this.onChat(client, message);
+      if (!this.admit(client, this.#flood)) return;
+      if (this.admit(client, this.#chatFlood, this.guard.limits.chatsPerSecond)) {
+        this.onChat(client, message);
+      }
     });
     // Any other message type: refuse it, but keep the connection (spec: MALFORMED).
     this.onMessage("*", (client: Client) => {
-      if (this.admit(client)) this.reject(client, "MALFORMED");
+      if (this.admit(client, this.#flood)) this.reject(client, "MALFORMED");
     });
   }
 
@@ -552,6 +557,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
 
   override onLeave(client: Client): void {
     this.#flood.delete(client.sessionId);
+    this.#chatFlood.delete(client.sessionId);
     // In a running game the Seat stays (a Bot plays its Decisions from then);
     // a Lobby frees it. On shutdown nothing changes: the Room comes back as it was.
     if (this.#shuttingDown) return;
@@ -1016,16 +1022,21 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /**
-   * Intent flood control: whether to handle this client's message. Extras over
-   * the per-second limit are dropped, the first with `SLOW_DOWN`; a sustained
-   * or heavy flood closes the socket, as a drop (never a consented leave), so
-   * the Seat stays held.
+   * Flood control for one connection: whether to handle this client's message.
+   * Extras over `perSecond` are dropped, the first with `SLOW_DOWN`; a
+   * sustained or heavy flood closes the socket, as a drop (never a consented
+   * leave), so the Seat stays held. Every message counts once in the intent
+   * meter; a chat counts once in its own, tighter meter as well.
    */
-  private admit(client: Client): boolean {
-    let meter = this.#flood.get(client.sessionId);
+  private admit(
+    client: Client,
+    meters: Map<string, FloodMeter>,
+    perSecond = this.guard.limits.intentsPerSecond,
+  ): boolean {
+    let meter = meters.get(client.sessionId);
     if (!meter) {
-      meter = new FloodMeter(this.guard.limits);
-      this.#flood.set(client.sessionId, meter);
+      meter = new FloodMeter(this.meterLimits(perSecond));
+      meters.set(client.sessionId, meter);
     }
     const verdict = meter.record(performance.now());
     if (verdict === "warn" || verdict === "close") {
@@ -1034,6 +1045,12 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (verdict === "warn") this.reject(client, "SLOW_DOWN");
     if (verdict === "close") client.leave(CloseCode.WITH_ERROR);
     return verdict === "accept";
+  }
+
+  /** The ladder's thresholds, at `perSecond`: the intent meter's rate, or chat's tighter one. */
+  private meterLimits(perSecond: number): ConstructorParameters<typeof FloodMeter>[0] {
+    const { intentFloodCloseSeconds, intentBurstClose } = this.guard.limits;
+    return { intentsPerSecond: perSecond, intentFloodCloseSeconds, intentBurstClose };
   }
 
   /**
