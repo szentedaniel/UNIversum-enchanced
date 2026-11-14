@@ -160,8 +160,8 @@ const fixtureName = (version: number): string => `state-v${String(version)}.json
  * Why the pull request is not the one-step migration the gate may merge
  * alone: a version that does not follow main's, a chain entry added, edited
  * or removed, code changed outside the entries, a snapshot added, edited or
- * removed, or a snapshot the rules test does not list. Empty means the
- * exception holds.
+ * removed, or a rules test that does not list the new snapshot or dropped an
+ * old one. Empty means the exception holds.
  */
 export const migrationProblems = (facts: MigrationFacts): string[] => {
   const problems: string[] = [];
@@ -245,10 +245,19 @@ export const migrationProblems = (facts: MigrationFacts): string[] => {
     }
   }
 
-  if (facts.testHead === undefined) {
+  const test = facts.testHead;
+  if (test === undefined) {
     problems.push("state migration: migrate.test.ts is missing");
-  } else if (head !== undefined && !listsFixture(facts.testHead, fixtureName(head))) {
-    problems.push(`state migration: migrate.test.ts does not list ${fixtureName(head)}`);
+  } else {
+    // The exception rests on the test running every stored snapshot through
+    // the chain, so dropping one from the list would hollow out the check.
+    const dropped = (facts.fixturesMain ?? []).filter((name) => !listsFixture(test, name));
+    if (dropped.length > 0) {
+      problems.push(`state migration: migrate.test.ts no longer lists ${dropped.join(", ")}`);
+    }
+    if (head !== undefined && !listsFixture(test, fixtureName(head))) {
+      problems.push(`state migration: migrate.test.ts does not list ${fixtureName(head)}`);
+    }
   }
 
   return problems;

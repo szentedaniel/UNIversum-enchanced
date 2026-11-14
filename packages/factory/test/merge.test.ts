@@ -836,7 +836,7 @@ exit 0
     payload("state-head", "export const STATE_VERSION = 3;");
     payload("migrate-main", migrateChain());
     payload("migrate-head", migrateChain("  2: (state) => ({ ...state, stateVersion: 3 }),"));
-    payload("test-head", 'const snapshots = ["state-v3.json"];');
+    payload("test-head", 'const snapshots = ["state-v1.json", "state-v2.json", "state-v3.json"];');
     payload("fixtures-main", '["state-v1.json","state-v2.json"]');
     payload("fixtures-head", '["state-v1.json","state-v2.json","state-v3.json"]');
     writeFileSync(

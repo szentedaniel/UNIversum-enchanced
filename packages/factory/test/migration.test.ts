@@ -206,6 +206,14 @@ describe("migrationProblems", () => {
     );
   });
 
+  it("refuses a rules test that dropped an old snapshot from the chain", () => {
+    const problems = migrationProblems(
+      sound({ testHead: sound().testHead?.replace(/^.*state-v1\.json.*$/mu, "") }),
+    );
+
+    expect(problems).toContain("state migration: migrate.test.ts no longer lists state-v1.json");
+  });
+
   it("reads a migration main already took as a collision, to renumber", () => {
     const raced = sound({
       stateMain: STATE.replace(

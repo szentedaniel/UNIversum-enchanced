@@ -368,7 +368,7 @@ describe("the state migration exception", () => {
     stateHead: "export const STATE_VERSION = 3;",
     migrateMain: chainOf([FIRST]),
     migrateHead: chainOf([FIRST, SECOND]),
-    testHead: 'const snapshots = ["state-v3.json"];',
+    testHead: 'const snapshots = ["state-v1.json", "state-v2.json", "state-v3.json"];',
     fixturesMain: ["state-v1.json", "state-v2.json"],
     fixturesHead: ["state-v1.json", "state-v2.json", "state-v3.json"],
     files: [MIGRATION_FILES.migrate, `${MIGRATION_FILES.fixtures}state-v3.json`],
