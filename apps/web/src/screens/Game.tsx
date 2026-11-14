@@ -1,6 +1,6 @@
 import type { RejectionCode } from "@universum/protocol/messages";
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { useStore } from "zustand";
 import { Board } from "#board/Board.tsx";
 import { FieldCard } from "#board/FieldCard.tsx";
@@ -22,7 +22,7 @@ import { playbackStore } from "#playback/playback-store.ts";
 import { DecisionTray } from "#screens/DecisionTray.tsx";
 import { TurnCard } from "#screens/TurnCard.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
-import { inFlightOf, roomStore } from "#stores/room-store.ts";
+import { inFlightOf, inLobbyOf, roomStore } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
 import { formatCompactMoney, formatMoney, m, playerName, rejectionText } from "#text.ts";
 
@@ -44,6 +44,11 @@ export function Game() {
   const [openCard, setOpenCard] = useState<number | null>(null);
   // The Playback core's frame: the gate, the view, the held Turn, the toast and the overlay (ADR-0004).
   const frame = useStore(playbackStore, (state) => state.frame);
+  // The Room returned to Lobby (a rematch): the Lobby message dropped the game
+  // push the screen drew. Leave for the Lobby's own address, replacing the
+  // game's, and show nothing meanwhile so the connecting card never flashes.
+  const returned = useStore(roomStore, (s) => s.code === code && inLobbyOf(s));
+  const navigate = useNavigate();
 
   // Opened by its address (a reload, a new tab, a later visit): take the Seat back by Guest token.
   useEffect(() => {
@@ -51,6 +56,12 @@ export function Game() {
       setJoinError(e instanceof JoinError ? e.code : "INTERNAL");
     });
   }, [code]);
+
+  useEffect(() => {
+    if (returned) void navigate(`/room/${code}`, { replace: true });
+  }, [returned, code, navigate]);
+
+  if (returned) return null;
 
   if (!push || frame === null) {
     return (

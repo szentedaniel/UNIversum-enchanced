@@ -24,6 +24,8 @@
   "lobby_you": "you",
   "lobby_start": "Start",
   "lobby_waiting": "Start unlocks when every Seat is taken.",
+  "lobby_seat_released": "Your Seat was released when the Room came back to the Lobby.",
+  "lobby_take_seat": "Take a Seat",
   "lobby_copy_code": "Copy the Room code",
   "lobby_copied": "Copied",
   "lobby_copy_link": "Copy the invite link",

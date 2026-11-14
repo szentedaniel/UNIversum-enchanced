@@ -109,6 +109,25 @@ export function receivePush(
   });
 }
 
+/**
+ * A Lobby message arrived: the Room whose Seats it carries. A Lobby message
+ * only ever means a Lobby (#225), so one after a game push is the return to
+ * Lobby: the push the screen drew, its Playback (`#playback/playback-store.ts`
+ * follows the push) and the Event log of the ended game go with it. A
+ * reconnect to a Lobby that never started a game sends one too, with no push
+ * held: that is a plain write, and the Rejection the screen shows survives
+ * either way.
+ */
+export function receiveLobby(lobby: LobbyMessage, receivedAt: number): void {
+  const { push } = roomStore.getState();
+  roomStore.setState({
+    lobby,
+    lobbyClockOffset: lobby.now - receivedAt,
+    ...(push === null ? {} : { push: null, sentAt: null }),
+  });
+  if (push !== null) resetLog();
+}
+
 /** A Rejection of one of this client's intents arrived: it answers with the next `seq`. */
 export function receiveRejection(code: RejectionCode): void {
   roomStore.setState({ rejection: { code, seq: ++seq } });
@@ -130,6 +149,14 @@ export function reset(): void {
   // The Event log is client-side history: it belongs to the Room being left.
   resetLog();
 }
+
+/**
+ * Whether the Room's latest news is its Lobby, not a game: `receiveLobby`
+ * cleared the push the Game screen drew. The Game screen leaves for
+ * `/room/:code` on this, and the Lobby screen's `started` flag stays false, so
+ * the screen does not bounce back (the next game's first push is a new one).
+ */
+export const inLobbyOf = (state: RoomState): boolean => state.push === null && state.lobby !== null;
 
 /**
  * The in-flight lock ("No optimistic UI"): this client sent an intent and no
