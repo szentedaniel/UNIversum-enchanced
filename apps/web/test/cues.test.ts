@@ -2,7 +2,7 @@ import type { GameEvent } from "@universum/rules";
 import { describe, expect, it } from "vitest";
 import { EVENT_PRESENTATION } from "#playback/presentation.ts";
 import { CUES, EVENT_CUES, cuesReached, type CueName } from "#sound/cues.ts";
-import { ROLL } from "./playback-fixtures.ts";
+import { CHANCE, ROLL } from "./playback-fixtures.ts";
 
 // The cue table (spec #178): one exhaustive row per event type saying which
 // sound it starts, or an explicit silence. A new event type fails to compile
@@ -18,14 +18,14 @@ const CUED = {
   BoughtOut: "buy",
   OfferDeclined: "none",
   RentPaid: "rent",
-  CardDrawn: "none",
+  CardDrawn: "chance",
   ChanceMoneyReceived: "none",
   ChanceChargePaid: "none",
   ChanceTransferPaid: "none",
   TaxPaid: "none",
-  QuarantineEntered: "none",
+  QuarantineEntered: "quarantine",
   QuarantineRoundUsed: "none",
-  QuarantineReleased: "none",
+  QuarantineReleased: "release",
   PcrTestBought: "none",
   PcrTestUsed: "none",
   FieldsSold: "none",
@@ -62,6 +62,13 @@ describe("the cue table", () => {
     expect(CUES.rent).toContain("rent.mp3");
     expect(CUES.buy).not.toBe(CUES.rent);
   });
+
+  it("gives the Chance card and the two Quarantine cues their own files", () => {
+    expect(CUES.chance).toContain("chance.mp3");
+    expect(CUES.quarantine).toContain("quarantine.mp3");
+    expect(CUES.release).toContain("release.mp3");
+    expect(CUES.quarantine).not.toBe(CUES.release);
+  });
 });
 
 describe("cuesReached", () => {
@@ -85,5 +92,21 @@ describe("cuesReached", () => {
     expect(cuesReached(ROLL(), 0, 1)).toEqual(["dice"]);
     expect(cuesReached(ROLL(), 1, 2)).toEqual([]);
     expect(cuesReached(ROLL(), 2, ROLL().length)).toEqual(["rent"]);
+  });
+
+  it("finds the Chance card in a real Chance push and keeps its money follow-up silent", () => {
+    expect(cuesReached(CHANCE(), 0, CHANCE().length)).toEqual(["dice", "chance"]);
+  });
+
+  it("plays the two Quarantine cues and stays silent for the round and the PCR test", () => {
+    const events: readonly GameEvent[] = [
+      { type: "QuarantineEntered", player: "p1", rounds: 3 },
+      { type: "QuarantineRoundUsed", player: "p1", roundsLeft: 2 },
+      { type: "PcrTestBought", player: "p1", amount: 100_000 },
+      { type: "PcrTestUsed", player: "p1" },
+      { type: "QuarantineReleased", player: "p1" },
+    ];
+
+    expect(cuesReached(events, 0, events.length)).toEqual(["quarantine", "release"]);
   });
 });

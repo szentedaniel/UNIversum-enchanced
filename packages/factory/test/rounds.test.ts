@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { excerptOf } from "#fix/excerpt.ts";
 import { fixReasonOf } from "#fix/reasons.ts";
-import { fixDecision, fixRounds, mainMovedComment, roundComment } from "#fix/rounds.ts";
+import { fixDecision, fixPlan, fixRounds, mainMovedComment, roundComment } from "#fix/rounds.ts";
 
 describe("fixRounds", () => {
   it("counts the round markers, the highest number winning", () => {
@@ -29,6 +29,32 @@ describe("fixDecision", () => {
   it("stops after the second round and says why", () => {
     expect(fixDecision(2)).toEqual({
       run: false,
+      reason: "the fix loop already ran 2 rounds",
+    });
+  });
+});
+
+describe("fixPlan", () => {
+  it("runs the next round while the review asks for a fix", () => {
+    expect(fixPlan(0, "review", false)).toEqual({ action: "run", round: 1 });
+  });
+
+  it("stands down for an advisory-only review, whatever the rounds", () => {
+    expect(fixPlan(2, "review", true)).toEqual({ action: "merge-gate" });
+    expect(fixPlan(0, "review", true)).toEqual({ action: "merge-gate" });
+  });
+
+  it("escalates a spent budget when a blocking finding brought it back", () => {
+    expect(fixPlan(2, "review", false)).toEqual({
+      action: "escalate",
+      reason: "the fix loop already ran 2 rounds",
+    });
+  });
+
+  it("keeps a red CI run on its rounds, whatever the last review said", () => {
+    expect(fixPlan(1, "ci", true)).toEqual({ action: "run", round: 2 });
+    expect(fixPlan(2, "ci", true)).toEqual({
+      action: "escalate",
       reason: "the fix loop already ran 2 rounds",
     });
   });

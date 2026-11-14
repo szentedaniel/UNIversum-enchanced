@@ -10,7 +10,10 @@
  */
 import type { GameEvent } from "@universum/rules";
 import buySound from "#assets/sounds/buy.mp3";
+import chanceSound from "#assets/sounds/chance.mp3";
 import diceSound from "#assets/sounds/dice.mp3";
+import quarantineSound from "#assets/sounds/quarantine.mp3";
+import releaseSound from "#assets/sounds/release.mp3";
 import rentSound from "#assets/sounds/rent.mp3";
 
 /** The effect file of every cue; a new sound adds a row here and a file beside it. */
@@ -18,6 +21,9 @@ export const CUES = {
   dice: diceSound,
   buy: buySound,
   rent: rentSound,
+  chance: chanceSound,
+  quarantine: quarantineSound,
+  release: releaseSound,
 } as const;
 
 /** A named cue: one effect file from `CUES`. */
@@ -35,14 +41,14 @@ export const EVENT_CUES: CueTable = {
   BoughtOut: "buy",
   OfferDeclined: "none",
   RentPaid: "rent",
-  CardDrawn: "none",
+  CardDrawn: "chance",
   ChanceMoneyReceived: "none",
   ChanceChargePaid: "none",
   ChanceTransferPaid: "none",
   TaxPaid: "none",
-  QuarantineEntered: "none",
+  QuarantineEntered: "quarantine",
   QuarantineRoundUsed: "none",
-  QuarantineReleased: "none",
+  QuarantineReleased: "release",
   PcrTestBought: "none",
   PcrTestUsed: "none",
   FieldsSold: "none",

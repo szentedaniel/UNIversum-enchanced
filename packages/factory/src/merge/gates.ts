@@ -1,5 +1,7 @@
 import type { FixReason } from "#fix/reasons.ts";
 import {
+  advisoryOnly,
+  findingsOf,
   mergeDangerOf,
   newestMarkerComment,
   reviewVerdictOf,
@@ -155,6 +157,10 @@ export const reviewState = (facts: MergeFacts): ReviewState => {
   // The reviewer commits and pushes before it comments, so a comment that
   // predates the head commit is about code that has since changed.
   if (Date.parse(review.createdAt) < Date.parse(facts.headCommittedAt)) return "stale";
+  // A changes-requested review whose findings are all advisory leaves nothing
+  // a person must fix: the gate decides as if the review had passed, and the
+  // findings become one follow-up issue after the merge.
+  if (verdict === "changes-requested" && advisoryOnly(review.body)) return "pass";
   return verdict;
 };
 
@@ -316,7 +322,7 @@ const fitSubject = (subject: string): string => {
 };
 
 export type MergeStep =
-  | { readonly kind: "merge" }
+  | { readonly kind: "merge"; readonly advisory: readonly string[] }
   | { readonly kind: "wait"; readonly reason: string }
   | { readonly kind: "requeue-review" }
   | { readonly kind: "fix"; readonly reason: FixReason }
@@ -367,5 +373,12 @@ export const mergeStep = (facts: MergeFacts): MergeStep => {
   if (facts.mergeState === "unknown") return wait("GitHub has not computed mergeability yet");
 
   const gate = canAutoMerge(facts);
-  return gate.merge ? { kind: "merge" } : { kind: "escalate", reasons: gate.reasons };
+  return gate.merge
+    ? {
+        kind: "merge",
+        // The newest review's advisory findings become one follow-up issue:
+        // they are judgement calls a person may act on after the merge.
+        advisory: findingsOf(newestMarkerComment(facts.comments)?.body ?? "").advisory,
+      }
+    : { kind: "escalate", reasons: gate.reasons };
 };

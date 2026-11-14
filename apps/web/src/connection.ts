@@ -22,6 +22,9 @@ import {
   MESSAGE,
   RECONNECT,
   backoffDelay,
+  type ChatEvent,
+  type ChatId,
+  type ClientChat,
   type ClientIntent,
   type CreateOptions,
   type GameMessage,
@@ -34,6 +37,7 @@ import {
   type WelcomeMessage,
 } from "@universum/protocol/messages";
 import { guestToken } from "#guest-token.ts";
+import { chatStore } from "#stores/chat-store.ts";
 import {
   markIntentSent,
   receiveLobby,
@@ -109,11 +113,21 @@ export function sendIntent(intent: ClientIntent): void {
   room?.send(MESSAGE.intent, intent);
 }
 
+/**
+ * Sends one catalogue quick-chat id to the Room; without a Room it does
+ * nothing. Chat is not an intent (ADR-0001): it changes no game state, so it
+ * sets no in-flight lock, and the Room's flood ladder answers a burst.
+ */
+export function sendChat(id: ChatId): void {
+  room?.send(MESSAGE.chat, { id } satisfies ClientChat);
+}
+
 export async function leaveRoom(): Promise<void> {
   clearTimeout(rejoinTimer);
   const leaving = room;
   room = null;
   reset();
+  chatStore.getState().reset();
   if (leaving?.connection.isOpen) await leaving.leave();
 }
 
@@ -148,6 +162,9 @@ function listen(joined: Room): void {
   });
   joined.onMessage(MESSAGE.game, (push: GameMessage) => {
     if (mine()) receivePush(push, Date.now());
+  });
+  joined.onMessage(MESSAGE.chat, (event: ChatEvent) => {
+    if (mine()) chatStore.getState().show(event.seat, event.id, Date.now());
   });
   joined.onMessage(MESSAGE.rejected, ({ code }: RejectionMessage) => {
     if (mine()) receiveRejection(code);
