@@ -1,6 +1,10 @@
 import type { FixReason } from "#fix/reasons.ts";
-import { isMigrationPath, migrationCollision, migrationProblems } from "#merge/migration.ts";
-import type { MigrationFacts } from "#merge/migration.ts";
+import {
+  isMigrationPath,
+  migrationCollision,
+  migrationProblems,
+  type MigrationFacts,
+} from "#merge/migration.ts";
 import {
   advisoryOnly,
   findingsOf,
@@ -241,8 +245,8 @@ interface MigrationGate {
 
 /**
  * The exception applies only when every protected path the pull request
- * touches is the migration's own and the check finds nothing wrong: anything
- * else about the diff, a second protected path included, keeps the owner.
+ * touches is the migration's own and the check finds nothing wrong. A second
+ * protected path, or any fault in the check, keeps the owner.
  */
 const migrationGate = (facts: MergeFacts, paths: readonly string[]): MigrationGate => {
   if (
@@ -264,8 +268,8 @@ const migrationGate = (facts: MergeFacts, paths: readonly string[]): MigrationGa
  *
  * A state migration is the one protected path the gate may take on its own:
  * when it is the only one and `migrationProblems` finds nothing, its
- * `risk:high`/one-way rating no longer stops the merge, and a fault in the
- * check is reported in the protected paths' place.
+ * `risk:high`/one-way rating no longer stops the merge; a fault in the check
+ * joins the reasons beside the protected paths.
  */
 export const canAutoMerge = (facts: MergeFacts): MergeGate => {
   const reasons: string[] = [];
