@@ -36,6 +36,7 @@ const reader = (overrides: Partial<MergeReader> = {}): MergeReader => ({
   ciRuns: () => [],
   compareOf: () => ({ mergeBase: "merge-base", mainAheadBy: 0, files: [] }),
   contentAt: () => undefined,
+  fixtureNames: () => undefined,
   issueComments: () => [],
   ...overrides,
 });
@@ -97,6 +98,7 @@ describe("readMergeFacts", () => {
       mergeState: "dirty",
       mainAheadBy: 3,
       mainFiles: ["apps/web/src/Game.tsx"],
+      migration: undefined,
     });
   });
 
@@ -133,6 +135,66 @@ describe("readMergeFacts", () => {
     );
 
     expect(facts.dependencyChanges).toEqual([]);
+  });
+
+  it("reads the migration's sources, at the merge base, main and the head", () => {
+    const contents: Record<string, string> = {
+      "packages/rules/src/state.ts@merge-base": "export const STATE_VERSION = 2;",
+      "packages/rules/src/state.ts@main": "export const STATE_VERSION = 2;",
+      "packages/rules/src/state.ts@head-sha": "export const STATE_VERSION = 3;",
+      "packages/rules/src/migrate.ts@main": "main chain",
+      "packages/rules/src/migrate.ts@head-sha": "head chain",
+      "packages/rules/test/migrate.test.ts@head-sha": 'const snapshots = ["state-v3.json"];',
+    };
+    const listings: Record<string, string[]> = {
+      main: ["state-v1.json", "state-v2.json"],
+      "head-sha": ["state-v1.json", "state-v2.json", "state-v3.json"],
+    };
+
+    const facts = readMergeFacts(
+      "owner/repo",
+      "132",
+      pull(),
+      reader({
+        changedFiles: () => [
+          "packages/rules/src/migrate.ts",
+          "packages/rules/test/fixtures/state-v3.json",
+        ],
+        contentAt: (_repo, file, ref) => contents[`${file}@${ref}`],
+        fixtureNames: (_repo, ref) => listings[ref],
+      }),
+    );
+
+    expect(facts.migration).toEqual({
+      stateBase: "export const STATE_VERSION = 2;",
+      stateMain: "export const STATE_VERSION = 2;",
+      stateHead: "export const STATE_VERSION = 3;",
+      migrateMain: "main chain",
+      migrateHead: "head chain",
+      testHead: 'const snapshots = ["state-v3.json"];',
+      fixturesMain: ["state-v1.json", "state-v2.json"],
+      fixturesHead: ["state-v1.json", "state-v2.json", "state-v3.json"],
+      files: ["packages/rules/src/migrate.ts", "packages/rules/test/fixtures/state-v3.json"],
+    });
+  });
+
+  it("reads nothing extra for a pull request outside the migration paths", () => {
+    let listings = 0;
+    const facts = readMergeFacts(
+      "owner/repo",
+      "132",
+      pull(),
+      reader({
+        changedFiles: () => ["packages/rules/src/state.ts", "packages/rules/test/migrate.test.ts"],
+        fixtureNames: () => {
+          listings++;
+          return [];
+        },
+      }),
+    );
+
+    expect(facts.migration).toBeUndefined();
+    expect(listings).toBe(0);
   });
 });
 

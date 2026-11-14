@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readMergeFacts, type CompareView, type MergeReader, type PullView } from "#merge/facts.ts";
 import { isFactoryPull, mergeStep, type CiRun } from "#merge/gates.ts";
+import { MIGRATION_FILES } from "#merge/migration.ts";
 import { performStep, type MergeActions } from "#merge/perform.ts";
 import { fail, required, sh, shellArg } from "#shared/common.ts";
 import {
@@ -103,6 +104,22 @@ const contentAt = (repo: string, path: string, ref: string): string | undefined 
   }
 };
 
+/** The state snapshots' file names at a ref, or `undefined` when the directory is absent. */
+const fixtureNames = (repo: string, ref: string): string[] | undefined => {
+  try {
+    return parseJson<string[]>(
+      apiBody(
+        sh(
+          `gh api -i "repos/${repo}/contents/${MIGRATION_FILES.fixtures}?ref=${ref}" --jq '[.[] | select(.type == "file") | .name]'`,
+        ),
+      ),
+    );
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
+    return undefined;
+  }
+};
+
 const writeTemp = (name: string, content: string): string => {
   const file = join(mkdtempSync(join(tmpdir(), "factory-merge-")), name);
   writeFileSync(file, `${content}\n`);
@@ -116,6 +133,7 @@ const ghReader: MergeReader = {
   ciRuns,
   compareOf,
   contentAt,
+  fixtureNames,
   issueComments,
 };
 
@@ -195,6 +213,7 @@ export const mergeGate = (
     ciRuns: (repository, branch) => retryRead(() => reader.ciRuns(repository, branch)),
     compareOf: (repository, headSha) => retryRead(() => reader.compareOf(repository, headSha)),
     contentAt: (repository, path, ref) => retryRead(() => reader.contentAt(repository, path, ref)),
+    fixtureNames: (repository, ref) => retryRead(() => reader.fixtureNames(repository, ref)),
     issueComments: (repository, pull) => retryRead(() => reader.issueComments(repository, pull)),
   };
   // `ticketTitle` is the one read on the actions seam; every write stays bare.
