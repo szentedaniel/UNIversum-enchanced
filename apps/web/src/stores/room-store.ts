@@ -156,8 +156,7 @@ export function reset(): void {
  * `/room/:code` on this, and the Lobby screen's `started` flag stays false, so
  * the screen does not bounce back (the next game's first push is a new one).
  */
-export const inLobbyOf = (state: RoomState): boolean =>
-  state.push === null && state.lobby !== null;
+export const inLobbyOf = (state: RoomState): boolean => state.push === null && state.lobby !== null;
 
 /**
  * The in-flight lock ("No optimistic UI"): this client sent an intent and no
