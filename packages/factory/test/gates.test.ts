@@ -456,6 +456,20 @@ describe("the state migration exception", () => {
     ]);
   });
 
+  it("keeps the one-way door for a migration that arrives with a protocol change", () => {
+    const gate = canAutoMerge(
+      facts({
+        labels: ["risk:high"],
+        comments: pullOf().comments,
+        files: [...pullOf().files, "packages/protocol/src/messages.ts"],
+        migration: soundMigration(),
+      }),
+    );
+
+    expect(gate.merge).toBe(false);
+    expect(gate.reasons).toContain("one-way door: stored state");
+  });
+
   it("keeps the one-way door for a pull request with no migration to check", () => {
     const gate = canAutoMerge(
       facts({

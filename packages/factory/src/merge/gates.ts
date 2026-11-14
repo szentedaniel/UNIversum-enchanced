@@ -244,15 +244,24 @@ interface MigrationGate {
 }
 
 /**
+ * The wire protocol's sources. The review's one-way rating cannot say whether
+ * it meant the migration or a wire change beside it, so a migration that
+ * arrives with a protocol change keeps the owner.
+ */
+const WIRE_PATH = "packages/protocol/src/";
+
+/**
  * The exception applies only when every protected path the pull request
- * touches is the migration's own and the check finds nothing wrong. A second
- * protected path, or any fault in the check, keeps the owner.
+ * touches is the migration's own, no wire change rides along, and the check
+ * finds nothing wrong. A second protected path, a protocol change or any fault
+ * in the check keeps the owner.
  */
 const migrationGate = (facts: MergeFacts, paths: readonly string[]): MigrationGate => {
   if (
     facts.migration === undefined ||
     paths.length === 0 ||
-    !paths.every((path) => isMigrationPath(path))
+    !paths.every((path) => isMigrationPath(path)) ||
+    facts.files.some((file) => file.startsWith(WIRE_PATH))
   ) {
     return { checked: false, faults: [] };
   }

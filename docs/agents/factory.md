@@ -356,7 +356,7 @@ it finds nothing wrong the same gates above merge the pull request:
 
 `migrate.test.ts` runs every stored snapshot through the chain to the current shape, so that chain
 stands in for the review of the migration: its one-way door rating no longer stops the merge. The
-exception covers the migration alone — a pull request that touches another protected path, or whose
+exception covers the migration alone — a pull request that touches another protected path or the wire protocol (`packages/protocol/src/`), or whose
 migration fails one of these conditions, waits for the owner with the check's reasons, which all open
 with `state migration:`, and a one-way door on a pull request that is not a sound migration keeps its
 refusal.
