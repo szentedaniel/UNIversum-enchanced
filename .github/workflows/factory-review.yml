@@ -4,13 +4,19 @@
 # the nightly tick dispatches a run with no `pr`, which drains whatever stayed
 # queued.
 #
+# A review that produces no valid `<review>` block gets its own second turn in
+# the session (`review.ts`); a review step that still fails re-dispatches this
+# workflow once (`retry: true`). Only then does the pull request go to the
+# owner, and the failure comment's marker lets a manual dispatch review it
+# again without a relabel.
+#
 # Labels: `agent:review` is the queue (a queued run leaves it in place); a run
 # swaps it for `risk:low` or `risk:high`. A changes-requested review dispatches
 # the fix loop (`factory-fix.yml`); a pass leaves the merge gate
 # (`factory-merge.yml`) to decide.
 name: Factory Review
 
-run-name: Factory review ${{ inputs.pr && format('#{0}', inputs.pr) || inputs.scheduled && '(factory tick)' || format('#{0}', github.event.pull_request.number || 'night queue') }}
+run-name: Factory review ${{ inputs.pr && format('#{0}', inputs.pr) || inputs.scheduled && '(factory tick)' || format('#{0}', github.event.pull_request.number || 'night queue') }}${{ inputs.retry && ' (retry)' || '' }}
 
 on:
   pull_request:
@@ -25,6 +31,10 @@ on:
         description: "The pull request number to review (empty: drain the queue of every agent:review pull request)"
         required: false
         type: string
+      retry:
+        description: "Set by a failed run: this is the one automatic re-run, so do not re-run it again"
+        type: boolean
+        default: false
 
 # The job's own token stays read-only; every write goes through AGENT_PAT,
 # which is what makes CI run on the reviewer's push and label chains fire.
@@ -81,7 +91,8 @@ jobs:
           fi
 
       # A label event elsewhere on the pull request must not review it: the
-      # queue is exactly the `agent:review` label.
+      # queue is exactly the `agent:review` label. A manual dispatch may still
+      # be a recovery of a failed review, which the gate below recognises.
       - name: Preflight
         id: preflight
         run: |
@@ -94,7 +105,7 @@ jobs:
             exit 0
           fi
           labels=$(jq -r '[.labels[].name] | join(" ")' <<< "$info")
-          if [[ " $labels " != *" agent:review "* ]]; then
+          if [[ " $labels " != *" agent:review "* ]] && [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ]; then
             echo "::notice::Pull request #$PR_NUMBER is not labelled agent:review; leaving it alone."
             echo "proceed=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -109,6 +120,7 @@ jobs:
             echo "proceed=true"
             echo "head_ref=$(jq -r .headRefName <<< "$info")"
             echo "issue=$issue"
+            echo "labels=$labels"
           } >> "$GITHUB_OUTPUT"
 
       # The gate runs main's code, not the pull request's.
@@ -125,20 +137,24 @@ jobs:
         with:
           node-version-file: .node-version
 
-      # Outside the Budapest night window, only the day's quota may review; a
-      # queued run leaves `agent:review` in place for the nightly queue dispatch.
-      - name: Check the night window and the daytime quota
+      # The queue label decides first; outside the Budapest night window, only
+      # the day's quota may review a queued pull request, which then leaves
+      # `agent:review` in place for the nightly dispatch. A manual dispatch of
+      # a failed review is a recovery and runs now.
+      - name: Check the queue, the night window and the daytime quota
         id: gate
         if: steps.preflight.outputs.proceed == 'true'
         env:
           FACTORY_DAY_REVIEWS: ${{ vars.FACTORY_DAY_REVIEWS }}
+          LABELS: ${{ steps.preflight.outputs.labels }}
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
           OUTPUT_DIR: ${{ runner.temp }}
         run: |
           set -euo pipefail
           review=$(node packages/factory/src/review/gate.ts)
           echo "review=$review" >> "$GITHUB_OUTPUT"
           if [ "$review" != "true" ]; then
-            echo "::notice::Queued: the daytime quota is spent and it is outside the Budapest night window. Pull request #$PR_NUMBER keeps agent:review for the night run."
+            echo "::notice::No review now (the gate's reason is above). A queued run keeps agent:review for the night dispatch; a pull request held for another reason is left alone."
           fi
 
       - uses: actions/checkout@v7
@@ -244,18 +260,13 @@ jobs:
           fi
 
       # A failed review is not left in the queue: it would fail again at night.
-      - name: Hand a failed review to a human
+      # The review step itself gets one whole-run re-run first (the session's
+      # own second turn is `review.ts`'s); the retry run hands over instead.
+      - name: Retry the failed review or hand it to a human
         if: failure() && steps.preflight.outputs.proceed == 'true' && steps.gate.outputs.review == 'true'
         env:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          reason="(no reason file written; check the run log)"
-          if [ -f "${RUNNER_TEMP}/failure_reason.txt" ]; then
-            reason=$(cat "${RUNNER_TEMP}/failure_reason.txt")
-          fi
-          body="${RUNNER_TEMP}/failure-comment.md"
-          printf 'The factory could not review this pull request.\n\n**Reason:** %s\n\n**Run:** %s\n\nRe-dispatch `factory-review.yml` to retry.\n' "$reason" "$RUN_URL" > "$body"
-          gh pr comment "$PR_NUMBER" --body-file "$body" || true
-          gh pr edit "$PR_NUMBER" --remove-label "agent:review" || true
-          gh pr edit "$PR_NUMBER" --add-label "ready-for-human" || true
+          REVIEW_FAILED: ${{ steps.review.outcome == 'failure' }}
+          RETRY: ${{ inputs.retry }}
+          OUTPUT_DIR: ${{ runner.temp }}
+        run: node packages/factory/src/review/fail.ts
