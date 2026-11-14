@@ -78,3 +78,18 @@ export const roundComment = (round: number, reason: FixReason): string =>
 
 /** Merging main in is housekeeping, not a fix round: it leaves no marker. */
 export const mainMovedComment = (): string => "Factory fix: main was merged into the branch.";
+
+/**
+ * What omp is asked to fix when main moved. A state version main already has
+ * is the one collision a merge cannot settle: the two chain entries would
+ * share a key, so the branch's migration and its snapshot move onto main's
+ * next version.
+ */
+export const mainMovedProblem = (): string =>
+  [
+    "main moved since this branch was cut, or merging it conflicts.",
+    "",
+    "Merge `origin/main` into this branch, resolve the conflicts, run the fast checks and commit.",
+    "",
+    "If main already took the state version this branch added, renumber the migration: the entry's key in `packages/rules/src/migrate.ts`, the snapshot's file name (`packages/rules/test/fixtures/state-v<new>.json`), its import and list entry in `packages/rules/test/migrate.test.ts`, and `STATE_VERSION` in `packages/rules/src/state.ts`.",
+  ].join("\n");
