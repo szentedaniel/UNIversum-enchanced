@@ -14,6 +14,8 @@ import {
 
 /** A Lobby Seat is held this long for a Player who dropped (spec: Seat hold). */
 const LOBBY_HOLD = 60_000;
+/** One Minute of game time in ms; the default Room's games last at most 50 of them (spec: settings). */
+const MINUTE = 60_000;
 /** What Colyseus answers a reconnection token it no longer holds a Seat for. */
 const EXPIRED = "reconnection token invalid or expired";
 
@@ -271,6 +273,27 @@ describe("a Seat in a running game while its Player is away", () => {
     server.room(code)?.endGame();
 
     await expect(server.reconnect(alice)).rejects.toThrow(EXPIRED);
+  });
+
+  it("sees the same final Summary as the Guests who were there when the game ended", async () => {
+    const server = await start();
+    const { alice, bob, tokens, ids, code } = await startedGame(server);
+    await bob.drop();
+    // The end, played out from Alice's open Decision; Bob missed every push.
+    server.scheduler.advanceTo(T0 + 50 * MINUTE);
+    const ended = await alice.next("game");
+
+    const again = await server.join(code, { guestToken: tokens[1] });
+
+    expect(await again.next("welcome")).toEqual({ playerId: ids[1] });
+    const { view } = await again.next("game");
+    expect(view.version).toBe(ended.view.version);
+    expect(view.summary).not.toBeNull();
+    expect(view.summary).toEqual(ended.view.summary);
+    const final = view.summary?.series.at(-1);
+    for (const standing of view.standings ?? []) {
+      expect(final?.wealth[standing.player]).toBe(standing.wealth);
+    }
   });
 
   it("is held when its client drops before its JOINED handshake, and the Guest token takes it back", async () => {

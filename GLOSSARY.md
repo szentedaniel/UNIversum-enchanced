@@ -232,5 +232,5 @@ A Player's cash plus the Value of their Fields; it decides the winner when the M
 Every Player's Wealth, sampled with the game's elapsed Minute each time a Turn passes and once more when the game ends, so the last sample equals the final standings.
 
 **Summary**:
-The end-of-game figures counted while the game runs: the biggest Rent paid, the Fields each Player bought, the Monopolies formed and the Bankruptcies, in order. A Monopoly counts each time a purchase or an accepted Deal completes it, so a Group lost and completed again counts twice.
+The end-of-game figures counted while the game runs: the biggest Rent paid, the Fields each Player bought, the Monopolies formed and the Bankruptcies, in order. A Monopoly counts each time a purchase or an accepted Deal completes it, so a Group lost and completed again counts twice. The final view carries the Summary, with the Wealth series beside the figures, once the game is over; it is absent while the game runs.
 _Avoid_: Statistics, Recap
