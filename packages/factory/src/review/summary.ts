@@ -78,7 +78,7 @@ export interface CommentFindings {
 }
 
 const FINDING_LINE = /^- (?:\*\*(?:Blocking|Advisory):\*\* )?(.+)$/u;
-const ADVISORY_LINE = /^- \*\*Advisory:?\*\* /u;
+const ADVISORY_LINE = /^- \*\*Advisory:\*\* /u;
 
 /**
  * The findings a review summary lists. A line with no severity is what a
