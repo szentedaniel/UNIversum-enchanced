@@ -143,6 +143,8 @@ const REJECTIONS: Record<RejectionCode, Message> = {
   INTERNAL: m.rejection_internal,
   ROOM_NOT_FOUND: m.rejection_room_not_found,
   ROOM_FULL: m.rejection_room_full,
+  SPECTATORS_FULL: m.rejection_spectators_full,
+  SPECTATOR_READ_ONLY: m.rejection_spectator_read_only,
   ROOM_NAME_INVALID: m.rejection_room_name_invalid,
   WRONG_PASSWORD: m.rejection_wrong_password,
   ROOM_NAME_BLOCKED: m.rejection_room_name_blocked,
