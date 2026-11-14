@@ -13,6 +13,7 @@ import {
   LOBBY_LIST_MESSAGE,
   LOBBY_ROOM,
   MESSAGE,
+  type ChatEvent,
   type CreateOptions,
   type GameMessage,
   type JoinOptions,
@@ -41,6 +42,7 @@ type Messages = {
   welcome: WelcomeMessage;
   lobby: LobbyMessage;
   game: GameMessage;
+  chat: ChatEvent;
   rejected: RejectionMessage;
 };
 type MessageType = keyof Messages;
@@ -340,6 +342,7 @@ export class TestClient {
     welcome: [],
     lobby: [],
     game: [],
+    chat: [],
     rejected: [],
   };
   readonly #waiters: { [K in MessageType]?: (message: Messages[K]) => void } = {};
@@ -354,6 +357,7 @@ export class TestClient {
     this.#listen("welcome");
     this.#listen("lobby");
     this.#listen("game");
+    this.#listen("chat");
     this.#listen("rejected");
   }
 
@@ -413,6 +417,11 @@ export class TestClient {
   /** Sends an `intent` message (anything, so tests can send malformed ones). */
   send(intent: unknown): void {
     this.room.send(MESSAGE.intent, intent);
+  }
+
+  /** Sends a `chat` message (anything, so tests can send malformed ones). */
+  sendChat(chat: unknown): void {
+    this.room.send(MESSAGE.chat, chat);
   }
 
   async leave(): Promise<void> {

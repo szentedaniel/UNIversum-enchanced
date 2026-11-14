@@ -8,7 +8,7 @@ import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ScreenHeader } from "#components/ScreenHeader.tsx";
 import { SeatCard } from "#components/SeatCard.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
-import { ensureJoined, JoinError, sendIntent } from "#connection.ts";
+import { ensureJoined, JoinError, joinRoom, sendIntent } from "#connection.ts";
 import { inviteLink } from "#invite.ts";
 import { PasswordForm, RejectionText, retryAtOf, useCountdown, useJoin } from "#screens/join.tsx";
 import { roomStore } from "#stores/room-store.ts";
@@ -127,6 +127,23 @@ export function Lobby() {
     if (started) void navigate(`/game/${code}`, { replace: true });
   }, [started, code, navigate]);
 
+  /**
+   * A Guest whose Seat the Rematch released takes a free one: the join takes
+   * the Seat by Guest token, and a Room with a password asks for it again.
+   */
+  async function takeSeat(): Promise<void> {
+    try {
+      await joinRoom(code);
+    } catch (e) {
+      const rejection = e instanceof JoinError ? e.code : "INTERNAL";
+      if (rejection === "WRONG_PASSWORD") ask(code);
+      else {
+        setError(rejection);
+        setRetryAt(retryAtOf(e));
+      }
+    }
+  }
+
   if (error) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-safe-4 text-center">
@@ -168,6 +185,9 @@ export function Lobby() {
   const full = lobby.seats.length === maxPlayers;
   const open = Array.from({ length: maxPlayers - lobby.seats.length }, (_, i) => i);
   const invite = inviteLink(window.location.origin, lobby.code);
+  // A Seat released when the Room returned to Lobby (#225): this client is still
+  // in the Room but in no Seat. It sees the open Seats and takes one by joining.
+  const released = me !== null && !lobby.seats.some((seat) => seat.playerId === me);
 
   return (
     <div className="min-h-dvh pb-safe-8">
@@ -192,7 +212,7 @@ export function Lobby() {
               creator={seat.playerId === lobby.creatorId}
               bot={seat.bot === true}
               onRemoveBot={
-                seat.bot === true
+                seat.bot === true && !released
                   ? () => sendIntent({ type: "RemoveBot", playerId: seat.playerId })
                   : undefined
               }
@@ -208,7 +228,7 @@ export function Lobby() {
             <SeatCard
               key={`open-${i}`}
               open
-              onAddBot={i === 0 ? () => sendIntent({ type: "AddBot" }) : undefined}
+              onAddBot={i === 0 && !released ? () => sendIntent({ type: "AddBot" }) : undefined}
             />
           ))}
         </ul>
@@ -248,16 +268,33 @@ export function Lobby() {
             </span>
           </li>
         </ul>
-        <Button
-          size="lg"
-          className="mt-6 w-full"
-          disabled={!full}
-          onClick={() => sendIntent({ type: "Start" })}
-        >
-          {m.lobby_start()}
-        </Button>
-        {!full && (
-          <p className="mt-3 text-center font-bold text-muted-foreground">{m.lobby_waiting()}</p>
+        {released ? (
+          <div className="sticker mt-6 flex flex-col items-center gap-3 rounded-ui bg-card p-4 text-center text-card-foreground">
+            <p data-testid="seat-released" className="m-0 font-bold">
+              {m.lobby_seat_released()}
+            </p>
+            {open.length > 0 && (
+              <Button data-testid="take-seat" onClick={() => void takeSeat()}>
+                {m.lobby_take_seat()}
+              </Button>
+            )}
+          </div>
+        ) : (
+          <>
+            <Button
+              size="lg"
+              className="mt-6 w-full"
+              disabled={!full}
+              onClick={() => sendIntent({ type: "Start" })}
+            >
+              {m.lobby_start()}
+            </Button>
+            {!full && (
+              <p className="mt-3 text-center font-bold text-muted-foreground">
+                {m.lobby_waiting()}
+              </p>
+            )}
+          </>
         )}
       </main>
     </div>

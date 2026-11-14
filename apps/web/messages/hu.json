@@ -24,6 +24,8 @@
   "lobby_you": "te",
   "lobby_start": "Indítás",
   "lobby_waiting": "Az indítás akkor válik elérhetővé, ha minden hely betelt.",
+  "lobby_seat_released": "A helyed felszabadult, amikor a szoba visszatért a váróterembe.",
+  "lobby_take_seat": "Helyet foglalok",
   "lobby_copy_code": "Szobakód másolása",
   "lobby_copied": "Másolva",
   "lobby_copy_link": "Meghívó link másolása",
