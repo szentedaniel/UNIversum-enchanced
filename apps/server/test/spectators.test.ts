@@ -7,12 +7,7 @@ import {
 } from "@universum/protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BOT_ONLY_RETENTION_MS } from "#room/game-driver.ts";
-import {
-  eventually,
-  newGuestToken,
-  startTestServer,
-  type TestServer,
-} from "./helpers.ts";
+import { eventually, newGuestToken, startTestServer, type TestServer } from "./helpers.ts";
 
 let server: TestServer;
 
@@ -205,6 +200,24 @@ describe("the spectator cap", () => {
 });
 
 describe("a Room with only spectators left", () => {
+  it("keeps a Lobby alive while a dropped Guest's Seat waits, spectator or not", async () => {
+    const alice = await server.create({ maxPlayers: 2 });
+    const bob = await server.join(alice.code);
+    await alice.until("lobby", (message) => message.seats.length === 2);
+    const spectator = await watch(alice.code);
+    await spectator.next("lobby");
+    await bob.drop();
+    await eventually(() => expect(server.room(alice.code)?.gauges().held).toBe(1));
+
+    await alice.leave();
+
+    // The dropped Guest's 60 s hold keeps the Lobby: the spectator does not end it.
+    await eventually(() => expect(server.room(alice.code)?.clients.length).toBe(1));
+    expect(server.room(alice.code)).toBeDefined();
+    const back = await server.reconnect(bob);
+    expect((await back.next("lobby")).seats).toHaveLength(1);
+  });
+
   it("is disposed once the Lobby's last Guest leaves", async () => {
     const alice = await server.create({ maxPlayers: 2 });
     await alice.next("welcome");

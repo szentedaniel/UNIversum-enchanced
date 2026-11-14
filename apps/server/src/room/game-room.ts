@@ -312,9 +312,9 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    * before a Seat is reserved, for create and join alike. Colyseus gives it no
    * Room, so a join names its Room code in the options. Refusals here hold no
    * Seat: the live-Lobby cap and open Lobbies per IP (create), outstanding
-   * Seat reservations per IP, an unknown or full Lobby, and the password,
-   * throttled before scrypt runs. The request rates are checked earlier, in
-   * the HTTP gate. Create options are checked in `onCreate`.
+   * Seat reservations per IP, an unknown or full Lobby, the spectator cap and
+   * the password, throttled before scrypt runs. The request rates are checked
+   * earlier, in the HTTP gate. Create options are checked in `onCreate`.
    */
   static async authorize(
     guard: AbuseGuard,
@@ -336,7 +336,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (reservations) throw refuse(reservations);
     const room = matchMaker.getLocalRoomById(join.data.code);
     if (!(room instanceof GameRoom)) throw refuse("ROOM_NOT_FOUND");
-    /** The password gate both a Player and a spectator pass before entering (spec #179). */
+    // The password gate both a Player and a spectator pass before entering (spec #179).
     const checkPassword = async (): Promise<void> => {
       if (room.password === null) return;
       const password = join.data.password ?? "";
@@ -399,8 +399,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     // (spec #179): Colyseus counts spectators against `maxClients`, so without
     // their share a full Room's Player rejoin would be refused. `onAuth` and
     // `onJoin` cap the Seats and the spectators themselves.
-    this.maxClients =
-      this.settings.maxPlayers * 2 + this.guard.limits.spectatorsPerRoom;
+    this.maxClients = this.settings.maxPlayers * 2 + this.guard.limits.spectatorsPerRoom;
     this.seatReservationTimeout = this.guard.limits.seatReservationSeconds;
     if (!this.game) this.guard.lobbyOpened(this.roomId);
     this.metadata = this.listing();
@@ -501,18 +500,18 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   override async onJoin(client: Client, options: unknown, auth?: SeatAuth): Promise<void> {
     if (auth) this.guard.release(auth.reservation);
     const watching =
-      typeof options === "object" && options !== null && "watch" in options && options.watch === true;
+      typeof options === "object" &&
+      options !== null &&
+      "watch" in options &&
+      options.watch === true;
     if (watching) {
-      // The Seat reservation is already given up: a spectator holds nothing.
+      // Its join reservation is already released: a spectator holds no Seat.
       if (this.spectatorsFull()) throw refuse("SPECTATORS_FULL");
-      if (
-        auth?.code !== this.roomId &&
-        !(await this.passwordMatches(passwordIn(options)))
-      ) {
+      if (auth?.code !== this.roomId && !(await this.passwordMatches(passwordIn(options)))) {
         throw refuse("WRONG_PASSWORD");
       }
       this.#spectators.add(client.sessionId);
-      this.sendCurrentTo(client);
+      this.sendSpectatorCurrent(client);
       return;
     }
     const token = guestTokenIn(options);
@@ -675,7 +674,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /** A joining spectator hears the current state: the Lobby to itself, or the running game's push. */
-  private sendCurrentTo(client: Client): void {
+  private sendSpectatorCurrent(client: Client): void {
     if (this.game) client.send(MESSAGE.game, this.gamePush(this.game));
     else client.send(MESSAGE.lobby, this.lobbyMessage());
   }
@@ -773,6 +772,9 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (this.autoDispose && this.#spectators.size === 0) return;
     // Any other client is a Guest, mid-join or seated: the Room is not abandoned.
     if (this.clients.some((client) => !this.#spectators.has(client.sessionId))) return;
+    // A dropped Guest's Seat is a reserved client Colyseus would keep the Room
+    // for; a watching client must not cut that hold short.
+    if (this.autoDispose && this.#holds.size > 0) return;
     if ([...this.#holds.values()].some((hold) => hold.release === null)) return;
     void this.disconnect();
   }
