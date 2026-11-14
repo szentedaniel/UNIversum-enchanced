@@ -31,9 +31,17 @@ const issueSchema = z.array(
   }),
 );
 
+/** A non-issue cause (a JSON parse error, a string) as one line. */
+const causeText = (cause: unknown): string => {
+  if (typeof cause === "string") return cause;
+  if (cause instanceof Error) return cause.message;
+  const json = JSON.stringify(cause);
+  return json === undefined ? "(no parser detail)" : json;
+};
+
 const issuesOf = (cause: unknown): string[] => {
   const issues = issueSchema.safeParse(cause);
-  if (!issues.success) return cause === undefined ? [] : [String(cause)];
+  if (!issues.success) return cause === undefined ? [] : [causeText(cause)];
   return issues.data.map(({ message, path }) =>
     path.length === 0 ? message : `${path.map(String).join(".")}: ${message}`,
   );

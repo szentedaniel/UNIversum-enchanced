@@ -48,6 +48,27 @@ const corrected: Review = {
   mergeDanger: { door: "two-way", blastRadius: "local", reason: "one factory step" },
 };
 
+/** A run whose reply always fails the schema the same way. */
+const alwaysMissingDanger: ReviewRunner = async () => {
+  throw new FailingAttempt(missingDanger);
+};
+
+/** A run whose tag is missing even after the retry turn. */
+const alwaysMissingTag: ReviewRunner = async () => {
+  throw new FailingAttempt({
+    message: "Structured output tag <review> not found in agent output",
+    cause: undefined,
+    rawMatched: undefined,
+    sessionId: "session-4",
+    commits: 0,
+  });
+};
+
+/** A run that fails for a reason the retry turn cannot repair. */
+const ghFailure: ReviewRunner = async () => {
+  throw new Error("gh exploded");
+};
+
 describe("retryTurn", () => {
   it("names the missing field and asks for the full block", () => {
     const turn = retryTurn(missingDanger);
@@ -119,11 +140,7 @@ describe("reviewWithRetry", () => {
   });
 
   it("keeps the verdict and findings when the retry still has no merge danger", async () => {
-    const run: ReviewRunner = async () => {
-      throw new FailingAttempt(missingDanger);
-    };
-
-    const outcome = await reviewWithRetry(run, failureOf);
+    const outcome = await reviewWithRetry(alwaysMissingDanger, failureOf);
     const comment = summaryComment(outcome.review);
 
     expect(outcome.retried).toBe(true);
@@ -184,24 +201,10 @@ describe("reviewWithRetry", () => {
   });
 
   it("fails after the retry when neither attempt carries a usable block", async () => {
-    const run: ReviewRunner = async () => {
-      throw new FailingAttempt({
-        message: "Structured output tag <review> not found in agent output",
-        cause: undefined,
-        rawMatched: undefined,
-        sessionId: "session-4",
-        commits: 0,
-      });
-    };
-
-    await expect(reviewWithRetry(run, failureOf)).rejects.toThrow("not found");
+    await expect(reviewWithRetry(alwaysMissingTag, failureOf)).rejects.toThrow("not found");
   });
 
   it("does not retry an error that is not a structured-output failure", async () => {
-    const run: ReviewRunner = async () => {
-      throw new Error("gh exploded");
-    };
-
-    await expect(reviewWithRetry(run, failureOf)).rejects.toThrow("gh exploded");
+    await expect(reviewWithRetry(ghFailure, failureOf)).rejects.toThrow("gh exploded");
   });
 });
