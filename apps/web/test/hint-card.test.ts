@@ -44,6 +44,13 @@ describe("the hint card", () => {
     expect(render(rowOf("sale"), "bottom")).toBe("");
   });
 
+  it("leaves the Doubler, Erasmus and game-end hints to #256", () => {
+    for (const id of ["doubler", "erasmus", "gameEnd"] as const) {
+      expect(render(rowOf(id), "bottom")).toBe("");
+      expect(render(rowOf(id), "tray")).toBe("");
+    }
+  });
+
   it("shows the open hint's sentence with a labelled dismiss button", () => {
     // React writes an apostrophe in a text node as `&#x27;`; the sentence is compared as text.
     const html = render(rowOf("offer"), "bottom").replaceAll("&#x27;", "'");
