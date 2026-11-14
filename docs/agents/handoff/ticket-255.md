@@ -35,8 +35,12 @@ game-end rows; #257 adds the menu switch and the hint list.
   **both** bottom stacks — the wide `absolute bottom-3` column and the phone's absolutely
   positioned scrolling card wrapper. Both stacks are now `flex flex-col gap-2`; the Decision
   itself stays bottom-anchored, so its buttons do not move when the hint appears and the
-  `--board-inset-*` reserve is unchanged. A landscape phone may show the card overlapping the
-  Board's bottom edge as the Turn card already does.
+  `--board-inset-*` reserve is unchanged. While a hint is open (`hint !== null`) the wide strip
+  also gets `max-h-[188px] overflow-y-auto`: the Board reserves `bottom-[200px]` and the strip
+  sits `bottom-3`, so without the cap a hint plus the Sale tray grew ~90 px over the Board and
+  covered the Fields a Sale or pick taps (Veszprém/Budapest, the front edge). The cap makes a
+  taller card scroll in place instead; the phone already capped its card at 224 px. A landscape
+  phone may still show the card over the Board as the Turn card already does.
 - `sale`: `Game.tsx` passes `hint` to `DecisionTray`, which renders
   `<HintCard hint={hint} place="tray" />` after the heading/Turn-timer row and the inspect
   hint, before the picks and the checklist. The pick tray renders it too, but `PLACES` is empty

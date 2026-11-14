@@ -219,7 +219,16 @@ export function Game() {
         <div className="absolute top-6 left-1/2 flex w-[calc(100%-600px)] -translate-x-1/2 items-center justify-center gap-2">
           {statusRow}
         </div>
-        <div className="absolute bottom-3 left-1/2 flex w-[min(440px,calc(100%-600px))] -translate-x-1/2 flex-col gap-2">
+        {/* The card and the hint above it stay in the space the Board reserves
+            (`bottom-[200px]` minus this strip's `bottom-3`): with a hint the
+            strip scrolls instead of covering a Field a Sale or pick asks for,
+            as the phone's does. Without one the card keeps its old room. */}
+        <div
+          className={cn(
+            "absolute bottom-3 left-1/2 flex w-[min(440px,calc(100%-600px))] -translate-x-1/2 flex-col gap-2",
+            hint !== null && "max-h-[188px] overflow-y-auto overscroll-contain",
+          )}
+        >
           <HintCard hint={hint} place="bottom" />
           {card}
         </div>
