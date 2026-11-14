@@ -63,6 +63,7 @@ function viewWith(phase: Phase, pickOptions: PickOption[] | null): PublicView {
     autoSell: null,
     pickOptions,
     standings: null,
+    summary: null,
   };
 }
 

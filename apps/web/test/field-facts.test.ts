@@ -47,6 +47,7 @@ function viewWith(field: FieldView): PublicView {
     autoSell: null,
     pickOptions: null,
     standings: null,
+    summary: null,
   };
 }
 
