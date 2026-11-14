@@ -136,7 +136,11 @@ describe("reviewWithRetry", () => {
     expect(outcome.review).toEqual(corrected);
     expect(outcome.commits).toBe(1);
     expect(turns).toHaveLength(2);
+    expect(turns[0]).toBeUndefined();
     expect(turns[1]).toContain("mergeDanger");
+    expect(summaryComment(outcome.review)).toContain(
+      "**Merge danger:** two-way door, local blast radius. one factory step",
+    );
   });
 
   it("keeps the verdict and findings when the retry still has no merge danger", async () => {

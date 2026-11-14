@@ -39,8 +39,9 @@ const redispatch = (pr: string): boolean => {
 /** The comment and labels that leave the pull request to the owner. */
 const handoff = (pr: string, reason: string, runUrl: string): void => {
   const posted = safeSh(`gh pr comment ${pr} --body ${shellArg(failureComment(reason, runUrl))}`);
-  if (posted.trim() === "")
+  if (posted.trim() === "") {
     console.error("The failure comment may not have posted; check the log.");
+  }
   safeSh(`gh pr edit ${pr} --remove-label agent:review`);
   safeSh(`gh pr edit ${pr} --add-label ready-for-human`);
 };

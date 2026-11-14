@@ -216,6 +216,7 @@ jobs:
         run: echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Review
+        id: review
         if: steps.preflight.outputs.proceed == 'true' && steps.gate.outputs.review == 'true'
         env:
           BRANCH: ${{ steps.preflight.outputs.head_ref }}

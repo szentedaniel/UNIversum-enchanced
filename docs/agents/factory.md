@@ -263,8 +263,8 @@ no `pr` at 02:23 Budapest.
    green) and emits `<review>` structured output — `verdict`, the `findings` it did **not** fix, and
    `mergeDanger`. A missing or invalid block gets one more turn in that same session, with the
    validation error in the prompt; if the retried reply still carries no `mergeDanger`, the step
-   posts its verdict and findings anyway and the merge gate treats the pull request as `risk:high`
-   ("merge danger not rated").
+   posts its verdict and findings anyway, labels the pull request `risk:high`, and the summary says
+   the merge danger was not rated.
 4. Pushes the reviewer's commits with `AGENT_PAT` (a plain push, never forced), posts one summary
    comment, and swaps `agent:review` for `risk:low` (only a two-way door with a local blast radius)
    or `risk:high`. A `changes-requested` verdict dispatches the fix loop
