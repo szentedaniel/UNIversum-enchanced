@@ -101,10 +101,20 @@ async function expectPhoneGame(page: Page, isMobile: boolean): Promise<void> {
   const chips = page.getByTestId("player-chip");
   const card = page.getByTestId("player-card");
 
-  // Story 5: chips are the phone's Player cards, and one tap opens the full card
-  // in the strip's place — above the Board, never over it.
+  // Story 5: chips are the phone's Player cards.
   await expect(chips).toHaveCount(2);
   await expectInsideViewport(page, chips, "the Player chips");
+
+  // Story 3: a one-finger drag pans the Board; the page never scrolls under it.
+  // The drag comes before the strip changes height: a card opening resizes the
+  // Board, and its re-fit must not land inside the drag's two camera reads.
+  const { before, after } = await dragBoard(page, { dx: 80, dy: 40 });
+  expect(after.x, "the drag panned the Board").not.toBe(before.x);
+  expect(after.scale, "a one-finger drag never zooms").toBe(before.scale);
+  expect(await page.evaluate(() => window.scrollY), "the page scrolled under the drag").toBe(0);
+
+  // One tap opens the full card in the strip's place — above the Board, never
+  // over it.
   await press(actor, chips.first().getByRole("button"));
   await expect(card).toHaveCount(1);
   await expectInsideViewport(page, card, "the Player card");
@@ -117,12 +127,6 @@ async function expectPhoneGame(page: Page, isMobile: boolean): Promise<void> {
   );
   await press(actor, card.getByRole("button", { name: "Collapse the card" }));
   await expect(card).toHaveCount(0);
-
-  // Story 3: a one-finger drag pans the Board; the page never scrolls under it.
-  const { before, after } = await dragBoard(page, { dx: 80, dy: 40 });
-  expect(after.x, "the drag panned the Board").not.toBe(before.x);
-  expect(after.scale, "a one-finger drag never zooms").toBe(before.scale);
-  expect(await page.evaluate(() => window.scrollY), "the page scrolled under the drag").toBe(0);
 
   // Story 4: the tray's controls are thumb-sized and the tray is on screen.
   await showPick(page, "doubler");

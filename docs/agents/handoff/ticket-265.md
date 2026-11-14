@@ -56,7 +56,8 @@ and PWA), last ticket of its suggested order. Files: `apps/e2e/tests/mobile.spec
   cameras. Two gotchas: the gesture layer calls `setPointerCapture` on every touch down and a synthetic pointer
   is not active, so the helper stubs it on the canvas; and the camera is clamped at fit, so drag toward positive
   x/y (a negative drag can clamp to no movement — the spec asserts only that x changed, and that the scale is
-  unchanged).
+  unchanged). The spec drags before a Player card opens or closes: a height change resizes the Board and its
+  `ResizeObserver` re-fits the camera, which must not land between the drag's two camera reads.
 
 ## Gotchas for later specs
 
