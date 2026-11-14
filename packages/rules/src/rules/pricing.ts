@@ -44,9 +44,30 @@ export function buyoutPriceOf(state: GameState, field: FieldId): number {
   return (valueOf(state, field) * BUYOUT_PERCENT) / 100;
 }
 
+/**
+ * How `state` answers who owns a Field. The Group tests read owners through
+ * it, and so does the summary fold, which passes its own list instead.
+ */
+export function fieldOwnerOf(state: GameState): (field: FieldId) => PlayerId | null {
+  return (field) => state.fields[field]?.owner ?? null;
+}
+
+/**
+ * True when `ownerOf` says `owner` holds every University of the Group (R29,
+ * F1). `isMonopoly` reads the state's Field owners; the summary fold reads the
+ * owners it built from the event list, through the same test.
+ */
+export function ownsGroup(
+  ownerOf: (field: FieldId) => PlayerId | null,
+  group: GroupId,
+  owner: PlayerId,
+): boolean {
+  return FIELDS.filter((f) => f.group === group).every((f) => ownerOf(f.id) === owner);
+}
+
 /** True when `owner` owns every University of the Group (R29, F1). */
 export function isMonopoly(state: GameState, group: GroupId, owner: PlayerId): boolean {
-  return FIELDS.filter((f) => f.group === group).every((f) => state.fields[f.id]?.owner === owner);
+  return ownsGroup(fieldOwnerOf(state), group, owner);
 }
 
 /** How many Museums `owner` holds (R53). */

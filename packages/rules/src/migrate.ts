@@ -4,6 +4,7 @@
  * every stored state through `migrate` on boot, before restoring the Room.
  */
 import { MINUTE_MS, ROUND_BONUS, START_CASH, TURN_LIMIT_MS, TURN_SLACK_MS } from "#constants.ts";
+import { emptySummary } from "#rules/summary.ts";
 import { STATE_VERSION, type GameState } from "#state.ts";
 
 /** A stored state as JSON, before it is known to have the current shape. */
@@ -85,6 +86,11 @@ const MIGRATIONS: Readonly<Record<number, (state: StoredState) => StoredState>> 
   // Turn it passes from now on, and the final one at its end. Its Minutes were
   // production ones, so it gets the production length.
   8: (state) => ({ ...state, stateVersion: 9, minuteMs: MINUTE_MS, wealthSamples: [] }),
+  // Version 10 adds the summary counters (spec #177, ticket #235). A game
+  // stored before them has counted nothing: the purchases, Monopolies and
+  // Bankruptcies it already saw are not recovered from its events, which the
+  // engine does not store, so its summary starts empty and counts from now on.
+  9: (state) => ({ ...state, stateVersion: 10, summary: emptySummary() }),
 };
 
 /**

@@ -12,6 +12,7 @@
 import { FIELDS, type FieldId } from "#board.ts";
 import { LOW_CASH_TIMEOUT_PENALTY, TIMEOUT_PENALTY_THRESHOLD } from "#constants.ts";
 import { saleValueOf } from "#rules/pricing.ts";
+import { recordBankruptcy, recordRent } from "#rules/summary.ts";
 import type { GameState, PlayerId } from "#state.ts";
 import { decide, emit, playerById, type Tx } from "#tx.ts";
 
@@ -110,16 +111,19 @@ export function timeoutPenaltyOf(tx: Tx, playerId: PlayerId): PendingCharge {
 /** Hands a paid Charge to its payee and tells everyone. */
 function payTo(tx: Tx, payer: PlayerId, pending: PendingCharge, amount: number): void {
   switch (pending.kind) {
-    case "rent":
+    case "rent": {
       playerById(tx, pending.owner).cash += amount;
+      const rent = { payer, owner: pending.owner, field: pending.field, amount };
+      recordRent(tx.state.summary, rent);
       emit(tx, {
         type: "RentPaid",
-        player: payer,
-        owner: pending.owner,
-        field: pending.field,
-        amount,
+        player: rent.payer,
+        owner: rent.owner,
+        field: rent.field,
+        amount: rent.amount,
       });
       return;
+    }
     case "tax":
       emit(tx, { type: "TaxPaid", player: payer, amount });
       return;
@@ -178,6 +182,7 @@ function goBankrupt(tx: Tx, payer: PlayerId, pending: PendingCharge): void {
   payTo(tx, payer, pending, raised);
   returnToBank(tx, fields);
   player.bankrupt = true;
+  recordBankruptcy(tx.state.summary, payer);
   emit(tx, { type: "WentBankrupt", player: payer, fields });
 }
 

@@ -10,6 +10,7 @@ import {
   SYSTEM,
   TURN_LIMIT_MS,
   TURN_SLACK_MS,
+  type GameState,
 } from "#index.ts";
 import stateV1 from "./fixtures/state-v1.json" with { type: "json" };
 import stateV2 from "./fixtures/state-v2.json" with { type: "json" };
@@ -20,6 +21,7 @@ import stateV6 from "./fixtures/state-v6.json" with { type: "json" };
 import stateV7 from "./fixtures/state-v7.json" with { type: "json" };
 import stateV8 from "./fixtures/state-v8.json" with { type: "json" };
 import stateV9 from "./fixtures/state-v9.json" with { type: "json" };
+import stateV10 from "./fixtures/state-v10.json" with { type: "json" };
 import { deadlineOf, newGame, playTurn, roll } from "./helpers.ts";
 import { chooser, nextMove } from "./simulation.ts";
 
@@ -43,6 +45,7 @@ const fixtures: { version: number; state: unknown }[] = [
   { version: 7, state: stateV7 },
   { version: 8, state: stateV8 },
   { version: 9, state: stateV9 },
+  { version: 10, state: stateV10 },
 ];
 
 /** The keys of an object, and of its first array item or nested object, as paths. */
@@ -54,6 +57,20 @@ function shape(value: unknown, path = ""): string[] {
       key === "phase" ? [`${path}.phase`] : shape(child, `${path}.${key}`),
     )
     .toSorted();
+}
+
+/** Plays a migrated state to its end with the seeded chooser. */
+function playToEnd(state: GameState): GameState {
+  const pick = chooser(1);
+  while (state.phase.kind !== "gameOver") {
+    const move = nextMove(state, pick, 1_000);
+    if (!move) throw new Error("a stored game offered no move");
+    const actor = move.intent.type === "TurnTimedOut" ? SYSTEM : state.currentPlayer;
+    const result = apply(state, move.intent, { actor, now: move.now });
+    if (isRejection(result)) throw new Error(`${move.intent.type} was refused: ${result.code}`);
+    state = result.state;
+  }
+  return state;
 }
 
 describe("state migrations", () => {
@@ -162,17 +179,7 @@ describe("state migrations", () => {
   });
 
   it("spec #177: a version-8 state plays on to its end, and its final sample matches the standings", () => {
-    const pick = chooser(1);
-    let state = migrate(stateV8);
-
-    while (state.phase.kind !== "gameOver") {
-      const move = nextMove(state, pick, 1_000);
-      if (!move) throw new Error("a stored game offered no move");
-      const actor = move.intent.type === "TurnTimedOut" ? SYSTEM : state.currentPlayer;
-      const result = apply(state, move.intent, { actor, now: move.now });
-      if (isRejection(result)) throw new Error(`${move.intent.type} was refused: ${result.code}`);
-      state = result.state;
-    }
+    const state = playToEnd(migrate(stateV8));
 
     const standings = publicView(state).standings ?? [];
     const final = state.wealthSamples.at(-1);
@@ -180,6 +187,28 @@ describe("state migrations", () => {
     for (const standing of standings) {
       expect(final?.wealth[standing.player]).toBe(standing.wealth);
     }
+  });
+
+  it("spec #177: a version-9 state loads with empty summary counters", () => {
+    expect(migrate(stateV9).summary).toEqual({
+      biggestRent: null,
+      fieldsBought: {},
+      monopolies: [],
+      bankruptcies: [],
+    });
+  });
+
+  it("spec #177: a version-9 state plays on to its end with plain-JSON counters", () => {
+    const state = playToEnd(migrate(stateV9));
+    const bankrupt = state.players
+      .filter((player) => player.bankrupt)
+      .map((player) => player.id)
+      .toSorted();
+
+    expect(state.phase.kind).toBe("gameOver");
+    expect(JSON.parse(JSON.stringify(state.summary))).toEqual(state.summary);
+    // Every Bankrupt Player of the continued game is counted, and no one else.
+    expect(state.summary.bankruptcies.toSorted()).toEqual(bankrupt);
   });
 
   it("a state at the current version comes back unchanged", () => {

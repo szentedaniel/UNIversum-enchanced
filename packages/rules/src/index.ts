@@ -25,6 +25,12 @@ export {
 } from "#intents.ts";
 export { RULES_REJECTION_CODES, type Rejection, type RulesRejectionCode } from "#rejections.ts";
 export { migrate, type StoredState } from "#migrate.ts";
+export {
+  summaryOf,
+  type BiggestRent,
+  type GameSummary,
+  type MonopolyFormed,
+} from "#rules/summary.ts";
 export { setupGame, type SetupInput } from "#setup.ts";
 export {
   STATE_VERSION,

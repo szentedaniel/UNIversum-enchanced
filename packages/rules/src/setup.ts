@@ -2,6 +2,7 @@ import { FIELDS } from "#board.ts";
 import { MINUTE_MS, turnDeadlineFrom } from "#constants.ts";
 import { rngFromSeed } from "#rng.ts";
 import { awaitingRoll } from "#rules/turn.ts";
+import { emptySummary } from "#rules/summary.ts";
 import { STATE_VERSION, type GameState, type Seat, type Seed, type Settings } from "#state.ts";
 
 export type SetupInput = {
@@ -65,6 +66,7 @@ export function setupGame({
     deal: null,
     dealUsed: false,
     wealthSamples: [],
+    summary: emptySummary(),
     rng: rngFromSeed(seed),
   };
 }
