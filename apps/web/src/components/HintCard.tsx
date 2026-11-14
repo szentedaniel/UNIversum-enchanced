@@ -31,7 +31,8 @@ export function HintCard({ hint, place }: { hint: HintRow | null; place: HintPla
   if (hint === null || PLACES[hint.id] !== place) return null;
   return (
     <aside
-      data-testid="hint-card"
+      role="note"
+      data-testid="hint"
       data-hint={hint.id}
       data-board-obstacle
       className="sticker flex items-start gap-2 rounded-ui bg-card p-2.5 text-card-foreground"

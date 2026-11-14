@@ -13,7 +13,7 @@ game-end rows; #257 adds the menu switch and the hint list.
   `sale` → `tray`. **#256 extends `PLACES` with `doubler`/`erasmus` → `tray` and
   `gameEnd` → `bottom`; no screen calls change**, because `Game.tsx` already passes the open
   hint to `DecisionTray`.
-- Markup: `<aside data-testid="hint-card" data-hint={id} data-board-obstacle>` with the row's
+- Markup: `<aside data-testid="hint" role="note" data-hint={id} data-board-obstacle>` with the row's
   sentence (`m[row.messageKey]()`, type-checked by #254's `HintMessageKey`) and a dismiss
   `Button` (`data-testid="hint-dismiss"`, `aria-label={m.hint_dismiss()}`). The dismiss calls
   `hintStore.getState().dismiss(hint.id)` in its handler; it is never a `Dialog`, takes no
@@ -57,7 +57,7 @@ game-end rows; #257 adds the menu switch and the hint list.
   sentence and the labelled dismiss button, and Hungarian copy. A second test renders
   `DecisionTray` from a real `bottomSlot` sale and pins the card inside `sale-tray`.
 - No Playwright spec was added or run here (the factory's CI runs the existing specs; the
-  first-game hint spec belongs to #257). Selectors for it: `getByTestId("hint-card")`,
+  first-game hint spec belongs to #257). Selectors for it: `getByTestId("hint")`,
   `data-hint="<id>"`, `getByTestId("hint-dismiss")`; a dismissal is stored under
   `universum.hintsSeen` and survives a reload.
 - Existing specs interact through roles and test ids anchored at the bottom, so a hint should

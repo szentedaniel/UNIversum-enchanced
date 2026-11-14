@@ -59,7 +59,7 @@ describe("the hint card", () => {
     // React writes an apostrophe in a text node as `&#x27;`; the sentence is compared as text.
     const html = render(rowOf("offer"), "bottom").replaceAll("&#x27;", "'");
 
-    expect(html).toContain('data-testid="hint-card"');
+    expect(html).toContain('data-testid="hint"');
     expect(html).toContain(en.hint_offer);
     expect(html).toContain('data-testid="hint-dismiss"');
     expect(html).toContain(`aria-label="${en.hint_dismiss}"`);
