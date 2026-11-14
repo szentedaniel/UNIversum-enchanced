@@ -11,11 +11,13 @@ and PWA), last ticket of its suggested order. Files: `apps/e2e/tests/mobile.spec
   landscape` (a layout test), so the file is three tests. It runs in both existing single-browser projects
   (`desktop-chromium`, `iphone-webkit`): the config's `testIgnore` only excludes `MIXED`, so the same phone
   profile runs on Chromium and WebKit.
-- Each describe sets `test.use(PORTRAIT)` / `test.use(LANDSCAPE)`: the device descriptor's context options
-  (`viewport`, `userAgent`, `deviceScaleFactor`, `isMobile`, `hasTouch`) plus `locale: "en-US"`. The descriptor's
-  `defaultBrowserType` is **deliberately dropped** — `test.use` can override that worker option, and spreading the
-  whole `devices["iPhone 15"]` would switch the desktop project to WebKit. `phoneOf` in the spec is the only
-  place the profile is unpacked.
+- Each describe sets `test.use(PORTRAIT)` / `test.use(LANDSCAPE)` from `phoneOf`: the device descriptor's
+  `viewport`, `userAgent`, `deviceScaleFactor`, `isMobile` and `hasTouch`, plus `locale: "en-US"` and
+  `screen: viewport`. Two deliberate omissions: the descriptor's `defaultBrowserType` is dropped — `test.use` can
+  override that worker option, and spreading the whole `devices["iPhone 15"]` would switch the desktop project to
+  WebKit — and `screen` is the viewport, because `test.use` merges with the project's options and Desktop
+  Chrome's 1920×1080 screen would otherwise stay (Playwright derives the emulated screen orientation from it).
+  `phoneOf` is the only place a profile is unpacked.
 - Profiles: `devices["iPhone 15"]` is 393×659 CSS px, `devices["iPhone 15 landscape"]` 734×343 (Playwright's
   viewport is the screen minus browser chrome, so the landscape run is narrower than the 852×393 the earlier
   tickets measured). Both keep the phone layout: `WIDE_QUERY` needs 48rem wide and 36rem tall.
@@ -34,11 +36,13 @@ and PWA), last ticket of its suggested order. Files: `apps/e2e/tests/mobile.spec
   is not asserted — `register.ts` registers only in a production build over a secure context.
 - Layout: the two Player chips, the expanded `player-card` (above the Board) and the `pick-tray`; every button in
   the tray and in its checklist is ≥ 44 px (`TAP_TARGET_PX`); a Board drag pans the camera without zooming and
-  `window.scrollY` stays 0.
+  `window.scrollY` stays 0. There is no fixed wait anywhere: `showPick` puts `actsAfter` on the server clock, so
+  the tray's gate is open at once and Playwright's auto-waiting covers the rest (the ADR-0004 wait rule does not
+  bite).
 - The portrait test adds `expectInsideViewport` for the whole tray after a pick: a portrait phone reserves 14rem
-  for it (#264). A landscape phone's ceiling is ~154 px, so its tray scrolls; the shared journey therefore only
-  requires the tray's top and sides on screen and its pinned primary action in the viewport
-  (`toBeInViewport`).
+  for it (#264). At the landscape profile's 343 px height `cardMaxHeight` is 154, so its tray scrolls; the shared
+  journey therefore only requires the tray's top and sides on screen and its pinned primary action in the
+  viewport (`toBeInViewport`).
 
 ## Shared steps added to `helpers.ts`
 
@@ -51,8 +55,8 @@ and PWA), last ticket of its suggested order. Files: `apps/e2e/tests/mobile.spec
   `document.elementFromPoint` is the canvas — i.e. the top band no card covers. It returns `{before, after}`
   cameras. Two gotchas: the gesture layer calls `setPointerCapture` on every touch down and a synthetic pointer
   is not active, so the helper stubs it on the canvas; and the camera is clamped at fit, so drag toward positive
-  x/y (a negative drag can clamp to no movement — the helper asserts only that x changed, and the caller checks
-  the scale is unchanged).
+  x/y (a negative drag can clamp to no movement — the spec asserts only that x changed, and that the scale is
+  unchanged).
 
 ## Gotchas for later specs
 

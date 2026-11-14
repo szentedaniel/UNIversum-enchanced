@@ -12,7 +12,9 @@ const CI = Boolean(process.env["CI"]);
 /**
  * A Playwright phone profile's context options without its browser choice: the
  * spec keeps the project's engine (CI runs Chromium and WebKit) and the profile
- * pins the screen, the touch support and the user agent.
+ * pins the screen, the touch support and the user agent. `screen` is the
+ * viewport: Playwright derives the emulated screen orientation from it, and the
+ * project's own screen (Desktop Chrome's 1920×1080) would otherwise stay.
  */
 function phoneOf({
   viewport,
@@ -21,7 +23,15 @@ function phoneOf({
   isMobile,
   hasTouch,
 }: (typeof devices)["iPhone 15"]) {
-  return { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, locale: "en-US" };
+  return {
+    viewport,
+    screen: viewport,
+    userAgent,
+    deviceScaleFactor,
+    isMobile,
+    hasTouch,
+    locale: "en-US",
+  };
 }
 
 const PORTRAIT = phoneOf(devices["iPhone 15"]);
@@ -135,7 +145,7 @@ async function expectPhoneGame(page: Page, isMobile: boolean): Promise<void> {
   await expect(rows).toHaveCount(2);
   await expectTapTargets(tray.getByTestId("pick-checklist"), "the checklist");
   const row = rows.first();
-  await expect(row).toBeEnabled({ timeout: 15_000 });
+  await expect(row).toBeEnabled();
   await row.tap({ position: { x: 12, y: 6 } });
   await press(actor, tray.getByTestId("pick-checklist-toggle"));
   await expect(tray.getByRole("button", { name: /^Remove / })).toHaveCount(1);
