@@ -5,7 +5,7 @@
  * dispatch, the merge read-back) is reachable without a repository.
  */
 import type { FixReason } from "#fix/reasons.ts";
-import { escalationComment } from "#merge/comment.ts";
+import { escalationComment, followUpIssue, type FollowUpIssue } from "#merge/comment.ts";
 import type { PullView } from "#merge/facts.ts";
 import { mergeSubjectOf, type MergeStep } from "#merge/gates.ts";
 import { closingIssue } from "#shared/closing-pr.ts";
@@ -22,6 +22,8 @@ export interface MergeActions {
   commentOnIssue(issue: number, body: string): void;
   /** Closes the ticket, tolerating the merge having closed it already. */
   closeIssue(issue: number): void;
+  /** Files the advisory findings as one `needs-triage` issue after the merge. */
+  fileFollowUp(issue: FollowUpIssue): void;
   /** The ticket's title: the merge subject names the ticket, not the pull request. */
   ticketTitle(issue: number): string;
 }
@@ -36,7 +38,11 @@ export interface PerformContext {
  * dependency bump, the pull request itself), and the read-back proves GitHub
  * made the merge commit a fork or a branch protection rule can swallow.
  */
-const mergePull = (pull: PullView, ctx: PerformContext): void => {
+const mergePull = (
+  pull: PullView,
+  advisory: readonly string[],
+  ctx: PerformContext,
+): void => {
   const issue = pull.closing[0] ?? closingIssue(pull.body);
   const ticket =
     issue === undefined
@@ -66,6 +72,11 @@ const mergePull = (pull: PullView, ctx: PerformContext): void => {
     ctx.actions.commentOnIssue(issue, `Merged in ${commit}.`);
     ctx.actions.closeIssue(issue);
   }
+  // The advisory findings outlive the merge as one issue for the nightly
+  // intake. Filing it after the merge keeps a refused merge issue-free.
+  if (advisory.length > 0) {
+    ctx.actions.fileFollowUp(followUpIssue(pull, advisory));
+  }
   console.log(`Merged in ${commit}. The push to main starts the dispatcher itself.`);
 };
 
@@ -91,7 +102,7 @@ export const performStep = (step: MergeStep, pull: PullView, ctx: PerformContext
       ctx.actions.label("ready-for-human");
       return;
     case "merge":
-      mergePull(pull, ctx);
+      mergePull(pull, step.advisory, ctx);
       return;
     default: {
       const unhandled: never = step;

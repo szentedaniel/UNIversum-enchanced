@@ -14,6 +14,7 @@ import {
   protectedPaths,
 } from "#merge/gates.ts";
 import type { CiRun, MergeFacts } from "#merge/gates.ts";
+import type { MergeDanger, ReviewFinding } from "#review/schema.ts";
 import { summaryComment } from "#review/summary.ts";
 
 describe("protected paths", () => {
@@ -149,14 +150,25 @@ const ciRun = (overrides: Partial<CiRun> = {}): CiRun => ({
 
 const reviewComment = (
   verdict: "pass" | "changes-requested",
-  createdAt = "2026-11-09T10:20:00Z",
+  {
+    createdAt = "2026-11-09T10:20:00Z",
+    findings = [],
+    danger = { door: "two-way", blastRadius: "local", reason: "one step, revertible" },
+  }: {
+    createdAt?: string;
+    findings?: readonly ReviewFinding[];
+    danger?: MergeDanger;
+  } = {},
 ) => ({
-  body: summaryComment({
-    verdict,
-    findings: [],
-    mergeDanger: { door: "two-way", blastRadius: "local", reason: "one step, revertible" },
-  }),
+  body: summaryComment({ verdict, findings, mergeDanger: danger }),
   createdAt,
+});
+
+const advisoryReview = reviewComment("changes-requested", {
+  findings: [
+    { text: "The helper duplicates `excerptOf`.", severity: "advisory" },
+    { text: "The assertion is trivially true.", severity: "advisory" },
+  ],
 });
 
 const facts = (overrides: Partial<MergeFacts> = {}): MergeFacts => ({
@@ -218,7 +230,9 @@ describe("canAutoMerge", () => {
   });
 
   it("refuses a review older than the head commit: a push needs a new review", () => {
-    const gate = canAutoMerge(facts({ comments: [reviewComment("pass", "2026-11-09T09:59:00Z")] }));
+    const gate = canAutoMerge(
+      facts({ comments: [reviewComment("pass", { createdAt: "2026-11-09T09:59:00Z" })] }),
+    );
 
     expect(gate.reasons).toEqual(["the newest review predates the head commit"]);
   });
@@ -327,7 +341,7 @@ describe("canAutoMerge", () => {
 
 describe("mergeStep", () => {
   it("merges when every gate holds", () => {
-    expect(mergeStep(facts())).toEqual({ kind: "merge" });
+    expect(mergeStep(facts())).toEqual({ kind: "merge", advisory: [] });
   });
 
   it("waits while a review is queued", () => {
@@ -368,6 +382,7 @@ describe("mergeStep", () => {
   it("merges a branch that is only behind main, on files it does not touch", () => {
     expect(mergeStep(facts({ mainAheadBy: 2, mainFiles: ["apps/server/src/bar.ts"] }))).toEqual({
       kind: "merge",
+      advisory: [],
     });
     expect(
       needsMain(
@@ -414,11 +429,11 @@ describe("mergeStep", () => {
   });
 
   it("re-queues a review when the head moved after it", () => {
-    expect(mergeStep(facts({ comments: [reviewComment("pass", "2026-11-09T09:00:00Z")] }))).toEqual(
-      {
-        kind: "requeue-review",
-      },
-    );
+    expect(
+      mergeStep(facts({ comments: [reviewComment("pass", { createdAt: "2026-11-09T09:00:00Z" })] })),
+    ).toEqual({
+      kind: "requeue-review",
+    });
   });
 
   it("escalates the deterministic gate reasons", () => {
@@ -426,6 +441,61 @@ describe("mergeStep", () => {
       kind: "escalate",
       reasons: ["touches .github/"],
     });
+  });
+});
+
+describe("advisory-only reviews", () => {
+  it("merges a changes-requested review whose findings are all advisory", () => {
+    const advisoryFacts = facts({ comments: [advisoryReview] });
+
+    expect(canAutoMerge(advisoryFacts)).toEqual({ merge: true, reasons: [] });
+    expect(mergeStep(advisoryFacts)).toEqual({
+      kind: "merge",
+      advisory: ["The helper duplicates `excerptOf`.", "The assertion is trivially true."],
+    });
+  });
+
+  it("still refuses one blocking finding among the advisory ones", () => {
+    const blocking = reviewComment("changes-requested", {
+      findings: [
+        { text: "The helper duplicates `excerptOf`.", severity: "advisory" },
+        { text: "The acceptance criterion is unmet.", severity: "blocking" },
+      ],
+    });
+
+    expect(canAutoMerge(facts({ comments: [blocking] })).reasons).toEqual([
+      "the newest review asked for changes",
+    ]);
+    expect(mergeStep(facts({ comments: [blocking] }))).toEqual({
+      kind: "wait",
+      reason: "the newest review asked for changes",
+    });
+  });
+
+  it("keeps every existing refusal for an advisory-only review", () => {
+    const gate = (overrides: Partial<MergeFacts>) =>
+      mergeStep(facts({ comments: [advisoryReview], ...overrides }));
+
+    expect(gate({ files: [".github/workflows/ci.yml"] })).toEqual({
+      kind: "escalate",
+      reasons: ["touches .github/"],
+    });
+    expect(gate({ labels: [] })).toEqual({ kind: "escalate", reasons: ["no risk label"] });
+    expect(gate({ ciRuns: [ciRun({ conclusion: "failure" })] })).toEqual({
+      kind: "wait",
+      reason: "CI failed on abc1234",
+    });
+    expect(
+      gate({
+        labels: ["risk:high"],
+        comments: [
+          reviewComment("changes-requested", {
+            findings: [{ text: "The helper could be shared.", severity: "advisory" }],
+            danger: { door: "one-way", blastRadius: "local", reason: "a state migration" },
+          }),
+        ],
+      }),
+    ).toEqual({ kind: "escalate", reasons: ["one-way door: a state migration"] });
   });
 });
 
