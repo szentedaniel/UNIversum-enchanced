@@ -2,7 +2,7 @@ import { CHAT_EMOTES, CHAT_IDS, CHAT_LINES, type ChatId } from "@universum/proto
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { chatOpenTo, closeTray, cooldownOver, openTray, tapChat } from "#chat/tray.ts";
+import { chatOpenTo, CLOSED_TRAY, closeTray, cooldownOver, openTray, tapChat } from "#chat/tray.ts";
 import { ChatChoices, ChatTray } from "#components/ChatTray.tsx";
 import { baseLocale, overwriteGetLocale, type Locale } from "#paraglide/runtime.js";
 import de from "../messages/de.json" with { type: "json" };
@@ -13,7 +13,7 @@ import { viewOf } from "./playback-fixtures.ts";
 // The quick-chat tray (#176, #231): a seated Guest picks one catalogue line or
 // emote and the Room shows it by their card. The tray offers no text input, its
 // buttons refuse a second send for CHAT_COOLDOWN_MS, and a tap sends the id and
-// closes the tray. The tap itself is pinned through `pickChat` with an injected
+// closes the tray. The tap itself is pinned through `tapChat` with an injected
 // sender: the house has no DOM test environment (#224), so the real press is
 // the two-Guest e2e spec (#233).
 
@@ -22,7 +22,7 @@ const inLanguage = (locale: Locale) => overwriteGetLocale(() => locale);
 beforeEach(() => inLanguage("en"));
 afterEach(() => inLanguage(baseLocale));
 
-const CLOSED = { open: false, cooling: false };
+const CLOSED = CLOSED_TRAY;
 
 /** The tray body as the Game screen's tray draws it. */
 const renderChoices = (cooling = false) =>
