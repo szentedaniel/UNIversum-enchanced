@@ -226,7 +226,7 @@ export function Game() {
         <div
           className={cn(
             "absolute bottom-3 left-1/2 flex w-[min(440px,calc(100%-600px))] -translate-x-1/2 flex-col gap-2",
-            hint !== null && "max-h-[188px] overflow-y-auto overscroll-contain",
+            hint !== null && "max-h-[calc(200px-0.75rem)] overflow-y-auto overscroll-contain",
           )}
         >
           <HintCard hint={hint} place="bottom" />
