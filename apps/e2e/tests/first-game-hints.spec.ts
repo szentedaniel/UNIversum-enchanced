@@ -18,8 +18,8 @@ test("the first Offer's hint shows, stays dismissed through a reload, and leaves
   isMobile,
 }) => {
   // A 30 s Turn keeps the Offer open while the reload takes the Seat back.
-  const { context, guest } = await startGame(page, browser, { turnLimitMs: 30_000 });
-  closeAfterDump(context);
+  const { context: guestContext, guest } = await startGame(page, browser, { turnLimitMs: 30_000 });
+  closeAfterDump(guestContext);
   const actor = { page, mobile: isMobile };
   const hint = page.getByTestId("hint");
   const dismiss = hint.getByTestId("hint-dismiss");
@@ -47,7 +47,7 @@ test("the first Offer's hint shows, stays dismissed through a reload, and leaves
   // A running game answers a dropped Guest's Decision with a Bot 1.5 s later
   // (#198). With the guest offline the Room arms none for the creator's dropped
   // Seat, so the reload below cannot hand this Offer to a Bot first.
-  await context.setOffline(true);
+  await guestContext.setOffline(true);
   await expect(guest.getByTestId("reconnect-overlay")).toBeVisible();
 
   // Buy stays tappable under the hint: a trial click runs Playwright's own
