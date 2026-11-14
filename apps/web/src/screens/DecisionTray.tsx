@@ -11,10 +11,12 @@ import { FIELDS, type FieldId } from "@universum/rules/board";
 import { Info, ListChecks, X, Zap } from "lucide-react";
 import { useMemo } from "react";
 import { useStore } from "zustand";
+import { HintCard } from "#components/HintCard.tsx";
 import { TimerRing } from "#components/TimerRing.tsx";
 import { Button } from "#components/ui/button.tsx";
 import { sendIntent } from "#connection.ts";
 import type { BottomSlot } from "#decision/decision.ts";
+import type { HintRow } from "#hints/hints.ts";
 import { cn } from "#lib/utils.ts";
 import { saleChecklist, singleChecklist, type ChecklistRow } from "#pick/checklist.ts";
 import { selectedPick, type SinglePick } from "#pick/pick.ts";
@@ -41,6 +43,8 @@ type Props = {
   clockOffset: number;
   /** Seat of this client's Player (the timer shows their figure). */
   seat: number;
+  /** The one hint `Game` picked for this Decision, or `null` while there is none. */
+  hint: HintRow | null;
 };
 
 const fieldLabel = (id: FieldId) => fieldName(FIELDS[id]?.key ?? "");
@@ -48,7 +52,7 @@ const NO_PICKED: readonly FieldId[] = [];
 const pickTitle = (pick: SinglePick): string =>
   pick.kind === "doubler" ? m.pick_doubler_title() : m.pick_erasmus_title();
 
-export function DecisionTray({ view, slot, clockOffset, seat }: Props) {
+export function DecisionTray({ view, slot, clockOffset, seat, hint }: Props) {
   const checklistOpen = useStore(uiStore, (state) => state.checklistOpen);
   const inspect = useStore(uiStore, (state) => state.inspect);
   const salePicks = useStore(uiStore, (state) => state.salePicks);
@@ -133,6 +137,7 @@ export function DecisionTray({ view, slot, clockOffset, seat }: Props) {
           {m.pick_inspect_hint()}
         </p>
       )}
+      <HintCard hint={hint} place="tray" />
       {checklistOpen ? (
         <PickChecklist
           rows={rows}
