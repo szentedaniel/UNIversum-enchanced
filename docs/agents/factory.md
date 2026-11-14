@@ -274,11 +274,11 @@ no `pr` at 02:23 Budapest.
    invokes `/mattpocock-skills:code-review` against `origin/main`, with the pull request's linked
    issue and its parent spec as the Spec axis. The skill reports the Standards and Spec axes side by
    side; the same session then commits the fixes it is sure of (conventional commits, fast checks
-   green) and emits `<review>` structured output — `verdict`, the `findings` it did **not** fix, and
-   `mergeDanger`. A missing or invalid block gets one more turn in that same session, with the
-   validation error in the prompt; if the retried reply still carries no `mergeDanger`, the step
-   posts its verdict and findings anyway, labels the pull request `risk:high`, and the summary says
-   the merge danger was not rated.
+   green) and emits `<review>` structured output — `verdict`, the `findings` it did **not** fix
+   with a `blocking` or `advisory` severity each, and `mergeDanger`. A missing or invalid block gets
+   one more turn in that same session, with the validation error in the prompt; if the retried reply
+   still carries no `mergeDanger`, the step posts its verdict and findings anyway, labels the pull
+   request `risk:high`, and the summary says the merge danger was not rated.
 4. Pushes the reviewer's commits with `AGENT_PAT` (a plain push, never forced), posts one summary
    comment, and swaps `agent:review` for `risk:low` (only a two-way door with a local blast radius)
    or `risk:high`. A `changes-requested` verdict dispatches the fix loop
@@ -296,6 +296,17 @@ Claude runs with `--permission-mode bypassPermissions` (`claudeAgent` in `src/sh
 Sandcastle's `noSandbox()` provider reports no sandbox, so it passes no permission flag, and
 `claude -p` would deny every edit and Bash call. The runner is an ephemeral VM.
 
+**Findings carry a severity.** A `blocking` finding is a bug, a broken acceptance criterion, a
+standards breach with a real cost or a security issue. An `advisory` finding is a judgement call, an
+optional follow-up, a scope note, or a test that could be stronger: the prompt asks for
+`changes-requested` only when at least one finding is blocking. A finding with no severity — an old
+prompt, a malformed reply — counts as blocking, so today's path is the fallback. A
+`changes-requested` review whose findings are all advisory is read as a pass by the fix loop and the
+merge gate: no fix round runs for a judgement call, and the gate's usual rules decide the pull
+request. The findings are not lost: a merge with advisory findings files one `needs-triage` issue
+naming the pull request and listing them, and the nightly intake decides whether they become a ticket
+or are closed.
+
 ## Merging and fixing
 
 Two steps finish a pull request: `factory-merge.yml` merges what the gates allow, and
@@ -312,8 +323,9 @@ It merges with a merge commit only when every gate holds ([spec #85, Decision
 5](https://github.com/szentedaniel/UNIversum-enchanced/issues/85)):
 
 1. The `CI` workflow concluded `success` on the pull request's head sha (a re-run that passed counts).
-2. The newest `<!-- factory-review -->` comment says pass and was posted **after** the head commit;
-   a push after the review queues `agent:review` again, so a fix commit is reviewed before merging.
+2. The newest `<!-- factory-review -->` comment says pass — or asks for changes only over advisory
+   findings — and was posted **after** the head commit; a push after the review queues `agent:review`
+   again, so a fix commit is reviewed before merging.
 3. The pull request carries `risk:low` (a two-way door with a local blast radius), or `risk:high` whose
    review names a **two-way** door: a wide blast radius alone does not wait for the owner once the
    review passed and CI, e2e included, is green. A one-way door, or a `risk:high` whose merge danger
@@ -327,8 +339,11 @@ It merges with a merge commit only when every gate holds ([spec #85, Decision
 The merge is `gh pr merge --merge --subject "chore(merge): #<issue> <the ticket's title>"` (the
 ticket's title, not the pull request's `Implement #N: …`; a Dependabot pull request closes no ticket,
 so it names its own number and title). The issue gets a
-comment naming the merge commit and is closed (`Closes #…` in the body already closed it). The push
-to `main` starts `factory-dispatch.yml` by itself, so the next ticket is dispatched without a chain.
+comment naming the merge commit and is closed (`Closes #…` in the body already closed it). A merge
+whose newest review left advisory findings then files one `needs-triage` issue, `Factory review
+follow-ups: #<pull>`, listing them and linking the pull request; a refused merge files none. The
+nightly intake triages it like any other issue. The push to `main` starts `factory-dispatch.yml` by
+itself, so the next ticket is dispatched without a chain.
 
 Green but gated → `ready-for-human` on the pull request and one comment listing every reason
 ("touches .github/", "one-way door: …", "dependency major: …"). A branch merely **behind main** merges
@@ -368,6 +383,9 @@ on the branch and the workflow pushes with `AGENT_PAT`; CI runs again and the me
   `<!-- factory-fix:round N -->`, so the CI and review triggers share one budget: **two** rounds
   (`MAX_FIX_ROUNDS` in `src/fix/rounds.ts`). A spent budget posts one escalation comment
   (`<!-- factory-fix:escalated -->`), adds `agent:blocked` + `ready-for-human` and runs no agent.
+  A review trigger whose newest review asks for changes only over advisory findings stands down
+  instead, spent budget or not: no round, no escalation, no label, and the merge gate decides. A red
+  CI run keeps its rounds and its escalation whatever the last review said.
 - Merging main in is housekeeping, not a round: a conflict-free merge is git's own merge commit, and
   only a conflict reaches the agent.
 - A failed run (no commit, a dirty tree, `STATUS: BLOCKED`) comments the reason and adds the same

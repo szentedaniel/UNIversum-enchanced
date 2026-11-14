@@ -5,7 +5,7 @@
  * and findings; the merge gate treats an unrated pull request as high risk.
  */
 import { z } from "zod";
-import { reviewSchema, type Review } from "#review/schema.ts";
+import { ratedFindings, reviewSchema, type Review } from "#review/schema.ts";
 
 /** What the step reads off Sandcastle's `StructuredOutputError`. */
 export interface StructuredFailure {
@@ -82,7 +82,9 @@ export const salvageReview = (raw: string | undefined): Review | undefined => {
   try {
     const parsed: unknown = JSON.parse(unwrapFences(raw.trim()));
     const core = coreSchema.safeParse(parsed);
-    return core.success ? { verdict: core.data.verdict, findings: core.data.findings } : undefined;
+    return core.success
+      ? { verdict: core.data.verdict, findings: ratedFindings(core.data.findings) }
+      : undefined;
   } catch {
     return undefined;
   }

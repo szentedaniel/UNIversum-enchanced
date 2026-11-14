@@ -8,7 +8,7 @@ import type { FixReason } from "#fix/reasons.ts";
 import { readMergeFacts, type MergeReader, type PullView } from "#merge/facts.ts";
 import { mergeGate, waitForMergeability } from "#merge/merge.ts";
 import { performStep, type MergeActions } from "#merge/perform.ts";
-import { escalationComment } from "#merge/comment.ts";
+import { escalationComment, type FollowUpIssue } from "#merge/comment.ts";
 import { mergeStep, type MergeStep } from "#merge/gates.ts";
 import { summaryComment } from "#review/summary.ts";
 import { RATE_LIMIT_WAITS_MS } from "#shared/github.ts";
@@ -142,7 +142,8 @@ type Write =
   | { readonly kind: "dispatchFix"; readonly reason: FixReason }
   | { readonly kind: "merge"; readonly subject: string }
   | { readonly kind: "commentOnIssue"; readonly issue: number; readonly body: string }
-  | { readonly kind: "closeIssue"; readonly issue: number };
+  | { readonly kind: "closeIssue"; readonly issue: number }
+  | { readonly kind: "followUp"; readonly issue: FollowUpIssue };
 
 const actions = (options: { mergeCommit?: string; ticketTitle?: string } = {}) => {
   const writes: Write[] = [];
@@ -157,6 +158,7 @@ const actions = (options: { mergeCommit?: string; ticketTitle?: string } = {}) =
     },
     commentOnIssue: (issue, body) => void writes.push({ kind: "commentOnIssue", issue, body }),
     closeIssue: (issue) => void writes.push({ kind: "closeIssue", issue }),
+    fileFollowUp: (issue) => void writes.push({ kind: "followUp", issue }),
     ticketTitle: (issue) => {
       ticketReads.push(issue);
       return options.ticketTitle ?? "Deepen the merge gate's script";
@@ -213,7 +215,7 @@ describe("performStep", () => {
       ticketTitle: "Deepen the merge gate's script",
     });
 
-    performStep({ kind: "merge" }, pull(), context(adapter));
+    performStep({ kind: "merge", advisory: [] }, pull(), context(adapter));
 
     expect(ticketReads).toEqual([132]);
     expect(writes).toEqual([
@@ -227,11 +229,34 @@ describe("performStep", () => {
     ]);
   });
 
+  it("files the advisory findings as one follow-up issue after the merge", () => {
+    const { adapter, writes } = actions();
+    const advisory = ["The helper duplicates `excerptOf`.", "The assertion is trivially true."];
+
+    performStep({ kind: "merge", advisory }, pull(), context(adapter));
+
+    const followUp = writes.at(-1);
+    expect(followUp?.kind).toBe("followUp");
+    if (followUp?.kind !== "followUp") return;
+    expect(followUp.issue.title).toBe("Factory review follow-ups: #132");
+    expect(followUp.issue.labels).toEqual(["needs-triage"]);
+    expect(followUp.issue.body).toContain("#132");
+    for (const finding of advisory) {
+      expect(followUp.issue.body).toContain(`- ${finding}`);
+    }
+    // The merge comes first: an issue about a pull request that never merged
+    // would be wrong, and a failed merge leaves no follow-up behind.
+    expect(writes[0]).toEqual({
+      kind: "merge",
+      subject: "chore(merge): #132 Deepen the merge gate's script",
+    });
+  });
+
   it("reads the ticket the pull request's body closes when the API names none", () => {
     const { adapter, writes } = actions();
 
     performStep(
-      { kind: "merge" },
+      { kind: "merge", advisory: [] },
       pull({ closing: [], body: "This pull request closes #132." }),
       context(adapter),
     );
@@ -246,7 +271,7 @@ describe("performStep", () => {
     const { adapter, writes, ticketReads } = actions();
 
     performStep(
-      { kind: "merge" },
+      { kind: "merge", advisory: [] },
       pull({
         title: "Bump react from 18 to 19",
         body: null,
@@ -267,7 +292,7 @@ describe("performStep", () => {
     for (const mergeCommit of ["", "null"]) {
       const { adapter, writes } = actions({ mergeCommit });
 
-      expect(() => performStep({ kind: "merge" }, pull(), context(adapter))).toThrow(
+      expect(() => performStep({ kind: "merge", advisory: [] }, pull(), context(adapter))).toThrow(
         "Pull request #132 merged but reported no merge commit.",
       );
       expect(writes).toEqual([
@@ -280,7 +305,11 @@ describe("performStep", () => {
     const { adapter } = actions();
 
     expect(() =>
-      performStep({ kind: "merge" }, pull({ closing: [], body: null }), context(adapter)),
+      performStep(
+        { kind: "merge", advisory: [] },
+        pull({ closing: [], body: null }),
+        context(adapter),
+      ),
     ).toThrow("Pull request #132 closes no issue; cannot name the merge commit.");
   });
 
@@ -290,7 +319,7 @@ describe("performStep", () => {
       { kind: "requeue-review" },
       { kind: "fix", reason: "ci" },
       { kind: "escalate", reasons: ["CI failed on abc1234"] },
-      { kind: "merge" },
+      { kind: "merge", advisory: ["An advisory finding."] },
     ];
 
     for (const step of steps) {
@@ -500,7 +529,7 @@ describe("the gate's flow", () => {
     );
 
     const step = mergeStep(facts);
-    expect(step).toEqual({ kind: "merge" });
+    expect(step).toEqual({ kind: "merge", advisory: [] });
 
     performStep(step, subject, context(adapter));
 
@@ -653,6 +682,59 @@ describe("the gate's flow", () => {
 });
 
 describe("the gate's entry", () => {
+  it("merges an advisory-only review and files one needs-triage follow-up", () => {
+    const dir = mkdtempSync(join(tmpdir(), "factory-merge-entry-"));
+    const calls = join(dir, "gh-calls.log");
+    writeFileSync(
+      join(dir, "gh"),
+      `#!/bin/sh
+echo "$*" >> "${calls}"
+case "$*" in
+  *mergeCommit*) echo "abc1234" ;;
+  *"pr view"*)
+    echo '{"number":132,"state":"OPEN","title":"Implement #132: deepen the merge gate script","body":"Closes #132","headRefName":"agent/issue-132-deepen-the-merge-gate","headRefOid":"head-sha","mergeStateStatus":"CLEAN","labels":["risk:low"],"closing":[132],"headCommittedAt":"2026-11-09T09:00:00Z","author":"universum-factory[bot]"}'
+    ;;
+  */pulls/132/files*) echo "apps/web/src/foo.ts" ;;
+  */actions/workflows/ci.yml/runs*) echo '[{"headSha":"head-sha","status":"completed","conclusion":"success","createdAt":"2026-11-09T09:10:00Z"}]' ;;
+  */compare/*) echo '{"mergeBase":"merge-base","mainAheadBy":0,"files":[]}' ;;
+  */issues/132/comments*)
+    printf '%s\\n' '{"body":"<!-- factory-review -->\\n## Factory review: changes requested\\n\\nThe reviewer committed the fixes it was sure of. These are the findings it left:\\n\\n- **Advisory:** The helper duplicates \`excerptOf\`.\\n- **Advisory:** The assertion is trivially true.\\n\\n**Merge danger:** two-way door, local blast radius. one factory step\\n","created_at":"2026-11-09T09:20:00Z"}'
+    ;;
+  *"issue view"*) echo "Deepen the merge gate script" ;;
+esac
+exit 0
+`,
+    );
+    chmodSync(join(dir, "gh"), 0o755);
+
+    const result = spawnSync(
+      process.execPath,
+      [fileURLToPath(new URL("../src/merge/merge.ts", import.meta.url))],
+      {
+        encoding: "utf8",
+        timeout: 60_000,
+        env: {
+          ...process.env,
+          PATH: `${dir}:${process.env["PATH"] ?? ""}`,
+          GH_REPO: "owner/repo",
+          PR_NUMBER: "132",
+          DRY_RUN: "",
+        },
+      },
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Merged in abc1234.");
+    const commands = readFileSync(calls, "utf8").trim().split("\n");
+    expect(commands.some((command) => command.startsWith("pr merge 132"))).toBe(true);
+    const created = commands.find((command) => command.startsWith("issue create"));
+    expect(created).toContain("--title Factory review follow-ups: #132");
+    expect(created).toContain("--label needs-triage");
+    const bodyFile = /--body-file (\S+)/u.exec(created ?? "")?.[1] ?? "";
+    expect(readFileSync(bodyFile, "utf8")).toContain("- The helper duplicates `excerptOf`.");
+    expect(readFileSync(bodyFile, "utf8")).toContain("#132");
+  });
+
   it("exits green when the run cannot outlast the refusal, so no escalation runs", () => {
     const dir = mkdtempSync(join(tmpdir(), "factory-merge-entry-"));
     const calls = join(dir, "gh-calls.log");

@@ -42,11 +42,14 @@ Never comment on the pull request, label it, or open another one: the workflow p
 End your final message with exactly one `<review>` block: valid JSON, no code fence, nothing after it. Every field is required — a reply without `mergeDanger` fails validation and costs a second turn.
 
 <review>
-{"verdict": "pass", "findings": ["..."], "mergeDanger": {"door": "two-way", "blastRadius": "local", "reason": "..."}}
+{"verdict": "pass", "findings": [{"text": "...", "severity": "advisory"}], "mergeDanger": {"door": "two-way", "blastRadius": "local", "reason": "..."}}
 </review>
 
-- `verdict`: `pass` when nothing is left that a person must decide or that you could not fix; `changes-requested` otherwise.
 - `findings`: only what you did not fix, or were not sure enough to fix. The fixes are the commits, not findings. `[]` when there are none.
+- `findings[].severity`: a finding without one counts as **blocking**, so rate every finding:
+  - `blocking`: a bug, a broken acceptance criterion, a standards breach with a real cost, or a security issue — something you would stop the merge for.
+  - `advisory`: a judgement call, an optional follow-up, a scope note, or a test that could be stronger — a person may merge without doing it. The merge gate files these as one follow-up issue for triage after the merge; they never send the pull request back to a fix round on their own.
+- `verdict`: `changes-requested` only when at least one finding is `blocking`; `pass` otherwise, including a review whose findings are all advisory.
 - `mergeDanger.door`: `one-way` when undoing it is expensive — stored state or a migration, a protocol or wire change, a public interface, data loss; `two-way` when a revert is clean.
 - `mergeDanger.blastRadius`: `local` when the diff stays in one package, app or factory step; `wide` when it spans packages, or changes shared behaviour or a contract.
 - `mergeDanger.reason`: one sentence a person can check.

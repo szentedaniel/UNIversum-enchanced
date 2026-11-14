@@ -39,6 +39,27 @@ export const fixDecision = (rounds: number): FixDecision =>
     ? { run: false, reason: `the fix loop already ran ${String(rounds)} rounds` }
     : { run: true, round: rounds + 1 };
 
+/** What the fix step does now: another round, a person, or nothing. */
+export type FixPlan =
+  | { readonly action: "run"; readonly round: number }
+  | { readonly action: "escalate"; readonly reason: string }
+  | { readonly action: "merge-gate" };
+
+/**
+ * The fix loop's next move. A spent budget hands the pull request to a
+ * person, unless the review that brought it back left only advisory
+ * findings: nothing blocks the merge then, so the merge gate decides as if
+ * the review had passed, and no round is spent on a judgement call. A red CI
+ * run keeps its rounds and its escalation, whatever the last review said.
+ */
+export const fixPlan = (rounds: number, reason: FixReason, advisoryOnly: boolean): FixPlan => {
+  if (reason === "review" && advisoryOnly) return { action: "merge-gate" };
+  const decision = fixDecision(rounds);
+  return decision.run
+    ? { action: "run", round: decision.round }
+    : { action: "escalate", reason: decision.reason };
+};
+
 const REASON_TEXT: Readonly<Record<FixReason, string>> = {
   ci: "a failed CI run",
   review: "the review's findings",
