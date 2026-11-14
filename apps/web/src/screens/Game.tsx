@@ -9,12 +9,14 @@ import { DiceOverlay } from "#components/DiceOverlay.tsx";
 import { EventLog } from "#components/EventLog.tsx";
 import { GameMenu } from "#components/GameMenu.tsx";
 import { EventToast, MinutePill } from "#components/GameHud.tsx";
+import { HintCard } from "#components/HintCard.tsx";
 import { PlayerCard, PlayerChip, type PlayerSummary } from "#components/PlayerCard.tsx";
 import { Podium } from "#components/Podium.tsx";
 import { buttonVariants } from "#components/ui/button.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ensureJoined, JoinError } from "#connection.ts";
 import { bottomSlot, openDecision } from "#decision/decision.ts";
+import { nextHint } from "#hints/hints.ts";
 import { stripMoney, useCardLayout } from "#lib/tray-layout.ts";
 import { useWide } from "#lib/use-media-query.ts";
 import { cn } from "#lib/utils.ts";
@@ -22,6 +24,7 @@ import { playbackStore } from "#playback/playback-store.ts";
 import { DecisionTray } from "#screens/DecisionTray.tsx";
 import { TurnCard } from "#screens/TurnCard.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
+import { hintStore } from "#stores/hint-store.ts";
 import { inFlightOf, inLobbyOf, roomStore } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
 import { formatCompactMoney, formatMoney, m, playerName, rejectionText } from "#text.ts";
@@ -36,6 +39,9 @@ export function Game() {
   const inspect = useStore(uiStore, (s) => s.inspect);
   // No optimistic UI: a tap locks the controls until the server answers.
   const inFlight = useStore(roomStore, inFlightOf);
+  // The hints this browser has shown and the Guest's switch (spec #180).
+  const hintsSeen = useStore(hintStore, (s) => s.seen);
+  const hintsEnabled = useStore(hintStore, (s) => s.enabled);
   const wide = useWide();
   // The bottom card's height ceiling and the on-screen keyboard's lift (#184).
   const cardLayout = useCardLayout();
@@ -89,6 +95,9 @@ export function Game() {
   // One answer for the Turn card, the trays, the bottom slot and the Podium (spec #72).
   const decision = openDecision(frame, me, inFlight);
   const slot = bottomSlot(decision, frame, { selectedField, inspect });
+  // The one hint a first-time Guest meets now (#255): the table's order decides,
+  // and the card draws it only in the area this ticket covers.
+  const hint = nextHint({ decision, view, seen: hintsSeen, enabled: hintsEnabled });
   const waiting = decision !== null && decision.owner === "other" ? decision.kind : null;
 
   const players: PlayerSummary[] = view.players.map((p) => ({
@@ -167,7 +176,15 @@ export function Game() {
         return <FieldCard id={slot.field} view={view} stepThrough={slot.stepThrough} />;
       case "sale":
       case "pick":
-        return <DecisionTray view={view} slot={slot} clockOffset={clockOffset} seat={mySeat} />;
+        return (
+          <DecisionTray
+            view={view}
+            slot={slot}
+            clockOffset={clockOffset}
+            seat={mySeat}
+            hint={hint}
+          />
+        );
       case "turnCard":
         return turnCard;
     }
@@ -202,7 +219,17 @@ export function Game() {
         <div className="absolute top-6 left-1/2 flex w-[calc(100%-600px)] -translate-x-1/2 items-center justify-center gap-2">
           {statusRow}
         </div>
-        <div className="absolute bottom-3 left-1/2 w-[min(440px,calc(100%-600px))] -translate-x-1/2">
+        {/* The card and the hint above it stay in the space the Board reserves
+            (`bottom-[200px]` minus this strip's `bottom-3`): with a hint the
+            strip scrolls instead of covering a Field a Sale or pick asks for,
+            as the phone's does. Without one the card keeps its old room. */}
+        <div
+          className={cn(
+            "absolute bottom-3 left-1/2 flex w-[min(440px,calc(100%-600px))] -translate-x-1/2 flex-col gap-2",
+            hint !== null && "max-h-[calc(200px-0.75rem)] overflow-y-auto overscroll-contain",
+          )}
+        >
+          <HintCard hint={hint} place="bottom" />
           {card}
         </div>
       </main>
@@ -249,9 +276,10 @@ export function Game() {
         <Board />
         {boardOverlay && <div className="playback-overlay landscape:bottom-24">{boardOverlay}</div>}
         <div
-          className="absolute inset-x-2 bottom-0 overflow-y-auto overscroll-contain pb-1 pr-1 landscape:mx-auto landscape:max-w-md"
+          className="absolute inset-x-2 bottom-0 flex flex-col gap-2 overflow-y-auto overscroll-contain pb-1 pr-1 landscape:mx-auto landscape:max-w-md"
           style={{ bottom: cardLayout.keyboard, maxHeight: cardLayout.maxHeight }}
         >
+          <HintCard hint={hint} place="bottom" />
           {card}
         </div>
       </div>
