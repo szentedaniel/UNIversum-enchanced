@@ -4,7 +4,7 @@ import { closeAfterDump, playerCards, press, startGame, test, type Interactor } 
 // The quick-chat path through the real server and web app (spec #176, #233):
 // one Guest sends a line and the other sees it by the sender's card, an emote
 // travels the other way, the bubble fades after its duration, and a Guest who
-// muted quick chat keeps neither the tray nor any bubble. Chat is a Room
+// muted quick chat keeps neither the tray nor any bubble. Quick chat is a Room
 // message and never a game intent, so nothing here waits on a Playback.
 // Runs once per single-browser project: desktop Chromium (corner cards) and
 // iPhone WebKit (chips), so the bubble is checked in both card layouts.
@@ -100,7 +100,7 @@ test("two Guests exchange a line and an emote, and mute hides the tray and bubbl
     await expect(guest.getByTestId("chat-toggle")).toHaveCount(0);
     await expect(page.getByTestId("chat-toggle")).toBeVisible();
     // Close the menu again, so the bubble checks below are on B's game screen.
-    await press(joiner, guest.getByRole("button", { name: "Close" }));
+    await press(joiner, guest.getByRole("button", { name: "Close", exact: true }));
     await expect(guest.getByTestId("chat-toggle-mute")).toHaveCount(0);
 
     // A's next line still shows by A's own card, but not on B's screen: A's own
