@@ -337,6 +337,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
 
   apps/loadtest:
     dependencies:

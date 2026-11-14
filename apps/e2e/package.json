@@ -11,6 +11,7 @@
     "@playwright/test": "catalog:",
     "@types/node": "catalog:",
     "@universum/rules": "workspace:*",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "zod": "catalog:"
   }
 }
