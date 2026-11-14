@@ -128,11 +128,12 @@ export const reviewWithRetry = async (
       return { ...second, commits: first.commits + second.commits, retried: true, salvaged: false };
     } catch (retryError) {
       const second = failureOf(retryError);
-      const salvaged = salvageReview(second?.rawMatched) ?? salvageReview(first.rawMatched);
+      if (second === undefined) throw retryError;
+      const salvaged = salvageReview(second.rawMatched) ?? salvageReview(first.rawMatched);
       if (salvaged === undefined) throw retryError;
       return {
         review: salvaged,
-        commits: first.commits + (second?.commits ?? 0),
+        commits: first.commits + second.commits,
         retried: true,
         salvaged: true,
       };
