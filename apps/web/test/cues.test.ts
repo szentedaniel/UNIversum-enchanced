@@ -63,7 +63,7 @@ describe("the cue table", () => {
     expect(CUES.buy).not.toBe(CUES.rent);
   });
 
-  it("gives the card and the two Quarantine cues their own files", () => {
+  it("gives the Chance card and the two Quarantine cues their own files", () => {
     expect(CUES.chance).toContain("chance.mp3");
     expect(CUES.quarantine).toContain("quarantine.mp3");
     expect(CUES.release).toContain("release.mp3");
@@ -94,7 +94,7 @@ describe("cuesReached", () => {
     expect(cuesReached(ROLL(), 2, ROLL().length)).toEqual(["rent"]);
   });
 
-  it("finds the card in a real Chance push and keeps its money follow-up silent", () => {
+  it("finds the Chance card in a real Chance push and keeps its money follow-up silent", () => {
     expect(cuesReached(CHANCE(), 0, CHANCE().length)).toEqual(["dice", "chance"]);
   });
 

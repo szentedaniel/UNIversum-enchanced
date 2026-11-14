@@ -9,24 +9,24 @@ remaining sound tickets (Bankrupt/game end, music) add rows the same way.
 - `CUES` gained `chance`, `quarantine` and `release` beside `dice`/`buy`/`rent`;
   each imports its file from `#assets/sounds/`.
 - `EVENT_CUES`: `CardDrawn` → `chance`, `QuarantineEntered` → `quarantine`,
-  `QuarantineReleased` → `release`. The card's money follow-ups
+  `QuarantineReleased` → `release`. The Chance card's money follow-ups
   (`ChanceMoneyReceived`, `ChanceChargePaid`, `ChanceTransferPaid`),
   `QuarantineRoundUsed`, `PcrTestBought` and `PcrTestUsed` stay `"none"`; a
   cue belongs to the event that shows the card or the notice, not to the money
   change it causes.
-- A card that sends the Player to Quarantine (`examPeriod`) emits `CardDrawn`,
+- A Chance card that sends the Player to Quarantine (`examPeriod`) emits `CardDrawn`,
   then `Moved`, then `QuarantineEntered` in one push. The frame reaches the two
   cue events at two step starts, so `chance` then `quarantine` play in order —
   they are different cues, so the per-cue element pools never cut each other
   off (`apps/web/src/audio.ts`).
 
-## Card timing
+## Chance card timing
 
 `CardDrawn` is the only `card` overlay (`apps/web/src/playback/presentation.ts`);
 its step starts after the dice and the walk, so the cue plays when the overlay
-opens, not on the push. `eventsReached` counts the card event once its step has
+opens, not on the push. `eventsReached` counts the Chance card event once its step has
 started, so `syncCues` needs no special case: the frame that first shows
-`overlay.kind === "card"` is the frame that plays `chance`. The card's step is
+`overlay.kind === "card"` is the frame that plays `chance`. The Chance card's step is
 `PLAYBACK_MS.CardDrawn` (7 s); never time the cue from a second constant
 (ADR-0004).
 
@@ -51,7 +51,7 @@ started, so `syncCues` needs no special case: the frame that first shows
   (dice then chance, the money follow-up silent) and a Quarantine sequence
   (entered, round used, PCR bought and used, released → `quarantine`,
   `release`).
-- `apps/web/test/cue-sync.test.ts` imports `timelineOf` to find the card step's
+- `apps/web/test/cue-sync.test.ts` imports `timelineOf` to find the Chance card step's
   `startMs` from the real `CHANCE()` push, then reads
   `playbackOfPush(...).frameAt(receivedAt + startMs)`: the frame before it plays
   only the dice, that frame has `overlay.kind === "card"` and plays `chance`

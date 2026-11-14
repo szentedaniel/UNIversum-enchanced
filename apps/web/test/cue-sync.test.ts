@@ -141,7 +141,7 @@ describe("syncCues", () => {
     expect(playCue).toHaveBeenCalledTimes(1);
   });
 
-  it("plays the card in the frame that opens its overlay, not a moment before", () => {
+  it("plays the Chance card in the frame that opens its overlay, not a moment before", () => {
     const events = CHANCE();
     const core = playbackOfPush({
       view: viewOf(undefined, { actsAfter: 0 }),
@@ -172,8 +172,8 @@ describe("syncCues", () => {
     expect(playCue.mock.calls).toEqual([["dice"], ["chance"]]);
   });
 
-  it("plays the card and the Quarantine it sends the Player to, in order", () => {
-    // The exam-period card walks the Player to the Quarantine Field and enters it.
+  it("plays the Chance card and the Quarantine it sends the Player to, in order", () => {
+    // The exam-period Chance card walks the Player to the Quarantine Field and enters it.
     const events: GameEvent[] = [
       { type: "CardDrawn", player: "p1", card: "examPeriod" },
       { type: "Moved", player: "p1", from: 4, to: 16, steps: 12 },
