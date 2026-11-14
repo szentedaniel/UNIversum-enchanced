@@ -18,9 +18,10 @@ that migration stops blocking. No workflow changed.
 - The `migrate.ts` comparison is line-based: entries are the lines at exactly two spaces starting with
   a number and a colon, comment-only and blank lines are dropped, and everything from the
   `const MIGRATIONS` declaration to the end of the file is the shell that must not change. Imports are
-  outside it, so an entry may import its constant. A new entry style — a nested line indented two
-  spaces, a computed key, a changed declaration line — fails closed with
-  `state migration: migrate.ts's MIGRATIONS entries cannot be read` or a shell reason.
+  outside it, so an entry may import its constant. A line that is no such key — a computed key, an
+  entry re-indented — reads as part of the previous entry, so the check fails closed with an edited or
+  missing entry; a changed declaration line leaves no entries to read and reports
+  `state migration: migrate.ts's MIGRATIONS entries cannot be read`.
 - The fixtures comparison is the two directory listings plus `files`: an added name must be exactly
   `state-v<head's STATE_VERSION>.json`, a removed or edited one is a reason, and
   `migrate.test.ts` must name the new snapshot outside a comment and still name every snapshot main
