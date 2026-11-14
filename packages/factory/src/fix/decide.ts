@@ -13,12 +13,12 @@ import { excerptOf } from "#fix/excerpt.ts";
 import { FIX_REASONS, fixReasonOf, type FixReason } from "#fix/reasons.ts";
 import {
   ESCALATED_MARKER,
-  fixDecision,
   fixReasonText,
   fixRounds,
+  fixPlan,
   MAX_FIX_ROUNDS,
 } from "#fix/rounds.ts";
-import { newestMarkerComment, type ReviewComment } from "#review/summary.ts";
+import { advisoryOnly, newestMarkerComment, type ReviewComment } from "#review/summary.ts";
 import { fail, outputDir, required, sh, shellArg } from "#shared/common.ts";
 import { issueComments, parseJson } from "#shared/github.ts";
 import { runLog } from "#shared/runs.ts";
@@ -27,7 +27,7 @@ import { runLog } from "#shared/runs.ts";
 const ESCALATION_CHARS = 4000;
 
 /** What `fix.ts` and the workflow read back. */
-interface FixPlan {
+interface PlanFile {
   readonly run: boolean;
   readonly round: number | null;
   readonly reason: FixReason;
@@ -35,7 +35,7 @@ interface FixPlan {
   readonly escalate: boolean;
 }
 
-const writePlan = (output: string, plan: FixPlan): void => {
+const writePlan = (output: string, plan: PlanFile): void => {
   writeFileSync(join(output, "plan.json"), `${JSON.stringify(plan, null, 2)}\n`);
 };
 
@@ -98,12 +98,24 @@ const main = (): void => {
     return;
   }
 
-  const decision = fixDecision(fixRounds(comments));
-  if (decision.run) {
+  const decision = fixPlan(
+    fixRounds(comments),
+    reason,
+    advisoryOnly(newestMarkerComment(comments)?.body ?? ""),
+  );
+  if (decision.action === "run") {
     writePlan(output, { run: true, round: decision.round, reason, escalate: false });
     console.log(
       `Fix round ${String(decision.round)} of ${String(MAX_FIX_ROUNDS)}: ${fixReasonText(reason)}.`,
     );
+    return;
+  }
+
+  // The review left only advisory findings: no round can settle a judgement
+  // call, and nothing blocks the merge, so the merge gate decides.
+  if (decision.action === "merge-gate") {
+    writePlan(output, { run: false, round: null, reason, escalate: false });
+    console.log("The last review left only advisory findings: the merge gate decides.");
     return;
   }
 
