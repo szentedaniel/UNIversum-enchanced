@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { HintCard } from "#components/HintCard.tsx";
+import { HintCard, type HintPlace } from "#components/HintCard.tsx";
 import { HINTS, type HintId, type HintRow } from "#hints/hints.ts";
 import { baseLocale, overwriteGetLocale, type Locale } from "#paraglide/runtime.js";
 import en from "../messages/en.json" with { type: "json" };
@@ -9,6 +9,8 @@ import hu from "../messages/hu.json" with { type: "json" };
 
 // The hint card (spec #180): one short sentence on the concept the Guest meets
 // and a dismiss button, inline so it never takes focus or covers a Decision.
+// The card also owns which area draws which concept (#255: an Offer and
+// Quarantine in the Game's bottom area, a Sale in its tray).
 
 const inLanguage = (locale: Locale) => overwriteGetLocale(() => locale);
 
@@ -21,19 +23,32 @@ const rowOf = (id: HintId): HintRow => {
   return row;
 };
 
-const render = (hint: HintRow | null) => renderToStaticMarkup(createElement(HintCard, { hint }));
+const render = (hint: HintRow | null, place: HintPlace) =>
+  renderToStaticMarkup(createElement(HintCard, { hint, place }));
 
 describe("the hint card", () => {
   it("renders nothing while no hint is open", () => {
-    expect(render(null)).toBe("");
+    expect(render(null, "bottom")).toBe("");
+    expect(render(null, "tray")).toBe("");
+  });
+
+  it("draws an Offer and Quarantine in the bottom area, never in the tray", () => {
+    for (const id of ["offer", "quarantine"] as const) {
+      expect(render(rowOf(id), "bottom")).toContain(`data-hint="${id}"`);
+      expect(render(rowOf(id), "tray")).toBe("");
+    }
+  });
+
+  it("draws a Sale in the tray, never in the bottom area", () => {
+    expect(render(rowOf("sale"), "tray")).toContain('data-hint="sale"');
+    expect(render(rowOf("sale"), "bottom")).toBe("");
   });
 
   it("shows the open hint's sentence with a labelled dismiss button", () => {
     // React writes an apostrophe in a text node as `&#x27;`; the sentence is compared as text.
-    const html = render(rowOf("offer")).replaceAll("&#x27;", "'");
+    const html = render(rowOf("offer"), "bottom").replaceAll("&#x27;", "'");
 
     expect(html).toContain('data-testid="hint-card"');
-    expect(html).toContain('data-hint="offer"');
     expect(html).toContain(en.hint_offer);
     expect(html).toContain('data-testid="hint-dismiss"');
     expect(html).toContain(`aria-label="${en.hint_dismiss}"`);
@@ -42,7 +57,7 @@ describe("the hint card", () => {
   it("reads the sentence in the active language", () => {
     inLanguage("hu");
 
-    const html = render(rowOf("sale"));
+    const html = render(rowOf("sale"), "tray");
 
     expect(html).toContain(hu.hint_sale);
     expect(html).toContain(`aria-label="${hu.hint_dismiss}"`);

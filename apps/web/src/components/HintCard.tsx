@@ -3,17 +3,32 @@
  * Guest meets — an Offer, Quarantine, a Sale — and a dismiss button that
  * remembers the hint as seen for this browser. It is an inline card beside the
  * Decision, never a dialog: it takes no focus, blocks no button and pauses no
- * timer. The screen picks the row through `nextHint` and decides where it
- * renders, the Game's bottom area or the Sale tray.
+ * timer. The screen picks the row through `nextHint`; the card decides which
+ * area draws it, so the Game's bottom area and the Sale tray never both show
+ * the same hint.
  */
 import { X } from "lucide-react";
 import { Button } from "#components/ui/button.tsx";
-import type { HintRow } from "#hints/hints.ts";
+import type { HintId, HintRow } from "#hints/hints.ts";
 import { hintStore } from "#stores/hint-store.ts";
 import { m } from "#text.ts";
 
-export function HintCard({ hint }: { hint: HintRow | null }) {
-  if (hint === null) return null;
+/** Where a hint renders: the Game's bottom area, or the Sale or pick tray. */
+export type HintPlace = "bottom" | "tray";
+
+/**
+ * The area each concept's hint renders in (#255: the three the Offer,
+ * Quarantine and Sale tickets cover). #256 adds the Doubler and Erasmus picks
+ * and the game end, both in the areas those concepts already open.
+ */
+const PLACES: Partial<Record<HintId, HintPlace>> = {
+  offer: "bottom",
+  quarantine: "bottom",
+  sale: "tray",
+};
+
+export function HintCard({ hint, place }: { hint: HintRow | null; place: HintPlace }) {
+  if (hint === null || PLACES[hint.id] !== place) return null;
   return (
     <aside
       data-testid="hint-card"
