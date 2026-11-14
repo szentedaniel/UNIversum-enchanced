@@ -24,6 +24,8 @@
   "lobby_you": "du",
   "lobby_start": "Starten",
   "lobby_waiting": "Starten ist möglich, sobald alle Plätze besetzt sind.",
+  "lobby_seat_released": "Dein Platz wurde freigegeben, als der Raum in die Lobby zurückgekehrt ist.",
+  "lobby_take_seat": "Platz nehmen",
   "lobby_copy_code": "Raumcode kopieren",
   "lobby_copied": "Kopiert",
   "lobby_copy_link": "Einladungslink kopieren",

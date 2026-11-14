@@ -36,6 +36,7 @@ import {
 import { guestToken } from "#guest-token.ts";
 import {
   markIntentSent,
+  receiveLobby,
   receivePush,
   receiveRejection,
   reset,
@@ -143,7 +144,7 @@ function listen(joined: Room): void {
     if (mine()) roomStore.setState({ me: message.playerId });
   });
   joined.onMessage(MESSAGE.lobby, (lobby: LobbyMessage) => {
-    if (mine()) roomStore.setState({ lobby, lobbyClockOffset: lobby.now - Date.now() });
+    if (mine()) receiveLobby(lobby, Date.now());
   });
   joined.onMessage(MESSAGE.game, (push: GameMessage) => {
     if (mine()) receivePush(push, Date.now());

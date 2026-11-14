@@ -33,6 +33,8 @@ export const DEFAULT_LIMITS = {
   passwordFailuresPerIpWindowSeconds: 600,
   /** Intents per connection per second; extras are dropped with one `SLOW_DOWN`. */
   intentsPerSecond: 10,
+  /** Quick-chat taps per connection per second (spec #176): tighter than intents, same ladder. */
+  chatsPerSecond: 1,
   /** Seconds in a row over `intentsPerSecond` before the socket is closed. */
   intentFloodCloseSeconds: 5,
   /** More intents than this in one second close the socket at once. */
