@@ -82,7 +82,7 @@ test("two Guests exchange a line and an emote, and mute hides the tray and bubbl
 
     // The bubble is short-lived on both screens: `BUBBLE_MS` after it arrived.
     await expect(bubbleOf(page, seatA)).toHaveCount(0, { timeout: BUBBLE_FADE_MS });
-    await expect(bubbleOf(guest, seatA)).toHaveCount(0);
+    await expect(bubbleOf(guest, seatA)).toHaveCount(0, { timeout: BUBBLE_FADE_MS });
 
     // Guest B sends an emote: A sees it by B's card, and B's own screen shows it
     // too. The glyph is language-free; the label comes from the same page. The
