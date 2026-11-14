@@ -14,8 +14,8 @@ changed; the diff is the prompt, one comment, the factory docs and one test.
   #268's chat catalogue, #267's two Room intents; renaming `MESSAGE.game`, deleting a
   `REJECTION_CODES` entry, making a chat catalogue id required).
 - The prompt asks for the reason to open `additive protocol change: …`. Nothing parses the reason
-  text: `mergeDangerOf` (`src/review/summary.ts`) keeps it for the summary and `riskReason`
-  (`src/merge/gates.ts`) reads only `door`, so the wording is for the reader.
+  text: `mergeDangerOf` (`src/review/summary.ts`) keeps it for the summary, and the gate's decision
+  keys on `door` — `riskReason` (`src/merge/gates.ts`) echoes the reason only in its one-way refusal.
 - The `mergeDanger` bullet under `# THE OUTPUT` now points at the section; change them together.
 
 ## The decision (`src/review/merge-danger.ts`, `src/merge/gates.ts`)
