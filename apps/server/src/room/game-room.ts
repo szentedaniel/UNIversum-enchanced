@@ -128,6 +128,7 @@ const STATUS: Partial<Record<RejectionCode, number>> = {
   WRONG_PASSWORD: 403,
   ROOM_NOT_FOUND: 404,
   ROOM_FULL: 409,
+  SPECTATORS_FULL: 409,
   PASSWORD_LOCKED: 429,
   RATE_LIMITED: 429,
   SERVER_BUSY: 503,
@@ -294,6 +295,11 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   readonly #chatFlood = new Map<string, FloodMeter>();
   /** Whether this Lobby is on the Lobby list; a full one is not (ticket #196). */
   #listed = true;
+  /**
+   * The connections watching without a Seat, by session id (spec #179). Room
+   * memory only: a spectator is never in `seats`, the snapshot or the game.
+   */
+  readonly #spectators = new Set<string>();
 
   /** The commit pipeline; `onCreate` creates it once every dependency is set. */
   private get driver(): GameDriver {
@@ -330,9 +336,28 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     if (reservations) throw refuse(reservations);
     const room = matchMaker.getLocalRoomById(join.data.code);
     if (!(room instanceof GameRoom)) throw refuse("ROOM_NOT_FOUND");
+    /** The password gate both a Player and a spectator pass before entering (spec #179). */
+    const checkPassword = async (): Promise<void> => {
+      if (room.password === null) return;
+      const password = join.data.password ?? "";
+      // No password yet: the client asks for one. Not a guess, so not counted.
+      if (password === "") throw refuse("WRONG_PASSWORD");
+      const locked = await guard.passwordAttempt(room.roomId, bucket);
+      if (locked) throw refuse(locked);
+      if (!(await room.passwordMatches(password))) {
+        await guard.passwordFailed(room.roomId, bucket);
+        throw refuse("WRONG_PASSWORD");
+      }
+      await guard.passwordMatched(room.roomId, bucket);
+    };
     // A Guest taking their own Seat back gets in, game started or not, with no
     // password asked (#35). Everyone else needs an open Lobby Seat.
-    if (!room.seatOfToken(join.data.guestToken ?? null)) {
+    if (join.data.watch === true) {
+      // A spectator never takes a Seat back, even when it carries a Guest
+      // token, and may watch a full or started Room (spec #179).
+      if (room.spectatorsFull()) throw refuse("SPECTATORS_FULL");
+      await checkPassword();
+    } else if (!room.seatOfToken(join.data.guestToken ?? null)) {
       if (room.game) throw refuse("ROOM_NOT_FOUND");
       // Seats, not clients: held and restored Seats have no client (maxClients
       // leaves them room). A Bot never keeps a Guest out of a full Lobby: the
@@ -343,18 +368,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       ) {
         throw refuse("ROOM_FULL");
       }
-      if (room.password !== null) {
-        const password = join.data.password ?? "";
-        // No password yet: the client asks for one. Not a guess, so not counted.
-        if (password === "") throw refuse("WRONG_PASSWORD");
-        const locked = await guard.passwordAttempt(room.roomId, bucket);
-        if (locked) throw refuse(locked);
-        if (!(await room.passwordMatches(password))) {
-          await guard.passwordFailed(room.roomId, bucket);
-          throw refuse("WRONG_PASSWORD");
-        }
-        await guard.passwordMatched(room.roomId, bucket);
-      }
+      await checkPassword();
     }
     return {
       bucket,
@@ -380,9 +394,13 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       this.password = password ? await hashPassword(password) : null;
       this.roomId = reserveRoomCode((code) => this.store.isCodeInUse(code));
     }
-    // Room for every Seat's client plus a Guest taking a held Seat back (a held
-    // Seat counts as a client until it is released); `onAuth` and `onJoin` cap the Seats.
-    this.maxClients = this.settings.maxPlayers * 2;
+    // Room for every Seat's client, a Guest taking a held Seat back (a held
+    // Seat counts as a client until it is released) and the spectator cap
+    // (spec #179): Colyseus counts spectators against `maxClients`, so without
+    // their share a full Room's Player rejoin would be refused. `onAuth` and
+    // `onJoin` cap the Seats and the spectators themselves.
+    this.maxClients =
+      this.settings.maxPlayers * 2 + this.guard.limits.spectatorsPerRoom;
     this.seatReservationTimeout = this.guard.limits.seatReservationSeconds;
     if (!this.game) this.guard.lobbyOpened(this.roomId);
     this.metadata = this.listing();
@@ -482,6 +500,21 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
 
   override async onJoin(client: Client, options: unknown, auth?: SeatAuth): Promise<void> {
     if (auth) this.guard.release(auth.reservation);
+    const watching =
+      typeof options === "object" && options !== null && "watch" in options && options.watch === true;
+    if (watching) {
+      // The Seat reservation is already given up: a spectator holds nothing.
+      if (this.spectatorsFull()) throw refuse("SPECTATORS_FULL");
+      if (
+        auth?.code !== this.roomId &&
+        !(await this.passwordMatches(passwordIn(options)))
+      ) {
+        throw refuse("WRONG_PASSWORD");
+      }
+      this.#spectators.add(client.sessionId);
+      this.sendCurrentTo(client);
+      return;
+    }
     const token = guestTokenIn(options);
     const own = this.seatOfToken(token);
     if (own) return this.takeBack(own, client);
@@ -558,6 +591,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   override onLeave(client: Client): void {
     this.#flood.delete(client.sessionId);
     this.#chatFlood.delete(client.sessionId);
+    // A spectator held no Seat and no reconnection: the connection was all it had.
+    this.#spectators.delete(client.sessionId);
     // In a running game the Seat stays (a Bot plays its Decisions from then);
     // a Lobby frees it. On shutdown nothing changes: the Room comes back as it was.
     if (this.#shuttingDown) return;
@@ -637,6 +672,12 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   private sendCurrent(client: Client): void {
     if (this.game) client.send(MESSAGE.game, this.gamePush(this.game));
     else this.broadcastLobby();
+  }
+
+  /** A joining spectator hears the current state: the Lobby to itself, or the running game's push. */
+  private sendCurrentTo(client: Client): void {
+    if (this.game) client.send(MESSAGE.game, this.gamePush(this.game));
+    else client.send(MESSAGE.lobby, this.lobbyMessage());
   }
 
   /** The push of the Room's current state: its view, and the Podium's votes once the game ended. */
@@ -724,7 +765,14 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    * off for good.
    */
   private disposeIfAbandoned(): void {
-    if (this.game || this.autoDispose || this.clients.length > 0) return;
+    if (this.game) return;
+    // Colyseus's own autoDispose keeps a Lobby alive while any client is
+    // connected, and a spectator is one (spec #179): a Lobby whose Guests are
+    // gone is disposed here all the same. Without a spectator that timer stays
+    // as it was, so only a Room that played or was restored is disposed below.
+    if (this.autoDispose && this.#spectators.size === 0) return;
+    // Any other client is a Guest, mid-join or seated: the Room is not abandoned.
+    if (this.clients.some((client) => !this.#spectators.has(client.sessionId))) return;
     if ([...this.#holds.values()].some((hold) => hold.release === null)) return;
     void this.disconnect();
   }
@@ -1081,7 +1129,12 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
 
   private onIntent(client: Client, message: unknown): void {
     const seat = this.seats.find((s) => s.sessionId === client.sessionId);
-    if (!seat) return;
+    if (!seat) {
+      // A spectator is read-only (spec #179): the UI hides the controls, and
+      // the Room refuses whatever still arrives. No Player intent is measured.
+      if (this.#spectators.has(client.sessionId)) this.reject(client, "SPECTATOR_READ_ONLY");
+      return;
+    }
     const started = performance.now();
     const parsed = intentSchema.safeParse(message);
     const intent = parsed.success ? parsed.data : null;
@@ -1114,6 +1167,11 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   seatReconnected(seat: SeatRecord): void {
     this.metrics.seatReconnected();
     this.log.info({ playerId: seat.playerId }, "Seat reconnected");
+  }
+
+  /** Whether another spectator would exceed the Room's cap (spec #179). */
+  private spectatorsFull(): boolean {
+    return this.#spectators.size >= this.guard.limits.spectatorsPerRoom;
   }
 
   /**
@@ -1169,7 +1227,12 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   private broadcastLobby(): void {
     void this.setMetadata(this.listing());
     this.syncListing();
-    const lobby: LobbyMessage = {
+    this.broadcast(MESSAGE.lobby, this.lobbyMessage());
+  }
+
+  /** The Lobby as every client sees it: its Seats in join order, and the server's clock. */
+  private lobbyMessage(): LobbyMessage {
+    return {
       code: this.roomId,
       roomName: this.displayName,
       creatorId: this.creatorId,
@@ -1187,7 +1250,6 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       }),
       now: this.now(),
     };
-    this.broadcast(MESSAGE.lobby, lobby);
   }
 
   private reject(client: Client, code: RejectionCode): void {
