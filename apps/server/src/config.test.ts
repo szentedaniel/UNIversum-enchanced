@@ -82,6 +82,7 @@ describe("loadConfig", () => {
       passwordFailuresPerIp: 30,
       passwordFailuresPerIpWindowSeconds: 600,
       intentsPerSecond: 10,
+      chatsPerSecond: 1,
       intentFloodCloseSeconds: 5,
       intentBurstClose: 50,
       maxPayloadBytes: 1024,
@@ -96,12 +97,14 @@ describe("loadConfig", () => {
       LIMIT_JOINS_PER_MINUTE: "6000",
       LIMIT_ROOM_CREATIONS_PER_HOUR: "100000",
       LIMIT_SEAT_RESERVATION_SECONDS: "15",
+      LIMIT_CHATS_PER_SECOND: "3",
     });
 
     expect(limits).toMatchObject({
       joinsPerMinute: 6000,
       roomCreationsPerHour: 100000,
       seatReservationSeconds: 15,
+      chatsPerSecond: 3,
       roomCreationsPerMinute: 10,
     });
   });
