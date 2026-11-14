@@ -52,18 +52,16 @@ const CHAT_PLACEMENT: Record<ChatPlacement, string> = {
   "above-end": "bottom-full right-0 mb-2",
 };
 
-/** The Seat's bubble as of this render, or null once it is older than BUBBLE_MS. */
-function useChatBubble(seat: number): ChatFace | null {
-  const bubble = useStore(chatStore, (state) => state.bubbleAt(seat, Date.now()));
-  return bubble === null ? null : bubbleOf(bubble.id);
-}
-
 /** The Seat's current quick-chat bubble: a line's text, or an emote's glyph and accessible label. */
 function ChatBubble({ seat, placement }: { seat: number; placement: ChatPlacement }) {
-  const face = useChatBubble(seat);
-  if (face === null) return null;
+  const bubble = useStore(chatStore, (state) => state.bubbleAt(seat, Date.now()));
+  if (bubble === null) return null;
+  const face: ChatFace = bubbleOf(bubble.id);
   return (
     <output
+      // A newer chat is a new node, so its entry animation restarts instead of
+      // inheriting the old bubble's fade (the store keeps one bubble per Seat).
+      key={`${bubble.shownAt}:${bubble.id}`}
       data-testid="chat-bubble"
       style={{ animationDuration: `${BUBBLE_MS}ms` }}
       className={cn(

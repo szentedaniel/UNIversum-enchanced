@@ -13,7 +13,9 @@ sender's Player card, in the viewer's language. Read for: #231 (the tray), #232
   is the Seat index (`PlayerView.seat`), not a Player id (#229).
 - `leaveRoom()` clears it (`chatStore.getState().reset()`) next to `reset()`, so
   a new join, another Room or leaving shows no bubble. There is no history: a
-  reload or a reconnect starts empty, as the server keeps none.
+  reload starts empty, and a reconnect shows nothing sent during the gap (a
+  bubble already on screen before the drop lives out its `BUBBLE_MS`), as the
+  server keeps none.
 - `apps/web/src/stores/chat-store.ts`: `BUBBLE_MS = 4_000`, `ChatBubble`
   (`{ id, shownAt }`), `ChatState` (`bubbles: ReadonlyMap<number, ChatBubble>`,
   `show`, `bubbleAt`, `expire`, `reset`) and `chatStore`. `show` replaces that
@@ -45,10 +47,11 @@ sender's Player card, in the viewer's language. Read for: #231 (the tray), #232
 ## The display
 
 - `apps/web/src/components/PlayerCard.tsx` exports `ChatPlacement`
-  (`below-start | below-end | above-start | above-end`), the `CHAT_PLACEMENT`
-  class map, the `useChatBubble(seat)` hook (store read plus `bubbleOf`) and the
-  `ChatBubble` node both `PlayerCard` and `PlayerChip` render as their last
-  child. `PlayerSummary` stays pure; the bubble is not part of it.
+  (`below-start | below-end | above-start | above-end`). Module-private: the
+  `CHAT_PLACEMENT` class map and the `ChatBubble` node both `PlayerCard` and
+  `PlayerChip` render as their last child; it reads `chatStore.bubbleAt(seat,
+  Date.now())` and maps the id through `bubbleOf`. `PlayerSummary` stays pure;
+  the bubble is not part of it.
 - The bubble is an absolutely positioned `<output>` (implicit `role="status"`,
   which Oxlint's `prefer-tag-over-role` requires over `span role="status"`),
   `data-testid="chat-bubble"`, `pointer-events-none`, so it never shifts the card,
@@ -57,7 +60,9 @@ sender's Player card, in the viewer's language. Read for: #231 (the tray), #232
   added `relative` for it. On a phone it overlays the status row for its few
   seconds, inside the screen edges; taps still reach the controls under it. A
   line shows its text; an emote shows its glyph (`aria-hidden`) plus the label in
-  an `sr-only` span.
+  an `sr-only` span. The `<output>`'s key is `${shownAt}:${id}`, so a newer chat
+  from the same Seat remounts the node and restarts the entry animation instead
+  of inheriting the previous bubble's fade.
 - `apps/web/src/screens/Game.tsx`: `CORNERS` now holds `{ card, bubble }` — the
   wide corner cards hang their bubble below the top cards and above the bottom
   ones, pointing inward. The phone chips pick by half of the strip
