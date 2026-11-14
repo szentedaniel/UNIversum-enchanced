@@ -4,7 +4,9 @@ import { Link, useNavigate, useParams } from "react-router";
 import { useStore } from "zustand";
 import { Board } from "#board/Board.tsx";
 import { FieldCard } from "#board/FieldCard.tsx";
+import { chatOpenTo } from "#chat/tray.ts";
 import { ChanceCardOverlay } from "#components/ChanceCardOverlay.tsx";
+import { ChatTray } from "#components/ChatTray.tsx";
 import { DiceOverlay } from "#components/DiceOverlay.tsx";
 import { EventLog } from "#components/EventLog.tsx";
 import { GameMenu } from "#components/GameMenu.tsx";
@@ -134,6 +136,10 @@ export function Game() {
   // Four Players on a portrait phone leave each chip too narrow for the full cash.
   const compactMoney = stripMoney(cardLayout.width, players.length) === "compact";
   const rejected = rejection !== null && rejection.seq > push.seq;
+  // The quick-chat tray (#231): a seated Guest in a running game, in any phase
+  // and on another Player's Turn; never on the result screen. #232 gates it
+  // with one mute condition at this one mount.
+  const chatOpen = chatOpenTo(view, me);
   // The Playback's DOM layer: the frame's overlay is the dice or a drawn Chance card.
   const boardOverlay =
     overlay?.kind === "dice" ? (
@@ -152,6 +158,7 @@ export function Game() {
         {rejected ? rejectionText(rejection.code) : toast?.text}
       </EventToast>
       <EventLog />
+      {chatOpen && <ChatTray />}
       <GameMenu />
     </>
   );
