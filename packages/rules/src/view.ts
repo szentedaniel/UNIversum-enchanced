@@ -4,8 +4,9 @@ import { autoSellPicks } from "#rules/charge.ts";
 import { doublerPlacement } from "#rules/doubler.ts";
 import { erasmusRoute } from "#rules/erasmus.ts";
 import { standingsOf, type Standing } from "#rules/game-end.ts";
+import type { GameSummary } from "#rules/summary.ts";
 import { revealOf, type FieldView, type PlayerView } from "#reveal.ts";
-import type { GameState } from "#state.ts";
+import type { GameState, WealthSample } from "#state.ts";
 
 /**
  * The Turn timer the ring shows: it runs for `limitMs` and empties at
@@ -32,6 +33,16 @@ export type PickOption =
   | { kind: "erasmus"; field: FieldId; steps: number; passesStart: boolean; bonus: number | null };
 
 /**
+ * The Summary the final `PublicView` carries (spec #177): the figures the
+ * engine counted while the game ran, plus the Wealth series it sampled. A game
+ * stored before the series was recorded has an empty one, not an error.
+ */
+export type GameSummaryView = GameSummary & {
+  /** One sample per passed Turn plus the game's final one, in Minute order. */
+  series: WealthSample[];
+};
+
+/**
  * The one view every client in the Room sees. It never contains the PRNG
  * state. Fields are listed one by one on purpose: a new state field fails to
  * compile here until someone decides whether clients may see it. Derived
@@ -51,7 +62,15 @@ export type PublicView = Omit<
   pickOptions: PickOption[] | null;
   /** The final standings in podium order; `null` until the game is over (R80). */
   standings: Standing[] | null;
+  /** The Wealth series and summary figures; `null` until the game is over (spec #177). */
+  summary: GameSummaryView | null;
 };
+
+/** The final Summary: the counted figures plus the series; `null` until the game is over. */
+function summaryView(state: GameState): GameSummaryView | null {
+  if (state.phase.kind !== "gameOver") return null;
+  return { ...state.summary, series: state.wealthSamples };
+}
 
 /** The effect of every Field a Doubler or Erasmus pick offers (R59–R61, R64, R65). */
 function pickOptions(state: GameState): PickOption[] | null {
@@ -99,5 +118,6 @@ export function publicView(state: GameState, timing: ViewTiming = {}): PublicVie
         : null,
     pickOptions: pickOptions(state),
     standings: standingsOf(state),
+    summary: summaryView(state),
   };
 }

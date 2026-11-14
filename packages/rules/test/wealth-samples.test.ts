@@ -106,7 +106,7 @@ describe("the Wealth series", () => {
     expect(run.state.wealthSamples).toHaveLength(passed.length + 1);
   });
 
-  it("the samples and the minute length stay out of the public view (ticket #236 adds the summary)", () => {
+  it("the samples and the minute length stay out of the public view's top level", () => {
     const { state } = playTurn(newGame());
     const view = publicView(state);
 
