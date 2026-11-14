@@ -9,6 +9,8 @@ import { closeAfterDump, press, ROLL_PLAYBACK_MS, startGame, test } from "./help
  * Runs once per single-browser project: desktop Chromium and iPhone WebKit.
  */
 test.use({ locale: "en-US" });
+// The reload draws the Board a second time (slow on WebKit in CI).
+test.setTimeout(90_000);
 
 test("the first Offer's hint shows, stays dismissed through a reload, and leaves Buy tappable", async ({
   page,
