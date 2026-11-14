@@ -24,6 +24,8 @@ A factory run on GitHub Actions follows this protocol too, with the deviations l
 
 Red → green → refactor, one behaviour at a time. The lines a test must not cross — public interfaces, rule-id names, seeded time, Paraglide messages — are in `CODING_STANDARDS.md`.
 
+Before the last commit, list every new domain noun your diff introduces (a vote, a window, a series, a role, a message). If `GLOSSARY.md` has no entry for it, add one in the same diff, in the glossary's format. The reviewer should not have to commit `docs(glossary)` for you.
+
 ## 4. Commit as you go
 
 - Commit after every green slice — a cut-off session must lose nothing.
