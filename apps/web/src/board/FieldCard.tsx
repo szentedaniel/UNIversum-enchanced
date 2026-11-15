@@ -146,10 +146,10 @@ export function FieldCard({
                       current ? "bg-primary text-primary-foreground" : "bg-secondary/30",
                     )}
                   >
-                    <span className="text-[0.6rem] leading-tight font-bold opacity-70">
+                    <span className="text-[0.65rem] leading-tight font-bold">
                       {m.field_card_level()} {level}
                     </span>
-                    <span className="tnum text-xs leading-tight font-black">
+                    <span className="tnum text-[0.7rem] leading-tight font-black whitespace-nowrap">
                       {formatMoney(rent)}
                     </span>
                   </li>
@@ -182,7 +182,7 @@ export function FieldCard({
                     data-owner={member.owner?.id ?? ""}
                     className={cn(
                       "flex min-w-0 items-center gap-1 rounded-lg bg-card px-1.5 py-0.5 text-xs font-extrabold",
-                      member.owner === null && "text-ink/50",
+                      member.owner === null && "text-ink/70",
                     )}
                   >
                     {member.owner && <PlayerToken seat={member.owner.seat} size={16} />}
