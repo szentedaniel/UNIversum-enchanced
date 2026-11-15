@@ -344,7 +344,16 @@ export function showPick(page: Page, kind: "doubler" | "erasmus"): Promise<void>
       const view = structuredClone(push!.view);
       view.currentPlayer = me!;
       const own = (id: number, level: number, rent: number) => {
-        view.fields[id] = { owner: me, level, value: 0, rent, sale: 0 };
+        view.fields[id] = {
+          owner: me,
+          level,
+          value: 0,
+          rent,
+          sale: 0,
+          levelRents: [],
+          basePrice: 0,
+          doublers: 0,
+        };
       };
       if (pickKind === "doubler") {
         view.phase = { kind: "placingDoubler", fields: [fields.budapest, fields.berlin] };
@@ -356,8 +365,26 @@ export function showPick(page: Page, kind: "doubler" | "erasmus"): Promise<void>
         ];
       } else {
         view.phase = { kind: "choosingErasmus", fields: [fields.london, fields.museum4] };
-        view.fields[fields.london] = { owner: null, level: 0, value: 0, rent: 0, sale: 0 };
-        view.fields[fields.museum4] = { owner: null, level: 0, value: 0, rent: 0, sale: 0 };
+        view.fields[fields.london] = {
+          owner: null,
+          level: 0,
+          value: 0,
+          rent: 0,
+          sale: 0,
+          levelRents: [],
+          basePrice: 0,
+          doublers: 0,
+        };
+        view.fields[fields.museum4] = {
+          owner: null,
+          level: 0,
+          value: 0,
+          rent: 0,
+          sale: 0,
+          levelRents: [],
+          basePrice: 0,
+          doublers: 0,
+        };
         view.pickOptions = [
           { kind: "erasmus", field: fields.london, steps: 29, passesStart: true, bonus: 250_000 },
           { kind: "erasmus", field: fields.museum4, steps: 4, passesStart: false, bonus: null },
