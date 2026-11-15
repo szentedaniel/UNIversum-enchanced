@@ -160,7 +160,7 @@ export function Game() {
       {watching && (
         <span
           data-testid="watching"
-          className="sticker-sm shrink-0 rounded-full bg-card px-3 py-1 text-sm font-black text-card-foreground"
+          className="sticker-sm shrink-0 rounded-full bg-card px-2 py-1 text-xs font-black text-card-foreground"
         >
           {m.watching()}
         </span>
@@ -244,7 +244,7 @@ export function Game() {
             />
           ))}
         </ul>
-        <div className="absolute top-6 left-1/2 flex w-[calc(100%-600px)] -translate-x-1/2 items-center justify-center gap-2">
+        <div className="absolute top-6 left-1/2 flex w-[calc(100%-600px)] -translate-x-1/2 flex-wrap items-center justify-center gap-2">
           {statusRow}
         </div>
         {/* The card and the hint above it stay in the space the Board reserves
@@ -292,7 +292,10 @@ export function Game() {
           />
         )}
       </ul>
-      <div className="mt-2 flex min-w-0 items-center justify-center gap-2 px-2">{statusRow}</div>
+      {/* The row wraps rather than clipping a control: a spectator's marker is one chip more. */}
+      <div className="mt-2 flex min-w-0 flex-wrap items-center justify-center gap-2 px-2">
+        {statusRow}
+      </div>
       {/* The card overlays the Board's bottom. The Board fits above it and below
           the camera buttons, into space reserved whether or not a card is open,
           so opening the Field card never changes the zoom. A landscape phone is
