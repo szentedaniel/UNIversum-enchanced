@@ -10,7 +10,7 @@ Branch `agent/issue-318-web-hover-tooltip-shows-name-owner-and-rent-next-t`. All
 
 ## Placement
 
-- `placeTooltip(at, size, viewport): Point` is the pure part (`Board/FieldTooltip.tsx` exports it): beside the Field on the side that fits, clamped inside the viewport (`GAP` 12 px, `MARGIN` 8 px, a box wider than the viewport keeps the left margin). Pinned by `test/field-tooltip.test.ts`.
+- `placeTooltip(at, size, viewport): Point` is the pure part (`board/FieldTooltip.tsx` exports it): beside the Field on the side that fits, clamped inside the viewport (`GAP` 12 px, `MARGIN` 8 px, a box wider than the viewport keeps the left margin). Pinned by `test/field-tooltip.test.ts`.
 - The component measures itself in a `useLayoutEffect` before paint, because the box wraps with its text; the effect's one dependency is `at`, which the Board rebuilds on every parent render, so a new hover or Playback step re-measures.
 - It is `position: fixed` with viewport coordinates inside `.board` (whose `overflow: hidden` does not clip a fixed child; a transformed ancestor would).
 

@@ -1,5 +1,13 @@
 import { expect, type Page } from "@playwright/test";
-import { closeAfterDump, dragBoard, fieldCenter, scale, startGame, test } from "./helpers.ts";
+import {
+  closeAfterDump,
+  dragBoard,
+  fieldCenter,
+  ROLL_PLAYBACK_MS,
+  scale,
+  startGame,
+  test,
+} from "./helpers.ts";
 
 // The Board's camera and the tap-to-inspect Field card (#38), on each
 // project's device (desktop Chromium and iPhone WebKit). The Board is driven
@@ -279,7 +287,7 @@ test("the tooltip shows over an open Offer with the shown view's owner and Rent"
 
   // The seeded first Roll stops at an unowned University and waits for an Offer.
   await page.getByRole("button", { name: "Roll" }).click();
-  await expect(offer).toBeVisible({ timeout: 15_000 });
+  await expect(offer).toBeVisible({ timeout: ROLL_PLAYBACK_MS });
   const offered = await page.evaluate(() => {
     const phase = window.universumTest?.view()?.phase;
     return phase?.kind === "offer" ? phase.field : null;
