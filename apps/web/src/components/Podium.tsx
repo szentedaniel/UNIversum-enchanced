@@ -6,9 +6,11 @@
  * carries (spec #175) and this client's Player id.
  */
 import type { GameEndReason, PhaseOf, PlayerId, PublicView } from "@universum/rules";
+import { useState } from "react";
 import { Link } from "react-router";
 import { BotMark } from "#components/BotMark.tsx";
 import { PlayerFigure, PlayerToken } from "#components/PlayerToken.tsx";
+import { Summary } from "#components/Summary.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { sendIntent } from "#connection.ts";
 import { cn } from "#lib/utils.ts";
@@ -56,10 +58,16 @@ export function Podium({
   const vote = podiumRematch(view.players, me, rematch);
   const mine = vote.mine;
 
+  // The Summary is a local view of this screen: the Podium gate (shownTurn,
+  // Playback) stays where it is, and a null Summary never opens.
+  const [showSummary, setShowSummary] = useState(false);
+  const summary = view.summary;
+  const onSummary = showSummary && summary !== null;
+
   return (
     <section
       data-testid="podium"
-      aria-labelledby="podium-title"
+      aria-labelledby={onSummary ? "summary-title" : "podium-title"}
       className="fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden p-safe-4"
       style={{ background: OVERLAY_BG }}
     >
@@ -75,88 +83,118 @@ export function Podium({
           }}
         />
       ))}
-      <h2
-        id="podium-title"
-        data-testid="podium-title"
-        className="m-0 max-w-full truncate text-center font-display text-3xl text-[#ffbb6c]"
-        style={{ WebkitTextStroke: "2px #14111c", textShadow: "4px 4px 0 #14111c" }}
-      >
-        {m.podium_wins({ name: winner ? playerName(winner.player.name) : "" })}
-      </h2>
-      <p className="mt-1 mb-0 text-sm font-bold text-[#fff3e4]/80">{REASONS[phase.reason]()}</p>
-      <ol
-        data-testid="podium-places"
-        className="mt-8 mb-0 flex list-none items-end gap-2 p-0 md:gap-4"
-      >
-        {columns.map((entry, index) => (
-          <PodiumPlace key={entry.player.id} entry={entry} height={HEIGHTS[index] ?? "h-16"} />
-        ))}
-      </ol>
-      {below.length > 0 && (
-        <ul
-          data-testid="podium-below"
-          className="mt-4 mb-0 flex list-none flex-col items-center gap-1 p-0"
-        >
-          {below.map((entry) => (
-            <li
-              key={entry.player.id}
-              data-bankrupt={entry.player.bankrupt || undefined}
-              className={cn(
-                "flex items-center gap-2 text-sm font-bold text-[#fff3e4]/80",
-                entry.player.bankrupt && "opacity-50 grayscale",
+      {/* The result scrolls inside this box on a short phone; the way back to
+          the Lobby list stays below it and never scrolls away. */}
+      <div className="flex min-h-0 w-full flex-1 flex-col items-center overflow-y-auto overscroll-contain">
+        <div className="my-auto flex w-full flex-col items-center">
+          {onSummary && summary !== null ? (
+            <Summary view={view} onBack={() => setShowSummary(false)} />
+          ) : (
+            <>
+              <h2
+                id="podium-title"
+                data-testid="podium-title"
+                className="m-0 max-w-full truncate text-center font-display text-3xl text-[#ffbb6c]"
+                style={{ WebkitTextStroke: "2px #14111c", textShadow: "4px 4px 0 #14111c" }}
+              >
+                {m.podium_wins({ name: winner ? playerName(winner.player.name) : "" })}
+              </h2>
+              <p className="mt-1 mb-0 text-sm font-bold text-[#fff3e4]/80">
+                {REASONS[phase.reason]()}
+              </p>
+              <ol
+                data-testid="podium-places"
+                className="mt-8 mb-0 flex list-none items-end gap-2 p-0 md:gap-4"
+              >
+                {columns.map((entry, index) => (
+                  <PodiumPlace
+                    key={entry.player.id}
+                    entry={entry}
+                    height={HEIGHTS[index] ?? "h-16"}
+                  />
+                ))}
+              </ol>
+              {below.length > 0 && (
+                <ul
+                  data-testid="podium-below"
+                  className="mt-4 mb-0 flex list-none flex-col items-center gap-1 p-0"
+                >
+                  {below.map((entry) => (
+                    <li
+                      key={entry.player.id}
+                      data-bankrupt={entry.player.bankrupt || undefined}
+                      className={cn(
+                        "flex items-center gap-2 text-sm font-bold text-[#fff3e4]/80",
+                        entry.player.bankrupt && "opacity-50 grayscale",
+                      )}
+                    >
+                      <PlayerFigure seat={entry.player.seat} size={24} />
+                      <span className="max-w-40 truncate">{playerName(entry.player.name)}</span>
+                      {entry.player.bot && <BotMark />}
+                      <span className="tnum text-[#ffbb6c]">
+                        {formatMoney(entry.player.wealth)}
+                      </span>
+                      {entry.player.bankrupt && <span>{m.game_bankrupt()}</span>}
+                    </li>
+                  ))}
+                </ul>
               )}
-            >
-              <PlayerFigure seat={entry.player.seat} size={24} />
-              <span className="max-w-40 truncate">{playerName(entry.player.name)}</span>
-              {entry.player.bot && <BotMark />}
-              <span className="tnum text-[#ffbb6c]">{formatMoney(entry.player.wealth)}</span>
-              {entry.player.bankrupt && <span>{m.game_bankrupt()}</span>}
-            </li>
-          ))}
-        </ul>
-      )}
-      <ul
-        data-testid="rematch-votes"
-        aria-label={m.rematch_votes()}
-        className="mt-4 mb-0 flex list-none flex-wrap justify-center gap-2 p-0"
-      >
-        {vote.votes.map(({ player, agreed }) => (
-          <li
-            key={player.id}
-            data-testid="rematch-chip"
-            data-player={player.id}
-            data-agreed={agreed || undefined}
-            className={cn(
-              "sticker-sm flex items-center gap-1.5 rounded-2xl bg-card px-2 py-1 text-card-foreground",
-              !agreed && "opacity-60",
-            )}
-          >
-            <PlayerToken seat={player.seat} size={14} />
-            <span className="max-w-28 truncate text-xs font-extrabold">
-              {playerName(player.name)}
-            </span>
-            <span
-              className={cn(
-                "text-[10px] leading-none font-black uppercase",
-                agreed ? "text-success" : "text-ink/60",
+              <ul
+                data-testid="rematch-votes"
+                aria-label={m.rematch_votes()}
+                className="mt-4 mb-0 flex list-none flex-wrap justify-center gap-2 p-0"
+              >
+                {vote.votes.map(({ player, agreed }) => (
+                  <li
+                    key={player.id}
+                    data-testid="rematch-chip"
+                    data-player={player.id}
+                    data-agreed={agreed || undefined}
+                    className={cn(
+                      "sticker-sm flex items-center gap-1.5 rounded-2xl bg-card px-2 py-1 text-card-foreground",
+                      !agreed && "opacity-60",
+                    )}
+                  >
+                    <PlayerToken seat={player.seat} size={14} />
+                    <span className="max-w-28 truncate text-xs font-extrabold">
+                      {playerName(player.name)}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[10px] leading-none font-black uppercase",
+                        agreed ? "text-success" : "text-ink/60",
+                      )}
+                    >
+                      {agreed ? m.rematch_agreed() : m.rematch_waiting()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {mine !== null && (
+                <Button
+                  data-testid="rematch-button"
+                  className="mt-4"
+                  disabled={busy}
+                  onClick={() => sendIntent(mine.intent)}
+                >
+                  {mine.agreed ? m.rematch_withdraw() : m.rematch_button()}
+                </Button>
               )}
-            >
-              {agreed ? m.rematch_agreed() : m.rematch_waiting()}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {mine !== null && (
-        <Button
-          data-testid="rematch-button"
-          className="mt-4"
-          disabled={busy}
-          onClick={() => sendIntent(mine.intent)}
-        >
-          {mine.agreed ? m.rematch_withdraw() : m.rematch_button()}
-        </Button>
-      )}
-      <Link to="/rooms" className={buttonVariants({ className: "mt-6" })}>
+              {summary !== null && (
+                <Button
+                  variant="plain"
+                  data-testid="summary-open"
+                  className="mt-4"
+                  onClick={() => setShowSummary(true)}
+                >
+                  {m.summary_open()}
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+      <Link to="/rooms" className={buttonVariants({ className: "mt-6 shrink-0" })}>
         {m.back_to_list()}
       </Link>
     </section>

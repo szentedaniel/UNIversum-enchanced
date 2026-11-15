@@ -232,6 +232,10 @@ export const formatMoney = (amount: number): string =>
     maximumFractionDigits: 0,
   }).format(amount);
 
+/** A whole number in the active language's format (a count, an axis tick). */
+export const formatCount = (value: number): string =>
+  new Intl.NumberFormat(getLocale(), { maximumFractionDigits: 0 }).format(value);
+
 /** `m:ss` for a number of milliseconds (never negative). */
 export function formatClock(ms: number): string {
   const seconds = Math.max(0, Math.ceil(ms / 1000));
