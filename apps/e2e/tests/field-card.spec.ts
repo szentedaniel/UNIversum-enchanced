@@ -216,7 +216,7 @@ test("an owned University's card highlights its current Level among the Level Re
   await expect(card.getByTestId("field-card-doubler")).toHaveText("Doubler ×2");
 });
 
-test("a mouse hover shows the Field tooltip, and leaving the Board hides it", async ({
+test("a mouse hover shows the Field tooltip, and a click through it opens the card", async ({
   page,
   browser,
   isMobile,
@@ -244,6 +244,14 @@ test("a mouse hover shows the Field tooltip, and leaving the Board hides it", as
 
   // Leaving the Board hides it: it is a hover, never pinned.
   await page.mouse.move(2, 2);
+  await expect(tooltip).toHaveCount(0);
+
+  // The tooltip takes no pointer events: a click on the hovered Field still
+  // opens its card, as a tap always has.
+  await page.mouse.move(zurich.x, zurich.y);
+  await expect(tooltip).toBeVisible();
+  await page.mouse.click(zurich.x, zurich.y);
+  await expect(page.getByTestId("field-card").getByRole("heading")).toHaveText("Zurich");
   await expect(tooltip).toHaveCount(0);
 });
 

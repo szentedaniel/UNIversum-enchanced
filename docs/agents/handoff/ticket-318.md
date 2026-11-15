@@ -25,4 +25,4 @@ Branch `agent/issue-318-web-hover-tooltip-shows-name-owner-and-rent-next-t`. All
 
 - `test/field-tooltip.test.ts` (Node, `renderToStaticMarkup`): `placeTooltip`'s four placements and the component's owned / unowned / name-only markup and its no-obstacle, no-pointer-events contract.
 - No message key was added: the tooltip reuses `field_card_owner`, `field_card_unowned`, `field_card_rent` and `field_card_none`, so `messages.test.ts` needed no change.
-- `apps/e2e/tests/field-card.spec.ts` gained three tests: the desktop hover (unowned Zurich, name-only Chance, leaving the Board hides it), the tooltip over an open Offer with a `showView` owned Field's Rent, and the touch project's tap and `dragBoard` pan asserting no tooltip.
+- `apps/e2e/tests/field-card.spec.ts` gained three tests: the desktop hover (unowned Zurich, name-only Chance, leaving the Board hides it, a click through it still opens the card), the tooltip over an open Offer with a `showView` owned Field's Rent, and the touch project's tap and `dragBoard` pan asserting no tooltip.
