@@ -100,7 +100,7 @@ const lobbyOf = (spectators: number): LobbyMessage => ({
     roundBonus: 250_000,
     turnLimitMs: 20_000,
   },
-  seats: [{ playerId: "p1", name: { adjective: "happy", noun: "tiger" } as PlayerName }],
+  seats: [{ playerId: "p1", name: { adjective: "happy", noun: "tiger" } satisfies PlayerName }],
   spectators,
   now: 1_000,
 });
