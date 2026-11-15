@@ -184,8 +184,22 @@ matches the pull's changed files, a three-segment module path in its branch slug
 pair whose directory and file name are both specific. It overlaps an older open ticket when both name
 the same module, but only work an agent holds or will start (`ready-for-agent`, `agent:in-progress`)
 holds a module: a stalled ticket (`agent:blocked`, `ready-for-human`) claims nothing, so it cannot
-stall a newer ticket indefinitely. The handoff ledger, the factory log and the lockfile are shared
-files every ticket touches, so naming one is not a target. An overlapping ticket keeps
+stall a newer ticket indefinitely.
+
+The shared files are not targets: naming one is no claim on a module, and a pull request whose
+changed files are all shared files holds nothing, however its branch is named. Each one only grows a
+line or an entry, so two tickets that both append to it share no code:
+
+- `apps/web/messages/*.json` — a new string is a new key in hu, en and de.
+- `apps/web/src/text.ts` — the message wiring: one map entry per new message.
+- `apps/e2e/tests/helpers.ts` — the one home for shared e2e steps: a ticket adds its own.
+- `GLOSSARY.md` — a new domain noun adds its entry.
+- `docs/agents/handoff/*` — the ledger: one `ticket-<n>.md` and one `INDEX.md` line per ticket.
+- `docs/agents/factory-log.md` — one line per day.
+- `pnpm-workspace.yaml` — a new package adds one entry.
+- `pnpm-lock.yaml` — any dependency change rewrites it.
+
+The list is `SHARED_FILES` in `packages/factory/src/shared/targets.ts`. An overlapping ticket keeps
 `ready-for-agent`, gets one note naming the pull request number (deduped by a hidden marker), and
 starts once the pull request merges or closes. The match is deterministic
 (`packages/factory/src/shared/targets.ts`), with no model call.

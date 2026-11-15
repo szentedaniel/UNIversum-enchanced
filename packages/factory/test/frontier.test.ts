@@ -167,6 +167,41 @@ describe("frontierOf", () => {
     expect(frontier.skipped).toEqual([]);
   });
 
+  it("does not let a pull that changes only shared files hold a ticket", () => {
+    const ticket = issue(101, { body: "`apps/server/src/room/turn-clock.ts`" });
+    const blocking = pull(154, {
+      branch: "agent/issue-154-room-turn-clock",
+      files: [
+        "apps/web/messages/en.json",
+        "apps/web/src/text.ts",
+        "apps/e2e/tests/helpers.ts",
+        "GLOSSARY.md",
+        "docs/agents/handoff/ticket-154.md",
+        "pnpm-workspace.yaml",
+      ],
+    });
+
+    const frontier = frontierOf([ticket], [blocking], new Set());
+
+    expect(frontier.eligible.map((entry) => entry.number)).toEqual([101]);
+    expect(frontier.skipped).toEqual([]);
+  });
+
+  it("still blocks a ticket on a pull that changes a module beside the shared files", () => {
+    const ticket = issue(101, { body: "`apps/web/src/board/FieldTooltip.tsx`" });
+    const blocking = pull(154, {
+      branch: "agent/issue-154-field-tooltip",
+      files: ["apps/web/messages/en.json", "apps/web/src/board/FieldTooltip.tsx"],
+    });
+
+    const frontier = frontierOf([ticket], [blocking], new Set());
+
+    expect(frontier.eligible).toEqual([]);
+    expect(frontier.skipped[0]?.reason).toBe(
+      "overlaps open pull request #154 (https://example.test/154)",
+    );
+  });
+
   it("starts only one of two tickets that name the same module", () => {
     const body = "## Files\n\n- `packages/factory/src/dispatch/frontier.ts`";
     const first = issue(101, { body });
@@ -188,6 +223,35 @@ describe("frontierOf", () => {
 
     expect(frontier.eligible.map((entry) => entry.number)).toEqual([101, 102]);
     expect(frontier.skipped).toEqual([]);
+  });
+
+  it("starts two web tickets that share only the messages, the wiring and the helpers", () => {
+    const shared = [
+      "- `apps/web/messages/en.json`",
+      "- `apps/web/src/text.ts`",
+      "- `apps/e2e/tests/helpers.ts`",
+    ].join("\n");
+    const first = issue(101, { body: `${shared}\n- \`apps/web/src/board/FieldCard.tsx\`` });
+    const second = issue(102, { body: `${shared}\n- \`apps/web/src/screens/Game.tsx\`` });
+
+    const frontier = frontierOf([first, second], [], new Set());
+
+    expect(frontier.eligible.map((entry) => entry.number)).toEqual([101, 102]);
+    expect(frontier.skipped).toEqual([]);
+  });
+
+  it("still starts only one of two tickets on the same component beside those files", () => {
+    const body = [
+      "- `apps/web/messages/en.json`",
+      "- `apps/web/src/text.ts`",
+      "- `apps/web/src/board/FieldCard.tsx`",
+    ].join("\n");
+
+    const frontier = frontierOf([issue(101, { body }), issue(102, { body })], [], new Set());
+
+    expect(frontier.eligible.map((entry) => entry.number)).toEqual([101]);
+    expect(frontier.skipped.map((entry) => entry.issue.number)).toEqual([102]);
+    expect(frontier.skipped[0]?.reason).toBe("overlaps #101 (same target module)");
   });
 
   it("lets a newer ticket wait for an open work item that already holds the module", () => {

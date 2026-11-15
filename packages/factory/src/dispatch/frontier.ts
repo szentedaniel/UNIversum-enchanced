@@ -5,7 +5,7 @@
  */
 import { closingPull, type PullFacts } from "#shared/closing-pr.ts";
 import { isTicketWork, READY_LABEL } from "#shared/labels.ts";
-import { branchNamesTarget, shareModule, targetPathsIn } from "#shared/targets.ts";
+import { branchNamesTarget, isSharedFile, shareModule, targetPathsIn } from "#shared/targets.ts";
 
 /** The fields of a REST issue the frontier reads. */
 export interface IssueFacts {
@@ -117,6 +117,15 @@ const reasonToSkip = (
 };
 
 /**
+ * A pull request that changes nothing but shared files holds no module: every
+ * ticket appends to those files, so the diff is no evidence it works on the
+ * ticket's module — and neither is the branch slug, which only repeats the
+ * title.
+ */
+const onlySharedFiles = (pull: OpenPull): boolean =>
+  pull.files.length > 0 && pull.files.every((path) => isSharedFile(path));
+
+/**
  * The open pull request a ticket overlaps: one that changes a file the ticket
  * names, or whose branch slug carries the module's path.
  */
@@ -127,7 +136,9 @@ const overlappingPull = (
   if (paths.length === 0) return undefined;
   return pulls.find(
     (pull) =>
-      shareModule(paths, pull.files) || paths.some((path) => branchNamesTarget(pull.branch, path)),
+      !onlySharedFiles(pull) &&
+      (shareModule(paths, pull.files) ||
+        paths.some((path) => branchNamesTarget(pull.branch, path))),
   );
 };
 

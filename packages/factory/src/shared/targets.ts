@@ -66,15 +66,60 @@ const GENERIC_STEMS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Files every ticket touches: the handoff ledger, the factory log and the
- * lockfile. Naming one is not a claim on a module — two tickets that both
- * append to the ledger share no code.
+ * The files nearly every web or e2e ticket touches without sharing any logic
+ * with the next ticket: each only grows a line or an entry. Naming one is not a
+ * claim on a module, and a pull request whose changed files are all of them
+ * holds nothing. A `*` matches one path segment.
  */
-const SHARED_FILES: ReadonlySet<string> = new Set([
-  "docs/agents/handoff/INDEX.md",
+const SHARED_FILES: readonly string[] = [
+  // The Paraglide messages: a new string is a new key in hu, en and de.
+  "apps/web/messages/*.json",
+  // The message wiring: a ticket adds one map entry per new message.
+  "apps/web/src/text.ts",
+  // One home for shared e2e steps (`CODING_STANDARDS.md`, E2E): a ticket adds its own.
+  "apps/e2e/tests/helpers.ts",
+  // A new domain noun adds its entry (`CODING_STANDARDS.md`, Docs).
+  "GLOSSARY.md",
+  // The handoff ledger: one `ticket-<n>.md` and one `INDEX.md` line per ticket.
+  "docs/agents/handoff/*",
+  // The factory log: one line per day.
   "docs/agents/factory-log.md",
+  // A new package adds one entry to the workspace manifest.
+  "pnpm-workspace.yaml",
+  // Any dependency change rewrites the lockfile.
   "pnpm-lock.yaml",
-]);
+];
+
+/** The regex syntax in a path segment, escaped before the glob's `*` becomes a matcher. */
+const SEGMENT_SYNTAX = /[.*+?^${}()|[\]\\]/gu;
+
+/** One path segment as a regex source; `*` matches any run of characters but `/`. */
+const segmentSource = (segment: string): string =>
+  segment.replace(SEGMENT_SYNTAX, "\\$&").replaceAll("\\*", "[^/]*");
+
+/**
+ * What a shared entry matches: its full path and every shorter trailing form a
+ * ticket writes (`messages/en.json`, `handoff/ticket-4.md`). A bare file name
+ * matches too, unless it is a glob (`*.json` would match every JSON file in the
+ * repo) or generic (`helpers.ts` names test helpers everywhere).
+ */
+const sharedPatternsOf = (entry: string): readonly RegExp[] => {
+  const segments = entry.split("/");
+  const sources = segments.map(segmentSource);
+  const patterns: RegExp[] = [];
+  const shortest = segments.length >= 2 ? 2 : 1;
+  for (let tail = shortest; tail <= segments.length; tail += 1) {
+    patterns.push(new RegExp(`^${sources.slice(-tail).join("/")}$`, "u"));
+  }
+  const name = segments.at(-1) ?? "";
+  const stem = name.replace(KNOWN_EXTENSION, "").toLowerCase();
+  if (segments.length >= 2 && !name.includes("*") && !GENERIC_STEMS.has(stem)) {
+    patterns.push(new RegExp(`^${sources.at(-1) ?? ""}$`, "u"));
+  }
+  return patterns;
+};
+
+const SHARED_PATTERNS: readonly RegExp[] = SHARED_FILES.flatMap(sharedPatternsOf);
 
 interface ModulePath {
   /** The normalized path without a source extension. */
@@ -92,9 +137,18 @@ const normalizePath = (raw: string): string =>
     .replace(/[.,;:!?]+$/u, "")
     .replace(/\/+$/u, "");
 
+/**
+ * Whether a path names one of the shared files: changing or naming it says
+ * nothing about which module the work changes, so it claims none.
+ */
+export const isSharedFile = (raw: string): boolean => {
+  const path = normalizePath(raw);
+  return path !== "" && SHARED_PATTERNS.some((pattern) => pattern.test(path));
+};
+
 const modulePathOf = (raw: string): ModulePath | undefined => {
   const path = normalizePath(raw);
-  if (path === "" || SHARED_FILES.has(path)) return undefined;
+  if (path === "" || isSharedFile(path)) return undefined;
   const directory = !KNOWN_EXTENSION.test(path);
   const key = directory ? path : path.replace(KNOWN_EXTENSION, "");
   const segments = key.split("/").filter((segment) => segment !== "");
@@ -160,8 +214,9 @@ const PROTOCOL_LINE = /^.*\bFollow\b.*implementer\.md.*$/gimu;
 
 /**
  * The file and directory paths the text names, once each, in textual order.
- * A shared file is not a target: the handoff ledger and the lockfile are in
- * every ticket's diff, so naming one says nothing about which module it changes.
+ * A shared file is not a target: every web or e2e ticket appends to the message
+ * files, the helpers and the ledger, so naming one says nothing about which
+ * module it changes.
  */
 export const targetPathsIn = (rawText: string): string[] => {
   const text = rawText.replace(PROTOCOL_LINE, (line) => " ".repeat(line.length));
@@ -174,7 +229,7 @@ export const targetPathsIn = (rawText: string): string[] => {
   return found
     .toSorted((a, b) => a.at - b.at)
     .flatMap((entry) => {
-      if (entry.path === "" || SHARED_FILES.has(entry.path) || seen.has(entry.path)) return [];
+      if (entry.path === "" || isSharedFile(entry.path) || seen.has(entry.path)) return [];
       seen.add(entry.path);
       return [entry.path];
     });
