@@ -11,6 +11,10 @@
  * goes home. A reload or a new tab rejoins by Guest token too (`ensureJoined`).
  * The status is `connected | reconnecting | lost`, and a reconnected client
  * never shows an older `version` than it had.
+ *
+ * A watcher (spec #179) joins by Room code with `watch: true`: no Seat, no
+ * Guest token and no game intents. Its drop is not held by the Room, so it
+ * rejoins the same way, by Room code, and gives up with the same lost state.
  */
 import { Client, CloseCode, MatchMakeError, type Room } from "@colyseus/sdk";
 import {
@@ -45,6 +49,7 @@ import {
   receiveRejection,
   reset,
   roomStore,
+  type Role,
 } from "#stores/room-store.ts";
 
 /** Vite (dev) and Caddy (production) forward this path to the Room server. */
@@ -72,14 +77,20 @@ export class JoinError extends Error {
 const rejectionOf = (error: unknown): RejectionCode =>
   error instanceof MatchMakeError ? matchmakeRefusal(error).code : "INTERNAL";
 
-const joinOptions = (code: string, password?: string): JoinOptions =>
-  password === undefined
-    ? { code, guestToken: guestToken() }
-    : { code, password, guestToken: guestToken() };
+/**
+ * The options of a join. A watcher asks for no Seat, so it carries no Guest
+ * token (there is no Seat to give back) and never touches the one a Player in
+ * another tab uses (spec #179, decision 3).
+ */
+const joinOptions = (code: string, password?: string, watch = false): JoinOptions => ({
+  code,
+  ...(password === undefined ? {} : { password }),
+  ...(watch ? { watch: true } : { guestToken: guestToken() }),
+});
 
 /** Creates a Room and takes its first Seat; resolves with the Room code. */
 export async function createRoom(options: CreateOptions = {}): Promise<string> {
-  return attach(() => sdk.create(GAME_ROOM, { ...options, guestToken: guestToken() }));
+  return attach(() => sdk.create(GAME_ROOM, { ...options, guestToken: guestToken() }), "player");
 }
 
 /**
@@ -88,7 +99,17 @@ export async function createRoom(options: CreateOptions = {}): Promise<string> {
  * gets that Seat back, in a running game too.
  */
 export async function joinRoom(code: string, password?: string): Promise<string> {
-  return attach(() => sdk.joinById(code, joinOptions(code, password)));
+  return attach(() => sdk.joinById(code, joinOptions(code, password)), "player");
+}
+
+/**
+ * Watches the Room with this code (spec #179): the same Room, password gate
+ * and pushes as a Player, with no Seat, no Guest token and no game intents.
+ * A password Room asks for its password as a Seat does. A dropped watcher
+ * rejoins by Room code, not by token (see `tryRejoin`).
+ */
+export async function watchRoom(code: string, password?: string): Promise<string> {
+  return attach(() => sdk.joinById(code, joinOptions(code, password, true)), "spectator");
 }
 
 let joining: { code: string; done: Promise<string> } | null = null;
@@ -107,6 +128,8 @@ export async function ensureJoined(code: string): Promise<void> {
 }
 
 export function sendIntent(intent: ClientIntent): void {
+  // A spectator has no Seat to act for; the Room rejects it too (presentation guard).
+  if (roomStore.getState().role === "spectator") return;
   // No optimistic UI: the lock is set even with no Room attached (the latest
   // answer is 0 then); the push a rejoin brings has a later `seq` and clears it.
   markIntentSent();
@@ -131,7 +154,7 @@ export async function leaveRoom(): Promise<void> {
   if (leaving?.connection.isOpen) await leaving.leave();
 }
 
-async function attach(connect: () => Promise<Room>): Promise<string> {
+async function attach(connect: () => Promise<Room>, role: Role): Promise<string> {
   await leaveRoom();
   roomStore.setState({ status: "connecting" });
   let joined: Room;
@@ -143,12 +166,12 @@ async function attach(connect: () => Promise<Room>): Promise<string> {
     const { code, retryAfter } = matchmakeRefusal(error);
     throw new JoinError(code, retryAfter);
   }
-  listen(joined);
+  listen(joined, role);
   return joined.roomId;
 }
 
 /** Makes `joined` this client's Room: every handler, registered before the next await (the server sends on join). */
-function listen(joined: Room): void {
+function listen(joined: Room, role: Role): void {
   room = joined;
   joined.reconnection.maxRetries = RECONNECT.sdkRetries;
   joined.reconnection.backoff = (attempt, delay) =>
@@ -182,30 +205,36 @@ function listen(joined: Room): void {
       // The server closed the Room (the game ended long ago).
       roomStore.setState({ status: "lost" });
     } else if (code === CLOSE_CODE.seatTaken) {
+      // A Seat was taken back elsewhere: a spectator holds no Seat, so it
+      // never sees this code and keeps its own waiting to come back.
       roomStore.setState({ status: "lost", takenElsewhere: true });
     } else {
-      rejoin(joined.roomId, 1);
+      rejoin(joined.roomId, 1, role);
     }
   });
-  roomStore.setState({ status: "connected", code: joined.roomId, takenElsewhere: false });
+  roomStore.setState({ status: "connected", code: joined.roomId, takenElsewhere: false, role });
 }
 
-/** Rejoins the Seat by Guest token, attempt `attempt` (1, 2, …), keeping what the screen shows meanwhile. */
-function rejoin(code: string, attempt: number): void {
+/**
+ * Rejoins by Room code, attempt `attempt` (1, 2, …), keeping what the screen
+ * shows meanwhile: a Player by Guest token (its Seat), a watcher with the watch
+ * flag (there is no Seat or token to hold).
+ */
+function rejoin(code: string, attempt: number, role: Role): void {
   roomStore.setState({ status: "reconnecting" });
   clearTimeout(rejoinTimer);
   rejoinTimer = setTimeout(
-    () => void tryRejoin(code, attempt),
+    () => void tryRejoin(code, attempt, role),
     backoffDelay(attempt, RECONNECT.guest.baseMs, RECONNECT.guest.maxMs),
   );
 }
 
-async function tryRejoin(code: string, attempt: number): Promise<void> {
+async function tryRejoin(code: string, attempt: number, role: Role): Promise<void> {
   const stillWanted = () => room === null && roomStore.getState().code === code;
   if (!stillWanted()) return;
   let joined: Room;
   try {
-    joined = await sdk.joinById(code, joinOptions(code));
+    joined = await sdk.joinById(code, joinOptions(code, undefined, role === "spectator"));
   } catch (error) {
     if (!stillWanted()) return;
     const rejection = rejectionOf(error);
@@ -217,7 +246,7 @@ async function tryRejoin(code: string, attempt: number): Promise<void> {
       rejection === "RATE_LIMITED" ||
       (rejection === "ROOM_NOT_FOUND" && attempt < RECONNECT.notFoundTries)
     ) {
-      rejoin(code, attempt + 1);
+      rejoin(code, attempt + 1, role);
     } else {
       roomStore.setState({ status: "lost" });
     }
@@ -228,7 +257,7 @@ async function tryRejoin(code: string, attempt: number): Promise<void> {
     void joined.leave();
     return;
   }
-  listen(joined);
+  listen(joined, role);
 }
 
 type ListingCache = { roomId: string; metadata?: LobbyListingMetadata };

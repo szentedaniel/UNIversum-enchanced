@@ -19,7 +19,11 @@ export const BACK_HOME_AFTER_MS = 30_000;
 export function ReconnectOverlay() {
   const status = useStore(roomStore, (s) => s.status);
   const takenElsewhere = useStore(roomStore, (s) => s.takenElsewhere);
-  if (status === "reconnecting") return <Overlay key="reconnecting" reconnecting />;
+  // A spectator holds no Seat (spec #179): only a Player is promised one back.
+  const spectator = useStore(roomStore, (s) => s.role === "spectator");
+  if (status === "reconnecting") {
+    return <Overlay key="reconnecting" reconnecting seatKept={!spectator} />;
+  }
   if (status === "lost") {
     return (
       <Overlay
@@ -32,7 +36,16 @@ export function ReconnectOverlay() {
   return null;
 }
 
-function Overlay({ reconnecting, text }: { reconnecting: boolean; text?: string }) {
+function Overlay({
+  reconnecting,
+  seatKept = true,
+  text,
+}: {
+  reconnecting: boolean;
+  /** Whether a Seat waits for this client: it does for a Player, never for a spectator. */
+  seatKept?: boolean;
+  text?: string;
+}) {
   const navigate = useNavigate();
   // Mounted afresh for each reconnect (its `key`), so the 30 s start over.
   const [late, setLate] = useState(false);
@@ -63,7 +76,7 @@ function Overlay({ reconnecting, text }: { reconnecting: boolean; text?: string 
         <p id="reconnect-title" className="m-0 text-center text-xl font-black">
           {text ?? m.reconnecting()}
         </p>
-        {reconnecting && (
+        {reconnecting && seatKept && (
           <p className="m-0 text-center font-bold text-ink/70">{m.reconnecting_hint()}</p>
         )}
         {(!reconnecting || late) && (
