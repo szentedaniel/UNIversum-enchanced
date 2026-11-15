@@ -189,6 +189,7 @@ export function Lobby() {
     return (
       <div className="min-h-dvh pb-safe-8">
         <ScreenHeader back="/" label={m.back_home()} />
+        <ReconnectOverlay />
         <main className="mx-auto flex max-w-md flex-col items-center gap-6 px-safe-4 pt-10 text-center">
           <h1 className="m-0 text-3xl font-black md:text-4xl">
             {roomNameText(lobby.roomName, lobby.code)}

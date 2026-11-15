@@ -10,7 +10,14 @@ import { currentPlayback, playbackStore } from "#playback/playback-store.ts";
 import { Game } from "#screens/Game.tsx";
 import { JoinByCode } from "#screens/join.tsx";
 import { Lobby } from "#screens/Lobby.tsx";
-import { receiveLobby, receivePush, reset, roomStore, type Role } from "#stores/room-store.ts";
+import {
+  receiveLobby,
+  receivePush,
+  reset,
+  roomStore,
+  type ConnectionStatus,
+  type Role,
+} from "#stores/room-store.ts";
 import en from "../messages/en.json" with { type: "json" };
 import { viewOf } from "./playback-fixtures.ts";
 
@@ -123,8 +130,8 @@ const lobbyOf = (): LobbyMessage => ({
 });
 
 /** The Lobby as the route draws it, after the given role joined it and its message arrived. */
-function showLobby(role: Role, me: string | null): string {
-  roomStore.setState({ status: "connected", code: "123456", me, role });
+function showLobby(role: Role, me: string | null, status: ConnectionStatus = "connected"): string {
+  roomStore.setState({ status, code: "123456", me, role });
   receiveLobby(lobbyOf(), 0);
   return renderToStaticMarkup(
     createElement(
@@ -161,6 +168,13 @@ describe("the watching Lobby screen", () => {
     expect(html).not.toContain('data-testid="room-code"');
     expect(html).not.toContain('data-testid="invite-link"');
     expect(html).not.toContain(en.lobby_take_seat);
+  });
+
+  it("tells a watcher whose Room is gone that the connection was lost", () => {
+    const html = showLobby("spectator", null, "lost");
+
+    expect(html).toContain(en.connection_lost);
+    expect(html).toContain('data-testid="reconnect-overlay"');
   });
 
   it("keeps the Lobby for a Player who took a Seat", () => {
