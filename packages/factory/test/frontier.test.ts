@@ -228,7 +228,7 @@ describe("frontierOf", () => {
   it("starts two web tickets that share only the messages, the wiring and the helpers", () => {
     const shared = [
       "- `apps/web/messages/en.json`",
-      "- `apps/web/src/text.ts`",
+      "- `text.ts`",
       "- `apps/e2e/tests/helpers.ts`",
     ].join("\n");
     const first = issue(101, { body: `${shared}\n- \`apps/web/src/board/FieldCard.tsx\`` });
