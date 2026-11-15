@@ -59,7 +59,7 @@ export function FieldTooltip({ id, view, at }: FieldTooltipProps) {
   const [placed, setPlaced] = useState<Point | null>(null);
 
   // Measured after the content renders, before the browser paints: the box
-  // wraps with its text, so its size is known only from the DOM.
+  // wraps with its text, so only the DOM knows its size (one rect per render).
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) {
@@ -73,7 +73,9 @@ export function FieldTooltip({ id, view, at }: FieldTooltipProps) {
       { width: window.innerWidth, height: window.innerHeight },
     );
     setPlaced((last) => (last?.x === point.x && last.y === point.y ? last : point));
-  }, [at, id, view]);
+    // `at` is a fresh point per hover or Playback step, so the box is measured
+    // again whenever its content can have changed.
+  }, [at]);
 
   if (id === null || view === null || at === null) return null;
   const facts = fieldFacts(view, id);

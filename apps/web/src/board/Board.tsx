@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { createBoard, type Board as BoardRenderer } from "#board/board.ts";
 import { fieldFacts } from "#board/field-facts.ts";
+import { FieldTooltip } from "#board/FieldTooltip.tsx";
+import type { Point } from "#board/layout.ts";
 import { Button } from "#components/ui/button.tsx";
 import { fieldTap, openDecision, pickSyncOf, type OpenDecision } from "#decision/decision.ts";
 import { currentPlayback, gateOpenOf, playbackStore } from "#playback/playback-store.ts";
@@ -54,6 +56,21 @@ function onFieldTap(id: FieldId | null): void {
 }
 
 /**
+ * The hover tooltip's data: the Field the mouse hovers (`uiStore`), the view
+ * the screen shows (the Playback's frame, never the server's latest, so the
+ * numbers cannot run ahead of the Playback — ADR-0004) and the Field's screen
+ * point from the Board renderer. Its own component, so a Playback step
+ * re-renders the tooltip without re-rendering the Board.
+ */
+function HoveredTooltip({ fieldCenter }: { fieldCenter: (id: FieldId) => Point }) {
+  const field = useStore(uiStore, (state) => state.hoveredField);
+  const view = useStore(playbackStore, (state) => state.frame?.view ?? null);
+  return (
+    <FieldTooltip id={field} view={view} at={field === null ? null : fieldCenter(field)} />
+  );
+}
+
+/**
  * The one React component around the PixiJS Board. It hands the renderer each
  * push's Playback (`currentPlayback()`, the store's one core, so the pawns
  * read the same clock as the dice, the toast and the gate), and the open Field
@@ -88,6 +105,7 @@ export function Board() {
           return rent === null ? null : formatCompactMoney(rent);
         },
         onFieldTap,
+        onFieldHover: (id) => uiStore.getState().hoverField(id),
         onFollowChange: (on) => uiStore.getState().setFollow(on),
       });
       if (cancelled) {
@@ -189,6 +207,9 @@ export function Board() {
       cancelAnimationFrame(revealFrame);
       clearTimeout(warningTimer);
       for (const stop of unsubscribe) stop();
+      // The Game's screen or this Board may be gone: a stale hover would show a
+      // tooltip for a Field the next screen does not have.
+      uiStore.getState().hoverField(null);
       exposeBoard(null);
       created?.destroy();
     };
@@ -198,6 +219,8 @@ export function Board() {
     <div className="board" data-testid="board">
       <div ref={hostRef} className="board-canvas" />
       <div ref={fitRef} className="board-fit-area" aria-hidden="true" />
+      {/* Beside the Field, not in the bottom slot, and no obstacle: the Board keeps every gesture under it. */}
+      {board && <HoveredTooltip fieldCenter={(id) => board.fieldCenter(id)} />}
       {/* On a landscape phone the row moves to the right edge (the fit area keeps
           clear of it), so the Board gets the whole height above the top row. */}
       <div className="absolute top-2 right-2 flex gap-2 wide:top-1/2 wide:-translate-y-1/2 wide:flex-col landscape:top-1/2 landscape:-translate-y-1/2 landscape:flex-col">
