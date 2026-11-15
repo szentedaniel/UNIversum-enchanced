@@ -57,6 +57,24 @@ describe("targetPathsIn", () => {
     ).toEqual(["shared/runs.ts"]);
   });
 
+  it("drops the append-only files every web or e2e ticket touches", () => {
+    const body = [
+      "Add `apps/web/messages/en.json` strings and wire them in `apps/web/src/text.ts`,",
+      "reuse a step from `apps/e2e/tests/helpers.ts`, add the term to `GLOSSARY.md`,",
+      "write `docs/agents/handoff/ticket-42.md` and `docs/agents/factory-log.md`,",
+      "list the package in `pnpm-workspace.yaml` and `pnpm-lock.yaml`,",
+      "then change `apps/web/src/board/FieldTooltip.tsx`.",
+    ].join("\n");
+
+    expect(targetPathsIn(body)).toEqual(["apps/web/src/board/FieldTooltip.tsx"]);
+  });
+
+  it("drops the package-relative form of a shared file too", () => {
+    expect(
+      targetPathsIn("Add `messages/en.json` and `text.ts`; keep `src/board/Board.tsx`."),
+    ).toEqual(["src/board/Board.tsx"]);
+  });
+
   it("lists a repeated path once, in the order it appears", () => {
     const body = "`a/one.ts` then `b/two.ts`, and a/one.ts again.";
 
@@ -106,6 +124,33 @@ describe("shareModule", () => {
     );
     expect(shareModule(["docs/agents/factory-log.md"], ["docs/agents/factory-log.md"])).toBe(false);
     expect(shareModule(["pnpm-lock.yaml"], ["pnpm-lock.yaml"])).toBe(false);
+  });
+
+  it("never matches the message files, the message wiring or the e2e helpers", () => {
+    expect(shareModule(["apps/web/messages/en.json"], ["apps/web/messages/hu.json"])).toBe(false);
+    expect(shareModule(["apps/web/messages/en.json"], ["apps/web/messages/en.json"])).toBe(false);
+    expect(shareModule(["apps/web/src/text.ts"], ["apps/web/src/text.ts"])).toBe(false);
+    expect(shareModule(["apps/e2e/tests/helpers.ts"], ["apps/e2e/tests/helpers.ts"])).toBe(false);
+    expect(shareModule(["GLOSSARY.md"], ["GLOSSARY.md"])).toBe(false);
+    expect(
+      shareModule(["docs/agents/handoff/ticket-304.md"], ["docs/agents/handoff/INDEX.md"]),
+    ).toBe(false);
+    expect(
+      shareModule(["docs/agents/handoff/ticket-304.md"], ["docs/agents/handoff/ticket-304.md"]),
+    ).toBe(false);
+    expect(shareModule(["pnpm-workspace.yaml"], ["pnpm-workspace.yaml"])).toBe(false);
+  });
+
+  it("still matches a component the same ticket names beside the shared files", () => {
+    expect(
+      shareModule(
+        ["apps/web/messages/en.json", "apps/web/src/board/FieldCard.tsx"],
+        ["apps/web/messages/hu.json", "apps/web/src/board/FieldCard.tsx"],
+      ),
+    ).toBe(true);
+    expect(
+      shareModule(["apps/web/src/board/FieldCard.tsx"], ["apps/web/src/screens/Game.tsx"]),
+    ).toBe(false);
   });
 });
 
