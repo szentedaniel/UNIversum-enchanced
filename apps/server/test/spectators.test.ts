@@ -74,8 +74,11 @@ describe("a spectator joins by Room code", () => {
   it("watches a started game and gets every push a Player gets", async () => {
     const { alice, first, code } = await startedGame();
 
+    // The join is one push of the same view for everyone: the count is its only change.
+    const joined = { ...first, spectators: 1 };
     const spectator = await watch(code);
-    expect(await spectator.next("game")).toEqual({ ...first, spectators: 1 });
+    expect(await spectator.next("game")).toEqual(joined);
+    expect(await alice.next("game")).toEqual(joined);
 
     server.scheduler.advanceTo(first.view.actsAfter);
     alice.send({ type: "Roll", turn: first.view.turn });
@@ -133,6 +136,44 @@ describe("the spectator count", () => {
 
     expect((await alice.next("game")).spectators).toBe(0);
   });
+
+  it("goes up for the Players and the newcomer when a spectator joins a Lobby", async () => {
+    const alice = await server.create({ maxPlayers: 3 });
+    await alice.next("lobby");
+
+    const spectator = await watch(alice.code);
+
+    expect((await spectator.next("lobby")).spectators).toBe(1);
+    expect((await alice.next("lobby")).spectators).toBe(1);
+    // The count is a number: no name, session id or token of the spectator travels.
+    expect(JSON.stringify(alice.received)).not.toContain(spectator.room.sessionId);
+  });
+
+  it("goes down when a spectator leaves a running game", async () => {
+    const { alice, bob, first, code } = await startedGame();
+    const spectator = await watch(code);
+    await spectator.next("game");
+    await Promise.all([alice.next("game"), bob.next("game")]);
+
+    await spectator.leave();
+
+    const [byAlice, byBob] = await Promise.all([alice.next("game"), bob.next("game")]);
+    // One push of the same view, with no event to replay.
+    expect(byAlice).toEqual({ ...first, spectators: 0 });
+    expect(byBob).toEqual({ ...first, spectators: 0 });
+  });
+
+  it("goes down when a spectator's connection drops", async () => {
+    const alice = await server.create({ maxPlayers: 3 });
+    await alice.next("lobby");
+    const spectator = await watch(alice.code);
+    await spectator.next("lobby");
+    await alice.next("lobby");
+
+    await spectator.drop();
+
+    await eventually(() => expect(alice.pending("lobby").at(-1)?.spectators).toBe(0));
+  });
 });
 
 describe("spectators are read-only", () => {
@@ -140,6 +181,7 @@ describe("spectators are read-only", () => {
     const { alice, first, code } = await startedGame();
     const spectator = await watch(code);
     await spectator.next("game");
+    await alice.next("game"); // the join's count-only push
 
     spectator.send({ type: "Roll", turn: first.view.turn });
 
