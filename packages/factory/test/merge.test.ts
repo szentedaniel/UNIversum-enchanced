@@ -7,10 +7,10 @@ import { describe, expect, it } from "vitest";
 import type { FixReason } from "#fix/reasons.ts";
 import { readMergeFacts, type MergeReader, type PullView } from "#merge/facts.ts";
 import { mergeGate, waitForMergeability } from "#merge/merge.ts";
-import { performStep, type MergeActions } from "#merge/perform.ts";
+import { performStep, type MergeActions, type MergeProgress } from "#merge/perform.ts";
 import { escalationComment, type FollowUpIssue } from "#merge/comment.ts";
 import { mergeStep, type MergeStep } from "#merge/gates.ts";
-import { summaryComment } from "#review/summary.ts";
+import { summaryComment, type ReviewComment } from "#review/summary.ts";
 import { RATE_LIMIT_WAITS_MS } from "#shared/github.ts";
 
 const HEAD_SHA = "head-sha";
@@ -70,6 +70,15 @@ const graphqlRateLimited = (): Error =>
       "Command failed: gh pr view 132 --repo owner/repo\nGraphQL: API rate limit exceeded for user ID 1.\n",
     ),
     { stdout: "", stderr: "GraphQL: API rate limit exceeded for user ID 1.\n" },
+  );
+
+/** The refusal GitHub answers a second merge for one pull request with. */
+const mergeInProgress = (): Error =>
+  Object.assign(
+    new Error(
+      "Command failed: gh pr merge 132 --repo owner/repo\nGraphQL: Merge already in progress (mergePullRequest)\n",
+    ),
+    { stdout: "", stderr: "GraphQL: Merge already in progress (mergePullRequest)\n" },
   );
 
 describe("readMergeFacts", () => {
@@ -220,26 +229,44 @@ type Write =
   | { readonly kind: "closeIssue"; readonly issue: number }
   | { readonly kind: "followUp"; readonly issue: FollowUpIssue };
 
-const actions = (options: { mergeCommit?: string; ticketTitle?: string } = {}) => {
+const actions = (
+  options: {
+    mergeCommit?: string;
+    ticketTitle?: string;
+    comments?: readonly ReviewComment[];
+    mergeProgress?: MergeProgress;
+    mergeFails?: Error;
+  } = {},
+) => {
   const writes: Write[] = [];
   const ticketReads: number[] = [];
+  const progressReads: MergeProgress[] = [];
   const adapter: MergeActions = {
     label: (name) => void writes.push({ kind: "label", name }),
     comment: (body) => void writes.push({ kind: "comment", body }),
     dispatchFix: (reason) => void writes.push({ kind: "dispatchFix", reason }),
     merge: (subject) => {
       writes.push({ kind: "merge", subject });
+      if (options.mergeFails !== undefined) throw options.mergeFails;
       return options.mergeCommit ?? "abc1234";
     },
     commentOnIssue: (issue, body) => void writes.push({ kind: "commentOnIssue", issue, body }),
     closeIssue: (issue) => void writes.push({ kind: "closeIssue", issue }),
     fileFollowUp: (issue) => void writes.push({ kind: "followUp", issue }),
+    comments: () => options.comments ?? [],
+    mergeProgress: () => {
+      // `open` by default: a test that expects the refusal to be tolerated
+      // must say which progress it reads.
+      const progress = options.mergeProgress ?? "open";
+      progressReads.push(progress);
+      return progress;
+    },
     ticketTitle: (issue) => {
       ticketReads.push(issue);
       return options.ticketTitle ?? "Deepen the merge gate's script";
     },
   };
-  return { adapter, writes, ticketReads };
+  return { adapter, writes, ticketReads, progressReads };
 };
 
 const context = (adapter: MergeActions, dryRun = false) => ({ actions: adapter, dryRun });
@@ -248,6 +275,43 @@ describe("performStep", () => {
   it("hands an escalated pull request to the owner: one comment and the label", () => {
     const { adapter, writes } = actions();
     const reasons = ["CI failed on abc1234", "touches .github/"];
+
+    performStep({ kind: "escalate", reasons }, pull(), context(adapter));
+
+    expect(writes).toEqual([
+      { kind: "comment", body: escalationComment(reasons) },
+      { kind: "label", name: "ready-for-human" },
+    ]);
+  });
+
+  it("posts no second waiting comment when the newest factory-merge one already says it", () => {
+    const reasons = ["CI failed on abc1234", "touches .github/"];
+    const { adapter, writes } = actions({
+      // A later review does not reset the dedupe: only the gate's own
+      // comments count.
+      comments: [
+        { body: escalationComment(reasons), createdAt: "2026-11-15T01:26:17Z" },
+        {
+          body: "<!-- factory-review -->\n## Factory review: pass",
+          createdAt: "2026-11-15T01:27:00Z",
+        },
+      ],
+    });
+
+    performStep({ kind: "escalate", reasons }, pull(), context(adapter));
+
+    // The label still goes on: it is what holds the pull request, and adding
+    // it twice is a no-op.
+    expect(writes).toEqual([{ kind: "label", name: "ready-for-human" }]);
+  });
+
+  it("posts a new waiting comment when the newest one names other reasons", () => {
+    const reasons = ["CI failed on abc1234"];
+    const { adapter, writes } = actions({
+      comments: [
+        { body: escalationComment(["touches .github/"]), createdAt: "2026-11-15T01:26:17Z" },
+      ],
+    });
 
     performStep({ kind: "escalate", reasons }, pull(), context(adapter));
 
@@ -389,6 +453,43 @@ describe("performStep", () => {
         { kind: "merge", subject: "chore(merge): #132 Deepen the merge gate's script" },
       ]);
     }
+  });
+
+  it("leaves a merge another run has done or queued to that run", () => {
+    for (const mergeProgress of ["merged", "merge-queued"] as const) {
+      const { adapter, writes } = actions({
+        mergeFails: mergeInProgress(),
+        mergeProgress,
+      });
+
+      expect(() =>
+        performStep({ kind: "merge", advisory: ["A judgement call."] }, pull(), context(adapter)),
+      ).not.toThrow();
+      // The attempt is all: no waiting comment, no ticket comment or close,
+      // no follow-up issue — the run that merged does the bookkeeping.
+      expect(writes, `merge ${mergeProgress}`).toEqual([
+        { kind: "merge", subject: "chore(merge): #132 Deepen the merge gate's script" },
+      ]);
+    }
+  });
+
+  it("fails an in-progress refusal whose re-read still finds the pull request open", () => {
+    const { adapter } = actions({ mergeFails: mergeInProgress(), mergeProgress: "open" });
+
+    expect(() => performStep({ kind: "merge", advisory: [] }, pull(), context(adapter))).toThrow(
+      "Merge already in progress",
+    );
+  });
+
+  it("fails a merge GitHub refused for another reason without re-reading it", () => {
+    const { adapter, progressReads } = actions({
+      mergeFails: new Error("GraphQL: Head branch was modified. Review and try the merge again."),
+    });
+
+    expect(() => performStep({ kind: "merge", advisory: [] }, pull(), context(adapter))).toThrow(
+      "Head branch was modified",
+    );
+    expect(progressReads).toEqual([]);
   });
 
   it("fails a factory pull that closes no issue", () => {
@@ -823,6 +924,70 @@ exit 0
     const bodyFile = /--body-file (\S+)/u.exec(created ?? "")?.[1] ?? "";
     expect(readFileSync(bodyFile, "utf8")).toContain("- The helper duplicates `excerptOf`.");
     expect(readFileSync(bodyFile, "utf8")).toContain("#132");
+  });
+
+  it("exits green when another merge for the pull request is in progress", () => {
+    const dir = mkdtempSync(join(tmpdir(), "factory-merge-in-progress-"));
+    const calls = join(dir, "gh-calls.log");
+    writeFileSync(
+      join(dir, "comments"),
+      `{"body":${JSON.stringify(
+        summaryComment({
+          verdict: "pass",
+          findings: [],
+          mergeDanger: { door: "two-way", blastRadius: "local", reason: "one factory step" },
+        }),
+      )},"created_at":"2026-11-09T09:20:00Z"}\n`,
+    );
+    writeFileSync(
+      join(dir, "gh"),
+      `#!/bin/sh
+echo "$*" >> "${calls}"
+case "$*" in
+  *"pr merge"*)
+    echo "GraphQL: Merge already in progress (mergePullRequest)" >&2
+    exit 1
+    ;;
+  *state,autoMergeRequest*) echo '{"state":"MERGED","autoMerge":false}' ;;
+  *"pr view"*)
+    echo '{"number":132,"state":"OPEN","title":"Implement #132: deepen the merge gate script","body":"Closes #132","headRefName":"agent/issue-132-deepen-the-merge-gate","headRefOid":"head-sha","mergeStateStatus":"CLEAN","labels":["risk:low"],"closing":[132],"headCommittedAt":"2026-11-09T09:00:00Z","author":"universum-factory[bot]"}'
+    ;;
+  */pulls/132/files*) echo "apps/web/src/foo.ts" ;;
+  */actions/workflows/ci.yml/runs*) echo '[{"headSha":"head-sha","status":"completed","conclusion":"success","createdAt":"2026-11-09T09:10:00Z"}]' ;;
+  */compare/*) echo '{"mergeBase":"merge-base","mainAheadBy":0,"files":[]}' ;;
+  */issues/132/comments*) cat "${dir}/comments" ;;
+  *"issue view"*) echo "Deepen the merge gate script" ;;
+esac
+exit 0
+`,
+    );
+    chmodSync(join(dir, "gh"), 0o755);
+
+    const result = spawnSync(
+      process.execPath,
+      [fileURLToPath(new URL("../src/merge/merge.ts", import.meta.url))],
+      {
+        encoding: "utf8",
+        timeout: 60_000,
+        env: {
+          ...process.env,
+          PATH: `${dir}:${process.env["PATH"] ?? ""}`,
+          GH_REPO: "owner/repo",
+          PR_NUMBER: "132",
+          DRY_RUN: "",
+        },
+      },
+    );
+
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Another run's merge has #132 (merged)");
+    const commands = readFileSync(calls, "utf8").trim().split("\n");
+    expect(commands.some((command) => command.startsWith("pr merge 132"))).toBe(true);
+    // The merge is that run's to finish: nothing is posted, labelled or closed.
+    for (const command of commands) {
+      expect(command).not.toMatch(/^(pr comment|pr edit|issue comment|issue close|issue create)/u);
+    }
   });
 
   it("merges a mechanically checked migration that gh reports as a one-way door", () => {

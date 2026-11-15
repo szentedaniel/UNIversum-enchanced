@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { readMergeFacts, type CompareView, type MergeReader, type PullView } from "#merge/facts.ts";
 import { isFactoryPull, mergeStep, type CiRun } from "#merge/gates.ts";
 import { MIGRATION_FILES } from "#merge/migration.ts";
-import { performStep, type MergeActions } from "#merge/perform.ts";
+import { performStep, type MergeActions, type MergeProgress } from "#merge/perform.ts";
 import { fail, required, sh, shellArg } from "#shared/common.ts";
 import {
   apiBody,
@@ -126,6 +126,22 @@ const writeTemp = (name: string, content: string): string => {
   return file;
 };
 
+/**
+ * The pull request after a merge GitHub refused as already in progress. `state`
+ * is MERGED once the other run's merge landed; an auto-merge request is the
+ * pull request queued to merge once its checks pass. Anything else is still
+ * open, and the refusal is not one this run can call benign.
+ */
+const mergeProgressOf = (repo: string, pr: string): MergeProgress => {
+  const answer = parseJson<{ state: string; autoMerge: boolean }>(
+    sh(
+      `gh pr view ${pr} --repo "${repo}" --json state,autoMergeRequest --jq '{state, autoMerge: (.autoMergeRequest != null)}'`,
+    ),
+  );
+  if (answer.state === "MERGED") return "merged";
+  return answer.autoMerge ? "merge-queued" : "open";
+};
+
 /** The gate's `gh` reads, as `readMergeFacts` consumes them. */
 const ghReader: MergeReader = {
   pullOf: (repo, pr) => waitForMergeability(() => readPull(repo, pr)),
@@ -178,6 +194,8 @@ const ghActions = (repo: string, pr: string): MergeActions => ({
   },
   ticketTitle: (issue) =>
     sh(`gh issue view ${String(issue)} --repo "${repo}" --json title --jq .title`),
+  comments: () => issueComments(repo, pr),
+  mergeProgress: () => mergeProgressOf(repo, pr),
 });
 
 /** "decided": the step ran through; "rate-limited": GitHub refused every attempt, so a later run must. */
@@ -216,10 +234,13 @@ export const mergeGate = (
     fixtureNames: (repository, ref) => retryRead(() => reader.fixtureNames(repository, ref)),
     issueComments: (repository, pull) => retryRead(() => reader.issueComments(repository, pull)),
   };
-  // `ticketTitle` is the one read on the actions seam; every write stays bare.
+  // The reads on the actions seam take the same retry as the reader's; every
+  // write stays bare.
   const writes: MergeActions = {
     ...actions,
     ticketTitle: (issue) => retryRead(() => actions.ticketTitle(issue)),
+    comments: () => retryRead(() => actions.comments()),
+    mergeProgress: () => retryRead(() => actions.mergeProgress()),
   };
 
   try {

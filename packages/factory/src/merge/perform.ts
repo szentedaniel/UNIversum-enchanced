@@ -5,12 +5,22 @@
  * dispatch, the merge read-back) is reachable without a repository.
  */
 import type { FixReason } from "#fix/reasons.ts";
-import { escalationComment, followUpIssue, type FollowUpIssue } from "#merge/comment.ts";
+import {
+  escalationComment,
+  followUpIssue,
+  newestEscalation,
+  type FollowUpIssue,
+} from "#merge/comment.ts";
 import type { PullView } from "#merge/facts.ts";
 import { mergeSubjectOf, type MergeStep } from "#merge/gates.ts";
+import type { ReviewComment } from "#review/summary.ts";
 import { closingIssue } from "#shared/closing-pr.ts";
+import { isMergeInProgress } from "#shared/github.ts";
 
-/** Every write the gate does, plus the one read the merge subject needs. */
+/** What a re-read of the pull request says after a merge GitHub refused as already running. */
+export type MergeProgress = "merged" | "merge-queued" | "open";
+
+/** Every write the gate does, plus the reads the writes need. */
 export interface MergeActions {
   label(name: string): void;
   /** Posts a comment on the pull request. */
@@ -26,6 +36,10 @@ export interface MergeActions {
   fileFollowUp(issue: FollowUpIssue): void;
   /** The ticket's title: the merge subject names the ticket, not the pull request. */
   ticketTitle(issue: number): string;
+  /** The pull request's comments now: what the gate posted in an earlier run, read again. */
+  comments(): readonly ReviewComment[];
+  /** The pull request now, re-read after GitHub refused the merge as already running. */
+  mergeProgress(): MergeProgress;
 }
 
 export interface PerformContext {
@@ -60,7 +74,20 @@ const mergePull = (pull: PullView, advisory: readonly string[], ctx: PerformCont
   console.log(`Merging #${pull.number} as "${subject}".`);
   if (ctx.dryRun) return;
 
-  const commit = ctx.actions.merge(subject);
+  let commit: string;
+  try {
+    commit = ctx.actions.merge(subject);
+  } catch (error) {
+    if (!isMergeInProgress(error)) throw error;
+    // Two runs can decide one pull request at the same moment and both reach
+    // the merge; GitHub then refuses the second as already in progress. The
+    // merge is the first run's to finish and to book-keep, so all this run
+    // does is read whether it landed or is still queued, and leave it.
+    const progress = ctx.actions.mergeProgress();
+    if (progress === "open") throw error;
+    console.log(`Another run's merge has #${pull.number} (${progress}); leaving it to that run.`);
+    return;
+  }
   if (commit === "" || commit === "null") {
     throw new Error(`Pull request #${pull.number} merged but reported no merge commit.`);
   }
@@ -99,12 +126,23 @@ export const performStep = (step: MergeStep, pull: PullView, ctx: PerformContext
       console.log(`Dispatching the fix loop: ${step.reason}.`);
       if (!ctx.dryRun) ctx.actions.dispatchFix(step.reason);
       return;
-    case "escalate":
+    case "escalate": {
       console.log(`Handing to a human:\n${step.reasons.map((reason) => `- ${reason}`).join("\n")}`);
       if (ctx.dryRun) return;
-      ctx.actions.comment(escalationComment(step.reasons));
+      const body = escalationComment(step.reasons);
+      // A second run that decided the same pull request at the same moment
+      // reads the older comments too; the newest of the gate's own says
+      // whether the waiting comment is already there.
+      if (newestEscalation(ctx.actions.comments())?.body.trim() === body.trim()) {
+        console.log("The newest waiting comment already says this; not posting it again.");
+      } else {
+        ctx.actions.comment(body);
+      }
+      // The label is what holds the pull request; adding it twice is a no-op,
+      // and it must survive the comment already being there.
       ctx.actions.label("ready-for-human");
       return;
+    }
     case "merge":
       mergePull(pull, step.advisory, ctx);
       return;

@@ -3,6 +3,7 @@
  * not auto-merge a pull request. Its marker is the retro's sign that a pull
  * request went to the owner.
  */
+import type { ReviewComment } from "#review/summary.ts";
 
 /** The hidden marker the escalation comment opens with. */
 export const MERGE_ESCALATED_MARKER = "<!-- factory-merge -->";
@@ -17,6 +18,17 @@ export const escalationComment = (reasons: readonly string[]): string =>
     ...reasons.map((reason) => `- ${reason}`),
     "",
   ].join("\n");
+
+/**
+ * The newest comment the gate's escalation left, or `undefined` when there is
+ * none. Two runs that decide the same pull request at once both read the older
+ * comments; the post re-reads through this, so only one comment lands.
+ */
+export const newestEscalation = (comments: readonly ReviewComment[]): ReviewComment | undefined =>
+  comments
+    .filter((comment) => comment.body.includes(MERGE_ESCALATED_MARKER))
+    .toSorted((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
+    .at(-1);
 
 /** The one follow-up issue an advisory review leaves after its merge. */
 export interface FollowUpIssue {
