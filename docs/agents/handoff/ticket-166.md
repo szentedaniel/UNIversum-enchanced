@@ -20,9 +20,9 @@ or pull request already holds. Both checks are deterministic path matching, no m
   four segments is a prefix of a file path (`apps/server/src/room`), or when a one-segment path
   names a non-generic stem (`turn-clock.ts`). Generic stems (`index`, `test`, `utils`, `config`, …)
   never match bare; keep that list for any new very common file name.
-- `SHARED_FILES` (`docs/agents/handoff/INDEX.md`, `docs/agents/factory-log.md`, `pnpm-lock.yaml`)
-  is skipped by both readers: every ticket touches them, so a changed or named shared file is not a
-  claim on a module. Add a file here when tickets start colliding on a ledger they all edit.
+- `SHARED_FILES` is skipped by both readers: every ticket touches those files, so a changed or named
+  shared file is not a claim on a module. Ticket #304 widened it from three exact paths to the
+  append-only pattern list (`ticket-304.md`).
 - `branchNamesTarget(branch, path)` matches the last three path segments against the branch slug
   with hyphens (`src-dispatch-frontier` when the title names the full path), or the last two when
   the directory and the stem are both specific (`room-turn-clock` yes; `src-index` and
