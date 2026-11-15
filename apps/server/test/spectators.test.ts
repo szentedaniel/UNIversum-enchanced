@@ -74,8 +74,11 @@ describe("a spectator joins by Room code", () => {
   it("watches a started game and gets every push a Player gets", async () => {
     const { alice, first, code } = await startedGame();
 
+    // The join is one push of the same view for everyone: the count is its only change.
+    const joined = { ...first, spectators: 1 };
     const spectator = await watch(code);
-    expect(await spectator.next("game")).toEqual(first);
+    expect(await spectator.next("game")).toEqual(joined);
+    expect(await alice.next("game")).toEqual(joined);
 
     server.scheduler.advanceTo(first.view.actsAfter);
     alice.send({ type: "Roll", turn: first.view.turn });
@@ -123,11 +126,68 @@ describe("a spectator joins by Room code", () => {
   });
 });
 
+describe("the spectator count", () => {
+  it("is 0 in a Lobby and in a running game with nobody watching", async () => {
+    const alice = await server.create({ maxPlayers: 2 });
+    expect((await alice.next("lobby")).spectators).toBe(0);
+    await server.join(alice.code);
+    await alice.until("lobby", (message) => message.seats.length === 2);
+    alice.send({ type: "Start" });
+
+    expect((await alice.next("game")).spectators).toBe(0);
+  });
+
+  it("goes up for the Players and every spectator when one joins a Lobby", async () => {
+    const alice = await server.create({ maxPlayers: 3 });
+    await alice.next("lobby");
+
+    const first = await watch(alice.code);
+    expect((await first.next("lobby")).spectators).toBe(1);
+    expect((await alice.next("lobby")).spectators).toBe(1);
+
+    const second = await watch(alice.code);
+    expect((await second.next("lobby")).spectators).toBe(2);
+    expect((await first.next("lobby")).spectators).toBe(2);
+    expect((await alice.next("lobby")).spectators).toBe(2);
+
+    // The count is a number: no name, session id or token of a spectator travels.
+    expect(JSON.stringify(alice.received)).not.toContain(first.room.sessionId);
+    expect(JSON.stringify(alice.received)).not.toContain(second.room.sessionId);
+  });
+
+  it("goes down when a spectator leaves a running game", async () => {
+    const { alice, bob, first, code } = await startedGame();
+    const spectator = await watch(code);
+    await spectator.next("game");
+    await Promise.all([alice.next("game"), bob.next("game")]);
+
+    await spectator.leave();
+
+    const [byAlice, byBob] = await Promise.all([alice.next("game"), bob.next("game")]);
+    // One push of the same view, with no event to replay.
+    expect(byAlice).toEqual({ ...first, spectators: 0 });
+    expect(byBob).toEqual({ ...first, spectators: 0 });
+  });
+
+  it("goes down when a spectator's connection drops", async () => {
+    const alice = await server.create({ maxPlayers: 3 });
+    await alice.next("lobby");
+    const spectator = await watch(alice.code);
+    await spectator.next("lobby");
+    await alice.next("lobby");
+
+    await spectator.drop();
+
+    await eventually(() => expect(alice.pending("lobby").at(-1)?.spectators).toBe(0));
+  });
+});
+
 describe("spectators are read-only", () => {
   it("refuses a spectator's intent and changes no game state", async () => {
     const { alice, first, code } = await startedGame();
     const spectator = await watch(code);
     await spectator.next("game");
+    await alice.next("game"); // the join's count-only push
 
     spectator.send({ type: "Roll", turn: first.view.turn });
 

@@ -139,6 +139,11 @@ export type LobbyMessage = {
   settings: RoomSettings;
   /** Taken Seats in join order; the rest of `settings.maxPlayers` are open. */
   seats: LobbySeatView[];
+  /**
+   * How many clients are connected to the Room without a Seat (spec #179): a
+   * non-negative whole number, and a count only — never a name or a token.
+   */
+  spectators: number;
   /** The server's clock when it sent this (epoch ms), for the held Seats' countdowns. */
   now: number;
 };
@@ -158,6 +163,13 @@ export type GameMessage = {
    * once the game has ended; absent while it runs (ticket #223).
    */
   rematch?: PlayerId[];
+  /**
+   * How many clients are watching the Room without a Seat at this push (spec
+   * #179): a non-negative whole number, and a count only — never a name or a
+   * token. A spectator joining or leaving brings one push with the new count,
+   * empty `events` and `reveals`.
+   */
+  spectators: number;
   /**
    * The server's clock when it sent this push (epoch ms), so clients can show
    * the Turn timer without trusting their own clock.
