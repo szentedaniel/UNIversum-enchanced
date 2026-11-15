@@ -217,7 +217,8 @@ export function Board() {
     <div className="board" data-testid="board">
       <div ref={hostRef} className="board-canvas" />
       <div ref={fitRef} className="board-fit-area" aria-hidden="true" />
-      {/* Beside the Field, not in the bottom slot, and no obstacle: the Board keeps every gesture under it. */}
+      {/* Beside the Field, not in the bottom slot, and no obstacle: the Board
+          keeps every gesture under it. */}
       {board && <HoveredTooltip fieldCenter={(id) => board.fieldCenter(id)} />}
       {/* On a landscape phone the row moves to the right edge (the fit area keeps
           clear of it), so the Board gets the whole height above the top row. */}
