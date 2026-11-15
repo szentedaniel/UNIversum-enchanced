@@ -25,3 +25,8 @@ the entries; the weekly health report (`factory:report`, #92) reads them.
 
 - Medium: the reviewer fixed a test id or role that differed from the ticket on #291 and #298, so a standards pull request adds a step to the implementer's Finish section: compare every name the ticket fixes with the diff before reporting. The review failures without a verdict (#285) are already ticketed, and the one red CI run (#265, run 43541015201) was resolved by fix round 1, so there is no new fix for either.
 - Opened pull request #299: Implementer: compare the names the ticket fixes with the diff before finishing (retro/2026-11-14-implementer-compare-the-names-the-ticket-fixes-wit)
+
+## 2026-11-15
+
+- Medium: two concurrent merge-gate runs hit one pull request, giving duplicate 'waiting for a human' comments on #296 and #313 and the owner's false 'Merge already in progress' escalation on #312 (run 43663043570). The likely cause is the run_id concurrency fallback in factory-merge.yml. Opened a ticket to make the gate idempotent against it and to name the group fallback for the owner. The other review advisories are already ticketed as follow-ups (#319 to #343) and the red main #320 is already fixed by open #341, so there is no new fix for them.
+- Opened #344: Merge gate: two concurrent runs for one pull request must not double-escalate or fail on 'Merge already in progress'
