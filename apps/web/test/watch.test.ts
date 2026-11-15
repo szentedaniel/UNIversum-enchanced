@@ -6,6 +6,7 @@ import { baseLocale, overwriteGetLocale, type Locale } from "#paraglide/runtime.
 import type { LobbyMessage } from "@universum/protocol/messages";
 import { currentPlayback, playbackStore } from "#playback/playback-store.ts";
 import { Game } from "#screens/Game.tsx";
+import { JoinByCode } from "#screens/join.tsx";
 import { Lobby } from "#screens/Lobby.tsx";
 import { receiveLobby, receivePush, reset, roomStore, type Role } from "#stores/room-store.ts";
 import en from "../messages/en.json" with { type: "json" };
@@ -117,27 +118,28 @@ const lobbyOf = (): LobbyMessage => ({
   now: 1_000,
 });
 
+/** The Lobby as the route draws it, after the given role joined it and its message arrived. */
+function showLobby(role: Role, me: string | null): string {
+  roomStore.setState({ status: "connected", code: "123456", me, role });
+  receiveLobby(lobbyOf(), 0);
+  return renderToStaticMarkup(
+    createElement(
+      StaticRouter,
+      { location: "/room/123456" },
+      createElement(
+        Routes,
+        null,
+        createElement(Route, { path: "/room/:code", element: createElement(Lobby) }),
+      ),
+    ),
+  );
+}
+
 describe("the watching Lobby screen", () => {
   beforeEach(() => {
     // The invite card reads the page's origin; Node has no window.
     vi.stubGlobal("window", { location: { origin: "http://localhost:5173" } });
   });
-
-  function showLobby(role: Role, me: string | null): string {
-    roomStore.setState({ status: "connected", code: "123456", me, role });
-    receiveLobby(lobbyOf(), 0);
-    return renderToStaticMarkup(
-      createElement(
-        StaticRouter,
-        { location: "/room/123456" },
-        createElement(
-          Routes,
-          null,
-          createElement(Route, { path: "/room/:code", element: createElement(Lobby) }),
-        ),
-      ),
-    );
-  }
 
   it("waits for the game to start under the Room's name, with a watching marker", () => {
     const html = showLobby("spectator", null);
@@ -163,5 +165,17 @@ describe("the watching Lobby screen", () => {
     expect(html).not.toContain('data-testid="watching"');
     expect(html).toContain('data-testid="room-code"');
     expect(html).toContain('data-testid="seat"');
+  });
+});
+
+describe("the Watch action by a Room code", () => {
+  it("sits beside Join and asks for the Room's password like a Seat does", () => {
+    const html = renderToStaticMarkup(createElement(StaticRouter, null, createElement(JoinByCode)));
+
+    expect(html).toContain(en.home_join);
+    expect(html).toContain(en.watch_button);
+    expect(html).toContain('data-testid="watch"');
+    // Nothing to send until the whole Room code is typed.
+    expect(html).toContain('disabled=""');
   });
 });
