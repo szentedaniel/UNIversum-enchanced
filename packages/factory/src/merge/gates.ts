@@ -157,7 +157,9 @@ export const ciState = (runs: readonly CiRun[], headSha: string): CiState => {
 export type ReviewState = "missing" | "unreadable" | "stale" | "changes-requested" | "pass";
 
 /** What the newest review says about this head, or why it says nothing. */
-export const reviewState = (facts: MergeFacts): ReviewState => {
+export const reviewState = (
+  facts: Pick<MergeFacts, "comments" | "headCommittedAt">,
+): ReviewState => {
   const review = newestMarkerComment(facts.comments);
   if (review === undefined) return "missing";
   const verdict = reviewVerdictOf(review.body);

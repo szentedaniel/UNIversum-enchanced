@@ -79,15 +79,16 @@ export const JOBS: readonly Job[] = [
   },
 ];
 
-const DAYS_IN_WEEK = 7;
+/** A full week plus today: the due time of a weekly job may still be ahead today. */
+const LOOKBACK_DAYS = 8;
 
 /**
  * The most recent due occurrence at or before `now`, with the Budapest day it
- * falls on. Every job is due at least once a week, so the seven-day walk finds one.
+ * falls on. Every job is due at least once a week, so the eight-day walk finds one.
  */
 const occurrenceOf = (job: Job, now: Date): { at: Date; day: string } | undefined => {
   const today = budapestDay(now);
-  for (let back = 0; back < DAYS_IN_WEEK; back++) {
+  for (let back = 0; back < LOOKBACK_DAYS; back++) {
     const day = shiftDay(today, -back);
     if (!job.days.includes(mondayIndex(day))) continue;
     const at = budapestAt(day, job.due.hour, job.due.minute);

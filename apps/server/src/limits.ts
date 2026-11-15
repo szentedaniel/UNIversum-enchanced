@@ -22,6 +22,12 @@ export const DEFAULT_LIMITS = {
   seatReservationSeconds: 5,
   /** Live Lobbies per server; at the cap Room creation answers `SERVER_BUSY`. Running games never count. */
   liveLobbies: 2000,
+  /**
+   * Spectators one Room admits at once (spec #179). Their own cap, so they can
+   * never use the connections `maxPlayers * 2` holds for Seats and reconnects;
+   * `maxClients` adds this to that budget. The owner picks the number in review.
+   */
+  spectatorsPerRoom: 10,
   /** Wrong passwords per (Room code + IP) per minute before `PASSWORD_LOCKED`. */
   passwordFailuresPerMinute: 5,
   /** The first `PASSWORD_LOCKED` wait; it doubles with each further lockout of the same (Room code + IP). */

@@ -76,6 +76,7 @@ describe("loadConfig", () => {
       socketsPerIp: 100,
       seatReservationSeconds: 5,
       liveLobbies: 2000,
+      spectatorsPerRoom: 10,
       passwordFailuresPerMinute: 5,
       passwordLockSeconds: 60,
       passwordLockMaxSeconds: 3600,

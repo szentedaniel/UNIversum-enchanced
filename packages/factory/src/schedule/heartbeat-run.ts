@@ -18,8 +18,8 @@ import {
   type LiveRun,
   type LiveStatus,
 } from "#schedule/heartbeat.ts";
-import { GH_CALL_TIMEOUT_MS, runTick, tickWiring } from "#schedule/tick.ts";
-import { fail, required, sh } from "#shared/common.ts";
+import { runTick, tickWiring } from "#schedule/tick.ts";
+import { fail, GH_CALL_TIMEOUT_MS, required, sh } from "#shared/common.ts";
 
 const TICK_WORKFLOW = "factory-tick.yml";
 

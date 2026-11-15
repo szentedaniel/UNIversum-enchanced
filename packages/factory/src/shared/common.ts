@@ -47,6 +47,12 @@ export const fail = (message: string): never => {
 export const shellArg = (value: string): string => `'${value.replaceAll("'", `'\\''`)}'`;
 
 /**
+ * One `gh` call's cap: a hung read or dispatch must not outlive the heartbeat's
+ * window. Every `sh` call in the tick's path passes it.
+ */
+export const GH_CALL_TIMEOUT_MS = 60 * 1000;
+
+/**
  * Room for a month of paginated runs and jobs: execSync's 1 MB default
  * overflowed (`ENOBUFS`) once the dispatcher's jobs read passed it.
  */
