@@ -200,6 +200,10 @@ _Avoid_: toBuy, price
 What a Player pays the owner on landing on a Field another Player owns.
 _Avoid_: Tuition, Tandíj
 
+**Level Rent**:
+The Rent a University would charge at one of its Levels, 1 to 4, with the Monopoly multiplier when its owner holds the Group; the Field card lists them as its table.
+_Avoid_: Rent ladder, tuition table
+
 **Base price**:
 What the Bank charges for a Field while nobody owns it: a University's Value at Level 1 (its base B), a Museum's 400,000.
 _Avoid_: price, cost
