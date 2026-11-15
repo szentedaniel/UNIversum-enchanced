@@ -201,6 +201,19 @@ test("an owned University's card highlights its current Level among the Level Re
   ).toHaveCount(1);
   await expect(group.locator("[data-shape]")).toHaveCount(1);
   await expect(card.getByTestId("field-card-monopoly")).toHaveCount(0);
+
+  // A Doubler on the Field states its count (#316). No seeded game reaches the
+  // Doubler token this early, so the test shows a made-up view with one on it.
+  await page.evaluate((id) => {
+    const hooks = window.universumTest;
+    const push = hooks?.room().push;
+    const view = push ? structuredClone(push.view) : null;
+    const field = view?.fields[id];
+    if (!hooks || !view || !field) throw new Error("no view to put a Doubler on");
+    field.doublers = 2;
+    hooks.showView(view);
+  }, offered.field);
+  await expect(card.getByTestId("field-card-doubler")).toHaveText("Doubler ×2");
 });
 
 test("the mouse wheel zooms on desktop", async ({ page, browser, isMobile }) => {

@@ -28,7 +28,7 @@ Branch `agent/issue-316-web-field-card-shows-level-rents-group-ownership-b`. Rea
 
 ## E2E
 
-- `apps/e2e/tests/field-card.spec.ts` gained `moneyOf` (the screen's en-US HUF format) and a second test: the seeded first Roll lands on Field 10 (Austin, `GAME_SEED: "4,29,55,129"`), the test buys Level 1 from the `offer`, then taps the Field with a retry wrapper (the camera refits on the Turn change) and asserts the highlighted Level cell, the four rows, the Group's three members with one token and no Monopoly mark.
+- `apps/e2e/tests/field-card.spec.ts` gained `moneyOf` (the screen's en-US HUF format) and a second test: the seeded first Roll lands on Field 10 (Austin, `GAME_SEED: "4,29,55,129"`), the test buys Level 1 from the `offer`, then taps the Field with a retry wrapper (the camera refits on the Turn change) and asserts the highlighted Level cell, the four rows, the Group's three members with one token and no Monopoly mark. It ends with a made-up `showView` push whose Field has `doublers: 2`, to assert the badge's count without steering a real Doubler placement.
 - The first test now also asserts the unowned University's base price and unhighlighted table, the Group row with no tokens, the Museum's missing Level table/Group row, and zero Doubler badge.
 - The card opens on a tap only while no Decision is open (`fieldTap`); the new test buys first, so the offer is gone before the tap. The first-time Offer hint disappears with the offer, so it does not shift the card while tapping.
 
