@@ -61,6 +61,14 @@ input and its run gets no `(factory tick)` marker, so a dispatch the tick starts
 for a due job nor suppress one. A live dispatch run is left alone, and a failed read of its runs
 starts none: the error is collected and the next tick tries again.
 
+Every tick ends with the stuck-pull-request sweep (`packages/factory/src/schedule/sweep.ts`): it
+nudges an open factory pull request GitHub left with no CI run, no review or no merge decision, and
+hands one a nudge did not help to a person. It runs after the due jobs and the dispatcher, and a
+failed sweep is collected like any other error, so it cannot hold either back. One open-pull list,
+one page of the newest workflow runs and one detail read per open factory pull request — plus the
+comment and the write a nudge needs — keep its API cost small. The rules are under
+[The stuck-pull-request sweep](#the-stuck-pull-request-sweep).
+
 The latest start keeps the Claude jobs inside the 01:00–07:00 night window: a tick at or after it does
 not start a missed job; the next day's due time does, so a missed night waits for the next one. A tick
 dispatches a due job with `scheduled=true` and that workflow's run name carries `(factory tick)`; only
@@ -434,6 +442,37 @@ on the branch and the workflow pushes with `AGENT_PAT`; CI runs again and the me
 ```bash
 gh workflow run factory-fix.yml -f pr=95 -f reason=review      # ci | review | main-moved
 ```
+
+### The stuck-pull-request sweep
+
+A pull request can sit for hours with nothing running on it: GitHub sometimes starts no CI run on a
+new pull request, a review labelled before a green CI is not started by the later run, and a merge
+gate a rate limit deferred waits for the next trigger. The tick's sweep
+(`packages/factory/src/schedule/sweep.ts`) looks at every open factory pull request — an `agent/`
+branch, the `factory` label or a Dependabot bump — and does one of three things, each after **30
+minutes** of silence and at most **once per head commit**:
+
+- **No CI run on the head** for 30 minutes after the head commit or the pull request's creation:
+  the sweep merges `main` into the branch through the API (`POST /repos/{repo}/merges`, so the PAT's
+  push starts CI). A merge that conflicts dispatches `factory-fix.yml -f reason=main-moved` instead.
+- **Green CI and `agent:review`, no review run** created since CI went green: it dispatches
+  `factory-review.yml -f pr=<n>`. The review gate still applies its night window and daytime quota,
+  so a queued review is a run that exists and the sweep leaves it.
+- **Green CI and a passing review, no `factory-merge.yml` run since the review**: it dispatches
+  `factory-merge.yml -f pr=<n>`, as the hourly backstop does.
+
+Each action opens with a hidden marker comment (`<!-- factory-sweep:<ci|review|merge>:<sha> -->`), so
+the same head commit is never nudged twice. A marker older than 30 minutes whose action still has not
+produced a run means the nudge did not help: the pull request gets `ready-for-human` and one comment
+naming what the sweep tried (`<!-- factory-sweep:<action>:<sha>:escalated -->`). A pull request that
+is closed, a human's, `agent:blocked` or already `ready-for-human` is left alone, as is one whose CI
+is still running or failed (the fix loop owns it). A dry tick (`gh workflow run factory-tick.yml -f
+dry_run=true`) prints what the sweep would do and writes nothing.
+
+The sweep reads the open pull requests, one page of the newest 100 workflow runs, and one detail
+read per open factory pull request (its comments and head commit); a nudge costs one comment and one
+write. That is two list calls plus at most a call per open factory pull request a tick, well inside
+the factory's share of the API budget.
 
 ## The nightly retro
 
