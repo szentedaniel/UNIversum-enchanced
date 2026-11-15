@@ -335,17 +335,16 @@ test("a touch pointer raises no tooltip, on a tap or a drag", async ({
   const { context } = await startGame(page, browser);
   closeAfterDump(context);
   const tooltip = page.getByTestId("field-tooltip");
-  await settledScale(page);
+
+  // A pan across the Board never flashes one.
+  const { before, after } = await dragBoard(page, { dx: 80, dy: 40 });
+  expect(after.x, "the drag panned the Board").not.toBe(before.x);
+  await expect(tooltip).toHaveCount(0);
 
   // A tap opens the Field card, as before, and shows no tooltip.
   const zurich = await fieldCenter(page, 5);
   await page.touchscreen.tap(zurich.x, zurich.y);
   await expect(page.getByTestId("field-card").getByRole("heading")).toHaveText("Zurich");
-  await expect(tooltip).toHaveCount(0);
-
-  // A pan across the Board never flashes one either.
-  const { before, after } = await dragBoard(page, { dx: 80, dy: 40 });
-  expect(after.x, "the drag panned the Board").not.toBe(before.x);
   await expect(tooltip).toHaveCount(0);
 });
 
