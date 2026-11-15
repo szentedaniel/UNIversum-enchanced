@@ -117,6 +117,89 @@ export function FieldCard({
               m.field_card_unowned()
             )}
           </p>
+          {facts.basePrice !== null && (
+            <p
+              data-testid="field-card-base-price"
+              className="mx-4 mt-2 mb-0 flex items-center justify-center gap-1 text-sm font-extrabold"
+            >
+              <span className="text-ink/60">{m.field_card_base_price()}</span>
+              <span className="tnum">{formatMoney(facts.basePrice)}</span>
+            </p>
+          )}
+          {facts.levelRents.length > 0 && (
+            <ul
+              aria-label={m.field_card_level_rents()}
+              data-testid="field-card-level-rents"
+              className="mx-4 mt-2 mb-0 grid list-none grid-cols-4 gap-1 p-0 text-center"
+            >
+              {facts.levelRents.map((rent, index) => {
+                const level = index + 1;
+                const current = level === facts.level;
+                return (
+                  <li
+                    key={level}
+                    data-testid="field-card-level-rent"
+                    data-level={level}
+                    aria-current={current ? "true" : undefined}
+                    className={cn(
+                      "flex flex-col rounded-lg py-1",
+                      current ? "bg-primary text-primary-foreground" : "bg-secondary/30",
+                    )}
+                  >
+                    <span className="text-[0.65rem] leading-tight font-bold">
+                      {m.field_card_level()} {level}
+                    </span>
+                    <span className="tnum text-[0.7rem] leading-tight font-black whitespace-nowrap">
+                      {formatMoney(rent)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {facts.group && (
+            <div
+              data-testid="field-card-group"
+              className="mx-4 mt-2 rounded-xl bg-secondary/30 px-2 py-1"
+            >
+              <p className="m-0 flex items-center justify-center gap-2 text-xs font-bold text-ink/60">
+                {m.field_card_group()}
+                {facts.monopoly && (
+                  <span
+                    data-testid="field-card-monopoly"
+                    className="rounded-full bg-accent px-2 py-0.5 text-ink"
+                  >
+                    {m.field_card_monopoly()}
+                  </span>
+                )}
+              </p>
+              <ul className="m-0 mt-1 flex list-none flex-wrap justify-center gap-1 p-0">
+                {facts.group.map((member) => (
+                  <li
+                    key={member.field.id}
+                    data-testid="field-card-group-field"
+                    data-field={member.field.id}
+                    data-owner={member.owner?.id ?? ""}
+                    className={cn(
+                      "flex min-w-0 items-center gap-1 rounded-lg bg-card px-1.5 py-0.5 text-xs font-extrabold",
+                      member.owner === null && "text-ink/70",
+                    )}
+                  >
+                    {member.owner && <PlayerToken seat={member.owner.seat} size={16} />}
+                    <span className="truncate">{fieldName(member.field.key)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {facts.doublers > 0 && (
+            <p
+              data-testid="field-card-doubler"
+              className="mx-4 mt-2 mb-0 flex items-center justify-center rounded-xl bg-accent/60 py-1 text-sm font-extrabold"
+            >
+              {m.field_card_doubler({ count: facts.doublers })}
+            </p>
+          )}
         </>
       )}
       <nav className="flex justify-between gap-2 p-2">

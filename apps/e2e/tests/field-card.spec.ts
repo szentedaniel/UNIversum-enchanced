@@ -25,6 +25,16 @@ async function tapAt(page: Page, isMobile: boolean, point: { x: number; y: numbe
   else await page.mouse.click(point.x, point.y);
 }
 
+/** The same money format the card uses (en-US, forint, "Ft" in every language). */
+function moneyOf(amount: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "HUF",
+    currencyDisplay: "narrowSymbol",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 test("a tap opens the nearest Field's card, and the card never changes the zoom", async ({
   page,
   browser,
@@ -43,6 +53,22 @@ test("a tap opens the nearest Field's card, and the card never changes the zoom"
   await expect(card).toContainText("Level");
   await expect(card).toContainText("Value");
   await expect(card).toContainText("Unowned");
+  // Unowned (#316): the Bank's base price, the plain Level Rent table with no
+  // Level highlighted yet, and the Group row with every Field unowned.
+  const basePrice = await page.evaluate(() => {
+    const view = window.universumTest?.view();
+    return view ? (view.fields[5]?.basePrice ?? null) : null;
+  });
+  if (basePrice === null) throw new Error("the view has no Zurich base price");
+  await expect(card.getByTestId("field-card-base-price")).toContainText(moneyOf(basePrice));
+  const rents = card.getByTestId("field-card-level-rents");
+  await expect(rents.getByTestId("field-card-level-rent")).toHaveCount(4);
+  await expect(rents.locator('[aria-current="true"]')).toHaveCount(0);
+  const group = card.getByTestId("field-card-group");
+  await expect(group.getByTestId("field-card-group-field")).toHaveCount(3);
+  await expect(group.locator("[data-shape]")).toHaveCount(0);
+  await expect(card.getByTestId("field-card-monopoly")).toHaveCount(0);
+  await expect(card.getByTestId("field-card-doubler")).toHaveCount(0);
   expect(await scale(page)).toBe(fitted);
 
   // ‹ › step round the ring, wrapping past Start; the zoom stays.
@@ -63,6 +89,9 @@ test("a tap opens the nearest Field's card, and the card never changes the zoom"
   // Field 4 sits halfway along the front-left edge, so it stays on screen.
   await tapAt(page, isMobile, await fieldCenter(page, 4));
   await expect(card.getByRole("heading")).toHaveText("Museum");
+  // A Museum has no Levels and no Group (#316), so neither row appears.
+  await expect(card.getByTestId("field-card-level-rents")).toHaveCount(0);
+  await expect(card.getByTestId("field-card-group")).toHaveCount(0);
   for (const _ of [1, 2, 3, 4]) {
     // oxlint-disable-next-line no-await-in-loop -- one step after another
     await card.getByRole("button", { name: "Previous Field" }).click();
@@ -105,6 +134,86 @@ test("a tap opens the nearest Field's card, and the card never changes the zoom"
   }
   await expect.poll(async () => (await view())?.turn).toBe(2);
   await expect.poll(() => scale(page)).toBe(fitted);
+});
+
+test("an owned University's card highlights its current Level among the Level Rents", async ({
+  page,
+  browser,
+  isMobile,
+}) => {
+  const { context } = await startGame(page, browser);
+  closeAfterDump(context);
+  const card = page.getByTestId("field-card");
+
+  // The seeded first Roll stops at an unowned University: buy Level 1.
+  await page.getByRole("button", { name: "Roll" }).click();
+  const offer = page.getByTestId("offer");
+  await expect(offer).toBeVisible({ timeout: 15_000 });
+  const offered = await page.evaluate(() => {
+    const phase = window.universumTest?.view()?.phase;
+    return phase?.kind === "offer"
+      ? { field: phase.field, levels: phase.levels.map((level) => level.level) }
+      : null;
+  });
+  if (offered === null || offered.levels.length === 0) {
+    throw new Error("the first Roll is expected to stop at a University offer");
+  }
+  await offer.getByRole("button", { name: /^Level 1/ }).click();
+  await expect
+    .poll(() =>
+      page.evaluate((id) => window.universumTest?.view()?.fields[id]?.level ?? 0, offered.field),
+    )
+    .toBe(1);
+
+  // Tapping the bought Field opens its card; a tap that misses while the
+  // camera settles after the Turn change is retried with a fresh centre.
+  await expect(async () => {
+    await expect
+      .poll(() => page.evaluate(() => window.universumTest?.playback().gateOpen ?? false), {
+        timeout: 15_000,
+      })
+      .toBe(true);
+    await tapAt(page, isMobile, await fieldCenter(page, offered.field));
+    await expect(
+      card.getByTestId("field-card-level-rents").locator('[aria-current="true"]'),
+    ).toHaveAttribute("data-level", "1");
+  }).toPass({ timeout: 15_000 });
+
+  // The table's four Levels, the current one highlighted with the Level 1 Rent;
+  // an owned Field shows no base price and no Doubler badge.
+  const rents = card.getByTestId("field-card-level-rents");
+  await expect(rents.getByTestId("field-card-level-rent")).toHaveCount(4);
+  const levelRent = await page.evaluate(
+    (id) => window.universumTest?.view()?.fields[id]?.levelRents[0] ?? null,
+    offered.field,
+  );
+  if (levelRent === null) throw new Error("the owned Field has no Level 1 Rent");
+  await expect(rents.locator('[aria-current="true"]')).toContainText(moneyOf(levelRent));
+  await expect(card.getByTestId("field-card-base-price")).toHaveCount(0);
+  await expect(card.getByTestId("field-card-doubler")).toHaveCount(0);
+
+  // The Group row lists all three Universities with the bought one's token,
+  // and no Monopoly mark while the other two are still unowned.
+  const group = card.getByTestId("field-card-group");
+  await expect(group.getByTestId("field-card-group-field")).toHaveCount(3);
+  await expect(
+    group.locator('[data-testid="field-card-group-field"]:not([data-owner=""])'),
+  ).toHaveCount(1);
+  await expect(group.locator("[data-shape]")).toHaveCount(1);
+  await expect(card.getByTestId("field-card-monopoly")).toHaveCount(0);
+
+  // A Doubler on the Field states its count (#316). No seeded game reaches the
+  // Doubler token this early, so the test shows a made-up view with one on it.
+  await page.evaluate((id) => {
+    const hooks = window.universumTest;
+    const push = hooks?.room().push;
+    const view = push ? structuredClone(push.view) : null;
+    const field = view?.fields[id];
+    if (!hooks || !view || !field) throw new Error("no view to put a Doubler on");
+    field.doublers = 2;
+    hooks.showView(view);
+  }, offered.field);
+  await expect(card.getByTestId("field-card-doubler")).toHaveText("Doubler ×2");
 });
 
 test("the mouse wheel zooms on desktop", async ({ page, browser, isMobile }) => {
