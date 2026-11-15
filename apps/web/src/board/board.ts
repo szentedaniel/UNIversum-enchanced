@@ -53,7 +53,7 @@ export type BoardOptions = {
   /**
    * A mouse hover: the nearest Field within reach, or `null` when the pointer
    * leaves the Board, presses, drags or pinches, or is far from every Field.
-   * Every Field counts, even during a pick, so a Field card works while a
+   * Every Field counts, even during a pick, so the Field tooltip works while a
    * Decision is open. Fires only when the Field changes.
    */
   onFieldHover?(id: FieldId | null): void;
@@ -472,7 +472,7 @@ export async function createBoard(
       );
     },
     hover(at) {
-      // No `allowed`: every Field counts, so the Field card works during a pick.
+      // No `allowed`: every Field counts, so the tooltip works during a pick.
       reportHover(at === null ? null : snapField(at, fieldCentres(), camera.scale));
     },
   });

@@ -149,6 +149,10 @@ _Avoid_: Map, table
 One square on the Board; every player stands on exactly one Field.
 _Avoid_: Tile, square, cell
 
+**Field tooltip**:
+The small note beside a Field that a mouse hovering it shows: the Field's name and, for a University or Museum, its owner (or Unowned) and its current Rent, read from the Playback's view; it takes no pointer events and no bottom slot, and a touch pointer never raises it.
+_Avoid_: Hover card, popover
+
 **University**:
 A Field a Player can buy and build up through Levels; each belongs to one Group.
 _Avoid_: Normal Field, City, Property, Lot
