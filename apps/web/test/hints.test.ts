@@ -1,17 +1,37 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { PlayerId, PublicView } from "@universum/rules";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HintList, HintsToggle } from "#components/GameMenu.tsx";
 import { openDecision } from "#decision/decision.ts";
 import { HINTS, nextHint, type HintId, type HintMessageKey } from "#hints/hints.ts";
+import { baseLocale, overwriteGetLocale, type Locale } from "#paraglide/runtime.js";
 import type { Frame } from "#playback/playback.ts";
 import { playbackOfPush } from "#playback/playback.ts";
+import { hintStore } from "#stores/hint-store.ts";
 import de from "../messages/de.json" with { type: "json" };
 import en from "../messages/en.json" with { type: "json" };
 import hu from "../messages/hu.json" with { type: "json" };
 import { fieldOf, viewOf } from "./playback-fixtures.ts";
 
 // The hint table (spec #180): which concept a first-time Guest meets, from the
-// Decision module's answer and the frame's view. No store, no Playback timers,
-// no wall clock.
+// Decision module's answer and the frame's view. No Playback timers, no wall
+// clock. The menu's hint list and switch read the same table and the hint
+// store, so the menu tests drive `hintStore` directly.
+
+// React's server renderer reads a zustand store's *initial* state
+// (`getServerSnapshot`), not the state a test has written. The menu's two hint
+// parts read the store through `useStore`; this hands them the state the store
+// holds, as a mounted client reads it (same seam as chat-mute.test.ts).
+vi.mock("zustand", () => ({
+  useStore: <T, U>(api: { getState: () => T }, selector?: (state: T) => U): U | T =>
+    selector ? selector(api.getState()) : api.getState(),
+}));
+
+const inLanguage = (locale: Locale) => overwriteGetLocale(() => locale);
+
+beforeEach(() => inLanguage("en"));
+afterEach(() => inLanguage(baseLocale));
 
 const RECEIVED_AT = 1_000;
 
@@ -168,7 +188,46 @@ describe("nextHint", () => {
     expect(hintIn(view(), { enabled: false })).toBeNull();
   });
 
+  it("brings a dismissed hint back at its trigger after the menu reset", () => {
+    hintStore.setState({ seen: new Set<HintId>(), enabled: true });
+    hintStore.getState().dismiss("offer");
+    expect(hintIn(offerView(), { seen: hintStore.getState().seen })).toBeNull();
+
+    hintStore.getState().reset();
+    expect(hintIn(offerView(), { seen: hintStore.getState().seen })?.id).toBe("offer");
+  });
+
   it("keeps a pick's hint while its commit is in flight", () => {
     expect(hintIn(doublerView(), { inFlight: true })?.id).toBe("doubler");
+  });
+});
+
+describe("the menu's hint list", () => {
+  it("shows every hint's text in the current language, whether seen or not", () => {
+    inLanguage("de");
+    // The list is a re-read list: the switch and the seen set do not filter it.
+    hintStore.setState({ seen: new Set<HintId>(["offer", "sale"]), enabled: false });
+
+    const list = renderToStaticMarkup(createElement(HintList));
+    const rows = [...list.matchAll(/<li[^>]*>(.*?)<\/li>/g)].map((match) => match[1]);
+
+    expect(rows).toEqual(HINTS.map((row) => de[row.messageKey]));
+    expect(list).toContain('data-testid="hint-list"');
+    expect(list).toContain(de.hints_list_title);
+    expect(list).toContain('data-testid="hints-reset"');
+    expect(list).toContain(de.hints_reset);
+  });
+
+  it("labels the switch with the current setting", () => {
+    hintStore.setState({ enabled: true });
+    const on = renderToStaticMarkup(createElement(HintsToggle));
+    expect(on).toContain('data-testid="hints-toggle"');
+    expect(on).toContain('aria-pressed="true"');
+    expect(on).toContain(en.hints_on);
+
+    hintStore.setState({ enabled: false });
+    const off = renderToStaticMarkup(createElement(HintsToggle));
+    expect(off).toContain('aria-pressed="false"');
+    expect(off).toContain(en.hints_off);
   });
 });
