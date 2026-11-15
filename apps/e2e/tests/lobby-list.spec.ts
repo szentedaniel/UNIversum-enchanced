@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import {
+  checkSegment,
   closeAfterDump,
   expectOneJoinSocket,
   probeSockets,
@@ -46,9 +47,9 @@ test("a password Lobby is listed with a lock, asks for its password, fills up, l
   // The creator sets every setting on the form; the Lobby shows them.
   await creator.goto("/create");
   await creator.getByLabel("Room name").fill("  Friday   game ");
-  await creator.getByLabel("2", { exact: true }).check();
-  await creator.getByLabel("15 minutes").check();
-  await creator.getByRole("radio", { name: /400K/ }).check();
+  await checkSegment(creator.getByLabel("2", { exact: true }));
+  await checkSegment(creator.getByLabel("15 minutes", { exact: true }));
+  await checkSegment(creator.getByRole("radio", { name: /400K/ }));
   await creator.getByLabel("Password (optional)").fill("open sesame");
   await creator.getByRole("button", { name: "Create Room" }).click();
   await expect(creator).toHaveURL(/\/room\/[1-9]\d{5}$/);

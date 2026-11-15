@@ -135,8 +135,7 @@ export type RoomChoices = { turnLimitMs?: 10_000 | 20_000 | 30_000 };
  * moves it between the press and the release and the click never activates it.
  * A centred radio is clear of the margin, so nothing moves.
  */
-async function checkSegment(page: Page, label: string): Promise<void> {
-  const radio = page.getByLabel(label, { exact: true });
+export async function checkSegment(radio: Locator): Promise<void> {
   await radio.evaluate((element) => element.scrollIntoView({ block: "center" }));
   await radio.check();
 }
@@ -155,9 +154,11 @@ export async function createAndJoin(
   registerPage(names.creator, creator);
   await probeSockets(creator);
   await creator.goto("/create");
-  await checkSegment(creator, "2");
+  await checkSegment(creator.getByLabel("2", { exact: true }));
   if (choices.turnLimitMs !== undefined) {
-    await checkSegment(creator, `${String(choices.turnLimitMs / 1_000)} s`);
+    await checkSegment(
+      creator.getByLabel(`${String(choices.turnLimitMs / 1_000)} s`, { exact: true }),
+    );
   }
   await creator.getByRole("button", { name: "Create Room" }).click();
   await expect(creator).toHaveURL(/\/room\/[1-9]\d{5}$/);
