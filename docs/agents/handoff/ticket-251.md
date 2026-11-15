@@ -70,6 +70,18 @@ build on it. The rules engine, `GameState` and the stored snapshot are untouched
 - The two Rejection texts a watcher can meet (`rejection_spectators_full`,
   `rejection_spectator_read_only`) were #248's and needed no change.
 
+## Files the ticket named that needed no change
+
+- **`Home.tsx`, `RoomCodeInput.tsx`**: the Room code entry is `JoinByCode` in `join.tsx`, and Home
+  already renders it; the Watch button sits in that form.
+- **`DecisionTray.tsx`, `DealTray.tsx`**: `openDecision(frame, null, …)` never returns a
+  `owner: "me"` Decision, so `bottomSlot` never asks for a tray. Their own `me !== null` guards
+  (`TurnCard`'s composer and answer panel) stay for a Player before the `welcome`.
+- **`GameMenu.tsx`**: its language picker, sound toggles and quick-chat mute are device settings
+  and send no intent; there is no Leave action in it to keep.
+- **`test-hooks.ts`**: no new hook; the vitest drives `receivePush`/`receiveLobby` directly and the
+  e2e (#253) drives the real Home → Watch flow.
+
 ## Tests
 
 - **`apps/web/test/watch-connection.test.ts`** replaces `@colyseus/sdk`'s `Client` with a fake that
