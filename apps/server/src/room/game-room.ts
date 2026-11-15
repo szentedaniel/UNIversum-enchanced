@@ -1211,8 +1211,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
    * `seats_held_disconnected` and `spectators` gauges. Held: every Guest Seat
    * with no live client (dropped and held, or restored and not yet taken
    * back), until the game ends; a Bot's Seat is neither connected nor held.
-   * Spectators are counted apart, from the Room's own client set: they take
-   * no Seat, so they never inflate either Seat number.
+   * Spectators are counted apart, from the Room's own spectator set: they
+   * take no Seat, so they never inflate either Seat number.
    */
   gauges(): RoomGauges {
     const guests = this.seats.filter((s) => s.bot !== true);
