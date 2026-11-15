@@ -3,6 +3,7 @@ import { List, Plus } from "lucide-react";
 import { Link } from "react-router";
 import { LanguagePicker } from "#components/LanguagePicker.tsx";
 import { Logo } from "#components/Logo.tsx";
+import { SoundToggles } from "#components/SoundToggles.tsx";
 import { buttonVariants } from "#components/ui/button.tsx";
 import { leaveRoom } from "#connection.ts";
 import { JoinByCode } from "#screens/join.tsx";
@@ -29,7 +30,11 @@ export function Home() {
       </nav>
       <p className="m-0 font-bold text-muted-foreground">{m.home_or_join()}</p>
       <JoinByCode />
-      <LanguagePicker className="mt-2" />
+      {/* A Guest silences the game before joining; the menu holds the same two toggles. */}
+      <div className="mt-2 flex flex-col items-center gap-2">
+        <LanguagePicker />
+        <SoundToggles compact />
+      </div>
     </main>
   );
 }
