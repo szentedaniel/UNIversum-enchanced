@@ -92,11 +92,11 @@ export function Summary({ view, onBack }: { view: PublicView; onBack: () => void
       aria-labelledby="summary-title"
       className="flex w-full max-w-md flex-col gap-2.5"
     >
-      <header className="flex w-full items-center justify-between gap-2">
+      <header className="flex w-full flex-col items-start gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
         <h2
           id="summary-title"
           data-testid="summary-title"
-          className="m-0 min-w-0 truncate font-display text-2xl text-[#ffbb6c]"
+          className="m-0 min-w-0 font-display text-2xl text-[#ffbb6c]"
           style={{ WebkitTextStroke: "1px #14111c" }}
         >
           {m.summary_title()}

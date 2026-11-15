@@ -17,6 +17,7 @@ Branch `agent/issue-238-web-summary-and-wealthchart-on-the-result-screen-o`, bas
 - The figures are `summaryView(view.players, view.summary)` (`#237`), rendered in the spec's order with `data-figure="rent|buyer|monopolies|bankruptcies"`: biggest Rent (payer, owner, amount, Field name), top buyer (name, count), Monopolies and Bankruptcies, each with `playerName` and `PlayerToken`.
 - `monopolyRows` groups the engine's formations by `player.id:group` and shows a repeated Group as one row with `×count` (`m.summary_monopoly_repeat`). `summaryView` keeps every formation, so the count preserves the glossary's "a Group lost and completed again counts twice"; the grouped key is also what keeps the `<li>` keys stable.
 - A Monopoly names its Group's Universities in ring order (`groupUniversities` reads `FIELDS`, `#235`'s `GroupId`) and shows the Group colour from `GROUP_COLORS` (`#board/colors.ts`).
+- The Summary's own header stacks the heading above the back button below `sm`, so neither truncates on a 360 px phone.
 - Test ids: `summary`, `summary-title`, `summary-back` and `summary-monopoly`.
 
 ## `apps/web/src/components/Podium.tsx`
@@ -34,6 +35,7 @@ Branch `agent/issue-238-web-summary-and-wealthchart-on-the-result-screen-o`, bas
 ## Tests
 
 - `apps/web/test/summary-panel.test.ts` (14): the Podium's `summary-open` gating, the four figures and their order, the Rent, top buyer, Monopoly group names, Bankruptcies, the empty lines, one line/marker per Player in their colours, the accessible name and text alternative, the empty series, a null Summary, and hu/de headings. Server-render only (the repo has no DOM test environment); the open/back interaction is the e2e's.
+- `apps/web/test/money.test.ts` gains the `formatCount` grouping case for hu, en and de.
 - `apps/e2e/tests/podium.spec.ts`: `showGameOver` now sets a made-up `view.summary` (figures plus a 3-sample series for four Players); the test opens `summary-open`, counts four `chart-line`s, presses `summary-back`, and still ends by clicking the Lobby list link. CI runs it.
 
 Read for: any Summary, Wealth chart or Podium open/back touch, and any result-screen layout change.
