@@ -4,8 +4,9 @@ import { closeAfterDump, startGame, test } from "./helpers.ts";
 // The result screen (#32), on each project's device. A random game can't be
 // played to its end quickly, so the test shows a made-up game-over view through
 // the test-only `showView` hook (as if the server had pushed it): the podium's
-// 2-1-3 order, the winner's own figure colour, the greyed Bankrupt Player and
-// the way back to the Lobby list. Nothing is sent to the server.
+// 2-1-3 order, the winner's own figure colour, the greyed Bankrupt Player, the
+// Summary it opens with a chart line per Player, and the way back to the Lobby
+// list. Nothing is sent to the server.
 test.use({ locale: "en-US" });
 
 /**
@@ -101,7 +102,7 @@ function showGameOver(page: Page) {
   });
 }
 
-test("the result screen: a 2-1-3 podium in Player colours, the Bankrupt Player greyed below, and back to the list", async ({
+test("the result screen: a 2-1-3 podium in Player colours, the Bankrupt Player greyed below, the summary chart, and back to the list", async ({
   page,
   browser,
 }) => {
