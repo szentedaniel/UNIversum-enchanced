@@ -9,6 +9,7 @@ import {
   receiveRejection,
   reset,
   roomStore,
+  viewerOf,
 } from "#stores/room-store.ts";
 import { viewOf } from "./playback-fixtures.ts";
 
@@ -113,5 +114,27 @@ describe("the in-flight lock", () => {
     expect(roomStore.getState().push).toBeNull();
     expect(roomStore.getState().rejection).toBeNull();
     expect(inFlightOf(roomStore.getState())).toBe(false);
+  });
+});
+
+describe("the role", () => {
+  it("is a Player until a watch records a spectator", () => {
+    expect(roomStore.getState().role).toBe("player");
+    roomStore.setState({ role: "spectator" });
+    expect(viewerOf(roomStore.getState())).toBeNull();
+  });
+
+  it("reads a Player's own id, and nobody for a spectator, whatever the welcome said", () => {
+    roomStore.setState({ me: "p1" });
+    expect(viewerOf(roomStore.getState())).toBe("p1");
+    // A watcher gets no welcome, and a stale `me` must not hand it a Seat's controls.
+    roomStore.setState({ role: "spectator" });
+    expect(viewerOf(roomStore.getState())).toBeNull();
+  });
+
+  it("goes back to a Player when the Room is left", () => {
+    roomStore.setState({ role: "spectator" });
+    reset();
+    expect(roomStore.getState().role).toBe("player");
   });
 });

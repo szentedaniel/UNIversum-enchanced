@@ -13,6 +13,9 @@ import { resetLog } from "#stores/log-store.ts";
 
 export type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "lost";
 
+/** What this client is in the Room: a Guest in a Seat, or one watching without one (spec #179). */
+export type Role = "player" | "spectator";
+
 /** One full-view push from the server: the view and the events that led to it. */
 export type Push = {
   view: PublicView;
@@ -39,6 +42,13 @@ export type RoomState = {
   code: string | null;
   /** This client's own public Player id. */
   me: PlayerId | null;
+  /**
+   * Whether this client took a Seat or only watches (spec #179). A spectator
+   * holds no Seat and gets no `welcome`, so `me` stays `null`; the role is
+   * what the screens read to draw the watching marker and to drop every
+   * Player-only control, even if a stale `me` ever survived.
+   */
+  role: Role;
   /** The Seats while the Room is a Lobby. */
   lobby: LobbyMessage | null;
   /** The latest game push; `null` until the game starts. */
@@ -57,6 +67,7 @@ const initialRoomState: RoomState = {
   status: "idle",
   code: null,
   me: null,
+  role: "player",
   lobby: null,
   push: null,
   rejection: null,
@@ -149,6 +160,16 @@ export function reset(): void {
   // The Event log is client-side history: it belongs to the Room being left.
   resetLog();
 }
+
+/**
+ * This client as a Player: its own public id, or `null` for a spectator. A
+ * watcher holds no Seat, so every Player-only read — a Decision, the
+ * quick-chat tray, the "your Turn" heading, the rematch vote — takes its
+ * `null` from here and not from `me` alone (spec #179, decision 4: the Room
+ * enforces read-only; the screen only stops offering controls).
+ */
+export const viewerOf = (state: RoomState): PlayerId | null =>
+  state.role === "spectator" ? null : state.me;
 
 /**
  * Whether the Room's latest news is its Lobby, not a game: `receiveLobby`
