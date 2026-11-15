@@ -163,14 +163,18 @@ function samePlayer(a: PlayerView, b: PlayerView): boolean {
   );
 }
 
-/** A Field as the Board shows it: owner ring, Level, Value, Rent and Sale. */
+/** A Field as the Board and the Field card show it: owner ring, Level, Value, Rent, Sale, the Level table, the base price and the Doublers. */
 function sameField(a: FieldView, b: FieldView): boolean {
   return (
     a.owner === b.owner &&
     a.level === b.level &&
     a.value === b.value &&
     a.rent === b.rent &&
-    a.sale === b.sale
+    a.sale === b.sale &&
+    a.basePrice === b.basePrice &&
+    a.doublers === b.doublers &&
+    a.levelRents.length === b.levelRents.length &&
+    a.levelRents.every((rent, index) => rent === b.levelRents[index])
   );
 }
 

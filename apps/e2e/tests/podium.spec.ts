@@ -68,7 +68,16 @@ function showGameOver(page: Page) {
         bot: true,
       },
     ];
-    view.fields = view.fields.map(() => ({ owner: null, level: 0, value: 0, rent: 0, sale: 0 }));
+    view.fields = view.fields.map(() => ({
+      owner: null,
+      level: 0,
+      value: 0,
+      rent: 0,
+      sale: 0,
+      levelRents: [],
+      basePrice: 0,
+      doublers: 0,
+    }));
     view.currentPlayer = "p4";
     view.phase = { kind: "gameOver", winner: "p4", reason: "timeUp" };
     view.actsAfter = hooks.serverNow();

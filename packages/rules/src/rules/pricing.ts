@@ -3,7 +3,14 @@
  * the current state (R26–R31, R53, F2). Pure functions of the state, shared by
  * the rule areas and `publicView`. The Doubler (#31) extends `rentOf`.
  */
-import { FIELDS, MUSEUM_VALUE, type FieldId, type GroupId } from "#board.ts";
+import {
+  FIELDS,
+  MAX_LEVEL,
+  MUSEUM_VALUE,
+  type FieldId,
+  type FieldInfo,
+  type GroupId,
+} from "#board.ts";
 import type { GameState, PlayerId } from "#state.ts";
 
 /** Rent as a percentage of Value, by Level 1–4 (R28). */
@@ -22,6 +29,16 @@ const BUYOUT_PERCENT = 200;
 /** A University's Value at `level` (R27); 0 for any other Field. */
 export function valueAt(field: FieldId, level: number): number {
   return FIELDS[field]?.values?.[level] ?? 0;
+}
+
+/**
+ * What the Bank charges for the Field while it is unowned: a University's
+ * Level 1 Value, its base price B (R26); a Museum's 400,000 (R53); 0 for a
+ * Field nobody can own.
+ */
+export function basePriceOf(field: FieldId): number {
+  if (FIELDS[field]?.kind === "museum") return MUSEUM_VALUE;
+  return valueAt(field, 1);
 }
 
 /**
@@ -96,6 +113,31 @@ export function wealthOf(state: GameState, playerId: PlayerId): number {
 }
 
 /**
+ * A University's Rent at `level` before the Monopoly multiplier and the
+ * Doublers: its Value there × that Level's rate (R28). 168,000 at Level 2 of a
+ * 240,000 University.
+ */
+function levelBaseRent(value: number, level: number): number {
+  return Math.round((value * (RENT_PERCENT[level] ?? 0)) / 100);
+}
+
+/**
+ * The Rent `base` charges with `count` Doublers on the Field (R61, F10) and,
+ * with no Doubler, ×1.4 when a University's owner holds its Group (R29). A
+ * Museum keeps its count multiplier and never the Monopoly.
+ */
+function rentFrom(
+  base: number,
+  info: FieldInfo | undefined,
+  monopoly: boolean,
+  count: number,
+): number {
+  if (info?.kind === "museum" || count > 0) return base * (count + 1);
+  if (!info?.group) return 0;
+  return monopoly ? Math.round((base * MONOPOLY_TENTHS) / 10) : base;
+}
+
+/**
  * The Rent before the Monopoly multiplier and the Doubler count (R61): a
  * University's Value × its Level's rate, or a Museum's 75,000 × the owner's
  * Museums. 0 when unowned.
@@ -106,7 +148,26 @@ export function baseRentOf(state: GameState, field: FieldId): number {
   if (!fieldState?.owner) return 0;
   if (info?.kind === "museum") return MUSEUM_RENT_STEP * museumsOf(state, fieldState.owner);
   if (!info?.group) return 0;
-  return Math.round((valueOf(state, field) * (RENT_PERCENT[fieldState.level] ?? 0)) / 100);
+  return levelBaseRent(valueOf(state, field), fieldState.level);
+}
+
+/**
+ * The Rent a University charges at each Level 1–4 (`levelRents[0]` is Level 1),
+ * as the Field card's table shows it: ×1.4 when its current owner holds the
+ * Group (R29), the plain Level Rents otherwise and while it is unowned (R28).
+ * The Doubler never multiplies the table; `rent` carries it. Empty for
+ * anything but a University, which has no Levels (R25).
+ */
+export function levelRentsOf(state: GameState, field: FieldId): number[] {
+  const info = FIELDS[field];
+  if (info?.kind !== "university" || !info.group) return [];
+  const owner = state.fields[field]?.owner ?? null;
+  const monopoly = owner !== null && isMonopoly(state, info.group, owner);
+  const rents: number[] = [];
+  for (let level = 1; level <= MAX_LEVEL; level += 1) {
+    rents.push(rentFrom(levelBaseRent(valueAt(field, level), level), info, monopoly, 0));
+  }
+  return rents;
 }
 
 /**
@@ -126,10 +187,6 @@ export function rentWithCount(state: GameState, field: FieldId, count: number): 
   const info = FIELDS[field];
   const fieldState = state.fields[field];
   if (!fieldState?.owner) return 0;
-  const base = baseRentOf(state, field);
-  if (info?.kind === "museum" || count > 0) return base * (count + 1);
-  if (!info?.group) return 0;
-  return Math.round(
-    isMonopoly(state, info.group, fieldState.owner) ? (base * MONOPOLY_TENTHS) / 10 : base,
-  );
+  const monopoly = info?.group ? isMonopoly(state, info.group, fieldState.owner) : false;
+  return rentFrom(baseRentOf(state, field), info, monopoly, count);
 }

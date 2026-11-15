@@ -40,6 +40,9 @@ const fieldView = (owner: string | null, sale = 0): FieldView => ({
   value: 0,
   rent: 0,
   sale,
+  levelRents: [],
+  basePrice: 0,
+  doublers: 0,
 });
 
 function viewWith(phase: Phase, autoSell: number[] | null = null): PublicView {

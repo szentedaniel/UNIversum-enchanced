@@ -38,7 +38,18 @@ function viewWith(field: FieldView): PublicView {
     endsAt: 0,
     players: [{ ...owner, wealth: owner.cash }],
     fields: Array.from({ length: FIELD_COUNT }, (_, id) =>
-      id === VESZPREM ? field : { owner: null, level: 0, value: 0, rent: 0, sale: 0 },
+      id === VESZPREM
+        ? field
+        : {
+            owner: null,
+            level: 0,
+            value: 0,
+            rent: 0,
+            sale: 0,
+            levelRents: [],
+            basePrice: 0,
+            doublers: 0,
+          },
     ),
     doubler: null,
     lastChanceCard: null,
@@ -54,7 +65,16 @@ function viewWith(field: FieldView): PublicView {
 describe("fieldFacts", () => {
   it("shows no Rent or Value for a University nobody owns", () => {
     const facts = fieldFacts(
-      viewWith({ owner: null, level: 0, value: 0, rent: 0, sale: 0 }),
+      viewWith({
+        owner: null,
+        level: 0,
+        value: 0,
+        rent: 0,
+        sale: 0,
+        levelRents: [],
+        basePrice: 0,
+        doublers: 0,
+      }),
       VESZPREM,
     );
     expect(facts).toMatchObject({ ownable: true, owner: null, level: 0, rent: null, value: null });
@@ -67,6 +87,9 @@ describe("fieldFacts", () => {
       value: 1_200_000_000,
       rent: 340_000_000,
       sale: 1_080_000_000,
+      levelRents: [],
+      basePrice: 0,
+      doublers: 0,
     });
     expect(fieldFacts(view, VESZPREM)).toMatchObject({
       owner,

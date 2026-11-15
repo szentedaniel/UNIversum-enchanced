@@ -108,6 +108,9 @@ export const fieldOf = (patch: Partial<FieldView> = {}): FieldView => ({
   value: 0,
   rent: 0,
   sale: 0,
+  levelRents: [],
+  basePrice: 0,
+  doublers: 0,
   ...patch,
 });
 

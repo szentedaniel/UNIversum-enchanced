@@ -138,4 +138,21 @@ describe("Museum numbers in the view", () => {
 
     expect(fields[MUSEUM_3]?.sale).toBe(360_000);
   });
+
+  it("R25, R53: a Museum has no Level Rent table; its base price is 400,000 owned or not", () => {
+    const { fields } = publicView(owning(newGame(), "p1", [MUSEUM_1]));
+
+    expect(fields[MUSEUM_1]).toMatchObject({
+      value: 400_000,
+      rent: 75_000,
+      levelRents: [],
+      basePrice: 400_000,
+    });
+    expect(fields[MUSEUM_4]).toMatchObject({
+      value: 0,
+      rent: 0,
+      levelRents: [],
+      basePrice: 400_000,
+    });
+  });
 });

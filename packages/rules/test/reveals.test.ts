@@ -153,11 +153,40 @@ describe("the engine's reveals", () => {
     expect(paid.doubler).toEqual({ field: VESZPREM, count: 1 });
     // The bankruptcy beat: Fields back at the Bank, no Doubler on them, the Player out.
     expect(playerOf(out, "p2")).toMatchObject({ cash: 0, bankrupt: true });
-    expect(out.fields[VESZPREM]).toEqual({ owner: null, level: 0, value: 0, rent: 0, sale: 0 });
+    expect(out.fields[VESZPREM]).toEqual({
+      owner: null,
+      level: 0,
+      value: 0,
+      rent: 0,
+      sale: 0,
+      levelRents: [110_000, 168_000, 272_000, 440_000],
+      basePrice: 200_000,
+      doublers: 0,
+    });
     expect(out.doubler).toBeNull();
     // The amounts and the final state are the ones the settlement shows (R72, F12).
     expect(player(applied.state, "p1").cash).toBe(START_CASH + charged.amount);
     expect(player(applied.state, "p2")).toMatchObject({ cash: 0, bankrupt: true });
+  });
+
+  it("ADR-0005: a reveal's Level Rents, base price and Doublers are the public view's, as its own arrays", () => {
+    // Veszprém with the Doubler on it; the Turn lands on Tax, so nothing else moves.
+    const state = withField(newGame({ players: 2 }), VESZPREM, { owner: "p2", level: 1 });
+    const applied = rollOnto({ ...state, doubler: { field: VESZPREM, count: 1 } }, TAX, T0);
+    const first = applied.reveals[0];
+    const last = applied.reveals.at(-1);
+    const view = publicView(applied.state);
+
+    if (!first || !last) throw new Error("the reveals are missing");
+    expect(last.fields[VESZPREM]).toEqual(view.fields[VESZPREM]);
+    expect(last.fields[VESZPREM]).toMatchObject({
+      doublers: 1,
+      basePrice: 200_000,
+      levelRents: [110_000, 168_000, 272_000, 440_000],
+    });
+    // Each reveal and the view build their own table: no two share one array.
+    expect(last.fields[VESZPREM]?.levelRents).not.toBe(first.fields[VESZPREM]?.levelRents);
+    expect(last.fields[VESZPREM]?.levelRents).not.toBe(view.fields[VESZPREM]?.levelRents);
   });
 
   it("ADR-0005: a reveal is a snapshot: rule code after the emit does not reach it", () => {

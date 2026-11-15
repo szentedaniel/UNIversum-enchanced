@@ -591,6 +591,36 @@ describe("the Playback core's reveals", () => {
     expect(playback.frameAt(walkEnd + PLAYBACK_MS.RentPaid - 1).view).toBe(rent);
   });
 
+  it("ADR-0005: a Field whose Level table changed is a changed board, even with the same Rent", () => {
+    // The Doubler stands on the Field, so its Rent ignores the Monopoly (R61)
+    // while the Level table keeps it: only the new key tells the two apart.
+    const plain = fieldOf({
+      owner: "p1",
+      level: 1,
+      value: 220_000,
+      rent: 242_000,
+      sale: 198_000,
+      levelRents: [121_000, 184_800, 299_200, 484_000],
+    });
+    const monopoly = fieldOf({ ...plain, levelRents: [169_400, 258_720, 418_880, 677_600] });
+    const cash = { p1: 100_000, p2: 100_000 };
+    const playback = playbackOfPush(
+      pushOf(ROLL(), {
+        reveals: [
+          revealWithCash(cash, { fields: [plain] }),
+          revealWithCash(cash, { fields: [monopoly] }),
+          revealWithCash(cash, { fields: [monopoly] }),
+          revealWithCash(cash, { fields: [monopoly] }),
+        ],
+      }),
+    );
+
+    const walked = playback.frameAt(1_000 + PLAYBACK_MS.DiceRolled).view;
+
+    expect(walked).not.toBe(playback.frameAt(1_000).view);
+    expect(walked.fields[0]?.levelRents).toEqual([169_400, 258_720, 418_880, 677_600]);
+  });
+
   it("ADR-0005: a reveal that only moved a pawn keeps the previous step's view object", () => {
     // A real Roll: the DiceRolled reveal is the board before the move, the Moved
     // one the board after it, so they differ in a Player's position and nowhere

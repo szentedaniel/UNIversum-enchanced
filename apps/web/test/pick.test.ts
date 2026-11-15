@@ -29,6 +29,9 @@ const fieldView = (owner: string | null, rent = 0): FieldView => ({
   value: 0,
   rent,
   sale: 0,
+  levelRents: [],
+  basePrice: 0,
+  doublers: 0,
 });
 
 function viewWith(phase: Phase, pickOptions: PickOption[] | null): PublicView {

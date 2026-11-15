@@ -53,12 +53,30 @@ function showSale(page: Page, msLeft: number, otherBankrupt = false) {
         resume: { kind: "rent", amount: 400_000, owner: other.id, field: fields.seattle },
       };
       const own = (id: number, level: number, sale: number) => {
-        view.fields[id] = { owner: me, level, value: 0, rent: 0, sale };
+        view.fields[id] = {
+          owner: me,
+          level,
+          value: 0,
+          rent: 0,
+          sale,
+          levelRents: [],
+          basePrice: 0,
+          doublers: 0,
+        };
       };
       own(fields.veszprem, 1, 180_000);
       own(fields.budapest, 1, 198_000);
       own(fields.berlin, 4, 792_000);
-      view.fields[fields.seattle] = { owner: other.id, level: 1, value: 0, rent: 0, sale: 0 };
+      view.fields[fields.seattle] = {
+        owner: other.id,
+        level: 1,
+        value: 0,
+        rent: 0,
+        sale: 0,
+        levelRents: [],
+        basePrice: 0,
+        doublers: 0,
+      };
       view.autoSell = [fields.veszprem, fields.budapest];
       // A new decision each time (fresh picks), open now, with `msLeft` on the server's clock.
       const now = hooks.serverNow();

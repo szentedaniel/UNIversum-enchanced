@@ -52,6 +52,9 @@ function viewWith(phase: Phase, autoSell: number[] | null = null): PublicView {
     value: 0,
     rent: 0,
     sale: SALES[id] ?? 0,
+    levelRents: [],
+    basePrice: 0,
+    doublers: 0,
   }));
   return {
     stateVersion: 1,
