@@ -61,6 +61,7 @@ builds on it. The rules engine, `GameState`, the stored snapshot and the server 
   count-only push at the same version, the Lobby message's count, and the Playback keeping
   `currentPlayback()` (the same core) with the same `eventsReached`.
 - **`apps/web/test/watch.test.ts`**: the read-only Lobby (name, code, taken Seats with the Bot mark
-  and held Seat, settings, invite, marker, count, `watch_waiting`), the absent controls, the
-  `lobby_you` absence with a stale `me`, the chip at 0/1/many on the Lobby and in the Game's status
-  row, and the chip updating from a push that carries no events.
+  and held Seat, settings, invite, marker, count, `watch_waiting`), the absent controls with the
+  watcher's `me` `null` and with a stale `me` naming the creator, the `lobby_you` absence with a
+  stale `me`, the chip at 0/1/many on the Lobby and in the Game's status row, and the chip updating
+  from a push that carries no events.
