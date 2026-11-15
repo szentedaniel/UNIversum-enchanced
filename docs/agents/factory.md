@@ -307,6 +307,16 @@ request. The findings are not lost: a merge with advisory findings files one `ne
 naming the pull request and listing them, and the nightly intake decides whether they become a ticket
 or are closed.
 
+**An additive protocol change is a two-way door.** Adding to the wire while leaving everything
+already on it alone — a new optional field, a new message or intent type, a new Rejection code, or a
+new chat catalogue id — is a change old clients ignore and a clean revert until a client ships code
+that depends on it, so the reviewer rates it `two-way` and gives its blast radius as it is (a
+protocol change usually spans packages, so `wide`). These stay one-way doors: renaming or removing
+anything on the wire, making an optional field required, changing a field's type or meaning, reusing
+a retired id, and changing stored state outside the migration path. The gate needs no new rule:
+`risk:high` with a two-way rating already merges outside a protected path (step 3 below), and
+`packages/protocol/src/` is not one.
+
 ## Merging and fixing
 
 Two steps finish a pull request: `factory-merge.yml` merges what the gates allow, and
@@ -327,7 +337,8 @@ It merges with a merge commit only when every gate holds ([spec #85, Decision
    findings — and was posted **after** the head commit; a push after the review queues `agent:review`
    again, so a fix commit is reviewed before merging.
 3. The pull request carries `risk:low` (a two-way door with a local blast radius), or `risk:high` whose
-   review names a **two-way** door: a wide blast radius alone does not wait for the owner once the
+   review names a **two-way** door — an additive protocol change is one, a breaking wire change is
+   not: a wide blast radius alone does not wait for the owner once the
    review passed and CI, e2e included, is green. A one-way door, or a `risk:high` whose merge danger
    the gate cannot read, waits for a human — except the one-way door of a mechanically checked state
    migration (below).
