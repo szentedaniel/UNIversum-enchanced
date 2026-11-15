@@ -137,16 +137,22 @@ describe("the spectator count", () => {
     expect((await alice.next("game")).spectators).toBe(0);
   });
 
-  it("goes up for the Players and the newcomer when a spectator joins a Lobby", async () => {
+  it("goes up for the Players and every spectator when one joins a Lobby", async () => {
     const alice = await server.create({ maxPlayers: 3 });
     await alice.next("lobby");
 
-    const spectator = await watch(alice.code);
-
-    expect((await spectator.next("lobby")).spectators).toBe(1);
+    const first = await watch(alice.code);
+    expect((await first.next("lobby")).spectators).toBe(1);
     expect((await alice.next("lobby")).spectators).toBe(1);
-    // The count is a number: no name, session id or token of the spectator travels.
-    expect(JSON.stringify(alice.received)).not.toContain(spectator.room.sessionId);
+
+    const second = await watch(alice.code);
+    expect((await second.next("lobby")).spectators).toBe(2);
+    expect((await first.next("lobby")).spectators).toBe(2);
+    expect((await alice.next("lobby")).spectators).toBe(2);
+
+    // The count is a number: no name, session id or token of a spectator travels.
+    expect(JSON.stringify(alice.received)).not.toContain(first.room.sessionId);
+    expect(JSON.stringify(alice.received)).not.toContain(second.room.sessionId);
   });
 
   it("goes down when a spectator leaves a running game", async () => {
