@@ -187,6 +187,15 @@ describe("nextHint", () => {
     expect(hintIn(view(), { enabled: false })).toBeNull();
   });
 
+  it("brings a dismissed hint back at its trigger after the menu reset", () => {
+    hintStore.setState({ seen: new Set<HintId>(), enabled: true });
+    hintStore.getState().dismiss("offer");
+    expect(hintIn(offerView(), { seen: hintStore.getState().seen })).toBeNull();
+
+    hintStore.getState().reset();
+    expect(hintIn(offerView(), { seen: hintStore.getState().seen })?.id).toBe("offer");
+  });
+
   it("keeps a pick's hint while its commit is in flight", () => {
     expect(hintIn(doublerView(), { inFlight: true })?.id).toBe("doubler");
   });
