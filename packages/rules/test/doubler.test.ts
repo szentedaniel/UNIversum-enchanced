@@ -224,6 +224,21 @@ describe("Doubler Rent", () => {
   });
 });
 
+describe("the Doubler in the Field view", () => {
+  it("R61, F10: the Field carries the Doubler count, and the Level table stays the plain Rents", () => {
+    const owned = owning(newGame({ players: 2 }), "p1", [BUDAPEST]);
+    const state: GameState = { ...owned, doubler: { field: BUDAPEST, count: 2 } };
+
+    const view = publicView(state).fields[BUDAPEST];
+
+    expect(view?.doublers).toBe(2);
+    // 121,000 × (2 + 1): the Doubler lifts the Rent but never the table.
+    expect(view?.rent).toBe(363_000);
+    expect(view?.levelRents).toEqual([121_000, 184_800, 299_200, 484_000]);
+    expect(publicView(owned).fields[BUDAPEST]?.doublers).toBe(0);
+  });
+});
+
 describe("the Doubler pick in the view", () => {
   it("lists each offered Field's Rent now and after placing it there", () => {
     const owned = owning(newGame({ players: 2 }), "p1", [BUDAPEST, MUSEUM_1]);
