@@ -6,8 +6,8 @@
  */
 import { Menu, MessageCircle, MessageCircleOff } from "lucide-react";
 import { useStore } from "zustand";
-import { SoundToggles } from "#components/SoundToggles.tsx";
 import { LanguagePicker } from "#components/LanguagePicker.tsx";
+import { SoundToggles } from "#components/SoundToggles.tsx";
 import { Button } from "#components/ui/button.tsx";
 import {
   Dialog,

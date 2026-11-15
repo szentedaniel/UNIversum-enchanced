@@ -17,9 +17,6 @@ export { soundStore };
 /** How many elements each cue rotates through: a repeated cue restarts without cutting itself off. */
 const POOL_SIZE = 3;
 
-/** The looping track the music plays. */
-const MUSIC_SRC = musicSound;
-
 type Pool = {
   /** The cue's elements, `null` in a slot not used yet. */
   elements: (HTMLAudioElement | null)[];
@@ -120,7 +117,7 @@ function tabHidden(): boolean {
 /** The music element: one looping track, muted under automation like the cues. */
 function musicElement(): HTMLAudioElement {
   if (music) return music;
-  const element = new Audio(MUSIC_SRC);
+  const element = new Audio(musicSound);
   element.loop = true;
   if (navigator.webdriver) element.muted = true;
   music = element;
