@@ -31,7 +31,7 @@ A Player's place in a Room, kept for them while they are disconnected so they ca
 _Avoid_: Slot
 
 **Spectator**:
-A Guest connected to a Room without a Seat, watching its Lobby or running game read-only by Room code; it lives only in the Room's memory, gets the same Lobby and Game messages as a Player, and never appears in the Seats, the game state or the snapshot.
+A Guest connected to a Room without a Seat, watching its Lobby or running game read-only by Room code; it lives only in the Room's memory, gets the same Lobby and Game messages as a Player, and never appears in the Seats, the game state or the snapshot. Every Lobby and Game message carries their number, and only their number: a count, never who is watching.
 _Avoid_: Viewer, observer, audience
 
 **Lobby list**:

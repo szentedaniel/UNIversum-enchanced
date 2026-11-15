@@ -1,0 +1,19 @@
+# Ticket #249 (Lobby and Game messages carry the spectator count) — extension points and gotchas
+
+Branch `agent/issue-249-protocol-lobby-and-game-messages-carry-the-spectat`, from main at `c5bc297`. Builds on #248's spectator set; #250–#253 read what this adds. The rules engine, `GameState` and the stored snapshot are untouched.
+
+## What landed
+
+- **`packages/protocol/src/messages.ts`**: `LobbyMessage.spectators` and `GameMessage.spectators`, both `number`, doc-commented as the connected clients with no Seat — a count only, never a name or a token.
+- **`GameRoom.spectatorCount()`** (`apps/server/src/room/game-room.ts`) is the private helper over `#spectators.size`. `lobbyMessage()` and `gamePush()` set `spectators` from it, and `onCreate` passes `readSpectators: () => this.spectatorCount()` into the `GameDriver`.
+- **`GameDriverOptions.readSpectators`** (`apps/server/src/room/game-driver.ts`): read afresh in `#commit` next to `now`, so the driver's own push carries the count without knowing the Room.
+- **`broadcastSpectatorCount()`** replaces #248's `sendSpectatorCurrent(client)` (deleted). Called from `onJoin`'s `watch` branch after the session id is added, and from `onLeave` when the leaving client was a spectator. A Lobby sends `broadcastLobby`; a running or ended Room sends `broadcast(MESSAGE.game, this.gamePush(this.game))` — the same view, empty `events` and `reveals`, so a client replays nothing. The joining spectator is inside `this.clients` before `onJoin` runs, so the broadcast reaches it too: one push, not a direct send plus a broadcast.
+- **`onLeave`'s order**: `const wasSpectator = this.#spectators.delete(client.sessionId)`, then the `#shuttingDown` return, then `if (wasSpectator && this.clients.length > 0) this.broadcastSpectatorCount()` in the `!seat` branch before `disposeIfAbandoned()`. The `wasSpectator` guard keeps a Player's leave from pushing the count a second time (its Seat path already broadcasts).
+
+## Gotchas for #250–#253
+
+- **The count is derived, never stored.** Nothing writes it to `seats`, `GameState`, the snapshot or the Room metadata; `spectators.test.ts`'s snapshot test still compares the stored Room before and after a spectator joins. Do not add it to `listing()`.
+- **A Lobby's count push goes through `broadcastLobby`**, so a spectator join also runs `setMetadata(this.listing())` and `syncListing()`. `syncListing` returns early once a game exists, so a started Room is never relisted by spectators arriving; in a Lobby the listing's numbers do not change.
+- **No push on shutdown**: `onLeave` returns on `#shuttingDown` before any broadcast, and a Lobby whose last client left broadcasts to nobody (`this.clients.length > 0`).
+- **The web does not keep the count yet.** `receivePush`'s `ReceivedPush` has no `spectators`, so `connection.ts` drops the field; an equal-`version` push with no events is accepted as a new push (the guard only drops an *older* `version`) and replays nothing. #251/#252 read the count: they add it to `RoomState` and must keep a count-only push from replacing a running Playback, since `playback-store` rebuilds its core from the push's own (empty) events.
+- **Tests.** `apps/server/test/spectators.test.ts` `describe("the spectator count")`: 0 in a Lobby and in a started game, up for the joiner and every Player on a Lobby join, up for the Players on a game join (compared field-for-field with the start push), down on a leave and on a drop, and the raw messages a Player received carry no session id. Two earlier tests drain a join's count-only push before an intent's, because the join's push comes first. `game-driver.test.ts`'s `newDriver({ spectators })` pins the driver reads the count per push; `apps/web/test/room-store.test.ts` "a push that only changes the spectator count" pins the accepted-and-nothing-replayed client behaviour.
