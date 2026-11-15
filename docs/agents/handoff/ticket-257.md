@@ -27,7 +27,8 @@ plays the first-game hint flow).
     The close button is absolutely positioned inside the popup, so it scrolls with the body
     (as in `ChatTray`); the header scrolls too.
 - `apps/web/messages/{hu,en,de}.json`: `hints_on`, `hints_off`, `hints_list_title`,
-  `hints_reset`, right after `hint_dismiss`. Hungarian says `Tippek …`; the owner reviews
+  `hints_reset`, right after `hint_dismiss`. Hungarian says `Súgó …`, not `Tipp`, because
+  `GLOSSARY.md` lists "tip" under the Hint entry's _Avoid_; the owner reviews
   copy per spec #180 decision 6, and `messages.test.ts` pins only key parity.
 - `apps/web/test/hints.test.ts`: a file-level `vi.mock("zustand", …)` (the `chat-mute.test.ts`
   seam: `useStore` → `getState`) so the server-rendered menu parts read real store state.
