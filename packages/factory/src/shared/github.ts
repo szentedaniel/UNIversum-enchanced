@@ -111,6 +111,15 @@ export const isNotFound = (error: unknown): boolean => httpStatusOf(textOf(error
 export const isConflict = (error: unknown): boolean => httpStatusOf(textOf(error)) === 409;
 
 /**
+ * A merge GitHub refused because another merge for the same pull request was
+ * already running: two gate runs can reach the merge at once. The message is
+ * GitHub's own (`Merge already in progress (mergePullRequest)`), so the text is
+ * the only signal.
+ */
+export const isMergeInProgress = (error: unknown): boolean =>
+  /merge already in progress/iu.test(textOf(error));
+
+/**
  * Whether GitHub refused the call for a rate limit. REST sends a 403 or 429;
  * a GraphQL call (`pr view`, `issue view`) names the limit with no status. A
  * 5xx that happens to say "rate limit" is a server fault, not a refusal to

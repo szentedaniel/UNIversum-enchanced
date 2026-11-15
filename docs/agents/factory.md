@@ -414,6 +414,17 @@ snapshot's file name and its import and list entry in `migrate.test.ts` onto mai
 request that is only _waiting_ — CI still running, the review not posted yet, `agent:review` queued —
 exits quietly: the next trigger decides.
 
+Two gate runs can decide one pull request at the same moment — a CI completion and a review completion
+that land together. Both read the same facts, so both may try to merge or both may refuse. A merge
+GitHub answers with `Merge already in progress (mergePullRequest)` is not a failure: the gate re-reads
+the pull request, and one that reads `MERGED` or carries an auto-merge request (queued to merge) is
+left to the run that has it, with no waiting comment, ticket comment, close or follow-up issue. Before
+the gate posts a waiting comment it re-reads the pull request's comments, and skips the post when the
+newest `<!-- factory-merge -->` comment already carries the same body; the `ready-for-human` label
+still goes on, because adding a label twice is a no-op and the label is what holds the pull request.
+The workflow's concurrency group is what serialises the two runs; the re-read and the dedupe keep an
+overlap from leaving two comments or a false "could not decide" behind.
+
 A `gh` read GitHub refuses for a rate limit — a 403 or 429 saying "rate limit", or a GraphQL error
 (`pr view`, `issue view`) naming one — is waited out and retried, as when many pull requests merge at
 once. The wait the refusal names (`retry-after`, or the `x-ratelimit-reset` instant from the headers
