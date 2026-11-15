@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FIELDS, publicView, START_CASH, SYSTEM, type GameState } from "#index.ts";
+import { FIELDS, MAX_LEVEL, publicView, START_CASH, SYSTEM, type GameState } from "#index.ts";
 import {
   accept,
   deadlineOf,
@@ -24,6 +24,8 @@ const VIENNA = 13;
 const BERLIN = 15;
 const SEATTLE = 17;
 const LONDON = 21;
+const DOUBLER = 16;
+const TAX = 30;
 
 /** The second Seat lands on `field` while the first Seat owns `owned` (Field id → Level). */
 function landOnOwned(field: number, owned: Record<number, number>, start = newGame()) {
@@ -331,6 +333,10 @@ describe("the view", () => {
       value: 544_000,
       rent: 647_360,
       sale: 489_600,
+      // Chicago, Austin and Princeton are all p1's: a Monopoly lifts every Level.
+      levelRents: [261_800, 399_840, 647_360, 1_047_200],
+      basePrice: 340_000,
+      doublers: 0,
     });
     expect(fields[SEATTLE]).toEqual({
       owner: "p2",
@@ -338,9 +344,30 @@ describe("the view", () => {
       value: 504_000,
       rent: 352_800,
       sale: 453_600,
+      levelRents: [231_000, 352_800, 571_200, 924_000],
+      basePrice: 420_000,
+      doublers: 0,
     });
-    expect(fields[VIENNA]).toEqual({ owner: null, level: 0, value: 0, rent: 0, sale: 0 });
-    expect(fields[0]).toEqual({ owner: null, level: 0, value: 0, rent: 0, sale: 0 });
+    expect(fields[VIENNA]).toEqual({
+      owner: null,
+      level: 0,
+      value: 0,
+      rent: 0,
+      sale: 0,
+      levelRents: [209_000, 319_200, 516_800, 836_000],
+      basePrice: 380_000,
+      doublers: 0,
+    });
+    expect(fields[0]).toEqual({
+      owner: null,
+      level: 0,
+      value: 0,
+      rent: 0,
+      sale: 0,
+      levelRents: [],
+      basePrice: 0,
+      doublers: 0,
+    });
   });
 
   it("carries the offered Levels with their prices", () => {
@@ -355,5 +382,74 @@ describe("the view", () => {
         { level: 3, price: 608_000 },
       ],
     });
+  });
+});
+
+/** A Field as the view carries it; a missing one is a bug in the test's board. */
+function viewField(state: GameState, field: number) {
+  const view = publicView(state).fields[field];
+  if (!view) throw new Error(`Field ${field} is missing from the view`);
+  return view;
+}
+
+describe("the Level Rent table in the view", () => {
+  it("R28: a University carries the Rent at Levels 1–4, plain while its owner holds no Group", () => {
+    // Austin's Values: 340,000 / 408,000 / 544,000 / 748,000 at Levels 1–4.
+    const state = withField(newGame(), AUSTIN, { owner: "p1", level: 1 });
+
+    expect(viewField(state, AUSTIN).levelRents).toEqual([187_000, 285_600, 462_400, 748_000]);
+  });
+
+  it("R29: the owner's Monopoly multiplies every Level's Rent by 1.4", () => {
+    // Group 3 is Chicago, Austin and Princeton: all three owned makes a Monopoly.
+    let state = withField(newGame(), CHICAGO, { owner: "p1", level: 1 });
+    state = withField(state, AUSTIN, { owner: "p1", level: 1 });
+    state = withField(state, PRINCETON, { owner: "p1", level: 1 });
+
+    expect(viewField(state, AUSTIN).levelRents).toEqual([261_800, 399_840, 647_360, 1_047_200]);
+  });
+
+  it("R28: an unowned University shows the plain table, without a Monopoly", () => {
+    const state = newGame();
+
+    expect(viewField(state, VIENNA).levelRents).toEqual([209_000, 319_200, 516_800, 836_000]);
+  });
+
+  it("R25: only a University has a Level Rent table", () => {
+    const { fields } = publicView(newGame());
+
+    expect(fields[0]?.levelRents).toEqual([]);
+    expect(fields[DOUBLER]?.levelRents).toEqual([]);
+    expect(fields[TAX]?.levelRents).toEqual([]);
+  });
+
+  it("R28: with no Doubler on the Field, the table's entry for the current Level is the Rent", () => {
+    for (const holdsGroup of [false, true]) {
+      for (const info of FIELDS.filter((f) => f.kind === "university")) {
+        for (let level = 1; level <= MAX_LEVEL; level += 1) {
+          let state = newGame();
+          if (holdsGroup) {
+            for (const mate of FIELDS.filter((f) => f.group === info.group)) {
+              state = withField(state, mate.id, { owner: "p1", level: 1 });
+            }
+          }
+          state = withField(state, info.id, { owner: "p1", level });
+
+          const field = viewField(state, info.id);
+
+          expect(field.levelRents[level - 1]).toBe(field.rent);
+        }
+      }
+    }
+  });
+
+  it("R26: basePrice is the Field's unowned price at every Level, and 0 for a non-ownable Field", () => {
+    const state = withField(newGame(), AUSTIN, { owner: "p1", level: 3 });
+    const { fields } = publicView(state);
+
+    // Vienna costs its Level 1 Value (380,000) unowned; an owned Field keeps the price.
+    expect(fields[VIENNA]?.basePrice).toBe(380_000);
+    expect(fields[AUSTIN]?.basePrice).toBe(340_000);
+    expect(fields[0]?.basePrice).toBe(0);
   });
 });
