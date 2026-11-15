@@ -2,8 +2,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Route, Routes, StaticRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { baseLocale, overwriteGetLocale, type Locale } from "#paraglide/runtime.js";
 import type { LobbyMessage } from "@universum/protocol/messages";
+import type { PlayerName } from "@universum/rules";
 import { currentPlayback, playbackStore } from "#playback/playback-store.ts";
 import { Game } from "#screens/Game.tsx";
 import { JoinByCode } from "#screens/join.tsx";
@@ -11,7 +13,6 @@ import { Lobby } from "#screens/Lobby.tsx";
 import { receiveLobby, receivePush, reset, roomStore, type Role } from "#stores/room-store.ts";
 import en from "../messages/en.json" with { type: "json" };
 import { viewOf } from "./playback-fixtures.ts";
-import type { PlayerName } from "@universum/rules";
 
 // The watching Game screen (spec #179, stories 2, 3 and 5): a Guest without a
 // Seat sees the same Board, Player cards and Turn as a Player, with no way to
@@ -30,7 +31,10 @@ beforeEach(reset);
 
 const inLanguage = (locale: Locale) => overwriteGetLocale(() => locale);
 
-afterEach(() => inLanguage(baseLocale));
+afterEach(() => {
+  inLanguage(baseLocale);
+  vi.unstubAllGlobals();
+});
 
 /**
  * A running game joined as `role`, where it is p1's Turn and a Roll is due,
@@ -177,5 +181,20 @@ describe("the Watch action by a Room code", () => {
     expect(html).toContain('data-testid="watch"');
     // Nothing to send until the whole Room code is typed.
     expect(html).toContain('disabled=""');
+  });
+});
+
+/** The reconnecting overlay as the Game screen mounts it, for a client of either role. */
+function overlay(role: Role): string {
+  roomStore.setState({ status: "reconnecting", role });
+  return renderToStaticMarkup(createElement(StaticRouter, null, createElement(ReconnectOverlay)));
+}
+
+describe("the reconnecting overlay", () => {
+  it("promises a kept Seat to a Player, and to nobody else", () => {
+    expect(overlay("player")).toContain(en.reconnecting_hint);
+    // A watcher holds no Seat (spec #179, story 6).
+    expect(overlay("spectator")).not.toContain(en.reconnecting_hint);
+    expect(overlay("spectator")).toContain(en.reconnecting);
   });
 });

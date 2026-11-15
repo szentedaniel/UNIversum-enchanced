@@ -25,6 +25,9 @@ build on it. The rules engine, `GameState` and the stored snapshot are untouched
   (after the `if (!lobby)` connecting branch) shows the Room's name, `data-testid="watching"` and
   `watch_waiting`, with no Seat, Start, Bot or invite control. #252 replaces exactly that block
   with the read-only Lobby; `started` (a game push) still navigates to `/game/:code`.
+- **`ReconnectOverlay`** reads `role` too: a reconnecting spectator is not told "Your Seat is
+  kept for you" (`seatKept` is false), because it holds none. The `lost` overlay's texts are the
+  same for both.
 - **The Board is not read-only in the sense of "no taps"**: a spectator can still open a Field
   card (inspect) and pan/zoom. That is presentation; the Room answers `SPECTATOR_READ_ONLY` to any
   intent anyway (`apps/server/src/room/game-room.ts`, #248).
