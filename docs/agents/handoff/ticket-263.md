@@ -4,7 +4,7 @@ Branch `agent/issue-263-board-touch-gesture-and-zoom-polish-as-pure-camera`. All
 
 ## Gesture decisions (`src/board/gestures.ts`)
 
-- `attachGestures(el, target, options?)` takes `GestureOptions.now` (default `performance.now`); tests pass a fake clock, so a press's age is measured without timers. `GestureTarget` is unchanged: `camera`, `move`, `scaleLimits`, `tap`, `moved`.
+- `attachGestures(el, target, options?)` takes `GestureOptions.now` (default `performance.now`); tests pass a fake clock, so a press's age is measured without timers. `GestureTarget` was unchanged in #263: `camera`, `move`, `scaleLimits`, `tap`, `moved` (#317's `hover` and the fake canvas's `pointerleave` came later, see `ticket-317.md`).
 - Two records, one press. `Press` (`start`, `at`, `slop`, `moved`, `multi`) lives from the first pointer down to the last pointer up; `Baseline` (`camera`, `mid`, `spread`) is re-read on every `pointerdown` and on every `pointerup` that leaves fingers down. A move applies the whole delta from the baseline, so a second finger landing mid-drag or one finger lifting from a pinch rebases the gesture instead of jumping the camera.
 - Constants: `TAP_MS = 500`; `TAP_SLOP = 10` (mouse/pen, the prototype's value); `TOUCH_TAP_SLOP = 18` (`pointerType === "touch"`, whose contact patch rolls); `PINCH_MIN_SPREAD = 24` (spread floor, so two fingers landing on one point cannot divide by zero); `TOUCH_WHEEL_GRACE_MS = 350`.
 - A second pointer sets `Press.multi`: the press is a pinch or pan and never a tap. `pointercancel` ends the whole press (clears every pointer) and fires no tap and no `moved`; later moves for the fingers still down are ignored. A new `pointerdown` starts a fresh press.
