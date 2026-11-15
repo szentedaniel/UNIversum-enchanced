@@ -23,8 +23,9 @@ build on it. The rules engine, `GameState` and the stored snapshot are untouched
   behind it at the result screen.
 - **The Lobby's spectator state is minimal and temporary.** `Lobby.tsx`'s `if (spectator)` block
   (after the `if (!lobby)` connecting branch) shows the Room's name, `data-testid="watching"` and
-  `watch_waiting`, with no Seat, Start, Bot or invite control. #252 replaces exactly that block
-  with the read-only Lobby; `started` (a game push) still navigates to `/game/:code`.
+  `watch_waiting`, keeps the `ReconnectOverlay` (a watcher whose Room is disposed is told), and
+  offers no Seat, Start, Bot or invite control. #252 replaces exactly that block with the
+  read-only Lobby; `started` (a game push) still navigates to `/game/:code`.
 - **`ReconnectOverlay`** reads `role` too: a reconnecting spectator is not told "Your Seat is
   kept for you" (`seatKept` is false), because it holds none. The `lost` overlay's texts are the
   same for both.
