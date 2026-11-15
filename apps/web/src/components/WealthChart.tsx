@@ -43,6 +43,9 @@ export function WealthChart({
         </p>
       ) : (
         <>
+          {/* The chart is an SVG figure, not an `<img>`: the ticket asks for a
+              `role="img"` chart with a label, and the rule cannot know that. */}
+          {/* oxlint-disable jsx-a11y/prefer-tag-over-role -- an <img> cannot hold the lines and markers */}
           <svg
             data-testid="wealth-chart-svg"
             role="img"
@@ -146,6 +149,7 @@ export function WealthChart({
               );
             })}
           </svg>
+          {/* oxlint-enable jsx-a11y/prefer-tag-over-role */}
           <ul
             aria-label={m.summary_chart_alt()}
             className="m-0 flex list-none flex-col gap-1 p-0 text-sm font-bold"

@@ -369,6 +369,7 @@
   "summary_top_buyer_none": "Niemand hat ein Feld gekauft.",
   "summary_monopolies": "Gebildete Monopole",
   "summary_monopoly_line": "{name}: {group}",
+  "summary_monopoly_repeat": "{name}: {group} (×{count})",
   "summary_monopolies_none": "Es wurde kein Monopol gebildet.",
   "summary_bankruptcies": "Bankrotte",
   "summary_bankruptcies_none": "Niemand ging bankrott.",

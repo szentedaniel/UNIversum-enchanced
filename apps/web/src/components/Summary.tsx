@@ -14,7 +14,7 @@ import { GROUP_COLORS } from "#board/colors.ts";
 import { PlayerToken } from "#components/PlayerToken.tsx";
 import { Button } from "#components/ui/button.tsx";
 import { WealthChart } from "#components/WealthChart.tsx";
-import { summaryView } from "#pick/summary.ts";
+import { summaryView, type SummaryMonopoly } from "#pick/summary.ts";
 import { fieldName, formatCount, formatMoney, m, playerName } from "#text.ts";
 
 /** The Group's University names in ring order, so a Monopoly names its colour's cities. */
@@ -25,6 +25,25 @@ const groupUniversities = (group: GroupId): string =>
 
 const groupColor = (group: GroupId): string =>
   `#${GROUP_COLORS[group].toString(16).padStart(6, "0")}`;
+
+/** A Monopoly row: a Group completed twice is one row with its count. */
+type MonopolyRow = SummaryMonopoly & { count: number };
+
+/**
+ * The Monopolies as rows, in the order the Groups first completed. `summaryView`
+ * keeps every formation (a Group lost and completed again counts twice), so a
+ * repeated Player and Group share a row, which also gives each row a stable key.
+ */
+function monopolyRows(monopolies: readonly SummaryMonopoly[]): MonopolyRow[] {
+  const rows = new Map<string, MonopolyRow>();
+  for (const monopoly of monopolies) {
+    const key = `${monopoly.player.id}:${monopoly.group}`;
+    const row = rows.get(key);
+    if (row === undefined) rows.set(key, { ...monopoly, count: 1 });
+    else row.count += 1;
+  }
+  return [...rows.values()];
+}
 
 /** One figure's card: its label and its value. */
 function Figure({
@@ -65,6 +84,7 @@ export function Summary({ view, onBack }: { view: PublicView; onBack: () => void
   if (summary === null) return null;
   const figures = summaryView(view.players, summary);
   const rent = figures.biggestRent;
+  const monopolies = monopolyRows(figures.monopolies);
 
   return (
     <section
@@ -120,28 +140,36 @@ export function Summary({ view, onBack }: { view: PublicView; onBack: () => void
           )}
         </Figure>
         <Figure figure="monopolies" label={m.summary_monopolies()}>
-          {figures.monopolies.length === 0 ? (
+          {monopolies.length === 0 ? (
             m.summary_monopolies_none()
           ) : (
             <ul className="m-0 flex list-none flex-col gap-1 p-0">
-              {figures.monopolies.map((monopoly, index) => (
-                <li
-                  key={`${monopoly.player.id}:${monopoly.group}:${index}`}
-                  className="flex items-center gap-1.5"
-                >
-                  <span
-                    aria-hidden
-                    className="size-3 shrink-0 rounded-full border-2 border-ink"
-                    style={{ background: groupColor(monopoly.group) }}
-                  />
-                  <span>
-                    {m.summary_monopoly_line({
-                      name: playerName(monopoly.player.name),
-                      group: groupUniversities(monopoly.group),
-                    })}
-                  </span>
-                </li>
-              ))}
+              {monopolies.map((monopoly) => {
+                const name = playerName(monopoly.player.name);
+                const group = groupUniversities(monopoly.group);
+                return (
+                  <li
+                    key={`${monopoly.player.id}:${monopoly.group}`}
+                    data-testid="summary-monopoly"
+                    className="flex items-center gap-1.5"
+                  >
+                    <span
+                      aria-hidden
+                      className="size-3 shrink-0 rounded-full border-2 border-ink"
+                      style={{ background: groupColor(monopoly.group) }}
+                    />
+                    <span>
+                      {monopoly.count === 1
+                        ? m.summary_monopoly_line({ name, group })
+                        : m.summary_monopoly_repeat({
+                            name,
+                            group,
+                            count: formatCount(monopoly.count),
+                          })}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Figure>

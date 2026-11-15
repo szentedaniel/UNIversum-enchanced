@@ -154,6 +154,21 @@ describe("the Summary", () => {
     expect(html).toContain("Calm Wolf: Veszprém, Budapest, Debrecen");
   });
 
+  it("shows a Group completed twice as one row with its count", () => {
+    inLanguage("en");
+    const twice: GameSummaryView = {
+      ...SUMMARY,
+      monopolies: [
+        { player: "p2", group: 2 },
+        { player: "p2", group: 2 },
+      ],
+    };
+    const html = renderSummary(gameOver(twice));
+
+    expect(countOf(html, "summary-monopoly")).toBe(1);
+    expect(html).toContain("Calm Wolf: Zurich, Paris, Edinburgh (×2)");
+  });
+
   it("lists the Bankrupt Players", () => {
     inLanguage("en");
     const html = renderSummary(gameOver(SUMMARY));

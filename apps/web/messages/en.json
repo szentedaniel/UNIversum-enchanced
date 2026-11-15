@@ -369,6 +369,7 @@
   "summary_top_buyer_none": "Nobody bought a Field.",
   "summary_monopolies": "Monopolies formed",
   "summary_monopoly_line": "{name}: {group}",
+  "summary_monopoly_repeat": "{name}: {group} (×{count})",
   "summary_monopolies_none": "No Monopoly was formed.",
   "summary_bankruptcies": "Bankruptcies",
   "summary_bankruptcies_none": "Nobody went Bankrupt.",

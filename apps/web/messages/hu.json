@@ -369,6 +369,7 @@
   "summary_top_buyer_none": "Senki nem vásárolt mezőt.",
   "summary_monopolies": "Kialakult monopóliumok",
   "summary_monopoly_line": "{name}: {group}",
+  "summary_monopoly_repeat": "{name}: {group} (×{count})",
   "summary_monopolies_none": "Nem alakult ki monopólium.",
   "summary_bankruptcies": "Csődök",
   "summary_bankruptcies_none": "Senki nem ment csődbe.",

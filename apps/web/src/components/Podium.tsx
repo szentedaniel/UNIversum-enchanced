@@ -62,12 +62,13 @@ export function Podium({
   // Playback) stays where it is, and a null Summary never opens.
   const [showSummary, setShowSummary] = useState(false);
   const summary = view.summary;
-  const onSummary = showSummary && summary !== null;
+  // What is open, with the Summary itself, so the null view never opens one.
+  const openSummary = showSummary ? summary : null;
 
   return (
     <section
       data-testid="podium"
-      aria-labelledby={onSummary ? "summary-title" : "podium-title"}
+      aria-labelledby={openSummary !== null ? "summary-title" : "podium-title"}
       className="fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden p-safe-4"
       style={{ background: OVERLAY_BG }}
     >
@@ -87,7 +88,7 @@ export function Podium({
           the Lobby list stays below it and never scrolls away. */}
       <div className="flex min-h-0 w-full flex-1 flex-col items-center overflow-y-auto overscroll-contain">
         <div className="my-auto flex w-full flex-col items-center">
-          {onSummary && summary !== null ? (
+          {openSummary !== null ? (
             <Summary view={view} onBack={() => setShowSummary(false)} />
           ) : (
             <>
