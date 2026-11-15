@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { closeAfterDump, fieldCenter, scale, startGame, test } from "./helpers.ts";
+import { closeAfterDump, dragBoard, fieldCenter, scale, startGame, test } from "./helpers.ts";
 
 // The Board's camera and the tap-to-inspect Field card (#38), on each
 // project's device (desktop Chromium and iPhone WebKit). The Board is driven
@@ -214,6 +214,120 @@ test("an owned University's card highlights its current Level among the Level Re
     hooks.showView(view);
   }, offered.field);
   await expect(card.getByTestId("field-card-doubler")).toHaveText("Doubler ×2");
+});
+
+test("a mouse hover shows the Field tooltip, and leaving the Board hides it", async ({
+  page,
+  browser,
+  isMobile,
+}) => {
+  test.skip(isMobile, "only a mouse pointer raises a hover (#317)");
+  const { context } = await startGame(page, browser);
+  closeAfterDump(context);
+  const tooltip = page.getByTestId("field-tooltip");
+  await settledScale(page);
+
+  // Zurich starts unowned: the name, Unowned, and the current Rent (none yet).
+  const zurich = await fieldCenter(page, 5);
+  await page.mouse.move(zurich.x, zurich.y);
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText("Zurich");
+  await expect(tooltip).toContainText("Unowned");
+  await expect(tooltip).toContainText("Rent");
+
+  // A Chance Field shows the name only, with no owner and no Rent row.
+  const chance = await fieldCenter(page, 14);
+  await page.mouse.move(chance.x, chance.y);
+  await expect(tooltip).toContainText("Chance");
+  await expect(tooltip).not.toContainText("Rent");
+  await expect(tooltip).not.toContainText("Unowned");
+
+  // Leaving the Board hides it: it is a hover, never pinned.
+  await page.mouse.move(2, 2);
+  await expect(tooltip).toHaveCount(0);
+});
+
+test("the tooltip shows over an open Offer with the shown view's owner and Rent", async ({
+  page,
+  browser,
+  isMobile,
+}) => {
+  test.skip(isMobile, "only a mouse pointer raises a hover (#317)");
+  const { context } = await startGame(page, browser);
+  closeAfterDump(context);
+  const tooltip = page.getByTestId("field-tooltip");
+  const offer = page.getByTestId("offer");
+
+  // The seeded first Roll stops at an unowned University and waits for an Offer.
+  await page.getByRole("button", { name: "Roll" }).click();
+  await expect(offer).toBeVisible({ timeout: 15_000 });
+  const offered = await page.evaluate(() => {
+    const phase = window.universumTest?.view()?.phase;
+    return phase?.kind === "offer" ? phase.field : null;
+  });
+  if (offered === null) throw new Error("the first Roll is expected to stop at a University offer");
+
+  // The tooltip is its own layer: the Offer keeps the bottom slot.
+  const at = await fieldCenter(page, offered);
+  await page.mouse.move(at.x, at.y);
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText("Unowned");
+  await expect(offer).toBeVisible();
+
+  // The numbers are the shown view's, not the server's latest state: a
+  // made-up push owns the Field at a known Rent, as #316's Doubler does.
+  const rent = 150_000;
+  await page.evaluate(
+    ({ id, amount }) => {
+      const hooks = window.universumTest;
+      const push = hooks?.room().push;
+      const view = push ? structuredClone(push.view) : null;
+      const field = view?.fields[id];
+      const owner = view?.players[0];
+      if (!hooks || !view || !field || !owner) throw new Error("no view to own a Field");
+      view.fields[id] = {
+        ...field,
+        owner: owner.id,
+        level: 2,
+        value: 540_000,
+        rent: amount,
+        basePrice: 0,
+      };
+      hooks.showView(view);
+    },
+    { id: offered, amount: rent },
+  );
+  await expect(tooltip).toContainText("Owner");
+  await expect(tooltip).toContainText(moneyOf(rent));
+  await expect(tooltip).not.toContainText("Unowned");
+
+  // No Board obstacle and no pointer events: the Board keeps every tap under it.
+  await expect(tooltip).toHaveCSS("pointer-events", "none");
+  expect(await tooltip.getAttribute("data-board-obstacle")).toBeNull();
+  await expect(offer).toBeVisible();
+});
+
+test("a touch pointer raises no tooltip, on a tap or a drag", async ({
+  page,
+  browser,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "needs a touch-emulating context");
+  const { context } = await startGame(page, browser);
+  closeAfterDump(context);
+  const tooltip = page.getByTestId("field-tooltip");
+  await settledScale(page);
+
+  // A tap opens the Field card, as before, and shows no tooltip.
+  const zurich = await fieldCenter(page, 5);
+  await page.touchscreen.tap(zurich.x, zurich.y);
+  await expect(page.getByTestId("field-card").getByRole("heading")).toHaveText("Zurich");
+  await expect(tooltip).toHaveCount(0);
+
+  // A pan across the Board never flashes one either.
+  const { before, after } = await dragBoard(page, { dx: 80, dy: 40 });
+  expect(after.x, "the drag panned the Board").not.toBe(before.x);
+  await expect(tooltip).toHaveCount(0);
 });
 
 test("the mouse wheel zooms on desktop", async ({ page, browser, isMobile }) => {

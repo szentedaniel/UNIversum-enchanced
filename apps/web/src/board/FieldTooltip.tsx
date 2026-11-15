@@ -94,9 +94,7 @@ export function FieldTooltip({ id, view, at }: FieldTooltipProps) {
       {facts.ownable && (
         <>
           <p className="m-0 text-[0.7rem] leading-tight font-bold text-ink/70">
-            {owner
-              ? `${m.field_card_owner()}: ${playerName(owner.name)}`
-              : m.field_card_unowned()}
+            {owner ? `${m.field_card_owner()}: ${playerName(owner.name)}` : m.field_card_unowned()}
           </p>
           <p className="m-0 flex items-baseline gap-1 text-[0.7rem] leading-tight font-bold">
             {m.field_card_rent()}:

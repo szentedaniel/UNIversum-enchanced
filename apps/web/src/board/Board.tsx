@@ -65,9 +65,7 @@ function onFieldTap(id: FieldId | null): void {
 function HoveredTooltip({ fieldCenter }: { fieldCenter: (id: FieldId) => Point }) {
   const field = useStore(uiStore, (state) => state.hoveredField);
   const view = useStore(playbackStore, (state) => state.frame?.view ?? null);
-  return (
-    <FieldTooltip id={field} view={view} at={field === null ? null : fieldCenter(field)} />
-  );
+  return <FieldTooltip id={field} view={view} at={field === null ? null : fieldCenter(field)} />;
 }
 
 /**
