@@ -1,6 +1,8 @@
 import type { PlayerView, WealthSample } from "@universum/rules";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { baseLocale, overwriteGetLocale, type Locale } from "#paraglide/runtime.js";
 import { wealthChart, type WealthChart } from "#pick/wealth-chart.ts";
+import { formatMoney } from "#text.ts";
 
 // The chart's geometry (spec #177, ticket #237) turns the engine's Wealth
 // series into SVG coordinates. The series is the engine's (ADR-0001,
@@ -33,6 +35,14 @@ const players = [player("p1", 0), player("p2", 1)];
 const sample = (minute: number, p1: number, p2: number): WealthSample => ({
   minute,
   wealth: { p1, p2 },
+});
+
+const inLanguage = (locale: Locale) => overwriteGetLocale(() => locale);
+// Intl separates groups and units with no-break spaces; compare with plain ones.
+const plain = (text: string) => text.replaceAll(/[\u00A0\u202F]/g, " ");
+
+afterEach(() => {
+  inLanguage(baseLocale);
 });
 
 /** Every number a value produces, to prove none is NaN or Infinity. */
@@ -104,6 +114,40 @@ describe("the Wealth chart's geometry", () => {
       { value: 3_000_000, position: 77 },
       { value: 4_000_000, position: 12 },
     ]);
+  });
+
+  it("ticks each whole Minute when two samples are one Minute apart", () => {
+    const chart = wealthChart(
+      [sample(0, 1_000_000, 2_000_000), sample(1, 2_000_000, 1_000_000)],
+      players,
+      SIZE,
+    );
+
+    expect(chart.xTicks).toEqual([
+      { value: 0, position: 56 },
+      { value: 1, position: 584 },
+    ]);
+    expect(chart.xTicks.every((tick) => Number.isInteger(tick.value))).toBe(true);
+    expect(positions(chart).every(Number.isFinite)).toBe(true);
+  });
+
+  it("keeps the x ticks whole and unique when the game spans under 5 Minutes", () => {
+    const chart = wealthChart(
+      [sample(0, 1_000_000, 2_000_000), sample(3, 2_000_000, 1_000_000)],
+      players,
+      SIZE,
+    );
+    const values = chart.xTicks.map((tick) => tick.value);
+
+    expect(chart.xTicks).toEqual([
+      { value: 0, position: 56 },
+      { value: 1, position: 232 },
+      { value: 2, position: 408 },
+      { value: 3, position: 584 },
+    ]);
+    expect(values.every(Number.isInteger)).toBe(true);
+    expect(new Set(values).size).toBe(values.length);
+    expect(positions(chart).every(Number.isFinite)).toBe(true);
   });
 
   it("an empty series draws no line, no marker and no tick", () => {
@@ -179,5 +223,56 @@ describe("the Wealth chart's geometry", () => {
 
     expect(chart.players.map((entry) => entry.player.id)).toEqual(["p1"]);
     expect(chart.y.max).toBe(2_000_000);
+  });
+});
+
+describe("the chart's money in each language", () => {
+  it("formats the Wealth start, end and y ticks with the active language's money", () => {
+    const chart = wealthChart(
+      [sample(0, 1_000_000, 2_000_000), sample(5, 3_000_000, 1_000_000), sample(10, 0, 4_000_000)],
+      players,
+      SIZE,
+    );
+    const figures = [
+      ...chart.yTicks.map((tick) => tick.value),
+      ...chart.players.flatMap((entry) => [entry.start, entry.end]),
+    ];
+
+    inLanguage("hu");
+    expect(figures.map((value) => plain(formatMoney(value)))).toEqual([
+      "0 Ft",
+      "1 000 000 Ft",
+      "2 000 000 Ft",
+      "3 000 000 Ft",
+      "4 000 000 Ft",
+      "1 000 000 Ft",
+      "0 Ft",
+      "2 000 000 Ft",
+      "4 000 000 Ft",
+    ]);
+    inLanguage("en");
+    expect(figures.map((value) => plain(formatMoney(value)))).toEqual([
+      "Ft 0",
+      "Ft 1,000,000",
+      "Ft 2,000,000",
+      "Ft 3,000,000",
+      "Ft 4,000,000",
+      "Ft 1,000,000",
+      "Ft 0",
+      "Ft 2,000,000",
+      "Ft 4,000,000",
+    ]);
+    inLanguage("de");
+    expect(figures.map((value) => plain(formatMoney(value)))).toEqual([
+      "0 Ft",
+      "1.000.000 Ft",
+      "2.000.000 Ft",
+      "3.000.000 Ft",
+      "4.000.000 Ft",
+      "1.000.000 Ft",
+      "0 Ft",
+      "2.000.000 Ft",
+      "4.000.000 Ft",
+    ]);
   });
 });
