@@ -30,6 +30,10 @@ _Avoid_: AI, computer player, NPC
 A Player's place in a Room, kept for them while they are disconnected so they can rejoin.
 _Avoid_: Slot
 
+**Spectator**:
+A Guest connected to a Room without a Seat, watching its Lobby or running game read-only by Room code; it lives only in the Room's memory, gets the same Lobby and Game messages as a Player, and never appears in the Seats, the game state or the snapshot. Every Lobby and Game message carries their number, and only their number: a count, never who is watching.
+_Avoid_: Viewer, observer, audience
+
 **Lobby list**:
 The public list of Lobbies a Guest can join; a Room whose game has started, or whose Seats are all taken, is not on it.
 _Avoid_: Room list, server browser
@@ -106,6 +110,10 @@ _Avoid_: History, chat, transcript
 **Cue**:
 A short sound effect one Game event's Playback step starts; the cue table maps each event type to at most one cue, and each cue is one audio file.
 _Avoid_: Sound effect (for the named entry), clip
+
+**Music**:
+The optional looping background track a Guest turns on for this browser, apart from the Cues; it follows that setting only, so every screen sounds the same, and it pauses while the tab is hidden.
+_Avoid_: BGM, soundtrack, background audio
 
 **Quick chat**:
 The only way Players talk in a Room: each picks a ready-made line or emote from a fixed catalogue, and the server shows it beside that Player's Seat; no free text is ever sent, and it is not the Event log.

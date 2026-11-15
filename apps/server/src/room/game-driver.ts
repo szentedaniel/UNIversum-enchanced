@@ -81,6 +81,11 @@ export type GameDriverOptions = {
   readRoom: () => DriverRoom;
   /** The Room's game, Seats and end time, read afresh for each write. */
   readState: () => DriverState;
+  /**
+   * The Room's spectator count for the push being built, read afresh: a count
+   * only, since a spectator is never in the snapshot or the Seats (spec #179).
+   */
+  readSpectators: () => number;
   /** Everyone hears a committed state; called only after the store has it. */
   publish: (state: GameState, message: GameMessage) => void;
   /** The game is over: the Room records the time and releases its Seats. */
@@ -118,6 +123,7 @@ export class GameDriver {
   readonly #roomCode: string;
   readonly #readRoom: () => DriverRoom;
   readonly #readState: () => DriverState;
+  readonly #readSpectators: () => number;
   readonly #publish: (state: GameState, message: GameMessage) => void;
   readonly #onEnded: (endedAt: number) => void;
   readonly #onRetention: () => void;
@@ -140,6 +146,7 @@ export class GameDriver {
     this.#roomCode = options.roomCode;
     this.#readRoom = options.readRoom;
     this.#readState = options.readState;
+    this.#readSpectators = options.readSpectators;
     this.#publish = options.publish;
     this.#onEnded = options.onEnded;
     this.#onRetention = options.onRetention;
@@ -379,6 +386,7 @@ export class GameDriver {
       view: publicView(state, this.#timing),
       events,
       reveals,
+      spectators: this.#readSpectators(),
       now: this.now(),
     });
     if (state.phase.kind === "gameOver") this.#end(state);

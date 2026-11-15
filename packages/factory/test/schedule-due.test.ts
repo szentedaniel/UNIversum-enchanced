@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { dueJobs } from "#schedule/due.ts";
+import { dueJobs, JOBS, lastDueAt, type Job } from "#schedule/due.ts";
 
 const at = (iso: string): Date => new Date(iso);
+
+/** The job with `name`; every name here comes from the schedule. */
+const jobNamed = (name: string): Job => {
+  const job = JOBS.find((candidate) => candidate.name === name);
+  if (job === undefined) throw new Error(`no job named ${name}`);
+  return job;
+};
 
 /** The workflows due at `now`, in schedule order; a run's time is keyed by workflow file. */
 const dueWorkflows = (now: string, lastRuns: Record<string, string> = {}): string[] =>
@@ -91,5 +98,22 @@ describe("dueJobs", () => {
       "factory-review.yml",
       "factory-maintain.yml",
     ]);
+  });
+
+  it("reads a weekly job's runs from last week while its due time is still ahead", () => {
+    // Sunday 02:28 CET: maintenance (03:19) has not fallen due today, so the
+    // window reaches back a full week instead of stopping one day short.
+    expect(lastDueAt(jobNamed("maintain"), at("2026-11-15T01:28:00Z"))).toEqual(
+      at("2026-11-08T02:19:00Z"),
+    );
+    expect(dueWorkflows("2026-11-15T01:28:00Z")).toEqual([
+      "factory-intake.yml",
+      "factory-review.yml",
+    ]);
+    // Monday 02:00 CET: the same for the report, due at 06:09.
+    expect(lastDueAt(jobNamed("report"), at("2026-11-16T01:00:00Z"))).toEqual(
+      at("2026-11-09T05:09:00Z"),
+    );
+    expect(dueWorkflows("2026-11-16T01:00:00Z")).toEqual(["factory-intake.yml"]);
   });
 });
