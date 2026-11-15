@@ -8,7 +8,7 @@ import { fieldFacts } from "#board/field-facts.ts";
 import { Button } from "#components/ui/button.tsx";
 import { fieldTap, openDecision, pickSyncOf, type OpenDecision } from "#decision/decision.ts";
 import { currentPlayback, gateOpenOf, playbackStore } from "#playback/playback-store.ts";
-import { inFlightOf, roomStore } from "#stores/room-store.ts";
+import { inFlightOf, roomStore, seatedMeOf } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
 import { exposeBoard } from "#test-hooks.ts";
 import { fieldName, formatCompactMoney, m } from "#text.ts";
@@ -22,11 +22,12 @@ const WAKE_SLACK_MS = 50;
 /**
  * This client's Decision: the latest frame, this client and the in-flight lock
  * (spec #72). The one place the Board asks what it may do; `fieldTap` and
- * `pickSyncOf` read that answer.
+ * `pickSyncOf` read that answer. A spectator is nobody here (spec #179), so it
+ * marks nothing and a tap only opens the Field card.
  */
 function currentDecision(): OpenDecision | null {
   const room = roomStore.getState();
-  return openDecision(playbackStore.getState().frame, room.me, inFlightOf(room));
+  return openDecision(playbackStore.getState().frame, seatedMeOf(room), inFlightOf(room));
 }
 
 /**
