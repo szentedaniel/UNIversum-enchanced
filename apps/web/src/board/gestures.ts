@@ -73,14 +73,15 @@ export type HoverInput = {
   dragging: boolean;
   /** A second pointer is down, so the gesture is a pinch or pan. */
   multi: boolean;
-  /** Milliseconds since the last touch lifted, or `null` if none has. */
+  /** Milliseconds since a touch was last down (`0` while one is), or `null` if none has been. */
   sinceTouch: number | null;
 };
 
 /**
  * Whether a pointer move may report a hover: a mouse, no button pressed, no
- * drag or pinch, and no touch this soon before (the same grace the leftover
- * wheel gets), so a touch's compatibility mouse move never raises a tooltip.
+ * drag or pinch, and no touch down now or this soon before (the same grace the
+ * leftover wheel gets), so a touch's compatibility mouse move never raises a
+ * tooltip.
  */
 export function hoverEligible(input: HoverInput): boolean {
   return (
@@ -160,7 +161,8 @@ export function attachGestures(
       buttons: event.buttons,
       dragging: press?.moved ?? false,
       multi: pointers.size > 1 || (press?.multi ?? false),
-      sinceTouch: lastTouchAt === null ? null : now() - lastTouchAt,
+      // A finger still down is the most recent touch of all.
+      sinceTouch: touches.size > 0 ? 0 : lastTouchAt === null ? null : now() - lastTouchAt,
     });
     reportHover(eligible ? local(event) : null);
   }

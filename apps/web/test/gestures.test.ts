@@ -255,6 +255,15 @@ describe("hover", () => {
     expect(board.hovers).toEqual([{ x: 100, y: 100 }, null]);
   });
 
+  it("stays down while a finger is on the Board, even for a mouse move", () => {
+    const board = mount();
+    board.move(1, { x: 100, y: 100 }, "mouse");
+    board.down(2, { x: 100, y: 100 }, "touch");
+    board.move(1, { x: 110, y: 100 }, "mouse");
+
+    expect(board.hovers).toEqual([{ x: 100, y: 100 }, null]);
+  });
+
   it("clears the hover once when the pointer leaves the canvas", () => {
     const board = mount();
     board.move(1, { x: 100, y: 100 }, "mouse");
