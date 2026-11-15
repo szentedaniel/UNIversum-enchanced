@@ -420,6 +420,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
         password: this.password && encodePassword(this.password),
       }),
       readState: () => ({ game: this.game, seats: this.seats, endedAt: this.endedAt }),
+      readSpectators: () => this.spectatorCount(),
       publish: (state, message) => {
         this.game = state;
         this.broadcast(MESSAGE.game, this.withVotes(message));
@@ -685,8 +686,17 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       view: publicView(game, this.timing),
       events: [],
       reveals: [],
+      spectators: this.spectatorCount(),
       now: this.now(),
     });
+  }
+
+  /**
+   * How many clients are watching without a Seat (spec #179): the count every
+   * Lobby and Game message carries, never who they are (ticket #249).
+   */
+  private spectatorCount(): number {
+    return this.#spectators.size;
   }
 
   /** Adds the rematch votes to a push once the game has ended; a running game's push is unchanged. */
@@ -1250,6 +1260,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
           ...(typeof heldUntil === "number" && { heldUntil }),
         };
       }),
+      spectators: this.spectatorCount(),
       now: this.now(),
     };
   }

@@ -75,7 +75,7 @@ describe("a spectator joins by Room code", () => {
     const { alice, first, code } = await startedGame();
 
     const spectator = await watch(code);
-    expect(await spectator.next("game")).toEqual(first);
+    expect(await spectator.next("game")).toEqual({ ...first, spectators: 1 });
 
     server.scheduler.advanceTo(first.view.actsAfter);
     alice.send({ type: "Roll", turn: first.view.turn });
@@ -120,6 +120,18 @@ describe("a spectator joins by Room code", () => {
 
     expect(before).toBeDefined();
     expect(server.store.unfinished().find((room) => room.code === code)).toEqual(before);
+  });
+});
+
+describe("the spectator count", () => {
+  it("is 0 in a Lobby and in a running game with nobody watching", async () => {
+    const alice = await server.create({ maxPlayers: 2 });
+    expect((await alice.next("lobby")).spectators).toBe(0);
+    await server.join(alice.code);
+    await alice.until("lobby", (message) => message.seats.length === 2);
+    alice.send({ type: "Start" });
+
+    expect((await alice.next("game")).spectators).toBe(0);
   });
 });
 

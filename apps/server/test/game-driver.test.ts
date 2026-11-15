@@ -129,6 +129,8 @@ function newDriver(
     log?: Logger;
     reporter?: ErrorReporter;
     timing?: GameTiming;
+    /** The Room's spectator count the driver reads for each push. */
+    spectators?: number;
   } = {},
 ) {
   const scheduler = new ManualScheduler();
@@ -149,6 +151,7 @@ function newDriver(
     roomCode: "ABC123",
     readRoom: () => ROOM,
     readState: () => state,
+    readSpectators: () => options.spectators ?? 0,
     publish: (game, message) => {
       state.game = game;
       published.push({ state: game, message });
@@ -190,12 +193,21 @@ describe("committing an intent", () => {
           view: publicView(game, { turnLimitMs: TURN_LIMIT_MS }),
           events: [],
           reveals: [],
+          spectators: 0,
           now: T0,
         },
       },
     ]);
     expect(state.game).toBe(game);
     expect(() => scheduler.lastTaskAt(game.turnDeadline ?? 0)).not.toThrow();
+  });
+
+  it("carries the Room's spectator count on the push", () => {
+    const { driver, published } = newDriver({ spectators: 2 });
+
+    driver.start(newGame());
+
+    expect(published[0]?.message.spectators).toBe(2);
   });
 
   it("a new decision replaces the previous Turn deadline: only one wake-up is armed", () => {

@@ -56,6 +56,7 @@ const lobbyOf = (patch: Partial<LobbyMessage> = {}): LobbyMessage => ({
     { playerId: "p1", name: NAME },
     { playerId: "p2", name: NAME },
   ],
+  spectators: 0,
   now: 1_000,
   ...patch,
 });
