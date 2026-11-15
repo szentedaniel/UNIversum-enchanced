@@ -26,7 +26,7 @@ export type PlayerView = PlayerState & {
   wealth: number;
 };
 
-/** A Field as clients see them: its state plus the numbers the UI shows. */
+/** A Field as clients see it: its state plus the numbers the UI shows. */
 export type FieldView = FieldState & {
   /** What the Field is worth at its current Level (0 when unbuilt). */
   value: number;
