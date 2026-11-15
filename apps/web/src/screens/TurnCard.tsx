@@ -14,7 +14,7 @@ import { sendIntent } from "#connection.ts";
 import type { OpenDecision } from "#decision/decision.ts";
 import type { TurnLabel } from "#playback/playback.ts";
 import { DealAnswerPanel, DealComposer } from "#screens/DealTray.tsx";
-import { roomStore } from "#stores/room-store.ts";
+import { roomStore, viewerOf } from "#stores/room-store.ts";
 import { fieldName, formatMoney, m, playerName } from "#text.ts";
 
 type Props = {
@@ -35,7 +35,8 @@ const quarantineRoundsOf = (view: PublicView, playerId: string): number =>
   view.players.find((player) => player.id === playerId)?.quarantineRounds ?? 0;
 
 export function TurnCard({ view, decision, shownTurn, waiting, clockOffset, seat }: Props) {
-  const me = useStore(roomStore, (state) => state.me);
+  // The viewer as a Player: a spectator reads as nobody, so no heading says "your Turn" and no control shows.
+  const me = useStore(roomStore, viewerOf);
   // The composer belongs to one Roll or Quarantine choice: a new decision (the
   // answer, the next Turn, a fresh deadline) leaves it closed.
   const decisionKey =

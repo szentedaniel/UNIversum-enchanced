@@ -33,14 +33,17 @@ import { TurnCard } from "#screens/TurnCard.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { chatMuteStore } from "#stores/chat-mute-store.ts";
 import { hintStore } from "#stores/hint-store.ts";
-import { inFlightOf, inLobbyOf, roomStore } from "#stores/room-store.ts";
+import { inFlightOf, inLobbyOf, roomStore, viewerOf } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
 import { formatCompactMoney, formatMoney, m, playerName, rejectionText } from "#text.ts";
 
 export function Game() {
   const { code = "" } = useParams();
   const push = useStore(roomStore, (s) => (s.code === code ? s.push : null));
-  const me = useStore(roomStore, (s) => s.me);
+  // This client as a Player: a spectator has no id, so every Player-only
+  // control below falls away from this one answer (spec #179).
+  const viewer = useStore(roomStore, viewerOf);
+  const watching = useStore(roomStore, (s) => s.role === "spectator");
   const status = useStore(roomStore, (s) => s.status);
   const rejection = useStore(roomStore, (s) => s.rejection);
   const selectedField = useStore(uiStore, (s) => s.selectedField);
@@ -103,7 +106,7 @@ export function Game() {
   const { shownTurn, toast, overlay } = frame;
   const { clockOffset } = push;
   // One answer for the Turn card, the trays, the bottom slot and the Podium (spec #72).
-  const decision = openDecision(frame, me, inFlight);
+  const decision = openDecision(frame, viewer, inFlight);
   const slot = bottomSlot(decision, frame, { selectedField, inspect });
   // The one hint a first-time Guest meets now (#255): the table's order decides,
   // and the card draws it only in the area this ticket covers.
@@ -118,7 +121,7 @@ export function Game() {
     cashShort: formatCompactMoney(p.cash),
     fields: view.fields.filter((field) => field.owner === p.id).length,
     current: p.id === view.currentPlayer,
-    you: p.id === me,
+    you: p.id === viewer,
     bankrupt: p.bankrupt,
     status: [
       p.bankrupt ? m.game_bankrupt() : null,
@@ -142,7 +145,7 @@ export function Game() {
   // The quick-chat tray (#231): a seated Guest in a running game, in any phase
   // and on another Player's Turn; never on the result screen, and never while
   // the Guest muted chat (#232), which hides the toggle here and every bubble.
-  const chatOpen = chatOpenTo(view, me, chatMuted);
+  const chatOpen = chatOpenTo(view, viewer, chatMuted);
   // The Playback's DOM layer: the frame's overlay is the dice or a drawn Chance card.
   const boardOverlay =
     overlay?.kind === "dice" ? (
@@ -153,6 +156,15 @@ export function Game() {
 
   const statusRow = (
     <>
+      {/* A spectator's one badge (spec #179): the screen is read-only, and says so. */}
+      {watching && (
+        <span
+          data-testid="watching"
+          className="sticker-sm shrink-0 rounded-full bg-card px-3 py-1 text-sm font-black text-card-foreground"
+        >
+          {m.watching()}
+        </span>
+      )}
       <MinutePill endsAt={view.endsAt} clockOffset={clockOffset} />
       <EventToast
         key={rejected ? `r${rejection.seq}` : push.seq}
@@ -167,7 +179,7 @@ export function Game() {
   );
 
   // The Turn card at the bottom; the Field card takes its place while open.
-  const mySeat = view.players.find((p) => p.id === me)?.seat ?? 0;
+  const mySeat = view.players.find((p) => p.id === viewer)?.seat ?? 0;
   const turnCard = (
     <TurnCard
       view={view}
@@ -208,7 +220,7 @@ export function Game() {
   const card = bottomCard();
   const podium =
     slot.kind === "podium" ? (
-      <Podium view={view} phase={slot.phase} rematch={push.rematch} me={me} busy={inFlight} />
+      <Podium view={view} phase={slot.phase} rematch={push.rematch} me={viewer} busy={inFlight} />
     ) : null;
 
   if (wide) {
