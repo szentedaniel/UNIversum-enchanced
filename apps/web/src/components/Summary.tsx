@@ -4,7 +4,7 @@
  * Monopolies formed and the Bankruptcies — and the Wealth chart, joined to the
  * view's Players by `pick/summary.ts` so names and colours follow the Podium.
  * The Podium opens it and its back button returns there; `view.summary` is
- * null until the game is over, and then this renders nothing at all.
+ * null until the game is over, and this renders nothing while it is.
  */
 import type { PlayerView, PublicView } from "@universum/rules";
 import { FIELDS, type GroupId } from "@universum/rules/board";
@@ -51,7 +51,7 @@ function Figure({
   label,
   children,
 }: {
-  figure: string;
+  figure: "rent" | "buyer" | "monopolies" | "bankruptcies";
   label: string;
   children: ReactNode;
 }) {
