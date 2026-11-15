@@ -13,12 +13,12 @@ Branch `agent/issue-317-board-onfieldhover-option-with-mouse-only-hover-el`. All
 
 - `snapField(at, centres, scale, allowed?)` is the one nearest-Field snap. `centres` is in canvas CSS px, indexed by `FieldId`, and already lifted as a tap lifts it (selected or picked Fields sit `SELECTED_LIFT` higher); `allowed` is the tap's pick/inspect filter (`!pick || inspect || pick.pickable.includes(id)`), and leaving it out counts every Field; ties keep the lower Field id. The reach is unchanged: `max(TAP_REACH_PX 90, TAP_REACH_FIELDS 1.6 × FIELD_WIDTH × scale)`, inside the function. `tap()` now calls it, so tap behaviour and the far-tap `null` (which closes the card) are as before.
 - `fieldHoverReporter(onFieldHover?)` returns the report function: it fires only when the `FieldId | null` changes, so a stream of moves inside one Field is one call. `createBoard` holds one reporter as `reportHover`.
-- `BoardOptions.onFieldHover?(id: FieldId | null)` is the new optional option. The renderer's `hover(at)` snap passes **no** filter: every Field counts, even during a pick, so the next ticket's tooltip works while a Decision is open (hover must not be limited to `pickable`). A hover farther than the tap reach from every Field reports `null`; nothing closes a card.
+- `BoardOptions.onFieldHover?(id: FieldId | null)` is the new optional option. The renderer's `hover(at)` snap passes **no** filter: every Field counts, even during a pick, so the next ticket's Field card works while a Decision is open (hover must not be limited to `pickable`). A hover farther than the tap reach from every Field reports `null`; nothing closes a card.
 - Not changed: `Board.tsx`, `uiStore`, `fieldTap`/`openDecision`, the pick tray, the atlas and the camera. `onFieldHover` is optional, so no bridge change was needed.
 
 ## Gotchas
 
-- Hover is stale while the pointer is still: a wheel zoom or a camera-button pan moves the Board under the cursor without a `pointermove`, so no re-snap happens until the mouse moves. The tooltip ticket must either accept that or add a re-snap where the camera changes.
+- Hover is stale while the pointer is still: a wheel zoom or a camera-button pan moves the Board under the cursor without a `pointermove`, so no re-snap happens until the mouse moves. The Field card ticket must either accept that or add a re-snap where the camera changes.
 - The gesture layer's clear is change-only: a leave fires `hover(null)` only after a point. Do not build behaviour that needs a `null` on every leave.
 - A press (including a touch landing during a mouse hover) clears the hover, and it does not return until the mouse moves again after the release.
 - `snapField` and `fieldHoverReporter` are importable in a Node vitest: `board.ts` imports PixiJS, which loads without a DOM, and the pure exports never call `createBoard`. `createBoard` itself still needs a real DOM and WebGL, so the renderer wiring is only covered by the gesture-level tests plus CI's e2e.
