@@ -51,11 +51,16 @@ afterEach(() => {
  * `welcome` would have written: a watcher gets none, and the role alone must
  * drop the controls.
  */
-function showGame(role: Role, me: string | null): string {
+function showGame(role: Role, me: string | null, spectators = 0): string {
   roomStore.setState({ status: "connected", code: "123456", me, role });
-  receivePush({ view: viewOf(), events: [], reveals: [], spectators: 0, now: 0 }, 0);
+  receivePush({ view: viewOf(), events: [], reveals: [], spectators, now: 0 }, 0);
   expect(currentPlayback()).not.toBeNull();
   expect(playbackStore.getState().frame?.gateOpen).toBe(true);
+  return renderGame();
+}
+
+/** The Game screen as the route draws it, from the store's latest push. */
+function renderGame(): string {
   return renderToStaticMarkup(
     createElement(
       StaticRouter,
@@ -132,13 +137,18 @@ const lobbyOf = (): LobbyMessage => ({
 });
 
 /** The Lobby as the route draws it, after the given role joined it and its message arrived. */
-function showLobby(role: Role, me: string | null, status: ConnectionStatus = "connected"): string {
-  roomStore.setState({ status, code: "123456", me, role });
-  receiveLobby(lobbyOf(), 0);
+function showLobby(
+  role: Role,
+  me: string | null,
+  status: ConnectionStatus = "connected",
+  lobby: LobbyMessage = lobbyOf(),
+): string {
+  roomStore.setState({ status, code: lobby.code, me, role });
+  receiveLobby(lobby, 0);
   return renderToStaticMarkup(
     createElement(
       StaticRouter,
-      { location: "/room/123456" },
+      { location: `/room/${lobby.code}` },
       createElement(
         Routes,
         null,
@@ -185,6 +195,54 @@ describe("the watching Lobby screen", () => {
     expect(html).not.toContain('data-testid="watching"');
     expect(html).toContain('data-testid="room-code"');
     expect(html).toContain('data-testid="seat"');
+  });
+});
+
+describe("the spectator count on the Lobby", () => {
+  beforeEach(() => {
+    // The invite card reads the page's origin; Node has no window.
+    vi.stubGlobal("window", { location: { origin: "http://localhost:5173" } });
+  });
+
+  it("shows nothing at zero", () => {
+    const html = showLobby("player", "p1", "connected", { ...lobbyOf(), spectators: 0 });
+
+    expect(html).not.toContain('data-testid="spectators"');
+  });
+
+  it("shows one watcher and many watchers, with a label of their number", () => {
+    const one = showLobby("player", "p1", "connected", { ...lobbyOf(), spectators: 1 });
+    expect(one).toContain('data-testid="spectators"');
+    expect(one).toContain("1 spectator");
+
+    reset();
+    const many = showLobby("player", "p1", "connected", { ...lobbyOf(), spectators: 3 });
+    expect(many).toContain('data-testid="spectators"');
+    expect(many).toContain("3 spectators");
+  });
+});
+
+describe("the spectator count in the Game", () => {
+  it("shows nothing at zero", () => {
+    expect(showGame("player", "p1")).not.toContain('data-testid="spectators"');
+  });
+
+  it("shows the count to a Player in the status row", () => {
+    const html = showGame("player", "p1", 2);
+
+    expect(html).toContain('data-testid="spectators"');
+    expect(html).toContain("2 spectators");
+  });
+
+  it("updates from a push that carries no events", () => {
+    const view = viewOf();
+    roomStore.setState({ status: "connected", code: "123456", me: "p1", role: "player" });
+    receivePush({ view, events: [], reveals: [], spectators: 0, now: 0 }, 0);
+    expect(renderGame()).not.toContain('data-testid="spectators"');
+
+    // A Guest started watching (spec #179, ticket #249): the same view, no events.
+    receivePush({ view, events: [], reveals: [], spectators: 2, now: 0 }, 1_000);
+    expect(renderGame()).toContain("2 spectators");
   });
 });
 

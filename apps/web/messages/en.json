@@ -16,6 +16,8 @@
   "home_code_digit": "Digit {index}",
   "watching": "Watching",
   "watch_waiting": "Waiting for the game to start.",
+  "spectators_count": "{count} spectator",
+  "spectators_count_plural": "{count} spectators",
   "lobby_title": "Lobby",
   "lobby_code": "Room code: {code}",
   "lobby_players": "Players: {count}/{max}",

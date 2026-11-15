@@ -7,6 +7,7 @@ import { InviteQr } from "#components/InviteQr.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ScreenHeader } from "#components/ScreenHeader.tsx";
 import { SeatCard } from "#components/SeatCard.tsx";
+import { SpectatorChip } from "#components/SpectatorChip.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { ensureJoined, JoinError, joinRoom, sendIntent } from "#connection.ts";
 import { inviteLink } from "#invite.ts";
@@ -105,6 +106,8 @@ export function Lobby() {
   const me = useStore(roomStore, (s) => s.me);
   const clockOffset = useStore(roomStore, (s) => s.lobbyClockOffset);
   const started = useStore(roomStore, (s) => s.code === code && s.push !== null);
+  // How many Guests watch the Room, from the latest Lobby message (spec #179).
+  const spectators = useStore(roomStore, (s) => s.spectators);
   // A watcher holds no Seat (spec #179): until #252 draws the Lobby read-only,
   // it gets a minimal waiting state with nothing to press, and the Game when
   // the first push arrives (the `started` navigation below).
@@ -200,6 +203,7 @@ export function Lobby() {
           >
             {m.watching()}
           </p>
+          <SpectatorChip count={spectators} />
           <p className="m-0 font-bold text-muted-foreground">{m.watch_waiting()}</p>
         </main>
       </div>
@@ -224,6 +228,7 @@ export function Lobby() {
             {roomNameText(lobby.roomName, lobby.code)}
           </h1>
           <RoomCodeSticker code={lobby.code} />
+          <SpectatorChip count={spectators} />
           <InviteCard link={invite} />
         </div>
         <ul className="m-0 mt-8 flex list-none flex-wrap justify-center gap-4 p-0">

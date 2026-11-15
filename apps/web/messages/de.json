@@ -16,6 +16,8 @@
   "home_code_digit": "Ziffer {index}",
   "watching": "Du siehst zu",
   "watch_waiting": "Warte, bis das Spiel beginnt.",
+  "spectators_count": "{count} Zuschauer",
+  "spectators_count_plural": "{count} Zuschauer",
   "lobby_title": "Lobby",
   "lobby_code": "Raumcode: {code}",
   "lobby_players": "Spieler: {count}/{max}",

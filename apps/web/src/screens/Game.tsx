@@ -19,6 +19,7 @@ import {
   type PlayerSummary,
 } from "#components/PlayerCard.tsx";
 import { Podium } from "#components/Podium.tsx";
+import { SpectatorChip } from "#components/SpectatorChip.tsx";
 import { buttonVariants } from "#components/ui/button.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ensureJoined, JoinError } from "#connection.ts";
@@ -44,6 +45,8 @@ export function Game() {
   // control below falls away from this one answer (spec #179).
   const seatedMe = useStore(roomStore, seatedMeOf);
   const watching = useStore(roomStore, (s) => s.role === "spectator");
+  // How many Guests watch the Room, from the latest push (spec #179, decision 7).
+  const spectators = useStore(roomStore, (s) => s.spectators);
   const status = useStore(roomStore, (s) => s.status);
   const rejection = useStore(roomStore, (s) => s.rejection);
   const selectedField = useStore(uiStore, (s) => s.selectedField);
@@ -165,6 +168,7 @@ export function Game() {
           {m.watching()}
         </span>
       )}
+      <SpectatorChip count={spectators} />
       <MinutePill endsAt={view.endsAt} clockOffset={clockOffset} />
       <EventToast
         key={rejected ? `r${rejection.seq}` : push.seq}
