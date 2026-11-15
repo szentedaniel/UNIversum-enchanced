@@ -128,6 +128,8 @@ export async function ensureJoined(code: string): Promise<void> {
 }
 
 export function sendIntent(intent: ClientIntent): void {
+  // A spectator has no Seat to act for; the Room rejects it too (presentation guard).
+  if (roomStore.getState().role === "spectator") return;
   // No optimistic UI: the lock is set even with no Room attached (the latest
   // answer is 0 then); the push a rejoin brings has a later `seq` and clears it.
   markIntentSent();

@@ -7,16 +7,16 @@ build on it. The rules engine, `GameState` and the stored snapshot are untouched
 ## The client's role
 
 - **`apps/web/src/stores/room-store.ts`** has `Role = "player" | "spectator"`, `RoomState.role`
-  (initial `"player"`), and `viewerOf(state)`: this client's own `PlayerId`, or `null` for a
+  (initial `"player"`), and `seatedMeOf(state)`: this client's own `PlayerId`, or `null` for a
   spectator. `reset()` returns the role to `"player"`, so `leaveRoom()` (and every `attach`)
   clears it.
-- **`viewerOf` is the one read of "me as a Player".** `Game.tsx`, `TurnCard.tsx` and the Board's
+- **`seatedMeOf` is the one read of "me as a Player".** `Game.tsx`, `TurnCard.tsx` and the Board's
   `currentDecision()` pass it to `openDecision`, `chatOpenTo` and `Podium`; a `null` viewer is what
   drops the Roll/Offer/Quarantine/Deal controls, the Decision tray, the pick marks, the quick-chat
   tray, the "Your Turn" heading and the rematch button. Those components needed no spectator
   branch of their own: `openDecision(frame, null, …)` can only answer another Player's waiting
   line, so `bottomSlot` can only be the Turn card or a Field card. Do not add a second Game screen
-  or a second "read only" flag; read `viewerOf`.
+  or a second "read only" flag; read `seatedMeOf`.
 - **`Game.tsx` draws the marker** as `data-testid="watching"` in the status row (both layouts)
   when `role === "spectator"`. The status row now `flex-wrap`s, so a spectator's extra chip never
   clips a control on a phone. The Podium is a `fixed inset-0 z-40` overlay, so the marker is
@@ -94,7 +94,7 @@ build on it. The rules engine, `GameState` and the stored snapshot are untouched
   `#board/Board.tsx` mocked, and the `window.location.origin` stub the invite card needs. A push
   with no events opens its gate at once, so the `awaitingRoll` view shows the Roll only for a
   Player.
-- `apps/web/test/room-store.test.ts` has the role and `viewerOf` cases.
+- `apps/web/test/room-store.test.ts` has the role and `seatedMeOf` cases.
 - **#253**: the Roll button has no `data-testid`; assert its absence by its label
   (`m.game_roll()`), or add the id there. The buy control is `data-testid="offer"`; there is no
   end-turn control (the engine passes the Turn).

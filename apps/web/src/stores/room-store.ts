@@ -168,7 +168,7 @@ export function reset(): void {
  * `null` from here and not from `me` alone (spec #179, decision 4: the Room
  * enforces read-only; the screen only stops offering controls).
  */
-export const viewerOf = (state: RoomState): PlayerId | null =>
+export const seatedMeOf = (state: RoomState): PlayerId | null =>
   state.role === "spectator" ? null : state.me;
 
 /**

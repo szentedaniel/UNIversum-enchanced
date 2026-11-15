@@ -8,7 +8,7 @@ import { fieldFacts } from "#board/field-facts.ts";
 import { Button } from "#components/ui/button.tsx";
 import { fieldTap, openDecision, pickSyncOf, type OpenDecision } from "#decision/decision.ts";
 import { currentPlayback, gateOpenOf, playbackStore } from "#playback/playback-store.ts";
-import { inFlightOf, roomStore, viewerOf } from "#stores/room-store.ts";
+import { inFlightOf, roomStore, seatedMeOf } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
 import { exposeBoard } from "#test-hooks.ts";
 import { fieldName, formatCompactMoney, m } from "#text.ts";
@@ -27,7 +27,7 @@ const WAKE_SLACK_MS = 50;
  */
 function currentDecision(): OpenDecision | null {
   const room = roomStore.getState();
-  return openDecision(playbackStore.getState().frame, viewerOf(room), inFlightOf(room));
+  return openDecision(playbackStore.getState().frame, seatedMeOf(room), inFlightOf(room));
 }
 
 /**
