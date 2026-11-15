@@ -9,8 +9,10 @@
 import { serverNow } from "@universum/protocol/messages";
 import type { GameEvent, PlayerId, PublicView, Reveal } from "@universum/rules";
 import type { FieldId } from "@universum/rules/board";
+import { cuePlays } from "#audio.ts";
 import type { Board } from "#board/board.ts";
 import { gateOpenOf, playbackStore, type PlaybackGate } from "#playback/playback-store.ts";
+import type { CueName } from "#sound/cues.ts";
 import { markIntentSent, receivePush, roomStore, type RoomState } from "#stores/room-store.ts";
 
 declare const TEST_HOOKS_ENABLED: boolean;
@@ -24,6 +26,8 @@ export type TestHooks = {
   room(): RoomState;
   /** Whether the latest push's decision is open (local Playback and `actsAfter`, ADR-0004). */
   playback(): PlaybackGate;
+  /** How many times each cue played on this page since it loaded (a test build records them). */
+  cuePlays(): Record<CueName, number>;
   /**
    * The server's clock estimated from this client's, for the latest push's
    * `clockOffset` (or the Lobby's before the first push). Specs inside
@@ -70,6 +74,7 @@ export function exposeBoard(board: Board | null): void {
             shownTurn: frame?.shownTurn ?? null,
           };
         },
+        cuePlays,
         serverNow: () => {
           const { push, lobbyClockOffset } = roomStore.getState();
           return serverNow(push?.clockOffset ?? lobbyClockOffset);
