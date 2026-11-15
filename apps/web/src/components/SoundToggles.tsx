@@ -20,8 +20,9 @@ export function SoundToggles({ compact = false }: { compact?: boolean }) {
   const musicOn = useStore(soundStore, (state) => state.musicOn);
   const effectsLabel = effectsMuted ? m.sound_off() : m.sound_on();
   const musicLabel = musicOn ? m.music_on() : m.music_off();
-  // `icon-sm` is the height of the language pills beside it on Home.
-  const size = compact ? "icon-sm" : "default";
+  // `icon` is the round sticker button: the menu's toggles are the same height
+  // (`min-h-12`), and it stays a thumb-sized target on a phone.
+  const size = compact ? "icon" : "default";
   const toggles = (
     <>
       <Button
