@@ -23,10 +23,10 @@ import { viewOf } from "./playback-fixtures.ts";
 
 // Watching a Room (spec #179, stories 2–6): the Game screen a Guest without a
 // Seat sees (the same Board, Player cards and Turn, with no way to play and a
-// watching marker), the Lobby's waiting state before the game starts, the
-// Watch action beside Join, and the overlay that no longer promises a watcher a
-// kept Seat. React's server renderer reads a zustand store's *initial* state,
-// so this hands the screens the state the store holds, as a mounted client
+// watching marker), the read-only Lobby it waits in with the spectator count,
+// the Watch action beside Join, and the overlay that no longer promises a
+// watcher a kept Seat. React's server renderer reads a zustand store's *initial*
+// state, so this hands the screens the state the store holds, as a mounted client
 // reads it; the media query and the PixiJS Board are the two things a server
 // render cannot build. No DOM environment is installed (#224).
 vi.mock("zustand", () => ({
@@ -212,6 +212,18 @@ describe("the watching Lobby screen", () => {
     expect(html).not.toContain(en.lobby_take_seat);
     expect(html).not.toContain('data-testid="take-seat"');
     expect(html).not.toContain('data-testid="seat-released"');
+  });
+
+  it("offers none either when a stale welcome named the creator as this client", () => {
+    // The role, not the Player id, is what drops the controls (spec #179): a
+    // watcher whose `me` happens to be the creator's must still press nothing.
+    const html = showLobby("spectator", "p1", "connected", watchableLobby());
+
+    expect(html).not.toContain(">Start<");
+    expect(html).not.toContain(en.lobby_add_bot);
+    expect(html).not.toContain(en.lobby_remove_bot);
+    expect(html).not.toContain(en.lobby_take_seat);
+    expect(html).not.toContain('data-testid="take-seat"');
   });
 
   it("marks no Seat as the watcher's own, even if a welcome named a Player", () => {
