@@ -310,7 +310,14 @@ describe("Rejection codes", () => {
 
   it("include the server's own codes", () => {
     expect(REJECTION_CODES).toEqual(
-      expect.arrayContaining(["MALFORMED", "INTERNAL", "ROOM_NOT_FOUND", "REMATCH_NOT_OFFERED"]),
+      expect.arrayContaining([
+        "MALFORMED",
+        "INTERNAL",
+        "ROOM_NOT_FOUND",
+        "SPECTATORS_FULL",
+        "SPECTATOR_READ_ONLY",
+        "REMATCH_NOT_OFFERED",
+      ]),
     );
   });
 });

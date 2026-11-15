@@ -226,6 +226,8 @@
   "lobby_no_password": "Nincs jelszó",
   "back_to_list": "Vissza a várótermekhez",
   "rejection_room_full": "Ez a váróterem megtelt.",
+  "rejection_spectators_full": "Túl sokan nézik ezt a szobát.",
+  "rejection_spectator_read_only": "Csak néző vagy, ezért nem léphetsz.",
   "rejection_room_name_invalid": "A szoba neve 3–24 karakter lehet: betűk, számjegyek, szóköz és - _ . , ! ? ' &",
   "rejection_wrong_password": "Hibás jelszó.",
   "field_card": "Mezőkártya",
