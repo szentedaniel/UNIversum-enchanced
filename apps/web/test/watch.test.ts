@@ -21,12 +21,14 @@ import {
 import en from "../messages/en.json" with { type: "json" };
 import { viewOf } from "./playback-fixtures.ts";
 
-// The watching Game screen (spec #179, stories 2, 3 and 5): a Guest without a
-// Seat sees the same Board, Player cards and Turn as a Player, with no way to
-// play. React's server renderer reads a zustand store's *initial* state, so
-// this hands the screens the state the store holds, as a mounted client reads
-// it; the media query and the PixiJS Board are the two things a server render
-// cannot build. No DOM environment is installed (#224).
+// Watching a Room (spec #179, stories 2–6): the Game screen a Guest without a
+// Seat sees (the same Board, Player cards and Turn, with no way to play and a
+// watching marker), the Lobby's waiting state before the game starts, the
+// Watch action beside Join, and the overlay that no longer promises a watcher a
+// kept Seat. React's server renderer reads a zustand store's *initial* state,
+// so this hands the screens the state the store holds, as a mounted client
+// reads it; the media query and the PixiJS Board are the two things a server
+// render cannot build. No DOM environment is installed (#224).
 vi.mock("zustand", () => ({
   useStore: <T, U>(api: { getState: () => T }, selector?: (state: T) => U): U | T =>
     selector ? selector(api.getState()) : api.getState(),
@@ -187,7 +189,7 @@ describe("the watching Lobby screen", () => {
 });
 
 describe("the Watch action by a Room code", () => {
-  it("sits beside Join and asks for the Room's password like a Seat does", () => {
+  it("sits beside Join in the Room code form", () => {
     const html = renderToStaticMarkup(createElement(StaticRouter, null, createElement(JoinByCode)));
 
     expect(html).toContain(en.home_join);
