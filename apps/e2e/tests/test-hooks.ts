@@ -81,6 +81,12 @@ export type TestHooks = {
    */
   playback(): PlaybackHook;
   /**
+   * How many times each cue played on this page since it loaded, by cue name
+   * (`dice`, `buy`, …): the app counts them under test hooks, so a spec asserts
+   * a cue without hearing it.
+   */
+  cuePlays(): Record<string, number>;
+  /**
    * The server's clock estimated from this client's (`serverNow` from
    * `@universum/protocol/messages`): the latest push's offset, or the
    * Lobby's before the first push.

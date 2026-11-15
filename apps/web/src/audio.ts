@@ -17,6 +17,8 @@ import { soundStore } from "#stores/sound-store.ts";
 
 export { soundStore };
 
+declare const TEST_HOOKS_ENABLED: boolean;
+
 /** How many elements each cue rotates through: a repeated cue restarts without cutting itself off. */
 const POOL_SIZE = 3;
 
@@ -109,11 +111,34 @@ function start(element: HTMLAudioElement): void {
   void element.play().catch(() => {});
 }
 
+/** Plays counted per cue for the e2e specs; only a test build records them. */
+const cueCounts: Record<CueName, number> = {
+  dice: 0,
+  buy: 0,
+  rent: 0,
+  chance: 0,
+  quarantine: 0,
+  release: 0,
+  bankrupt: 0,
+  gameEnd: 0,
+};
+
+/** Records one play of `name`; only a test build calls this. */
+function countPlay(name: CueName): void {
+  cueCounts[name] += 1;
+}
+
+/** How many times each cue played since this page loaded. */
+export function cuePlays(): Record<CueName, number> {
+  return { ...cueCounts };
+}
+
 /** Plays a cue, unless muted. A cue on an element unlocked a moment ago follows the unlock. */
 export function playCue(name: CueName): void {
   if (soundStore.getState().effectsMuted) return;
   // No audio outside a browser: the store's vitest drives the cues' caller in Node.
   if (typeof Audio === "undefined") return;
+  if (TEST_HOOKS_ENABLED) countPlay(name);
   const sound = elementFor(name);
   const pending = unlocking.get(sound);
   if (pending) void pending.then(() => start(sound));

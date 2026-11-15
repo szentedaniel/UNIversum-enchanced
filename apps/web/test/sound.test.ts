@@ -191,6 +191,32 @@ describe("the sound cues", () => {
     expect(FakeAudio.instances[0]?.plays).toBe(1);
   });
 
+  it("counts each play under its cue's name", async () => {
+    stubBrowser();
+    const { cuePlays, playCue } = await loadAudio();
+
+    playCue("buy");
+    playCue("buy");
+    playCue("dice");
+
+    const counts = cuePlays();
+    expect(Object.keys(counts).toSorted()).toEqual(Object.keys(CUES).toSorted());
+    for (const [name, count] of Object.entries(counts)) {
+      expect(count).toBe(name === "buy" ? 2 : name === "dice" ? 1 : 0);
+    }
+  });
+
+  it("counts no cue while the effects are muted", async () => {
+    stubBrowser();
+    const { cuePlays, playCue, soundStore } = await loadAudio();
+    soundStore.getState().setEffectsMuted(true);
+
+    playCue("buy");
+
+    expect(cuePlays().buy).toBe(0);
+    expect(FakeAudio.instances).toHaveLength(0);
+  });
+
   it("unlocks every pooled element on the first pointer press, once", async () => {
     stubBrowser();
     const { installAudioUnlock, playCue } = await loadAudio();
