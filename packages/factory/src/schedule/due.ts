@@ -83,11 +83,12 @@ const DAYS_IN_WEEK = 7;
 
 /**
  * The most recent due occurrence at or before `now`, with the Budapest day it
- * falls on. Every job is due at least once a week, so the seven-day walk finds one.
+ * falls on. Every job is due at least once a week, so the walk back to the same
+ * weekday a week ago finds one: a weekly job before today's due time is last due then.
  */
 const occurrenceOf = (job: Job, now: Date): { at: Date; day: string } | undefined => {
   const today = budapestDay(now);
-  for (let back = 0; back < DAYS_IN_WEEK; back++) {
+  for (let back = 0; back <= DAYS_IN_WEEK; back++) {
     const day = shiftDay(today, -back);
     if (!job.days.includes(mondayIndex(day))) continue;
     const at = budapestAt(day, job.due.hour, job.due.minute);

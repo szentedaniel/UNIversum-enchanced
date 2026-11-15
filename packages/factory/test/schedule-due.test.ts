@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dueJobs } from "#schedule/due.ts";
+import { dueJobs, lastDueAt, JOBS } from "#schedule/due.ts";
 
 const at = (iso: string): Date => new Date(iso);
 
@@ -91,5 +91,20 @@ describe("dueJobs", () => {
       "factory-review.yml",
       "factory-maintain.yml",
     ]);
+  });
+});
+
+const job = (name: string) => JOBS.find((candidate) => candidate.name === name)!;
+
+describe("lastDueAt", () => {
+  it("reaches back a week for a weekly job read before today's due time", () => {
+    // 2026-11-15 is a Sunday; 01:35 UTC is 02:35 CET, before maintenance's 03:19.
+    expect(lastDueAt(job("maintain"), at("2026-11-15T01:35:00Z"))).toEqual(
+      at("2026-11-08T02:19:00Z"),
+    );
+    // 2026-11-16 is a Monday; 04:00 UTC is 05:00 CET, before the report's 06:09.
+    expect(lastDueAt(job("report"), at("2026-11-16T04:00:00Z"))).toEqual(
+      at("2026-11-09T05:09:00Z"),
+    );
   });
 });
