@@ -53,6 +53,7 @@ const pushOf = (view: PublicView, rematch: readonly string[] | undefined) => ({
   view,
   events: [],
   reveals: [],
+  spectators: 0,
   now: 0,
   ...(rematch === undefined ? {} : { rematch }),
 });

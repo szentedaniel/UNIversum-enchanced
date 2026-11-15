@@ -7,11 +7,12 @@ import { InviteQr } from "#components/InviteQr.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ScreenHeader } from "#components/ScreenHeader.tsx";
 import { SeatCard } from "#components/SeatCard.tsx";
+import { SpectatorChip } from "#components/SpectatorChip.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { ensureJoined, JoinError, joinRoom, sendIntent } from "#connection.ts";
 import { inviteLink } from "#invite.ts";
 import { PasswordForm, RejectionText, retryAtOf, useCountdown, useJoin } from "#screens/join.tsx";
-import { roomStore } from "#stores/room-store.ts";
+import { roomStore, seatedMeOf } from "#stores/room-store.ts";
 import { formatMoney, m, playerName, roomNameText } from "#text.ts";
 
 const COPIED_MS = 1500;
@@ -98,16 +99,30 @@ function HeldCountdown({ until, clockOffset }: { until: number; clockOffset: num
   );
 }
 
+/** A watcher's one badge (spec #179): the Room's Lobby is read-only for it. */
+function WatchingMark() {
+  return (
+    <span
+      data-testid="watching"
+      className="sticker-sm shrink-0 rounded-full bg-card px-2 py-1 text-xs font-black text-card-foreground"
+    >
+      {m.watching()}
+    </span>
+  );
+}
+
 export function Lobby() {
   const { code = "" } = useParams();
   const navigate = useNavigate();
   const lobby = useStore(roomStore, (s) => (s.code === code ? s.lobby : null));
-  const me = useStore(roomStore, (s) => s.me);
+  // This client as a Player: `null` for a watcher, so no Seat reads as its own.
+  const me = useStore(roomStore, seatedMeOf);
   const clockOffset = useStore(roomStore, (s) => s.lobbyClockOffset);
   const started = useStore(roomStore, (s) => s.code === code && s.push !== null);
-  // A watcher holds no Seat (spec #179): until #252 draws the Lobby read-only,
-  // it gets a minimal waiting state with nothing to press, and the Game when
-  // the first push arrives (the `started` navigation below).
+  // How many Guests watch the Room, from the latest Lobby message (spec #179).
+  const spectators = useStore(roomStore, (s) => s.spectators);
+  // A watcher holds no Seat (spec #179): it reads the Lobby, presses nothing,
+  // and the Game screen opens with the first push (the `started` navigation).
   const spectator = useStore(roomStore, (s) => s.role === "spectator");
   const [error, setError] = useState<RejectionCode | null>(null);
   const [retryAt, setRetryAt] = useState<number | null>(null);
@@ -185,27 +200,6 @@ export function Lobby() {
     );
   }
 
-  if (spectator) {
-    return (
-      <div className="min-h-dvh pb-safe-8">
-        <ScreenHeader back="/" label={m.back_home()} />
-        <ReconnectOverlay />
-        <main className="mx-auto flex max-w-md flex-col items-center gap-6 px-safe-4 pt-10 text-center">
-          <h1 className="m-0 text-3xl font-black md:text-4xl">
-            {roomNameText(lobby.roomName, lobby.code)}
-          </h1>
-          <p
-            data-testid="watching"
-            className="sticker m-0 rounded-ui bg-card px-4 py-2 font-black text-card-foreground"
-          >
-            {m.watching()}
-          </p>
-          <p className="m-0 font-bold text-muted-foreground">{m.watch_waiting()}</p>
-        </main>
-      </div>
-    );
-  }
-
   const { maxPlayers, minuteLimit, startingCash, roundBonus } = lobby.settings;
   const full = lobby.seats.length === maxPlayers;
   const open = Array.from({ length: maxPlayers - lobby.seats.length }, (_, i) => i);
@@ -216,13 +210,22 @@ export function Lobby() {
 
   return (
     <div className="min-h-dvh pb-safe-8">
-      <ScreenHeader back="/rooms" label={m.back_to_list()} />
+      <ScreenHeader
+        back={spectator ? "/" : "/rooms"}
+        label={spectator ? m.back_home() : m.back_to_list()}
+      />
       <ReconnectOverlay />
       <main className="mx-auto max-w-5xl px-safe-4 pt-6">
         <div className="flex flex-col items-center gap-3 text-center">
           <h1 className="m-0 text-3xl font-black md:text-4xl">
             {roomNameText(lobby.roomName, lobby.code)}
           </h1>
+          {(spectator || spectators > 0) && (
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {spectator && <WatchingMark />}
+              <SpectatorChip count={spectators} />
+            </div>
+          )}
           <RoomCodeSticker code={lobby.code} />
           <InviteCard link={invite} />
         </div>
@@ -237,7 +240,7 @@ export function Lobby() {
               creator={seat.playerId === lobby.creatorId}
               bot={seat.bot === true}
               onRemoveBot={
-                seat.bot === true && !released
+                seat.bot === true && !released && !spectator
                   ? () => sendIntent({ type: "RemoveBot", playerId: seat.playerId })
                   : undefined
               }
@@ -248,14 +251,16 @@ export function Lobby() {
               }
             />
           ))}
-          {open.map((i) => (
-            // A Bot takes the next empty Seat, so only the first open card offers it.
-            <SeatCard
-              key={`open-${i}`}
-              open
-              onAddBot={i === 0 && !released ? () => sendIntent({ type: "AddBot" }) : undefined}
-            />
-          ))}
+          {/* A watcher sees the taken Seats only: an open Seat is something to take. */}
+          {!spectator &&
+            open.map((i) => (
+              // A Bot takes the next empty Seat, so only the first open card offers it.
+              <SeatCard
+                key={`open-${i}`}
+                open
+                onAddBot={i === 0 && !released ? () => sendIntent({ type: "AddBot" }) : undefined}
+              />
+            ))}
         </ul>
         <ul className="sticker m-0 mt-8 grid list-none grid-cols-1 gap-4 rounded-ui bg-card p-4 text-card-foreground sm:grid-cols-2 lg:grid-cols-3">
           <li className="flex items-center gap-2">
@@ -293,7 +298,9 @@ export function Lobby() {
             </span>
           </li>
         </ul>
-        {released ? (
+        {spectator ? (
+          <p className="mt-6 text-center font-bold text-muted-foreground">{m.watch_waiting()}</p>
+        ) : released ? (
           <div className="sticker mt-6 flex flex-col items-center gap-3 rounded-ui bg-card p-4 text-center text-card-foreground">
             <p data-testid="seat-released" className="m-0 font-bold">
               {m.lobby_seat_released()}

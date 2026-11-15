@@ -51,6 +51,12 @@ export type RoomState = {
   role: Role;
   /** The Seats while the Room is a Lobby. */
   lobby: LobbyMessage | null;
+  /**
+   * How many Guests are watching the Room, from the latest Lobby or Game
+   * message (spec #179, decision 7): a count only, never a name. A push that
+   * only changes it carries no events, and the screens show it only above zero.
+   */
+  spectators: number;
   /** The latest game push; `null` until the game starts. */
   push: Push | null;
   /** The latest Rejection of one of this client's intents. */
@@ -69,6 +75,7 @@ const initialRoomState: RoomState = {
   me: null,
   role: "player",
   lobby: null,
+  spectators: 0,
   push: null,
   rejection: null,
   sentAt: null,
@@ -93,6 +100,8 @@ type ReceivedPush = {
   reveals: readonly Reveal[];
   /** The rematch votes, present only once the game has ended (ticket #223). */
   rematch?: readonly PlayerId[];
+  /** How many Guests watch the Room; a count-only push carries no events (spec #179). */
+  spectators: number;
   now: number;
 };
 
@@ -102,12 +111,13 @@ type ReceivedPush = {
  * clock offset. An ignored push spends no `seq`.
  */
 export function receivePush(
-  { view, events, reveals, rematch, now }: ReceivedPush,
+  { view, events, reveals, rematch, spectators, now }: ReceivedPush,
   receivedAt: number,
 ): void {
   const last = roomStore.getState().push;
   if (last && view.version < last.view.version) return;
   roomStore.setState({
+    spectators,
     push: {
       view,
       events,
@@ -133,6 +143,7 @@ export function receiveLobby(lobby: LobbyMessage, receivedAt: number): void {
   const { push } = roomStore.getState();
   roomStore.setState({
     lobby,
+    spectators: lobby.spectators,
     lobbyClockOffset: lobby.now - receivedAt,
     ...(push === null ? {} : { push: null, sentAt: null }),
   });
