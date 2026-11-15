@@ -420,6 +420,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
         password: this.password && encodePassword(this.password),
       }),
       readState: () => ({ game: this.game, seats: this.seats, endedAt: this.endedAt }),
+      readSpectators: () => this.spectatorCount(),
       publish: (state, message) => {
         this.game = state;
         this.broadcast(MESSAGE.game, this.withVotes(message));
@@ -511,7 +512,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
         throw refuse("WRONG_PASSWORD");
       }
       this.#spectators.add(client.sessionId);
-      this.sendSpectatorCurrent(client);
+      // The newcomer and everyone else hear the new count in one push.
+      this.broadcastSpectatorCount();
       return;
     }
     const token = guestTokenIn(options);
@@ -591,14 +593,16 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     this.#flood.delete(client.sessionId);
     this.#chatFlood.delete(client.sessionId);
     // A spectator held no Seat and no reconnection: the connection was all it had.
-    this.#spectators.delete(client.sessionId);
+    const wasSpectator = this.#spectators.delete(client.sessionId);
     // In a running game the Seat stays (a Bot plays its Decisions from then);
     // a Lobby frees it. On shutdown nothing changes: the Room comes back as it was.
     if (this.#shuttingDown) return;
     const seat = this.seatOf(client);
     if (!seat) {
       // Taken back from another connection, already freed, or released by a
-      // rematch: the Room may now be an empty Lobby.
+      // rematch: the Room may now be an empty Lobby. A spectator that left is
+      // one push of the new count for whoever is still there.
+      if (wasSpectator && this.clients.length > 0) this.broadcastSpectatorCount();
       this.disposeIfAbandoned();
       return;
     }
@@ -673,10 +677,15 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     else this.broadcastLobby();
   }
 
-  /** A joining spectator hears the current state: the Lobby to itself, or the running game's push. */
-  private sendSpectatorCurrent(client: Client): void {
-    if (this.game) client.send(MESSAGE.game, this.gamePush(this.game));
-    else client.send(MESSAGE.lobby, this.lobbyMessage());
+  /**
+   * Tells every client the new spectator count after one joined or left (spec
+   * #179, ticket #249): a Lobby sends itself, a running game gets a
+   * reconnect-like push of the current view with no events, so no client
+   * replays anything. Joins and leaves only, never a chat or an intent.
+   */
+  private broadcastSpectatorCount(): void {
+    if (this.game) this.broadcast(MESSAGE.game, this.gamePush(this.game));
+    else this.broadcastLobby();
   }
 
   /** The push of the Room's current state: its view, and the Podium's votes once the game ended. */
@@ -685,8 +694,17 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
       view: publicView(game, this.timing),
       events: [],
       reveals: [],
+      spectators: this.spectatorCount(),
       now: this.now(),
     });
+  }
+
+  /**
+   * How many clients are watching without a Seat (spec #179): the count every
+   * Lobby and Game message carries, never who they are (ticket #249).
+   */
+  private spectatorCount(): number {
+    return this.#spectators.size;
   }
 
   /** Adds the rematch votes to a push once the game has ended; a running game's push is unchanged. */
@@ -1250,6 +1268,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
           ...(typeof heldUntil === "number" && { heldUntil }),
         };
       }),
+      spectators: this.spectatorCount(),
       now: this.now(),
     };
   }

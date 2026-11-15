@@ -1,4 +1,7 @@
+import type { GameMessage } from "@universum/protocol/messages";
 import { beforeEach, describe, expect, it } from "vitest";
+import { playbackStore } from "#playback/playback-store.ts";
+import { logStore } from "#stores/log-store.ts";
 import {
   inFlightOf,
   markIntentSent,
@@ -56,6 +59,27 @@ describe("the answer's seq", () => {
     expect(roomStore.getState().push).toEqual(shown);
     receiveRejection("NOT_YOUR_TURN");
     expect(roomStore.getState().rejection!.seq).toBeGreaterThan(shown!.seq);
+  });
+});
+
+describe("a push that only changes the spectator count", () => {
+  it("is accepted for the shown view and replays no event", () => {
+    const view = viewOf(undefined, { version: 3 });
+    receivePush({ view, events: [], reveals: [], now: 0 }, 0);
+    const before = roomStore.getState().push!;
+
+    // A spectator joined the Room (spec #179, ticket #249): the same view and
+    // no events, so the Playback has nothing to replay and the log gains no line.
+    const countOnly: GameMessage = { view, events: [], reveals: [], spectators: 1, now: 0 };
+    receivePush(countOnly, 1_000);
+
+    const shown = roomStore.getState().push!;
+    expect(shown.seq).toBeGreaterThan(before.seq);
+    expect(shown.receivedAt).toBe(1_000);
+    expect(shown.events).toEqual([]);
+    expect(shown.reveals).toEqual([]);
+    expect(playbackStore.getState().frame).toMatchObject({ eventsReached: 0, view });
+    expect(logStore.getState().lines).toEqual([]);
   });
 });
 
