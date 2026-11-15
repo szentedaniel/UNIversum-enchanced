@@ -107,6 +107,9 @@ const RATE_LIMIT_STATUSES = new Set([403, 429]);
 /** A missing file is the one refusal the gate tolerates; everything else throws. */
 export const isNotFound = (error: unknown): boolean => httpStatusOf(textOf(error)) === 404;
 
+/** A merge the API refused because the branches conflict (409). */
+export const isConflict = (error: unknown): boolean => httpStatusOf(textOf(error)) === 409;
+
 /**
  * Whether GitHub refused the call for a rate limit. REST sends a 403 or 429;
  * a GraphQL call (`pr view`, `issue view`) names the limit with no status. A

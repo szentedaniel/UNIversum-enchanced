@@ -64,6 +64,7 @@ const tick = (now: Date, deps: Partial<Omit<TickDeps, "now">> = {}): TickOutcome
     dispatcherLive: () => false,
     startDispatcher: () => undefined,
     dispatch: () => undefined,
+    sweep: () => [],
     log: () => undefined,
     ...deps,
   });
@@ -155,6 +156,66 @@ describe("runTick", () => {
 
     expect(dispatched).toEqual(["factory-review.yml", "factory-retro.yml"]);
     expect(outcome.due).toEqual(["factory-review.yml", "factory-retro.yml"]);
+  });
+});
+
+describe("the sweep the tick runs", () => {
+  it("runs on every tick, after the due jobs and the dispatcher", () => {
+    const order: string[] = [];
+    const outcome = tick(at("2026-11-10T04:00:00Z"), {
+      startDispatcher: () => order.push("dispatcher"),
+      dispatch: (workflow) => order.push(workflow),
+      sweep: () => {
+        order.push("sweep");
+        return [];
+      },
+    });
+
+    expect(order).toEqual([
+      "factory-intake.yml",
+      "factory-review.yml",
+      "factory-retro.yml",
+      "dispatcher",
+      "sweep",
+    ]);
+    expect(outcome.errors).toEqual([]);
+  });
+
+  it("collects a failed sweep, the due jobs and the dispatcher still going out", () => {
+    const dispatched: string[] = [];
+    const started: string[] = [];
+    const outcome = tick(at("2026-11-10T04:00:00Z"), {
+      startDispatcher: () => started.push("factory-dispatch.yml"),
+      dispatch: (workflow) => dispatched.push(workflow),
+      sweep: () => ["#311: the comment was refused"],
+    });
+
+    expect(dispatched).toEqual(["factory-intake.yml", "factory-review.yml", "factory-retro.yml"]);
+    expect(started).toEqual(["factory-dispatch.yml"]);
+    expect(outcome.errors).toEqual(["sweep: #311: the comment was refused"]);
+  });
+
+  it("collects a thrown sweep, the tick still reporting the rest", () => {
+    const outcome = tick(at("2026-11-10T12:00:00Z"), {
+      sweep: () => {
+        throw new Error("the pull list is not an array");
+      },
+    });
+
+    expect(outcome.errors).toEqual(["sweep: the pull list is not an array"]);
+  });
+
+  it("passes the tick's clock and dry-run flag to the sweep", () => {
+    const seen: { readonly now: Date; readonly dryRun: boolean }[] = [];
+    tick(at("2026-11-10T12:10:00Z"), {
+      dryRun: true,
+      sweep: (now, dryRun) => {
+        seen.push({ now, dryRun });
+        return [];
+      },
+    });
+
+    expect(seen).toEqual([{ now: at("2026-11-10T12:10:00Z"), dryRun: true }]);
   });
 });
 

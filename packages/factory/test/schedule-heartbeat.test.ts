@@ -426,9 +426,12 @@ describe("the entry", () => {
 
     expect(status).toBe(0);
     expect(output).toContain("Dry run: one tick, no successor.");
-    // The five nightly jobs and the dispatcher's two live statuses.
-    expect(calls).toHaveLength(JOBS.length + LIVE_STATUSES.length);
-    expect(calls.every((call) => call.startsWith("api "))).toBe(true);
+    // The five nightly jobs, the dispatcher's two live statuses, and the
+    // sweep's open-pull list and runs page.
+    expect(calls).toHaveLength(JOBS.length + LIVE_STATUSES.length + 2);
+    expect(calls.filter((call) => call.startsWith("pr list"))).toHaveLength(1);
+    expect(calls.filter((call) => call.includes("actions/runs?per_page=100"))).toHaveLength(1);
+    expect(calls.filter((call) => call.startsWith("workflow run"))).toEqual([]);
   });
 
   it("fails the run when a workflow's runs cannot be read", () => {
