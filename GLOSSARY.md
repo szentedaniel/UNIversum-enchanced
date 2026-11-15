@@ -111,6 +111,10 @@ _Avoid_: History, chat, transcript
 A short sound effect one Game event's Playback step starts; the cue table maps each event type to at most one cue, and each cue is one audio file.
 _Avoid_: Sound effect (for the named entry), clip
 
+**Music**:
+The optional looping background track a Guest turns on for this browser, apart from the Cues; it follows that setting only, so every screen sounds the same, and it pauses while the tab is hidden.
+_Avoid_: BGM, soundtrack, background audio
+
 **Quick chat**:
 The only way Players talk in a Room: each picks a ready-made line or emote from a fixed catalogue, and the server shows it beside that Player's Seat; no free text is ever sent, and it is not the Event log.
 _Avoid_: Chat message, free chat

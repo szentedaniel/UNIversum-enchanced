@@ -14,3 +14,4 @@ row to `CUES` in `apps/web/src/sound/cues.ts` (spec #178).
 | `release.mp3`    | Placeholder, replace: a copy of `dice.mp3`.              | Placeholder, replace: unlicensed copy.   |
 | `bankrupt.mp3`   | Placeholder, replace: a copy of `dice.mp3`.              | Placeholder, replace: unlicensed copy.   |
 | `game-end.mp3`   | Placeholder, replace: a copy of `dice.mp3`.              | Placeholder, replace: unlicensed copy.   |
+| `music.mp3`      | Placeholder, replace: a copy of `dice.mp3`.              | Placeholder, replace: unlicensed copy.   |

@@ -1,11 +1,13 @@
 /**
- * The in-game menu: the language picker and the two mute toggles. A language
- * switch reloads the page and rejoins the Seat by Guest token; the sound and
- * the quick-chat choices are remembered separately.
+ * The in-game menu: the language picker, the two sound toggles and the
+ * quick-chat mute. A language switch reloads the page and rejoins the Seat by
+ * Guest token; the sound, the music and the quick-chat choices are remembered
+ * separately.
  */
-import { Menu, MessageCircle, MessageCircleOff, Volume2, VolumeX } from "lucide-react";
+import { Menu, MessageCircle, MessageCircleOff } from "lucide-react";
 import { useStore } from "zustand";
 import { LanguagePicker } from "#components/LanguagePicker.tsx";
+import { SoundToggles } from "#components/SoundToggles.tsx";
 import { Button } from "#components/ui/button.tsx";
 import {
   Dialog,
@@ -15,7 +17,6 @@ import {
   DialogTrigger,
 } from "#components/ui/dialog.tsx";
 import { chatMuteStore } from "#stores/chat-mute-store.ts";
-import { soundStore } from "#stores/sound-store.ts";
 import { m } from "#text.ts";
 
 /** The quick-chat mute toggle: it hides the tray and every bubble on this device (#232). */
@@ -39,7 +40,6 @@ export function ChatMuteToggle() {
 }
 
 export function GameMenu() {
-  const muted = useStore(soundStore, (s) => s.muted);
   return (
     <Dialog>
       <DialogTrigger
@@ -63,19 +63,7 @@ export function GameMenu() {
           <h3 className="m-0 text-sm font-black text-ink/70">{m.language()}</h3>
           <LanguagePicker />
         </section>
-        <Button
-          variant="plain"
-          aria-pressed={muted}
-          data-testid="sound-toggle"
-          onClick={() => soundStore.getState().toggleMuted()}
-        >
-          {muted ? (
-            <VolumeX size={20} strokeWidth={3} aria-hidden />
-          ) : (
-            <Volume2 size={20} strokeWidth={3} aria-hidden />
-          )}
-          {muted ? m.sound_off() : m.sound_on()}
-        </Button>
+        <SoundToggles />
         <ChatMuteToggle />
       </DialogContent>
     </Dialog>
