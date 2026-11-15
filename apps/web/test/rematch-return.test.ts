@@ -63,7 +63,7 @@ const lobbyOf = (patch: Partial<LobbyMessage> = {}): LobbyMessage => ({
 
 /** A game push with a Roll, as the last thing a Podium client saw. */
 const pushGame = (): void => {
-  receivePush({ view: viewOf(), events: ROLL(), reveals: [], now: 0 }, 0);
+  receivePush({ view: viewOf(), events: ROLL(), reveals: [], spectators: 0, now: 0 }, 0);
 };
 
 beforeEach(reset);
@@ -173,12 +173,15 @@ describe("the screen's news", () => {
 
 describe("the next game", () => {
   it("accepts a first push whose version is lower than the game it replaced", () => {
-    receivePush({ view: viewOf(undefined, { version: 9 }), events: [], reveals: [], now: 0 }, 0);
+    receivePush(
+      { view: viewOf(undefined, { version: 9 }), events: [], reveals: [], spectators: 0, now: 0 },
+      0,
+    );
     receiveLobby(lobbyOf(), 0);
     // A new game restarts `version` at its own start: the dropped push must not
     // turn the guard against it.
     receivePush(
-      { view: viewOf(undefined, { version: 1 }), events: [], reveals: [], now: 0 },
+      { view: viewOf(undefined, { version: 1 }), events: [], reveals: [], spectators: 0, now: 0 },
       1_000,
     );
 
@@ -191,7 +194,7 @@ describe("the next game", () => {
     pushGame();
     receiveLobby(lobbyOf(), 0);
     receivePush(
-      { view: viewOf(undefined, { version: 1 }), events: [], reveals: [], now: 0 },
+      { view: viewOf(undefined, { version: 1 }), events: [], reveals: [], spectators: 0, now: 0 },
       1_000,
     );
 

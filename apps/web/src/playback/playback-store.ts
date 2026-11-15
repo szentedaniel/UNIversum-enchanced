@@ -15,7 +15,7 @@ import { createStore } from "zustand/vanilla";
 import { playbackOfPush, type Frame, type Playback, type TurnLabel } from "#playback/playback.ts";
 import { resetCues, syncCues } from "#sound/cue-sync.ts";
 import { syncLog } from "#stores/log-store.ts";
-import { roomStore } from "#stores/room-store.ts";
+import { roomStore, type Push } from "#stores/room-store.ts";
 
 /** What the Playback store publishes (spec #63). */
 export type PlaybackState = {
@@ -45,6 +45,8 @@ export function gateOpenOf(state: PlaybackState): boolean {
 
 let wakeTimer: ReturnType<typeof setTimeout> | undefined;
 let current: Playback | null = null;
+/** The push `current` was built from, so a count-only push keeps it (spec #179). */
+let currentPush: Push | null = null;
 
 /**
  * The latest push's core, for a render loop that needs its own reading
@@ -82,11 +84,23 @@ function wake(): void {
 
 /** A new push: build its core once, from the Turn the screen shows now. */
 function start(): void {
+  const { push } = roomStore.getState();
+  // A push that only changes the spectator count carries the same view and no
+  // events (spec #179, ticket #249): the running Playback and its timer stay,
+  // so a watcher's join replays nothing and opens no decision early.
+  if (
+    push !== null &&
+    currentPush !== null &&
+    push.view.version === currentPush.view.version &&
+    push.events.length === 0
+  ) {
+    return;
+  }
   clearTimeout(wakeTimer);
   wakeTimer = undefined;
-  const { push } = roomStore.getState();
   if (!push) {
     current = null;
+    currentPush = null;
     playbackStore.setState({ frame: null });
     // A Room left behind: the next Room's push counter starts over.
     resetCues();
@@ -95,6 +109,7 @@ function start(): void {
   // The previous push's shown Turn is what this one holds until its gate opens.
   const previousTurn = playbackStore.getState().frame?.shownTurn ?? null;
   current = playbackOfPush(push, previousTurn);
+  currentPush = push;
   publish(current, Date.now());
 }
 

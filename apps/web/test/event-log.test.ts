@@ -122,7 +122,7 @@ describe("the Event log store", () => {
 
   it("adds each line when its Playback step starts, never ahead of the Board", () => {
     receivePush(
-      { view: viewOf(undefined, { actsAfter: 60_000 }), events: ROLL(), reveals: [], now: T0 },
+      { view: viewOf(undefined, { actsAfter: 60_000 }), events: ROLL(), reveals: [], spectators: 0, now: T0 },
       T0,
     );
 
@@ -138,7 +138,7 @@ describe("the Event log store", () => {
   });
 
   it("resets with the Room, so leaving or changing Room starts an empty log", () => {
-    receivePush({ view: viewOf(), events: ROLL(), reveals: [], now: T0 }, T0);
+    receivePush({ view: viewOf(), events: ROLL(), reveals: [], spectators: 0, now: T0 }, T0);
     expect(logStore.getState().lines.length).toBeGreaterThan(0);
 
     reset();

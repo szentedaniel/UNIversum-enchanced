@@ -53,7 +53,7 @@ afterEach(() => {
  */
 function showGame(role: Role, me: string | null): string {
   roomStore.setState({ status: "connected", code: "123456", me, role });
-  receivePush({ view: viewOf(), events: [], reveals: [], now: 0 }, 0);
+  receivePush({ view: viewOf(), events: [], reveals: [], spectators: 0, now: 0 }, 0);
   expect(currentPlayback()).not.toBeNull();
   expect(playbackStore.getState().frame?.gateOpen).toBe(true);
   return renderToStaticMarkup(
