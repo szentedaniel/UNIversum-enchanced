@@ -14,9 +14,9 @@ Branch `agent/issue-243-sound-background-music-and-separate-effects-music`.
 
 ## Music
 
-- `#audio.ts` owns one `HTMLAudioElement` for `#assets/sounds/music.mp3`, with `loop = true` and
-  `muted` under `navigator.webdriver` like the cues. `MUSIC_SRC` stays out of `CUES`: the cue table
-  remains one row per event, and the music is not a cue.
+- `#audio.ts` imports `#assets/sounds/music.mp3` itself and owns one `HTMLAudioElement` for it, with
+  `loop = true` and `muted` under `navigator.webdriver` like the cues. The track stays out of
+  `CUES`: the cue table remains one row per event, and the music is not a cue.
 - The element is created on the first unlock: `unlockAudio` silently unlocks every pooled cue
   element and then the music, so a later `musicOn` toggle needs no extra gesture. The music is the
   extra element in the unlock's count (`3 * CUES + 1`).
