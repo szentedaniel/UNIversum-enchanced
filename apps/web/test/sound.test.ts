@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import musicFile from "#assets/sounds/music.mp3";
 import { CUES } from "#sound/cues.ts";
 import { MUSIC_ON_KEY, SOUND_MUTED_KEY } from "#stores/sound-store.ts";
 
-/** Just the parts of HTMLAudioElement the cue pool uses. */
+/** Just the parts of HTMLAudioElement the sound module uses. */
 class FakeAudio {
   static instances: FakeAudio[] = [];
   currentTime = 0;
   volume = 1;
   muted = false;
+  loop = false;
   plays = 0;
   pauses = 0;
   src: string;
@@ -39,14 +41,18 @@ const press = (type: string) => {
   for (const listener of listeners.get(type) ?? []) listener();
 };
 
+/** The music element: the one playing the track, not a cue. */
+const musicSound = () => FakeAudio.instances.find((sound) => sound.src === musicFile);
+
 /**
- * Lets an unlock's awaited silent play finish, and the cue it holds back, so
- * the assertions read the final counts. Two microtask rounds: the unlock's
- * `await play()`, then its queued cue.
+ * Lets an unlock's awaited silent play finish, and the music or cue it holds
+ * back, so the assertions read the final counts: a few microtask rounds drain
+ * the unlock's `await play()`, its `pause()` and the play queued behind it.
  */
-const settle = async () => {
-  await Promise.resolve();
-  await Promise.resolve();
+const settle = () => {
+  let rounds = Promise.resolve();
+  for (let round = 0; round < 10; round += 1) rounds = rounds.then(() => undefined);
+  return rounds;
 };
 
 afterEach(() => {
@@ -210,7 +216,7 @@ describe("the sound cues", () => {
     installAudioUnlock();
     press("pointerdown");
     await settle();
-    expect(FakeAudio.instances).toHaveLength(3 * Object.keys(CUES).length);
+    expect(FakeAudio.instances).toHaveLength(3 * Object.keys(CUES).length + 1);
     expect(FakeAudio.instances.every((sound) => sound.plays === 1)).toBe(true);
     expect(FakeAudio.instances.every((sound) => sound.pauses === 1)).toBe(true);
 
@@ -218,7 +224,7 @@ describe("the sound cues", () => {
     await settle();
 
     const sound = FakeAudio.instances.find((element) => element.src === CUES.dice);
-    expect(FakeAudio.instances).toHaveLength(3 * Object.keys(CUES).length);
+    expect(FakeAudio.instances).toHaveLength(3 * Object.keys(CUES).length + 1);
     expect(sound?.plays).toBe(2);
     expect(sound?.volume).toBe(1);
   });
@@ -249,5 +255,105 @@ describe("the sound cues", () => {
 
     expect(FakeAudio.instances[0]?.muted).toBe(true);
     expect(FakeAudio.instances[0]?.plays).toBe(1);
+  });
+});
+
+describe("the background music", () => {
+  it("does not start before the first gesture, even when it is on", async () => {
+    stubBrowser();
+    storage.set(MUSIC_ON_KEY, "1");
+    const { soundStore } = await loadAudio();
+
+    expect(soundStore.getState().musicOn).toBe(true);
+    expect(musicSound()).toBeUndefined();
+  });
+
+  it("starts looping from the stored choice on the first gesture, after the silent unlock", async () => {
+    stubBrowser();
+    storage.set(MUSIC_ON_KEY, "1");
+    const { installAudioUnlock } = await loadAudio();
+
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+
+    expect(musicSound()?.loop).toBe(true);
+    // The unlock's silent play, then the music itself.
+    expect(musicSound()?.plays).toBe(2);
+  });
+
+  it("is unlocked but silent when the music is off", async () => {
+    stubBrowser();
+    const { installAudioUnlock } = await loadAudio();
+
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+
+    expect(musicSound()?.plays).toBe(1);
+    expect(musicSound()?.pauses).toBe(1);
+  });
+
+  it("pauses when turned off and resumes when turned on again", async () => {
+    stubBrowser();
+    storage.set(MUSIC_ON_KEY, "1");
+    const { installAudioUnlock, soundStore } = await loadAudio();
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+    const element = musicSound();
+
+    soundStore.getState().setMusicOn(false);
+    expect(element?.pauses).toBe(2);
+
+    soundStore.getState().setMusicOn(true);
+    expect(element?.plays).toBe(3);
+  });
+
+  it("keeps playing when the effects are muted", async () => {
+    stubBrowser();
+    storage.set(MUSIC_ON_KEY, "1");
+    const { installAudioUnlock, soundStore } = await loadAudio();
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+    const element = musicSound();
+
+    soundStore.getState().setEffectsMuted(true);
+
+    expect(element?.pauses).toBe(1);
+    expect(element?.plays).toBe(2);
+  });
+
+  it("pauses while the tab is hidden and resumes when it shows again", async () => {
+    stubBrowser();
+    storage.set(MUSIC_ON_KEY, "1");
+    const { installAudioUnlock } = await loadAudio();
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+    const element = musicSound();
+
+    hidden = true;
+    press("visibilitychange");
+    expect(element?.pauses).toBe(2);
+
+    hidden = false;
+    press("visibilitychange");
+    expect(element?.plays).toBe(3);
+  });
+
+  it("stays muted under automation but still calls play()", async () => {
+    stubBrowser();
+    storage.set(MUSIC_ON_KEY, "1");
+    vi.stubGlobal("navigator", { webdriver: true });
+    const { installAudioUnlock } = await loadAudio();
+
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+
+    expect(musicSound()?.muted).toBe(true);
+    expect(musicSound()?.plays).toBe(2);
   });
 });
