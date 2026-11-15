@@ -73,14 +73,21 @@ function extentOf(values: readonly number[]): { min: number; max: number } {
   return { min, max };
 }
 
-/** A scale from `min`–`max` to `from`–`to`, inverted when `from` is the bottom. */
-function scaleOf(min: number, max: number, from: number, to: number): ChartScale {
-  const span = max - min;
+/** A scale from `domain` to `range`, inverted when `range.from` is the bottom. */
+function scaleOf(
+  domain: { min: number; max: number },
+  range: { from: number; to: number },
+): ChartScale {
+  const span = domain.max - domain.min;
   return {
-    min,
-    max,
+    min: domain.min,
+    max: domain.max,
     position: (value) =>
-      round(span === 0 ? (from + to) / 2 : from + ((value - min) / span) * (to - from)),
+      round(
+        span === 0
+          ? (range.from + range.to) / 2
+          : range.from + ((value - domain.min) / span) * (range.to - range.from),
+      ),
   };
 }
 
@@ -125,7 +132,10 @@ export function wealthChart(
   const lines = new Map<PlayerId, { minute: number; wealth: number }[]>();
   const minutes: number[] = [];
   const wealths: number[] = [];
-  for (const sample of series.toSorted((a, b) => a.minute - b.minute)) {
+  // Copy-and-sort, not `toSorted`: it needs Firefox 115, above the Firefox 114
+  // baseline the old-browser notice states (index.html).
+  // oxlint-disable-next-line unicorn/no-array-sort -- `toSorted` is outside that baseline
+  for (const sample of [...series].sort((a, b) => a.minute - b.minute)) {
     if (!Number.isFinite(sample.minute)) continue;
     minutes.push(sample.minute);
     for (const player of players) {
@@ -140,8 +150,8 @@ export function wealthChart(
 
   const minutesExtent = extentOf(minutes);
   const wealthExtent = extentOf(wealths);
-  const x = scaleOf(minutesExtent.min, minutesExtent.max, plot.x, plot.x + plot.width);
-  const y = scaleOf(wealthExtent.min, wealthExtent.max, plot.y + plot.height, plot.y);
+  const x = scaleOf(minutesExtent, { from: plot.x, to: plot.x + plot.width });
+  const y = scaleOf(wealthExtent, { from: plot.y + plot.height, to: plot.y });
 
   const chartPlayers = players.flatMap((player): ChartPlayer[] => {
     const line = lines.get(player.id);
