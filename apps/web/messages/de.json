@@ -321,6 +321,8 @@
   "menu_title": "Einstellungen",
   "sound_on": "Ton an",
   "sound_off": "Ton aus",
+  "music_on": "Musik an",
+  "music_off": "Musik aus",
   "offer_museum_hint": "Jedes Museum in deinem Besitz erhöht die Miete um diesen Betrag: {amount}",
   "doubler_title": "Du hast dein Diplom gemacht!",
   "doubler_prompt": "Wähle als Belohnung eine Stadt, in der die Miete ab jetzt VERDOPPELT wird.",

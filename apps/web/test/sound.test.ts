@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CUES } from "#sound/cues.ts";
+import { MUSIC_ON_KEY, SOUND_MUTED_KEY } from "#stores/sound-store.ts";
 
 /** Just the parts of HTMLAudioElement the cue pool uses. */
 class FakeAudio {
@@ -25,6 +26,8 @@ class FakeAudio {
 
 const storage = new Map<string, string>();
 const listeners = new Map<string, Set<() => void>>();
+/** What `document.hidden` reports; a visibility test flips it and presses the listener. */
+let hidden = false;
 
 /** Loads the module fresh, as a new page would: the stored mute choice is read on import. */
 async function loadAudio() {
@@ -51,6 +54,7 @@ afterEach(() => {
   FakeAudio.instances = [];
   storage.clear();
   listeners.clear();
+  hidden = false;
 });
 
 function stubBrowser() {
@@ -65,7 +69,72 @@ function stubBrowser() {
     removeEventListener: (type: string, listener: () => void) =>
       listeners.get(type)?.delete(listener),
   });
+  // The music pauses while the tab is hidden: the module adds one listener on import.
+  vi.stubGlobal("document", {
+    get hidden() {
+      return hidden;
+    },
+    addEventListener: (type: string, listener: () => void) =>
+      listeners.set(type, (listeners.get(type) ?? new Set()).add(listener)),
+    removeEventListener: (type: string, listener: () => void) =>
+      listeners.get(type)?.delete(listener),
+  });
 }
+
+/** Storage that refuses every read and write, as a private window does. */
+function stubBlockedStorage() {
+  vi.stubGlobal("localStorage", {
+    getItem: () => {
+      throw new Error("storage is blocked");
+    },
+    setItem: () => {
+      throw new Error("storage is blocked");
+    },
+  });
+}
+
+describe("the sound settings", () => {
+  it("keeps an existing effects mute from the legacy key, with the music off", async () => {
+    stubBrowser();
+    storage.set(SOUND_MUTED_KEY, "1");
+
+    const { soundStore } = await loadAudio();
+
+    expect(soundStore.getState().effectsMuted).toBe(true);
+    expect(soundStore.getState().musicOn).toBe(false);
+  });
+
+  it("turns the effects and the music independently, each remembered under its own key", async () => {
+    stubBrowser();
+    const first = await loadAudio();
+    first.soundStore.getState().toggleEffectsMuted();
+    expect(storage.get(SOUND_MUTED_KEY)).toBe("1");
+    expect(storage.get(MUSIC_ON_KEY)).toBeUndefined();
+
+    first.soundStore.getState().toggleMusicOn();
+    expect(storage.get(MUSIC_ON_KEY)).toBe("1");
+
+    const second = await loadAudio();
+    expect(second.soundStore.getState().effectsMuted).toBe(true);
+    expect(second.soundStore.getState().musicOn).toBe(true);
+
+    second.soundStore.getState().toggleMusicOn();
+    expect(storage.get(MUSIC_ON_KEY)).toBe("0");
+    expect(second.soundStore.getState().effectsMuted).toBe(true);
+  });
+
+  it("still applies on this page when storage is unavailable, with the music off", async () => {
+    stubBrowser();
+    stubBlockedStorage();
+    const { soundStore } = await loadAudio();
+    expect(soundStore.getState().effectsMuted).toBe(false);
+    expect(soundStore.getState().musicOn).toBe(false);
+
+    expect(() => soundStore.getState().toggleMusicOn()).not.toThrow();
+    expect(soundStore.getState().musicOn).toBe(true);
+    expect(soundStore.getState().effectsMuted).toBe(false);
+  });
+});
 
 describe("the sound cues", () => {
   it("starts two cues in quick succession, each through its own element, from the start", async () => {
@@ -89,30 +158,30 @@ describe("the sound cues", () => {
     expect(FakeAudio.instances.map((sound) => sound.plays)).toEqual([2, 1, 1]);
   });
 
-  it("is silent and stays silent after a reload once muted", async () => {
+  it("is silent and stays silent after a reload once the effects are off", async () => {
     stubBrowser();
     const first = await loadAudio();
-    first.soundStore.getState().setMuted(true);
-    expect(storage.get("universum.soundMuted")).toBe("1");
+    first.soundStore.getState().setEffectsMuted(true);
+    expect(storage.get(SOUND_MUTED_KEY)).toBe("1");
     first.playCue("dice");
     expect(FakeAudio.instances).toHaveLength(0);
 
     const second = await loadAudio();
-    expect(second.soundStore.getState().muted).toBe(true);
+    expect(second.soundStore.getState().effectsMuted).toBe(true);
     second.playCue("dice");
     expect(FakeAudio.instances).toHaveLength(0);
   });
 
-  it("plays again after unmuting, and remembers that too", async () => {
+  it("plays again after unmuting the effects, and remembers that too", async () => {
     stubBrowser();
     const first = await loadAudio();
-    first.soundStore.getState().setMuted(true);
+    first.soundStore.getState().setEffectsMuted(true);
     first.playCue("dice");
     expect(FakeAudio.instances).toHaveLength(0);
-    first.soundStore.getState().setMuted(false);
+    first.soundStore.getState().setEffectsMuted(false);
     first.playCue("dice");
 
-    expect(storage.get("universum.soundMuted")).toBe("0");
+    expect(storage.get(SOUND_MUTED_KEY)).toBe("0");
     expect(FakeAudio.instances[0]?.plays).toBe(1);
   });
 
@@ -154,11 +223,11 @@ describe("the sound cues", () => {
     expect(sound?.volume).toBe(1);
   });
 
-  it("unlocks without a sound when muted", async () => {
+  it("unlocks without a sound when the effects are off", async () => {
     stubBrowser();
     const { installAudioUnlock, playCue, soundStore } = await loadAudio();
     for (let play = 0; play < 3; play += 1) playCue("dice");
-    soundStore.getState().setMuted(true);
+    soundStore.getState().setEffectsMuted(true);
 
     installAudioUnlock();
     press("pointerdown");

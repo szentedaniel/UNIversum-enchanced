@@ -321,6 +321,8 @@
   "menu_title": "Beállítások",
   "sound_on": "Hang bekapcsolva",
   "sound_off": "Hang kikapcsolva",
+  "music_on": "Zene bekapcsolva",
+  "music_off": "Zene kikapcsolva",
   "offer_museum_hint": "Minden birtokolt múzeum ennyi összeggel növeli a tandíjat: {amount}",
   "doubler_title": "Lediplomáztál.",
   "doubler_prompt": "Jutalmul válassz ki egy várost, ahol ezentúl a tandíj MEGDUPLÁZÓDIK.",

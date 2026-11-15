@@ -321,6 +321,8 @@
   "menu_title": "Settings",
   "sound_on": "Sound on",
   "sound_off": "Sound off",
+  "music_on": "Music on",
+  "music_off": "Music off",
   "offer_museum_hint": "Each Museum you own raises the Rent by this amount: {amount}",
   "doubler_title": "You graduated!",
   "doubler_prompt": "As a reward, pick a city where the Rent is DOUBLED from now on.",

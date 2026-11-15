@@ -95,13 +95,13 @@ describe("the chat mute setting", () => {
     storage.clear();
     const { mute, sound } = await loadStores();
 
-    sound.getState().setMuted(true);
+    sound.getState().setEffectsMuted(true);
     expect(mute.getState().muted).toBe(false);
     expect(storage.get(SOUND_MUTED_KEY)).toBe("1");
     expect(storage.get(CHAT_MUTED_KEY)).toBeUndefined();
 
     mute.getState().setMuted(true);
-    expect(sound.getState().muted).toBe(true);
+    expect(sound.getState().effectsMuted).toBe(true);
     expect(storage.get(CHAT_MUTED_KEY)).toBe("1");
   });
 
