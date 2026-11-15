@@ -1,12 +1,13 @@
 import type { GameEvent } from "@universum/rules";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { bottomSlot } from "#decision/decision.ts";
 import { currentPlayback } from "#playback/playback-store.ts";
 import { playbackOfPush } from "#playback/playback.ts";
 import { timelineOf } from "#playback/timeline.ts";
 import { resetCues, syncCues } from "#sound/cue-sync.ts";
 import type { CueName } from "#sound/cues.ts";
 import { roomStore } from "#stores/room-store.ts";
-import { CHANCE, ROLL, viewOf } from "./playback-fixtures.ts";
+import { CHANCE, playersWithCash, ROLL, viewOf } from "./playback-fixtures.ts";
 
 const { playCue } = vi.hoisted(() => ({ playCue: vi.fn<(name: CueName) => void>() }));
 vi.mock("#audio.ts", () => ({ playCue }));
@@ -17,6 +18,8 @@ vi.mock("#audio.ts", () => ({ playCue }));
 
 const dice = (): GameEvent => ({ type: "DiceRolled", player: "p1", dice: [3, 4] });
 const move = (): GameEvent => ({ type: "Moved", player: "p1", from: 1, to: 8, steps: 7 });
+const bankrupt = (): GameEvent => ({ type: "WentBankrupt", player: "p1", fields: [3, 4] });
+const gameEnded = (): GameEvent => ({ type: "GameEnded", winner: "p2", reason: "lastPlayer" });
 
 const push = (seq: number, events: readonly GameEvent[]) => ({ seq, events });
 const frame = (seq: number, eventsReached: number) => ({ seq, eventsReached });
@@ -183,5 +186,65 @@ describe("syncCues", () => {
     syncCues(push(1, events), frame(1, 3));
 
     expect(playCue.mock.calls).toEqual([["chance"], ["quarantine"]]);
+  });
+});
+
+describe("the game-end cues", () => {
+  it("plays bankrupt then gameEnd as one push's frame reaches them", () => {
+    const events = [bankrupt(), gameEnded()];
+
+    syncCues(push(1, events), frame(1, 0));
+    expect(playCue).not.toHaveBeenCalled();
+
+    syncCues(push(1, events), frame(1, 1));
+    expect(playCue.mock.calls).toEqual([["bankrupt"]]);
+
+    syncCues(push(1, events), frame(1, 2));
+    expect(playCue.mock.calls).toEqual([["bankrupt"], ["gameEnd"]]);
+  });
+
+  it("plays gameEnd at its step, before the podium opens, and not at its frame", () => {
+    // The result screen's own view, as the Podium's tests shape it.
+    const events = [bankrupt(), gameEnded()];
+    const view = viewOf(undefined, {
+      phase: { kind: "gameOver", winner: "p2", reason: "lastPlayer" },
+      players: playersWithCash({ p1: 0, p2: 900_000 }),
+      standings: [
+        { player: "p2", wealth: 900_000 },
+        { player: "p1", wealth: 0 },
+      ],
+    });
+    const core = playbackOfPush({
+      view,
+      events,
+      reveals: [],
+      seq: 5,
+      clockOffset: 0,
+      receivedAt: 1_000,
+    });
+    const [, endStep] = timelineOf(events);
+    const ui = { selectedField: null, inspect: false };
+    const podiumAt = core.boundaries.find(
+      (time) => bottomSlot(null, core.frameAt(time), ui).kind === "podium",
+    );
+
+    // Bankrupt's step: the first cue, with the result screen still closed.
+    syncCues(push(5, events), core.frameAt(1_000));
+    expect(playCue.mock.calls).toEqual([["bankrupt"]]);
+
+    // The game's end's step: the closing cue, and the podium is not up yet.
+    const endStarts = 1_000 + (endStep?.startMs ?? 0);
+    expect(bottomSlot(null, core.frameAt(endStarts), ui)).toEqual({ kind: "none" });
+    syncCues(push(5, events), core.frameAt(endStarts));
+    expect(playCue.mock.calls).toEqual([["bankrupt"], ["gameEnd"]]);
+
+    // The podium's own frame, and every later one, plays nothing more.
+    expect(podiumAt).toBeGreaterThan(endStarts);
+    for (const time of core.boundaries) {
+      if (podiumAt === undefined || time < podiumAt) continue;
+      syncCues(push(5, events), core.frameAt(time));
+    }
+    syncCues(push(5, events), core.frameAt(core.opensAt + 1_000));
+    expect(playCue.mock.calls).toEqual([["bankrupt"], ["gameEnd"]]);
   });
 });

@@ -2,7 +2,7 @@ import type { GameEvent } from "@universum/rules";
 import { describe, expect, it } from "vitest";
 import { EVENT_PRESENTATION } from "#playback/presentation.ts";
 import { CUES, EVENT_CUES, cuesReached, type CueName } from "#sound/cues.ts";
-import { CHANCE, ROLL } from "./playback-fixtures.ts";
+import { CHANCE, ROLL, TIMEOUT } from "./playback-fixtures.ts";
 
 // The cue table (spec #178): one exhaustive row per event type saying which
 // sound it starts, or an explicit silence. A new event type fails to compile
@@ -29,7 +29,7 @@ const CUED = {
   PcrTestBought: "none",
   PcrTestUsed: "none",
   FieldsSold: "none",
-  WentBankrupt: "none",
+  WentBankrupt: "bankrupt",
   TimedOut: "none",
   TimeoutPenaltyPaid: "none",
   DoublerPlaced: "none",
@@ -37,7 +37,7 @@ const CUED = {
   DealAccepted: "none",
   DealDeclined: "none",
   DealExpired: "none",
-  GameEnded: "none",
+  GameEnded: "gameEnd",
   TurnPassed: "none",
 } satisfies Record<GameEvent["type"], CueName | "none">;
 
@@ -68,6 +68,12 @@ describe("the cue table", () => {
     expect(CUES.quarantine).toContain("quarantine.mp3");
     expect(CUES.release).toContain("release.mp3");
     expect(CUES.quarantine).not.toBe(CUES.release);
+  });
+
+  it("gives Bankrupt and the game's end their own files", () => {
+    expect(CUES.bankrupt).toContain("bankrupt.mp3");
+    expect(CUES.gameEnd).toContain("game-end.mp3");
+    expect(CUES.bankrupt).not.toBe(CUES.gameEnd);
   });
 });
 
@@ -108,5 +114,20 @@ describe("cuesReached", () => {
     ];
 
     expect(cuesReached(events, 0, events.length)).toEqual(["quarantine", "release"]);
+  });
+
+  it("keeps a Timeout, its Auto-sell and its penalty silent", () => {
+    expect(cuesReached(TIMEOUT(), 0, TIMEOUT().length)).toEqual([]);
+  });
+
+  it("plays Bankrupt and the game's end in their step order", () => {
+    const events: readonly GameEvent[] = [
+      { type: "WentBankrupt", player: "p1", fields: [3, 4] },
+      { type: "GameEnded", winner: "p2", reason: "lastPlayer" },
+    ];
+
+    expect(cuesReached(events, 0, 1)).toEqual(["bankrupt"]);
+    expect(cuesReached(events, 1, 2)).toEqual(["gameEnd"]);
+    expect(cuesReached(events, 0, events.length)).toEqual(["bankrupt", "gameEnd"]);
   });
 });
