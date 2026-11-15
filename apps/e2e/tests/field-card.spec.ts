@@ -234,6 +234,17 @@ test("a mouse hover shows the Field tooltip, and a click through it opens the ca
   await expect(tooltip).toContainText("Zurich");
   await expect(tooltip).toContainText("Unowned");
   await expect(tooltip).toContainText("Rent");
+  // Beside the Field and on screen, never over the Field it describes.
+  const box = (await tooltip.boundingBox())!;
+  const viewport = page.viewportSize()!;
+  expect(box.x, "the tooltip left the screen").toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width, "the tooltip left the screen").toBeLessThanOrEqual(viewport.width);
+  expect(box.y, "the tooltip left the screen").toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height, "the tooltip left the screen").toBeLessThanOrEqual(viewport.height);
+  expect(
+    box.x > zurich.x || box.x + box.width < zurich.x,
+    "the tooltip covers the Field it describes",
+  ).toBe(true);
 
   // A Chance Field shows the name only, with no owner and no Rent row.
   const chance = await fieldCenter(page, 14);
