@@ -89,6 +89,67 @@ describe("metrics", () => {
     expect(sample(scrape, "restore_duration_seconds")).toBeGreaterThan(0);
     expect(sample(scrape, 'rooms{state="lobby"}')).toBe(2);
   });
+
+  it("counts spectators apart from the Seats, and none of their comings and goings moves a Seat metric", async () => {
+    server = await startTestServer();
+    const alice = await server.create({ maxPlayers: 2 });
+    const bob = await server.join(alice.code);
+    await alice.next("welcome");
+    await bob.until("lobby", (l) => l.seats.length === 2);
+    alice.send({ type: "Start" });
+    const { view } = await alice.next("game");
+    await bob.next("game");
+
+    const scrape = () => server!.metrics.scrape();
+    const before = await scrape();
+    expect(sample(before, "spectators")).toBe(0);
+    expect(sample(before, "spectator_joins_total")).toBe(0);
+    expect(sample(before, "players_connected")).toBe(2);
+
+    const watching = await server.join(alice.code, { watch: true });
+    expect((await watching.next("game")).spectators).toBe(1);
+    await expect.poll(async () => sample(await scrape(), "spectators")).toBe(1);
+    const joined = await scrape();
+    expect(sample(joined, "spectator_joins_total")).toBe(1);
+    expect(sample(joined, "players_connected")).toBe(2);
+    expect(sample(joined, "seats_held_disconnected")).toBe(0);
+    expect(sample(joined, "seat_drops_total")).toBe(0);
+    expect(joined).toContain("# HELP spectators ");
+    expect(joined).toContain("# TYPE spectators gauge");
+    expect(joined).toContain("# HELP spectator_joins_total ");
+    expect(joined).toContain("# TYPE spectator_joins_total counter");
+
+    // A spectator's intent is refused as a spectator, never measured as a Player intent.
+    const intents = sample(joined, "intent_duration_seconds_count");
+    watching.send({ type: "Roll", turn: view.turn });
+    expect((await watching.next("rejected")).code).toBe("SPECTATOR_READ_ONLY");
+    const refused = await scrape();
+    expect(sample(refused, "intent_duration_seconds_count")).toBe(intents);
+    expect(sample(refused, 'intents_total{result="rejected"}')).toBe(
+      sample(joined, 'intents_total{result="rejected"}'),
+    );
+    expect(sample(refused, 'rejections_total{code="SPECTATOR_READ_ONLY"}')).toBe(1);
+
+    // A dropped spectator leaves no held Seat and no Seat drop behind.
+    await watching.drop();
+    await expect.poll(async () => sample(await scrape(), "spectators")).toBe(0);
+    const dropped = await scrape();
+    expect(sample(dropped, "spectator_joins_total")).toBe(1);
+    expect(sample(dropped, "players_connected")).toBe(2);
+    expect(sample(dropped, "seats_held_disconnected")).toBe(0);
+    expect(sample(dropped, "seat_drops_total")).toBe(0);
+
+    const leaving = await server.join(alice.code, { watch: true });
+    await leaving.next("game");
+    await expect.poll(async () => sample(await scrape(), "spectators")).toBe(1);
+    await leaving.leave();
+    await expect.poll(async () => sample(await scrape(), "spectators")).toBe(0);
+    const left = await scrape();
+    expect(sample(left, "spectator_joins_total")).toBe(2);
+    expect(sample(left, "players_connected")).toBe(2);
+    expect(sample(left, "seats_held_disconnected")).toBe(0);
+    expect(sample(left, "seat_drops_total")).toBe(0);
+  });
 });
 
 describe("limiter refusals", () => {
@@ -212,5 +273,35 @@ describe("logs", () => {
       expect(secret).toBeTruthy();
       expect(capture.text()).not.toContain(secret);
     }
+  });
+
+  it("say a spectator joined or left with the count and the Room code, never its session id", async () => {
+    const capture = captureLogs();
+    server = await startTestServer({
+      log: createLogger({ level: "info", stream: capture.stream }),
+    });
+    const alice = await server.create({ maxPlayers: 2 });
+    await alice.next("welcome");
+
+    const watching = await server.join(alice.code, { watch: true });
+    await watching.next("lobby");
+    const sessionId = watching.room.sessionId;
+    await watching.leave();
+    await eventually(() => {
+      expect(capture.lines().some((l) => l["msg"] === "Spectator left")).toBe(true);
+    });
+
+    const about = (msg: string) => capture.lines().filter((l) => l["msg"] === msg);
+    expect(about("Spectator joined")).toEqual([
+      expect.objectContaining({ level: 30, roomCode: alice.code, spectators: 1 }),
+    ]);
+    expect(about("Spectator left")).toEqual([
+      expect.objectContaining({ level: 30, roomCode: alice.code, spectators: 0 }),
+    ]);
+    for (const line of [...about("Spectator joined"), ...about("Spectator left")]) {
+      expect(line).not.toHaveProperty("playerId");
+      expect(line).not.toHaveProperty("sessionId");
+    }
+    expect(capture.text()).not.toContain(sessionId);
   });
 });

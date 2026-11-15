@@ -4,7 +4,7 @@
  * `playerName` and `playerLook` (decision 8). Every figure is the engine's
  * (ADR-0001); nothing here recomputes Wealth, Rent or Value.
  */
-import type { GameSummary, PlayerView } from "@universum/rules";
+import type { GameSummary, PlayerId, PlayerView } from "@universum/rules";
 import type { FieldId, GroupId } from "@universum/rules/board";
 
 /** The biggest Rent paid, with the Field it was paid on and both Players. */
@@ -40,9 +40,11 @@ export type SummaryView = {
  */
 export function summaryView(players: readonly PlayerView[], summary: GameSummary): SummaryView {
   const byId = new Map(players.map((player) => [player.id, player]));
+  /** The Player `id` names, or `undefined` when the view does not carry it. */
+  const playerOf = (id: PlayerId): PlayerView | undefined => byId.get(id);
   const rent = summary.biggestRent;
-  const payer = rent ? byId.get(rent.payer) : undefined;
-  const owner = rent ? byId.get(rent.owner) : undefined;
+  const payer = rent ? playerOf(rent.payer) : undefined;
+  const owner = rent ? playerOf(rent.owner) : undefined;
 
   let topBuyer: SummaryBuyer | null = null;
   for (const player of players) {
@@ -57,11 +59,11 @@ export function summaryView(players: readonly PlayerView[], summary: GameSummary
       rent && payer && owner ? { payer, owner, field: rent.field, amount: rent.amount } : null,
     topBuyer,
     monopolies: summary.monopolies.flatMap(({ player, group }): SummaryMonopoly[] => {
-      const seat = byId.get(player);
+      const seat = playerOf(player);
       return seat ? [{ player: seat, group }] : [];
     }),
     bankruptcies: summary.bankruptcies.flatMap((id): PlayerView[] => {
-      const player = byId.get(id);
+      const player = playerOf(id);
       return player ? [player] : [];
     }),
   };

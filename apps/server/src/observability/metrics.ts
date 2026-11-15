@@ -9,6 +9,8 @@ export type RoomGauges = {
   connected: number;
   /** Taken Seats nobody is connected to (dropped, or restored and not yet rejoined). */
   held: number;
+  /** Connected clients watching the Room with no Seat (spec #179). */
+  spectators: number;
 };
 
 /** A Room the gauges read; `GameRoom` registers itself while it is live. */
@@ -56,6 +58,7 @@ export class GameMetrics {
   readonly #restoreDuration: Gauge;
   readonly #seatDrops: Counter;
   readonly #seatReconnects: Counter;
+  readonly #spectatorJoins: Counter;
   readonly #limiterRefusals: Counter<"limit">;
 
   constructor(options: { release: string }) {
@@ -100,6 +103,16 @@ export class GameMetrics {
         registers: [],
         collect() {
           this.set(rooms().reduce((sum, r) => sum + r.held, 0));
+        },
+      }),
+    );
+    this.registry.registerMetric(
+      new Gauge({
+        name: "spectators",
+        help: "Connected clients watching a Room with no Seat.",
+        registers: [],
+        collect() {
+          this.set(rooms().reduce((sum, r) => sum + r.spectators, 0));
         },
       }),
     );
@@ -149,6 +162,11 @@ export class GameMetrics {
     this.#seatReconnects = new Counter({
       name: "seat_reconnects_total",
       help: "Players back in their held Seat.",
+      registers,
+    });
+    this.#spectatorJoins = new Counter({
+      name: "spectator_joins_total",
+      help: "Spectators admitted to a Room by its Room code.",
       registers,
     });
     this.#limiterRefusals = new Counter({
@@ -212,6 +230,11 @@ export class GameMetrics {
   /** A Player is back in a held Seat (#35 calls this when a reconnect or rejoin lands). */
   seatReconnected(): void {
     this.#seatReconnects.inc();
+  }
+
+  /** A spectator was admitted to a Room (spec #179); it takes no Seat. */
+  spectatorJoined(): void {
+    this.#spectatorJoins.inc();
   }
 
   /** An abuse limit refused a request (through `limiterRefused`). */

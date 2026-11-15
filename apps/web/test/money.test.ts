@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { baseLocale, overwriteGetLocale, type Locale } from "#paraglide/runtime.js";
-import { formatCompactMoney, formatMoney } from "#text.ts";
+import { formatCompactMoney, formatCount, formatMoney } from "#text.ts";
 
 const inLanguage = (locale: Locale) => overwriteGetLocale(() => locale);
 // Intl separates groups and units with no-break spaces; compare with plain ones.
@@ -35,5 +35,16 @@ describe("money in short (the Board)", () => {
     expect(plain(formatCompactMoney(75_000))).toBe("75K");
     inLanguage("de");
     expect(plain(formatCompactMoney(1_200_000))).toBe("1,2 Mio.");
+  });
+});
+
+describe("whole numbers (chart ticks and counts)", () => {
+  it("follow the active language's grouping", () => {
+    inLanguage("hu");
+    expect(plain(formatCount(12_500))).toBe("12 500");
+    inLanguage("en");
+    expect(plain(formatCount(12_500))).toBe("12,500");
+    inLanguage("de");
+    expect(plain(formatCount(12_500))).toBe("12.500");
   });
 });
