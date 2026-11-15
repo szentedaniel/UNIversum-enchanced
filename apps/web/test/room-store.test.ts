@@ -135,6 +135,24 @@ describe("the spectator count", () => {
     expect(playbackStore.getState().frame?.eventsReached).toBe(reached);
   });
 
+  it("follows a view that changed at the same version, with no events", () => {
+    const view = viewOf(undefined, { version: 3 });
+    receivePush({ view, events: [], reveals: [], spectators: 0, now: 0 }, 0);
+    const core = currentPlayback();
+
+    // A made-up view (the e2e hooks clone the push and keep its version) is a
+    // new view: only the *same* view keeps the Playback, so the screens follow
+    // this one instead of the count-only rule (spec #179, ticket #249).
+    const madeUp = { ...view, turn: view.turn + 1, currentPlayer: "p2" };
+    receivePush({ view: madeUp, events: [], reveals: [], spectators: 0, now: 0 }, 10);
+
+    expect(currentPlayback()).not.toBe(core);
+    expect(playbackStore.getState().frame?.shownTurn).toEqual({
+      turn: view.turn + 1,
+      currentPlayer: "p2",
+    });
+  });
+
   it("keeps the count a Lobby message carries", () => {
     receiveLobby(lobbyOf(3), 0);
     expect(roomStore.getState().spectators).toBe(3);

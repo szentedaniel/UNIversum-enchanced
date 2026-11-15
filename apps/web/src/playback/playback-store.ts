@@ -47,6 +47,8 @@ let wakeTimer: ReturnType<typeof setTimeout> | undefined;
 let current: Playback | null = null;
 /** The push `current` was built from, so a count-only push keeps it (spec #179). */
 let currentPush: Push | null = null;
+/** `currentPush`'s view as JSON, written when the first later push needs it. */
+let currentViewJson: string | undefined;
 
 /**
  * The latest push's core, for a render loop that needs its own reading
@@ -82,25 +84,32 @@ function wake(): void {
   if (current) publish(current, Date.now());
 }
 
+/**
+ * Whether `push` restates the very view `current` was built from: no events, the
+ * same `version`, and the same view field for field. The server's count-only push
+ * re-sends the state it holds (spec #179, ticket #249), so the running Playback
+ * and its timer stay: a watcher's join replays nothing and opens no decision
+ * early. A made-up view the e2e hooks show is a changed view with no events, and
+ * it must rebuild the Playback, so the version alone is not the test — the views
+ * are JSON by construction, and one serialization compares every field.
+ */
+function restatesView(push: Push): boolean {
+  if (currentPush === null) return false;
+  if (push.events.length > 0 || push.view.version !== currentPush.view.version) return false;
+  currentViewJson ??= JSON.stringify(currentPush.view);
+  return JSON.stringify(push.view) === currentViewJson;
+}
+
 /** A new push: build its core once, from the Turn the screen shows now. */
 function start(): void {
   const { push } = roomStore.getState();
-  // A push that only changes the spectator count carries the same view and no
-  // events (spec #179, ticket #249): the running Playback and its timer stay,
-  // so a watcher's join replays nothing and opens no decision early.
-  if (
-    push !== null &&
-    currentPush !== null &&
-    push.view.version === currentPush.view.version &&
-    push.events.length === 0
-  ) {
-    return;
-  }
+  if (push !== null && restatesView(push)) return;
   clearTimeout(wakeTimer);
   wakeTimer = undefined;
   if (!push) {
     current = null;
     currentPush = null;
+    currentViewJson = undefined;
     playbackStore.setState({ frame: null });
     // A Room left behind: the next Room's push counter starts over.
     resetCues();
@@ -110,6 +119,7 @@ function start(): void {
   const previousTurn = playbackStore.getState().frame?.shownTurn ?? null;
   current = playbackOfPush(push, previousTurn);
   currentPush = push;
+  currentViewJson = undefined;
   publish(current, Date.now());
 }
 

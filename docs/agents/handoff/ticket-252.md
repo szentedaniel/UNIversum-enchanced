@@ -11,8 +11,10 @@ builds on it. The rules engine, `GameState`, the stored snapshot and the server 
   `receiveLobby` stores `lobby.spectators`. `reset()` returns it to `0`. It lives beside `role`,
   never inside `Push`, so a count-only push replaces the push without touching the Playback frame.
 - **`apps/web/src/playback/playback-store.ts`**: `start()` keeps a `currentPush` and returns early
-  when the new push has **no events and the same `view.version`** as the core it built. That is the
-  count-only push (#249), so the running Playback keeps its core, timer and `eventsReached`.
+  when the new push has **no events, the same `view.version` and the same view field for field**
+  (`restatesView`). That is the count-only push (#249), so the running Playback keeps its core, timer
+  and `eventsReached`. The view comparison is what tells it apart from a made-up view: the e2e hooks
+  clone the push and keep its `version`, so `version` alone would swallow every `showView` push.
   Consequence for e2e: `playback().seq` keeps the Playback push's `seq` after a watcher joins or
   leaves; `room().push.seq` does move on.
 - **`apps/web/src/test-hooks.ts`**: `showView` passes `spectators: roomStore.getState().spectators`,
