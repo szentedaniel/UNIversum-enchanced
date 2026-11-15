@@ -16,6 +16,12 @@
  * a call) throws the whole press away: no tap, and no moves from the fingers
  * still down. A wheel that arrives during or just after a touch is that
  * touch's leftover, not a new zoom.
+ *
+ * Hover is a mouse's alone: a move with nothing pressed and no drag or pinch
+ * reports its point, and a press, a pinch, a pointer leaving the canvas or a
+ * touch just past (`TOUCH_WHEEL_GRACE_MS`) clears it. A touch or pen pointer
+ * never reports a hover point, even though some browsers emit compatibility
+ * mouse moves for them.
  */
 import { gestureCamera, zoomAround, type Camera } from "#board/camera.ts";
 import type { Point } from "#board/layout.ts";
@@ -27,6 +33,11 @@ export type GestureTarget = {
   scaleLimits(): { min: number; max: number };
   /** A tap at canvas CSS pixels. */
   tap(at: Point): void;
+  /**
+   * A mouse hover at canvas CSS pixels, or `null` when it ends: the pointer
+   * left the canvas, a press, drag or pinch began, or a touch just passed.
+   */
+  hover(at: Point | null): void;
   /** The Player moved the camera by hand (drag, pinch or wheel). */
   moved(): void;
 };
@@ -51,6 +62,36 @@ const WHEEL_ZOOM = 0.002;
 
 /** The clock tap duration and the wheel grace are measured on; the browser's by default. */
 export type GestureOptions = { now?: () => number };
+
+/** What a pointer move says about whether it may report a hover. */
+export type HoverInput = {
+  /** `PointerEvent.pointerType`: only a mouse hovers (touch and pen emit compatibility moves). */
+  pointerType: string;
+  /** `PointerEvent.buttons`: nonzero while a button is down, which is a press or a drag. */
+  buttons: number;
+  /** The press left its slop, so it is a drag. */
+  dragging: boolean;
+  /** A second pointer is down, so the gesture is a pinch or pan. */
+  multi: boolean;
+  /** Milliseconds since a touch was last down (`0` while one is), or `null` if none has been. */
+  sinceTouch: number | null;
+};
+
+/**
+ * Whether a pointer move may report a hover: a mouse, no button pressed, no
+ * drag or pinch, and no touch down now or this soon before (the same grace the
+ * leftover wheel gets), so a touch's compatibility mouse move never raises a
+ * tooltip.
+ */
+export function hoverEligible(input: HoverInput): boolean {
+  return (
+    input.pointerType === "mouse" &&
+    input.buttons === 0 &&
+    !input.dragging &&
+    !input.multi &&
+    (input.sinceTouch === null || input.sinceTouch >= TOUCH_WHEEL_GRACE_MS)
+  );
+}
 
 /** The press from the first pointer down to the last pointer up. */
 type Press = {
@@ -100,11 +141,31 @@ export function attachGestures(
   let lastTouchAt: number | null = null;
   let press: Press | null = null;
   let baseline: Baseline | null = null;
+  /** Whether the target last heard a hover point (not `null`), so a clear fires once. */
+  let hovering = false;
 
   const local = (event: PointerEvent | WheelEvent): Point => {
     const rect = el.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
+  /** Reports a hover point, and a `null` only when one was reported before it. */
+  function reportHover(at: Point | null): void {
+    if (at === null && !hovering) return;
+    hovering = at !== null;
+    target.hover(at);
+  }
+  /** A move's hover when it is a mouse's and nothing is in the way; a clear otherwise. */
+  function hoverMove(event: PointerEvent): void {
+    const eligible = hoverEligible({
+      pointerType: event.pointerType,
+      buttons: event.buttons,
+      dragging: press?.moved ?? false,
+      multi: pointers.size > 1 || (press?.multi ?? false),
+      // A finger still down is the most recent touch of all.
+      sinceTouch: touches.size > 0 ? 0 : lastTouchAt === null ? null : now() - lastTouchAt,
+    });
+    reportHover(eligible ? local(event) : null);
+  }
   /** (Re)starts the gesture from the current pointers, e.g. when a second finger lands. */
   function begin(): void {
     const points = [...pointers.values()];
@@ -117,6 +178,8 @@ export function attachGestures(
 
   function down(event: PointerEvent): void {
     if (event.button !== 0 && event.pointerType === "mouse") return;
+    // The press ends the hover: nothing is hovered while a button or finger is down.
+    reportHover(null);
     const at = local(event);
     pointers.set(event.pointerId, at);
     if (press === null) {
@@ -136,6 +199,9 @@ export function attachGestures(
   }
 
   function move(event: PointerEvent): void {
+    // Every move decides the hover first: a mouse's free move reports a point,
+    // and a press, drag or pinch (ineligible) clears the one before it.
+    hoverMove(event);
     if (!pointers.has(event.pointerId) || !baseline || !press) return;
     pointers.set(event.pointerId, local(event));
     const points = [...pointers.values()];
@@ -187,6 +253,10 @@ export function attachGestures(
     if (isTap) target.tap(at);
   }
 
+  function leave(): void {
+    reportHover(null);
+  }
+
   function wheel(event: WheelEvent): void {
     event.preventDefault();
     // The page must never scroll or zoom, even for a wheel that is ignored.
@@ -204,12 +274,14 @@ export function attachGestures(
   el.addEventListener("pointermove", move);
   el.addEventListener("pointerup", up);
   el.addEventListener("pointercancel", up);
+  el.addEventListener("pointerleave", leave);
   el.addEventListener("wheel", wheel, { passive: false });
   return () => {
     el.removeEventListener("pointerdown", down);
     el.removeEventListener("pointermove", move);
     el.removeEventListener("pointerup", up);
     el.removeEventListener("pointercancel", up);
+    el.removeEventListener("pointerleave", leave);
     el.removeEventListener("wheel", wheel);
   };
 }

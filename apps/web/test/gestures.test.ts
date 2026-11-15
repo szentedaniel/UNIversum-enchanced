@@ -26,8 +26,17 @@ const eventOf = (
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- a DOM event stand-in
 ): Input => input as unknown as Input;
 
-const pointer = (type: string, id: number, at: Point, pointerType: string) =>
-  eventOf({ type, pointerId: id, clientX: at.x, clientY: at.y, pointerType, button: 0 });
+/** A pointer event stand-in; `buttons` is the bitmask `pointermove` carries while one is held. */
+const pointer = (type: string, id: number, at: Point, pointerType: string, buttons = 0) =>
+  eventOf({
+    type,
+    pointerId: id,
+    clientX: at.x,
+    clientY: at.y,
+    pointerType,
+    button: 0,
+    buttons,
+  });
 
 /** The canvas the gestures listen on: listeners, a rect and pointer capture. */
 function fakeCanvas(origin: Point) {
@@ -64,6 +73,7 @@ function mount(
   const canvas = fakeCanvas(options.origin ?? { x: 0, y: 0 });
   const moves: Camera[] = [];
   const taps: Point[] = [];
+  const hovers: (Point | null)[] = [];
   let moved = 0;
   let prevented = 0;
 
@@ -78,6 +88,7 @@ function mount(
       },
       scaleLimits: () => limits,
       tap: (at) => taps.push(at),
+      hover: (at) => hovers.push(at),
       moved: () => {
         moved += 1;
       },
@@ -90,10 +101,13 @@ function mount(
       clock = ms;
     },
     down(id: number, at: Point, pointerType = "touch") {
-      canvas.dispatch("pointerdown", pointer("pointerdown", id, at, pointerType));
+      canvas.dispatch("pointerdown", pointer("pointerdown", id, at, pointerType, 1));
     },
-    move(id: number, at: Point, pointerType = "touch") {
-      canvas.dispatch("pointermove", pointer("pointermove", id, at, pointerType));
+    move(id: number, at: Point, pointerType = "touch", buttons = 0) {
+      canvas.dispatch("pointermove", pointer("pointermove", id, at, pointerType, buttons));
+    },
+    leave(id: number, at: Point, pointerType = "mouse") {
+      canvas.dispatch("pointerleave", pointer("pointerleave", id, at, pointerType));
     },
     up(id: number, at: Point, pointerType = "touch") {
       canvas.dispatch("pointerup", pointer("pointerup", id, at, pointerType));
@@ -118,6 +132,7 @@ function mount(
     camera: () => camera,
     moves,
     taps,
+    hovers,
     moved: () => moved,
     prevented: () => prevented,
   };
@@ -198,6 +213,87 @@ describe("tap", () => {
 const boardOf = (camera: Camera, point: Point): Point => ({
   x: (point.x - camera.x) / camera.scale,
   y: (point.y - camera.y) / camera.scale,
+});
+
+describe("hover", () => {
+  it("reports a mouse move with no button pressed, in canvas CSS pixels", () => {
+    const board = mount({ origin: { x: 40, y: 24 } });
+    board.move(1, { x: 140, y: 124 }, "mouse");
+
+    expect(board.hovers).toEqual([{ x: 100, y: 100 }]);
+    expect(board.moves).toEqual([]);
+  });
+
+  it("never hovers for a touch or pen pointer", () => {
+    const touch = mount();
+    touch.move(1, { x: 100, y: 100 }, "touch");
+    const pen = mount();
+    pen.move(1, { x: 100, y: 100 }, "pen");
+
+    expect(touch.hovers).toEqual([]);
+    expect(pen.hovers).toEqual([]);
+  });
+
+  it("clears the hover on a press and stays down while the button is held", () => {
+    const board = mount();
+    board.move(1, { x: 100, y: 100 }, "mouse");
+    board.at(0);
+    board.down(1, { x: 100, y: 100 }, "mouse");
+    board.at(100);
+    board.move(1, { x: 101, y: 100 }, "mouse", 1);
+    board.at(200);
+    board.move(1, { x: 100 + TAP_SLOP, y: 100 }, "mouse", 1);
+
+    expect(board.hovers).toEqual([{ x: 100, y: 100 }, null]);
+  });
+
+  it("clears the hover when a second finger lands on the Board", () => {
+    const board = mount();
+    board.move(1, { x: 100, y: 100 }, "mouse");
+    board.down(2, { x: 150, y: 150 }, "touch");
+
+    expect(board.hovers).toEqual([{ x: 100, y: 100 }, null]);
+  });
+
+  it("stays down while a finger is on the Board, even for a mouse move", () => {
+    const board = mount();
+    board.move(1, { x: 100, y: 100 }, "mouse");
+    board.down(2, { x: 100, y: 100 }, "touch");
+    board.move(1, { x: 110, y: 100 }, "mouse");
+
+    expect(board.hovers).toEqual([{ x: 100, y: 100 }, null]);
+  });
+
+  it("clears the hover once when the pointer leaves the canvas", () => {
+    const board = mount();
+    board.move(1, { x: 100, y: 100 }, "mouse");
+    board.leave(1, { x: -5, y: 100 });
+    board.leave(1, { x: -6, y: 100 });
+
+    expect(board.hovers).toEqual([{ x: 100, y: 100 }, null]);
+  });
+
+  it("ignores a move carrying a button that never landed on the canvas", () => {
+    const board = mount();
+    board.move(1, { x: 100, y: 100 }, "mouse", 2);
+
+    expect(board.hovers).toEqual([]);
+  });
+
+  it("keeps a mouse move just after a touch from hovering until the grace passes", () => {
+    const board = mount();
+    board.at(0);
+    board.down(1, { x: 100, y: 100 });
+    board.at(100);
+    board.up(1, { x: 100, y: 100 });
+    board.at(100 + TOUCH_WHEEL_GRACE_MS - 1);
+    board.move(2, { x: 100, y: 100 }, "mouse");
+    expect(board.hovers).toEqual([]);
+
+    board.at(100 + TOUCH_WHEEL_GRACE_MS);
+    board.move(2, { x: 100, y: 100 }, "mouse");
+    expect(board.hovers).toEqual([{ x: 100, y: 100 }]);
+  });
 });
 
 describe("pinch", () => {

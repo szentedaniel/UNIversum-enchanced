@@ -15,6 +15,8 @@
  * Camera (prototype variant E): it starts fitted to the fit area and returns
  * to fit at each Turn change unless the Player turned Follow on. Taps open the
  * nearest Field; selecting or revealing a Field pans at most, never zooms.
+ * A mouse hover reports the nearest Field within the same reach — every Field,
+ * even during a pick — and the Field only when it changes.
  */
 import type { PlayerId, PublicView } from "@universum/rules";
 import { FIELD_COUNT, FIELDS, type FieldId } from "@universum/rules/board";
@@ -48,6 +50,13 @@ export type BoardOptions = {
    * Field. During a pick only pickable Fields count (the tap snaps to them).
    */
   onFieldTap?(id: FieldId | null): void;
+  /**
+   * A mouse hover: the nearest Field within reach, or `null` when the pointer
+   * leaves the Board, presses, drags or pinches, or is far from every Field.
+   * Every Field counts, even during a pick, so a Field card works while a
+   * Decision is open. Fires only when the Field changes.
+   */
+  onFieldHover?(id: FieldId | null): void;
   /** Follow was switched off by hand (a drag, pinch or wheel). */
   onFollowChange?(on: boolean): void;
 };
@@ -101,6 +110,51 @@ const REVEAL_MARGIN = 24;
 /** Tap reach: `max(90 px, 1.6 × Field width)` (spec: Taps). */
 const TAP_REACH_PX = 90;
 const TAP_REACH_FIELDS = 1.6;
+
+/**
+ * The Field nearest `at` within the tap reach, or `null` beyond it. `centres`
+ * are the Fields' centres in canvas CSS px, indexed by Field id and lifted as
+ * a tap lifts them; `allowed` is the tap's filter (during a pick only the
+ * pickable Fields count unless inspecting). Leave it out to count every Field,
+ * as hover does.
+ */
+export function snapField(
+  at: Point,
+  centres: readonly Point[],
+  scale: number,
+  allowed?: (id: FieldId) => boolean,
+): FieldId | null {
+  let nearest: FieldId | null = null;
+  let distance = Infinity;
+  for (let id = 0; id < centres.length; id++) {
+    const centre = centres[id];
+    if (!centre || allowed?.(id) === false) continue;
+    const d = Math.hypot(centre.x - at.x, centre.y - at.y);
+    if (d < distance) {
+      distance = d;
+      nearest = id;
+    }
+  }
+  return distance <= Math.max(TAP_REACH_PX, TAP_REACH_FIELDS * FIELD_WIDTH * scale)
+    ? nearest
+    : null;
+}
+
+/**
+ * The Board's hover report: `onFieldHover` fires when the snapped Field
+ * changes, so a stream of moves inside one Field is one call.
+ */
+export function fieldHoverReporter(
+  onFieldHover?: (id: FieldId | null) => void,
+): (id: FieldId | null) => void {
+  let reported: FieldId | null = null;
+  return (id) => {
+    if (id === reported) return;
+    reported = id;
+    onFieldHover?.(id);
+  };
+}
+
 const FOLLOW_ZOOM = 2.6;
 const FOLLOW_EASE = 0.12;
 const SELECTED_LIFT = 12;
@@ -385,6 +439,15 @@ export async function createBoard(
     invalidate();
   }
 
+  /** Every Field's centre in canvas CSS px, lifted as a tap lifts it. */
+  function fieldCentres(): Point[] {
+    const centres: Point[] = [];
+    for (let id = 0; id < FIELD_COUNT; id++) centres.push(toScreen(camera, boardCentre(id)));
+    return centres;
+  }
+
+  const reportHover = fieldHoverReporter((id) => options.onFieldHover?.(id));
+
   const detachGestures = attachGestures(app.canvas, {
     camera: () => camera,
     move: (next) => {
@@ -398,19 +461,19 @@ export async function createBoard(
       setFollow(false, true);
     },
     tap(at) {
-      let nearest: FieldId | null = null;
-      let distance = Infinity;
-      for (let id = 0; id < FIELD_COUNT; id++) {
-        if (pick && !inspect && !pick.pickable.includes(id)) continue;
-        const centre = toScreen(camera, boardCentre(id));
-        const d = Math.hypot(centre.x - at.x, centre.y - at.y);
-        if (d < distance) {
-          distance = d;
-          nearest = id;
-        }
-      }
-      const reach = Math.max(TAP_REACH_PX, TAP_REACH_FIELDS * FIELD_WIDTH * camera.scale);
-      options.onFieldTap?.(distance <= reach ? nearest : null);
+      // A tap during a pick snaps only to the pickable Fields, unless inspecting.
+      options.onFieldTap?.(
+        snapField(
+          at,
+          fieldCentres(),
+          camera.scale,
+          (id) => !pick || inspect || pick.pickable.includes(id),
+        ),
+      );
+    },
+    hover(at) {
+      // No `allowed`: every Field counts, so the Field card works during a pick.
+      reportHover(at === null ? null : snapField(at, fieldCentres(), camera.scale));
     },
   });
 
