@@ -26,8 +26,8 @@ Branch `ticket/73-in-flight-lock`, spec #72, _In-flight (`roomStore`)_. The
 
 - The comparison is `<=`: a push or Rejection at exactly the sent `seq` does
   not answer the send. That is the deleted `answeredAt <= sentAt` rule.
-- `apps/web/test/in-flight.test.ts` imports `connection.ts` and sends through
-  `sendIntent` in vitest: the Colyseus client constructs without a browser and
+- The in-flight tests moved into `apps/web/test/room-store.test.ts` (b312cbb).
+  They import `connection.ts` and send through `sendIntent` in vitest: the Colyseus client constructs without a browser and
   `room` is null, so nothing is sent. Read the lock with
   `inFlightOf(roomStore.getState())`.
 - The e2e `showView` hook still writes `roomStore.push` with `seq + 1`; like
