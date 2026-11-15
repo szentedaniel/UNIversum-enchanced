@@ -105,6 +105,10 @@ export function Lobby() {
   const me = useStore(roomStore, (s) => s.me);
   const clockOffset = useStore(roomStore, (s) => s.lobbyClockOffset);
   const started = useStore(roomStore, (s) => s.code === code && s.push !== null);
+  // A watcher holds no Seat (spec #179): until #252 draws the Lobby read-only,
+  // it gets a minimal waiting state with nothing to press, and the Game when
+  // the first push arrives (the `started` navigation below).
+  const spectator = useStore(roomStore, (s) => s.role === "spectator");
   const [error, setError] = useState<RejectionCode | null>(null);
   const [retryAt, setRetryAt] = useState<number | null>(null);
   const wait = useCountdown(retryAt);
@@ -178,6 +182,26 @@ export function Lobby() {
       <main className="flex min-h-dvh items-center justify-center p-safe-4">
         <p className="font-bold">{m.connecting()}</p>
       </main>
+    );
+  }
+
+  if (spectator) {
+    return (
+      <div className="min-h-dvh pb-safe-8">
+        <ScreenHeader back="/" label={m.back_home()} />
+        <main className="mx-auto flex max-w-md flex-col items-center gap-6 px-safe-4 pt-10 text-center">
+          <h1 className="m-0 text-3xl font-black md:text-4xl">
+            {roomNameText(lobby.roomName, lobby.code)}
+          </h1>
+          <p
+            data-testid="watching"
+            className="sticker m-0 rounded-ui bg-card px-4 py-2 font-black text-card-foreground"
+          >
+            {m.watching()}
+          </p>
+          <p className="m-0 font-bold text-muted-foreground">{m.watch_waiting()}</p>
+        </main>
+      </div>
     );
   }
 

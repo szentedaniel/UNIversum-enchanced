@@ -3,11 +3,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Route, Routes, StaticRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { baseLocale, overwriteGetLocale, type Locale } from "#paraglide/runtime.js";
+import type { LobbyMessage } from "@universum/protocol/messages";
 import { currentPlayback, playbackStore } from "#playback/playback-store.ts";
 import { Game } from "#screens/Game.tsx";
-import { receivePush, reset, roomStore, type Role } from "#stores/room-store.ts";
+import { Lobby } from "#screens/Lobby.tsx";
+import { receiveLobby, receivePush, reset, roomStore, type Role } from "#stores/room-store.ts";
 import en from "../messages/en.json" with { type: "json" };
 import { viewOf } from "./playback-fixtures.ts";
+import type { PlayerName } from "@universum/rules";
 
 // The watching Game screen (spec #179, stories 2, 3 and 5): a Guest without a
 // Seat sees the same Board, Player cards and Turn as a Player, with no way to
@@ -90,5 +93,75 @@ describe("the watching Game screen", () => {
     expect(html).toContain(en.game_roll);
     expect(html).toContain(en.game_your_turn);
     expect(html).not.toContain('data-testid="watching"');
+  });
+});
+
+/** A Lobby two Guests have taken Seats in, as its Lobby message carries it. */
+const lobbyOf = (): LobbyMessage => ({
+  code: "123456",
+  roomName: "tigrisek",
+  creatorId: "p1",
+  hasPassword: false,
+  settings: {
+    maxPlayers: 4,
+    minuteLimit: 50,
+    startingCash: 2_500_000,
+    roundBonus: 250_000,
+    turnLimitMs: 20_000,
+  },
+  seats: [
+    { playerId: "p1", name: { adjective: "happy", noun: "tiger" } satisfies PlayerName },
+    { playerId: "p2", name: { adjective: "calm", noun: "wolf" } satisfies PlayerName },
+  ],
+  spectators: 1,
+  now: 1_000,
+});
+
+describe("the watching Lobby screen", () => {
+  beforeEach(() => {
+    // The invite card reads the page's origin; Node has no window.
+    vi.stubGlobal("window", { location: { origin: "http://localhost:5173" } });
+  });
+
+  function showLobby(role: Role, me: string | null): string {
+    roomStore.setState({ status: "connected", code: "123456", me, role });
+    receiveLobby(lobbyOf(), 0);
+    return renderToStaticMarkup(
+      createElement(
+        StaticRouter,
+        { location: "/room/123456" },
+        createElement(
+          Routes,
+          null,
+          createElement(Route, { path: "/room/:code", element: createElement(Lobby) }),
+        ),
+      ),
+    );
+  }
+
+  it("waits for the game to start under the Room's name, with a watching marker", () => {
+    const html = showLobby("spectator", null);
+
+    expect(html).toContain('data-testid="watching"');
+    expect(html).toContain(en.watching);
+    expect(html).toContain(en.watch_waiting);
+    expect(html).toContain("tigrisek");
+  });
+
+  it("offers a watcher no Seat, Start, Bot or invite control", () => {
+    const html = showLobby("spectator", null);
+
+    expect(html).not.toContain('data-testid="seat"');
+    expect(html).not.toContain('data-testid="room-code"');
+    expect(html).not.toContain('data-testid="invite-link"');
+    expect(html).not.toContain(en.lobby_take_seat);
+  });
+
+  it("keeps the Lobby for a Player who took a Seat", () => {
+    const html = showLobby("player", null);
+
+    expect(html).not.toContain('data-testid="watching"');
+    expect(html).toContain('data-testid="room-code"');
+    expect(html).toContain('data-testid="seat"');
   });
 });
