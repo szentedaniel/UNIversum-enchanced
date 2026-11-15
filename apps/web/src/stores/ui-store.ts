@@ -1,7 +1,8 @@
 /**
- * Local UI state that never goes to the server: the open Field card, the
- * camera mode, the Fields picked in a Sale or a single pick, and the pick
- * tray's checklist preference. The Board subscribes outside React.
+ * Local UI state that never goes to the server: the open Field card, the Field
+ * a mouse hovers, the camera mode, the Fields picked in a Sale or a single
+ * pick, and the pick tray's checklist preference. The Board subscribes outside
+ * React.
  */
 import type { FieldId } from "@universum/rules/board";
 import { subscribeWithSelector } from "zustand/middleware";
@@ -12,6 +13,13 @@ export type UiState = {
   /** The Field whose card is open (a tap on the Board, or ‹ › on the card). */
   selectedField: FieldId | null;
   selectField(field: FieldId | null): void;
+  /**
+   * The Field a mouse hovers on the Board, for the hover tooltip (#318); it is
+   * independent of `selectedField`, so it shows while the card or a tray is
+   * open and never takes the bottom slot.
+   */
+  hoveredField: FieldId | null;
+  hoverField(field: FieldId | null): void;
   /** Camera mode: Follow keeps the moving pawn in view (opt-in; a drag turns it off). */
   follow: boolean;
   setFollow(follow: boolean): void;
@@ -58,6 +66,8 @@ export const uiStore = createStore<UiState>()(
   subscribeWithSelector((set) => ({
     selectedField: null,
     selectField: (field) => set({ selectedField: field }),
+    hoveredField: null,
+    hoverField: (field) => set({ hoveredField: field }),
     follow: false,
     setFollow: (follow) => set({ follow }),
     salePicks: { key: "", fields: [] },
