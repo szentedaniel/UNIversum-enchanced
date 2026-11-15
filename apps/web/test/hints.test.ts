@@ -15,8 +15,9 @@ import hu from "../messages/hu.json" with { type: "json" };
 import { fieldOf, viewOf } from "./playback-fixtures.ts";
 
 // The hint table (spec #180): which concept a first-time Guest meets, from the
-// Decision module's answer and the frame's view. No store, no Playback timers,
-// no wall clock. The menu's hint list and switch read the same table.
+// Decision module's answer and the frame's view. No Playback timers, no wall
+// clock. The menu's hint list and switch read the same table and the hint
+// store, so the menu tests drive `hintStore` directly.
 
 // React's server renderer reads a zustand store's *initial* state
 // (`getServerSnapshot`), not the state a test has written. The menu's two hint
