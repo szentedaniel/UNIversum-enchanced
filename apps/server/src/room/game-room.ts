@@ -512,6 +512,8 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
         throw refuse("WRONG_PASSWORD");
       }
       this.#spectators.add(client.sessionId);
+      this.metrics.spectatorJoined();
+      this.log.info({ spectators: this.spectatorCount() }, "Spectator joined");
       // The newcomer and everyone else hear the new count in one push.
       this.broadcastSpectatorCount();
       return;
@@ -597,6 +599,7 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
     // In a running game the Seat stays (a Bot plays its Decisions from then);
     // a Lobby frees it. On shutdown nothing changes: the Room comes back as it was.
     if (this.#shuttingDown) return;
+    if (wasSpectator) this.log.info({ spectators: this.spectatorCount() }, "Spectator left");
     const seat = this.seatOf(client);
     if (!seat) {
       // Taken back from another connection, already freed, or released by a
@@ -1204,16 +1207,23 @@ export class GameRoom extends Room<{ metadata: LobbyListingMetadata }> {
   }
 
   /**
-   * The Room's numbers for the `rooms`, `players_connected` and
-   * `seats_held_disconnected` gauges. Held: every Guest Seat with no live
-   * client (dropped and held, or restored and not yet taken back), until the
-   * game ends; a Bot's Seat is neither connected nor held.
+   * The Room's numbers for the `rooms`, `players_connected`,
+   * `seats_held_disconnected` and `spectators` gauges. Held: every Guest Seat
+   * with no live client (dropped and held, or restored and not yet taken
+   * back), until the game ends; a Bot's Seat is neither connected nor held.
+   * Spectators are counted apart, from the Room's own spectator set: they
+   * take no Seat, so they never inflate either Seat number.
    */
   gauges(): RoomGauges {
     const guests = this.seats.filter((s) => s.bot !== true);
     const connected = guests.filter((seat) => this.isSeatConnected(seat)).length;
     const state = this.game === null ? "lobby" : this.endedAt === null ? "playing" : null;
-    return { state, connected, held: state === null ? 0 : guests.length - connected };
+    return {
+      state,
+      connected,
+      held: state === null ? 0 : guests.length - connected,
+      spectators: this.spectatorCount(),
+    };
   }
 
   /** Runs a Player intent through the commit pipeline. */
