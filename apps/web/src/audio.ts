@@ -3,9 +3,12 @@
  * through a small pool of `HTMLAudioElement`s, so two cues in quick succession
  * do not cut each other off, and one looping element carries the music. Every
  * element is unlocked on the first tap or key press (iOS only plays audio a
- * gesture started); one created after that is unlocked when it is made. The
- * menu's effects toggle silences the cues, its music toggle starts or pauses
- * the music, and under browser automation the elements start muted, so
+ * gesture started); one created after that is unlocked when it is made. While
+ * every sound is muted the first gesture only records itself and makes
+ * nothing, so a Guest who silenced the game downloads no audio; the tap that
+ * turns a setting on creates and unlocks what it needs, being a gesture too.
+ * The menu's effects toggle silences the cues, its music toggle starts or
+ * pauses the music, and under browser automation the elements start muted, so
  * `play()` is still called and can be counted.
  */
 import musicSound from "#assets/sounds/music.mp3";
@@ -26,9 +29,11 @@ type Pool = {
 
 const pools = new Map<CueName, Pool>();
 let unlocked = false;
+/** Elements whose silent unlock has started: the unlock runs once per element. */
+const unlockedElements = new WeakSet<HTMLAudioElement>();
 /** Elements whose silent unlock has not finished: a cue waits for it so it is audible. */
 const unlocking = new WeakMap<HTMLAudioElement, Promise<void>>();
-/** The one music element, made on the first unlock. */
+/** The one music element, made by the first unlock that needs it. */
 let music: HTMLAudioElement | null = null;
 /** Whether a `play()` for the music is under way. */
 let musicPlaying = false;
@@ -54,6 +59,8 @@ function elementAt(name: CueName, pool: Pool, slot: number): HTMLAudioElement {
   if (pooled) return pooled;
 
   const element = new Audio(CUES[name]);
+  // No download until the unlock or a cue plays it.
+  element.preload = "none";
   if (navigator.webdriver) element.muted = true;
   pool.elements[slot] = element;
   if (unlocked) unlockElement(element);
@@ -71,6 +78,7 @@ function elementFor(name: CueName): HTMLAudioElement {
 /** Starts `element` silently and pauses it again: the iOS unlock, without a sound. */
 function beginUnlock(element: HTMLAudioElement): Promise<void> {
   const volume = element.volume;
+  element.preload = "auto";
   element.volume = 0;
   return (async () => {
     try {
@@ -85,8 +93,10 @@ function beginUnlock(element: HTMLAudioElement): Promise<void> {
   })();
 }
 
-/** Unlocks one element, remembering the wait so a cue cannot start under its silent play. */
+/** Unlocks one element once, remembering the wait so a cue cannot start under its silent play. */
 function unlockElement(element: HTMLAudioElement): void {
+  if (unlockedElements.has(element)) return;
+  unlockedElements.add(element);
   const done = beginUnlock(element);
   unlocking.set(element, done);
   void done.then(() => unlocking.delete(element));
@@ -94,6 +104,7 @@ function unlockElement(element: HTMLAudioElement): void {
 
 /** Restarts the element from the beginning and plays it. A failed play (no gesture yet) is silent. */
 function start(element: HTMLAudioElement): void {
+  element.preload = "auto";
   element.currentTime = 0;
   void element.play().catch(() => {});
 }
@@ -119,6 +130,8 @@ function musicElement(): HTMLAudioElement {
   if (music) return music;
   const element = new Audio(musicSound);
   element.loop = true;
+  // No download until the unlock starts it.
+  element.preload = "none";
   if (navigator.webdriver) element.muted = true;
   music = element;
   return element;
@@ -163,17 +176,11 @@ function syncMusic(): void {
 }
 
 /**
- * Makes every pooled element and the music playable from the next event: call
- * it inside the first gesture and start each silently, then pause it again.
- * After that, `playCue` works without a gesture, as iOS requires, the music
- * starts if it is on, and an element created later is unlocked when it is made.
+ * Creates and silently unlocks every pooled cue element inside the gesture:
+ * iOS honours a later play only on an element a gesture started, so a lazily
+ * made first one would be silent.
  */
-export function unlockAudio(): void {
-  if (unlocked) return;
-  unlocked = true;
-  if (typeof Audio === "undefined") return;
-  // Create every element now, inside the gesture: iOS honours a later play
-  // only on an element a gesture started, so a lazily made first one would be silent.
+function unlockEffects(): void {
   for (const name of Object.keys(CUES)) {
     if (!isCueName(name)) continue;
     const pool = poolFor(name);
@@ -183,8 +190,35 @@ export function unlockAudio(): void {
       else elementAt(name, pool, slot);
     }
   }
+}
+
+/**
+ * Creates and silently unlocks the elements the settings need, inside the
+ * gesture that makes them audible. With everything muted it makes nothing, so
+ * no sound file is downloaded for a sound nobody will hear; each element is
+ * unlocked once, so a later setting change only covers the elements it adds.
+ */
+function unlockElements(): void {
+  // No audio outside a browser: the store's vitest drives the settings in Node.
+  if (typeof Audio === "undefined") return;
+  const { effectsMuted, musicOn } = soundStore.getState();
+  if (effectsMuted && !musicOn) return;
+  if (!effectsMuted) unlockEffects();
   // The music is part of every element the unlock covers; it starts only if it is on.
   unlockElement(musicElement());
+}
+
+/**
+ * Makes the elements the settings need playable from the next event: call it
+ * inside the first gesture and start each silently, then pause it again. After
+ * that, `playCue` works without a gesture, as iOS requires, the music starts
+ * if it is on, and an element created later is unlocked when it is made.
+ */
+export function unlockAudio(): void {
+  if (unlocked) return;
+  unlocked = true;
+  if (typeof Audio === "undefined") return;
+  unlockElements();
   syncMusic();
 }
 
@@ -201,8 +235,14 @@ export function installAudioUnlock(): void {
   window.addEventListener("keydown", unlock);
 }
 
-// The music starts or pauses with its toggle, wherever the setting changes.
+// A setting that turns a sound on is itself a gesture: make and silently unlock
+// the elements it needs inside that tap, so a later cue or the music needs no
+// second one, and the music starts or pauses with its toggle.
 soundStore.subscribe((state, previous) => {
+  const audible = !state.effectsMuted || state.musicOn;
+  const changed =
+    state.effectsMuted !== previous.effectsMuted || state.musicOn !== previous.musicOn;
+  if (unlocked && changed && audible) unlockElements();
   if (state.musicOn !== previous.musicOn) syncMusic();
 });
 

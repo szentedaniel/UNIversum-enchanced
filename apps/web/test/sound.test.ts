@@ -229,21 +229,62 @@ describe("the sound cues", () => {
     expect(sound?.volume).toBe(1);
   });
 
-  it("unlocks without a sound when the effects are off", async () => {
+  it("creates no element on the first gesture while everything is muted", async () => {
     stubBrowser();
-    const { installAudioUnlock, playCue, soundStore } = await loadAudio();
-    for (let play = 0; play < 3; play += 1) playCue("dice");
-    soundStore.getState().setEffectsMuted(true);
+    storage.set(SOUND_MUTED_KEY, "1");
+    const { installAudioUnlock, playCue } = await loadAudio();
 
     installAudioUnlock();
     press("pointerdown");
+    press("keydown");
+    await settle();
+    playCue("dice");
     await settle();
 
-    for (const [name, file] of Object.entries(CUES)) {
-      const elements = FakeAudio.instances.filter((sound) => sound.src === file);
-      expect(elements.map((sound) => sound.plays)).toEqual(name === "dice" ? [2, 2, 2] : [1, 1, 1]);
-      expect(elements.every((sound) => sound.volume === 1)).toBe(true);
-    }
+    expect(FakeAudio.instances).toHaveLength(0);
+  });
+
+  it("makes the pool and the music playable on the later tap that shows the effects", async () => {
+    stubBrowser();
+    storage.set(SOUND_MUTED_KEY, "1");
+    const { installAudioUnlock, playCue, soundStore } = await loadAudio();
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+    expect(FakeAudio.instances).toHaveLength(0);
+
+    // The toggle tap is the gesture: every element is made and silently unlocked inside it.
+    soundStore.getState().setEffectsMuted(false);
+    expect(FakeAudio.instances).toHaveLength(3 * Object.keys(CUES).length + 1);
+    expect(FakeAudio.instances.every((sound) => sound.plays === 1)).toBe(true);
+    await settle();
+    expect(FakeAudio.instances.every((sound) => sound.pauses === 1)).toBe(true);
+    expect(musicSound()?.plays).toBe(1);
+
+    // No second tap: the next cue plays on the element the toggle tap unlocked.
+    playCue("dice");
+    await settle();
+
+    expect(FakeAudio.instances.find((sound) => sound.src === CUES.dice)?.plays).toBe(2);
+  });
+
+  it("adds the pool without restarting the music when the effects come on while it plays", async () => {
+    stubBrowser();
+    storage.set(SOUND_MUTED_KEY, "1");
+    storage.set(MUSIC_ON_KEY, "1");
+    const { installAudioUnlock, soundStore } = await loadAudio();
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+    expect(FakeAudio.instances.map((sound) => sound.src)).toEqual([musicFile]);
+    expect(musicSound()?.plays).toBe(2);
+
+    soundStore.getState().setEffectsMuted(false);
+    await settle();
+
+    expect(FakeAudio.instances).toHaveLength(3 * Object.keys(CUES).length + 1);
+    expect(musicSound()?.plays).toBe(2);
+    expect(musicSound()?.pauses).toBe(1);
   });
 
   it("stays muted and still counted under browser automation", async () => {
@@ -292,6 +333,39 @@ describe("the background music", () => {
 
     expect(musicSound()?.plays).toBe(1);
     expect(musicSound()?.pauses).toBe(1);
+  });
+
+  it("unlocks the music alone, silently, when only the music is on", async () => {
+    stubBrowser();
+    storage.set(SOUND_MUTED_KEY, "1");
+    storage.set(MUSIC_ON_KEY, "1");
+    const { installAudioUnlock } = await loadAudio();
+
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+
+    expect(FakeAudio.instances.map((sound) => sound.src)).toEqual([musicFile]);
+    // The silent unlock, then the music itself.
+    expect(musicSound()?.plays).toBe(2);
+    expect(musicSound()?.pauses).toBe(1);
+  });
+
+  it("starts the music on the tap that turns it on after a muted first gesture", async () => {
+    stubBrowser();
+    storage.set(SOUND_MUTED_KEY, "1");
+    const { installAudioUnlock, soundStore } = await loadAudio();
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+    expect(FakeAudio.instances).toHaveLength(0);
+
+    soundStore.getState().setMusicOn(true);
+    await settle();
+
+    // The music only: the cues stay unloaded until the effects come on too.
+    expect(FakeAudio.instances.map((sound) => sound.src)).toEqual([musicFile]);
+    expect(musicSound()?.plays).toBe(2);
   });
 
   it("pauses when turned off and resumes when turned on again", async () => {
