@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { JOBS } from "#schedule/due.ts";
 import {
@@ -384,17 +384,45 @@ describe("factory-tick.yml", () => {
   });
 });
 
+/**
+ * The clock a spawned entry reads: Node preloads this module, so every `new
+ * Date()` in the entry is fixed at `FACTORY_TEST_NOW` before the tick's first
+ * read. The tick's reads follow Budapest wall time, so without it the suite's
+ * result depends on the hour CI runs — which is how the seven-day walk turned
+ * `main` red.
+ */
+const CLOCK_MODULE = [
+  'const fixed = Date.parse(process.env["FACTORY_TEST_NOW"] ?? "");',
+  "const Real = Date;",
+  "class FixedDate extends Real {",
+  "  constructor(...args) {",
+  "    if (args.length === 0) super(fixed);",
+  "    else super(...args);",
+  "  }",
+  "  static now() {",
+  "    return fixed;",
+  "  }",
+  "}",
+  "globalThis.Date = FixedDate;",
+].join("\n");
+
+/** Sunday 02:27 CET on 2026-11-15, 52 minutes before maintenance falls due. */
+const RED_MAIN_NOW = "2026-11-15T01:27:00Z";
+
 describe("the entry", () => {
   const entry = fileURLToPath(new URL("../src/schedule/heartbeat-run.ts", import.meta.url));
 
-  /** Runs the entry against a `gh` shim; `env` overrides the dry-run defaults. */
+  /** Runs the entry against a `gh` shim at `now`; `env` overrides the dry-run defaults. */
   const runEntry = (
     shim: string,
     env: Record<string, string> = {},
+    now = RED_MAIN_NOW,
   ): { status: number | null; output: string; calls: string[] } => {
     const dir = mkdtempSync(join(tmpdir(), "factory-heartbeat-"));
     const calls = join(dir, "gh-calls.log");
+    const clock = join(dir, "clock.mjs");
     writeFileSync(calls, "");
+    writeFileSync(clock, CLOCK_MODULE);
     writeFileSync(join(dir, "gh"), shim.replaceAll("CALLS", calls));
     chmodSync(join(dir, "gh"), 0o755);
     const result = spawnSync(process.execPath, [entry], {
@@ -403,6 +431,10 @@ describe("the entry", () => {
       env: {
         ...process.env,
         PATH: `${dir}:${process.env["PATH"] ?? ""}`,
+        NODE_OPTIONS: [process.env["NODE_OPTIONS"], `--import ${pathToFileURL(clock).href}`]
+          .filter((option) => option !== undefined && option !== "")
+          .join(" "),
+        FACTORY_TEST_NOW: now,
         GH_REPO: "owner/repo",
         GH_TOKEN: "test-token",
         GITHUB_RUN_ID: "",
@@ -432,6 +464,19 @@ describe("the entry", () => {
     expect(calls.filter((call) => call.startsWith("pr list"))).toHaveLength(1);
     expect(calls.filter((call) => call.includes("actions/runs?per_page=100"))).toHaveLength(1);
     expect(calls.filter((call) => call.startsWith("workflow run"))).toEqual([]);
+  });
+
+  it("ticks while a weekly job falls due later today", () => {
+    // The red `main` of 2026-11-15: 02:27 CET on a Sunday, with maintenance due
+    // at 03:19. Its newest run was last Sunday's, more than seven days back, so
+    // a seven-day walk found no occurrence and failed the whole tick.
+    const { status, output } = runEntry('#!/bin/sh\necho "$*" >> "CALLS"\necho "[]"\n');
+
+    expect(status).toBe(0);
+    expect(output).toContain("Dry run: would dispatch factory-intake.yml");
+    expect(output).toContain("Dry run: would dispatch factory-review.yml");
+    expect(output).not.toContain("factory-maintain.yml");
+    expect(output).toContain("Dry run: one tick, no successor.");
   });
 
   it("fails the run when a workflow's runs cannot be read", () => {
