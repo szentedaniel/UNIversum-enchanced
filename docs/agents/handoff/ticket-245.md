@@ -6,11 +6,12 @@ element on the first gesture, only the ones the settings need.
 
 ## The lazy rule in `apps/web/src/audio.ts`
 
-- `unlockElements()` is the one place elements are made: it reads `soundStore`
-  and returns early while `effectsMuted && !musicOn` (nothing audible, so no
-  file is downloaded). Otherwise it calls `unlockEffects()` (all cue pools) when
-  the effects are on, and `unlockElement(musicElement())`; the music element is
-  made even while `musicOn` is false, so its silent unlock covers a later toggle.
+- `unlockElements()` is the one place the unlock makes elements: it reads
+  `soundStore` and returns early while `effectsMuted && !musicOn` (nothing
+  audible, so no file is downloaded). Otherwise it calls `unlockEffects()` (all
+  cue pools) when the effects are on, and `unlockElement(musicElement())`; the
+  music element is made even while `musicOn` is false, so its silent unlock
+  covers a later toggle.
 - `unlockAudio()` keeps its "first gesture only" flag and now just calls
   `unlockElements()` then `syncMusic()`. `unlockEffects()` is the old pool loop,
   moved out unchanged.
@@ -53,7 +54,7 @@ element on the first gesture, only the ones the settings need.
 
 - Under `navigator.webdriver` the settings are the defaults (effects on), so the
   first gesture still makes the whole pool and the `two-guests` play counter
-  (`window.dicePlays`) counts the same silent unlocks as before. A spec that
-  mutes the effects and reloads changes nothing either: the counter is read
-  after the taps, and the muted page makes no element until a toggle turns a
-  sound on.
+  (`window.dicePlays`) counts the same silent unlocks as before. That spec mutes
+  the effects only after its roll assertions, and reads `playsBeforeRoll` after
+  the taps, so nothing it asserts changes: a muted, reloaded page makes no
+  element until a toggle turns a sound on.
