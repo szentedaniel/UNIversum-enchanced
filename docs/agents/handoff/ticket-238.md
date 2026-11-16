@@ -5,10 +5,10 @@ Branch `agent/issue-238-web-summary-and-wealthchart-on-the-result-screen-o`, bas
 ## `apps/web/src/components/WealthChart.tsx`
 
 - `WealthChart({ series, players })` draws `wealthChart(series, players, SIZE)` from `pick/wealth-chart.ts` (`#237`) in a `360 × 240` SVG: one `polyline` per `ChartPlayer` in `playerLook(seat).color` over an ink underlay (pale colours stay visible on cream), and a `circle` at the final sample.
-- Test ids: `wealth-chart` (the figure), `wealth-chart-svg` (the `role="img"` chart), `chart-line` / `chart-marker` (one per Player, `data-player`), `chart-player` (the text alternative's item) and `wealth-chart-empty`.
+- Test ids: `wealth-chart` (the figure), `wealth-chart-svg` (the `role="img"` chart), `chart-line` / `chart-marker` (one per Player, `data-player`) and `chart-player` (the text alternative's item).
 - The chart's accessible name is `m.summary_chart_label()`; the visible list under it is the text alternative (`m.summary_chart_alt()`), one line per Player with `start` → `end` Wealth from the same `ChartPlayer`.
 - Axis ticks are `formatCompactMoney` (y) and `formatCount` (x); the axis labels are drawn inside the geometry's own margins, so a margin change in `pick/wealth-chart.ts` is a deliberate layout change.
-- An empty series (a pre-series v8 save) draws no SVG at all: the figure shows `m.summary_chart_empty()` instead, so no empty frame appears.
+- An empty series (a pre-series v8 save) draws no chart at all: `WealthChart` returns null when `wealthChart` finds no Player line, so neither the figure nor a note appears (ticket #333).
 - `role="img"` on the SVG carries an oxlint block disable (`jsx-a11y/prefer-tag-over-role`) with the reason: an `<img>` cannot hold the lines and markers. Keep the disable if the element moves.
 
 ## `apps/web/src/components/Summary.tsx`
@@ -34,7 +34,7 @@ Branch `agent/issue-238-web-summary-and-wealthchart-on-the-result-screen-o`, bas
 
 ## Tests
 
-- `apps/web/test/summary-panel.test.ts` (14): the Podium's `summary-open` gating, the four figures and their order, the Rent, top buyer, Monopoly group names, Bankruptcies, the empty lines, one line/marker per Player in their colours, the accessible name and text alternative, the empty series, a null Summary, and hu/de headings. Server-render only (the repo has no DOM test environment); the open/back interaction is the e2e's.
+- `apps/web/test/summary-panel.test.ts` (15): the Podium's `summary-open` gating and its own `podium-title` label, the four figures and their order, the Rent, top buyer, Monopoly group names, Bankruptcies, the empty lines, one line/marker per Player in their colours, the accessible name and text alternative, no chart at all for an empty series, the Summary's own label, a null Summary, and hu/de headings. Server-render only (the repo has no DOM test environment); the open/back interaction is the e2e's.
 - `apps/web/test/money.test.ts` gains the `formatCount` grouping case for hu, en and de.
 - `apps/e2e/tests/podium.spec.ts`: `showGameOver` now sets a made-up `view.summary` (figures plus a 3-sample series for four Players); the test opens `summary-open`, counts four `chart-line`s, presses `summary-back`, and still ends by clicking the Lobby list link. CI runs it.
 

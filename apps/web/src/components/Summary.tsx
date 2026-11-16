@@ -10,8 +10,8 @@ import type { PlayerView, PublicView } from "@universum/rules";
 import { FIELDS, type GroupId } from "@universum/rules/board";
 import { ChevronLeft } from "lucide-react";
 import type { ReactNode } from "react";
-import { GROUP_COLORS } from "#board/colors.ts";
-import { PlayerToken } from "#components/PlayerToken.tsx";
+import { cssHex, GROUP_COLORS } from "#board/colors.ts";
+import { PlayerLine } from "#components/PlayerToken.tsx";
 import { Button } from "#components/ui/button.tsx";
 import { WealthChart } from "#components/WealthChart.tsx";
 import { summaryView, type SummaryMonopoly } from "#pick/summary.ts";
@@ -22,9 +22,6 @@ const groupUniversities = (group: GroupId): string =>
   FIELDS.filter((field) => field.group === group)
     .map((field) => fieldName(field.key))
     .join(", ");
-
-const groupColor = (group: GroupId): string =>
-  `#${GROUP_COLORS[group].toString(16).padStart(6, "0")}`;
 
 /** A Monopoly row: a Group completed twice is one row with its count. */
 type MonopolyRow = SummaryMonopoly & { count: number };
@@ -70,9 +67,8 @@ function Names({ players }: { players: readonly PlayerView[] }) {
   return (
     <ul className="m-0 flex list-none flex-col gap-1 p-0">
       {players.map((player) => (
-        <li key={player.id} className="flex items-center gap-1.5">
-          <PlayerToken seat={player.seat} size={14} />
-          <span>{playerName(player.name)}</span>
+        <li key={player.id}>
+          <PlayerLine seat={player.seat}>{playerName(player.name)}</PlayerLine>
         </li>
       ))}
     </ul>
@@ -111,32 +107,26 @@ export function Summary({ view, onBack }: { view: PublicView; onBack: () => void
           {rent === null ? (
             m.summary_biggest_rent_none()
           ) : (
-            <span className="flex flex-wrap items-center gap-1.5">
-              <PlayerToken seat={rent.payer.seat} size={14} />
-              <span>
-                {m.summary_biggest_rent_line({
-                  payer: playerName(rent.payer.name),
-                  amount: formatMoney(rent.amount),
-                  owner: playerName(rent.owner.name),
-                  field: fieldName(FIELDS[rent.field]?.key ?? ""),
-                })}
-              </span>
-            </span>
+            <PlayerLine seat={rent.payer.seat}>
+              {m.summary_biggest_rent_line({
+                payer: playerName(rent.payer.name),
+                amount: formatMoney(rent.amount),
+                owner: playerName(rent.owner.name),
+                field: fieldName(FIELDS[rent.field]?.key ?? ""),
+              })}
+            </PlayerLine>
           )}
         </Figure>
         <Figure figure="buyer" label={m.summary_top_buyer()}>
           {figures.topBuyer === null ? (
             m.summary_top_buyer_none()
           ) : (
-            <span className="flex flex-wrap items-center gap-1.5">
-              <PlayerToken seat={figures.topBuyer.player.seat} size={14} />
-              <span>
-                {m.summary_top_buyer_line({
-                  name: playerName(figures.topBuyer.player.name),
-                  count: formatCount(figures.topBuyer.count),
-                })}
-              </span>
-            </span>
+            <PlayerLine seat={figures.topBuyer.player.seat}>
+              {m.summary_top_buyer_line({
+                name: playerName(figures.topBuyer.player.name),
+                count: formatCount(figures.topBuyer.count),
+              })}
+            </PlayerLine>
           )}
         </Figure>
         <Figure figure="monopolies" label={m.summary_monopolies()}>
@@ -156,7 +146,7 @@ export function Summary({ view, onBack }: { view: PublicView; onBack: () => void
                     <span
                       aria-hidden
                       className="size-3 shrink-0 rounded-full border-2 border-ink"
-                      style={{ background: groupColor(monopoly.group) }}
+                      style={{ background: cssHex(GROUP_COLORS[monopoly.group]) }}
                     />
                     <span>
                       {monopoly.count === 1

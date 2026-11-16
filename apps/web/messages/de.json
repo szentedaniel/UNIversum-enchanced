@@ -395,6 +395,5 @@
   "summary_chart_minute": "Minute",
   "summary_chart_wealth": "Vermögen",
   "summary_chart_alt": "Anfangs- und Endvermögen",
-  "summary_chart_player_line": "{name}: {start} → {end}",
-  "summary_chart_empty": "Dieses Spiel hat keine Vermögensproben, daher gibt es kein Diagramm."
+  "summary_chart_player_line": "{name}: {start} → {end}"
 }

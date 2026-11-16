@@ -164,8 +164,21 @@ test("the result screen: a 2-1-3 podium in Player colours, the Bankrupt Player g
     const summary = page.getByTestId("summary");
     await expect(summary).toBeVisible();
     await expect(summary.getByTestId("chart-line")).toHaveCount(4);
+    // `summary-title` labels the Summary alone: the Podium's section drops its
+    // own label while the Summary is open, so one landmark carries it.
+    await expect(page.getByRole("region", { name: "The game in numbers" })).toHaveCount(1);
+    await expect(podium).not.toHaveAttribute("aria-labelledby");
+    // On a 360×640 phone the way back to the Lobby list stays inside the
+    // viewport while the Summary is open: the scroll box keeps it below.
+    const viewport = page.viewportSize();
+    await page.setViewportSize({ width: 360, height: 640 });
+    const lobbyLink = page.getByRole("link", { name: "Back to the Lobby list" });
+    await expect(lobbyLink).toBeVisible();
+    await expect(lobbyLink).toBeInViewport({ ratio: 1 });
+    if (viewport !== null) await page.setViewportSize(viewport);
     await summary.getByTestId("summary-back").click();
     await expect(podium.getByTestId("podium-places")).toBeVisible();
+    await expect(podium).toHaveAttribute("aria-labelledby", "podium-title");
 
     // Back to the Lobby list.
     await podium.getByRole("link", { name: "Back to the Lobby list" }).click();

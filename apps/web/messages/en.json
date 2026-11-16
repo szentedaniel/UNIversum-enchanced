@@ -395,6 +395,5 @@
   "summary_chart_minute": "Minute",
   "summary_chart_wealth": "Wealth",
   "summary_chart_alt": "Start and end Wealth",
-  "summary_chart_player_line": "{name}: {start} → {end}",
-  "summary_chart_empty": "This game has no Wealth samples to chart."
+  "summary_chart_player_line": "{name}: {start} → {end}"
 }
