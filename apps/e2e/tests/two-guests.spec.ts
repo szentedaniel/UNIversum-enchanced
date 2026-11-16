@@ -349,14 +349,16 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
       });
     }).toPass();
 
-    // The menu muting the dice; the choice is part of the page's storage.
+    // The menu mutes the dice and starts the music; the page stores both choices.
     const phoneId = await me(phone);
     await phone.getByTestId("game-menu").tap();
     await phone.getByTestId("sound-toggle").tap();
     await expect(phone.getByTestId("sound-toggle")).toHaveAttribute("aria-pressed", "true");
+    await phone.getByTestId("music-toggle").tap();
+    await expect(phone.getByTestId("music-toggle")).toHaveAttribute("aria-pressed", "true");
 
     // A language switch mid-game reloads the page; the Guest token returns the
-    // phone to the same Seat, the game speaks German, and the mute choice survived.
+    // phone to the same Seat, the game speaks German, and both choices survived.
     await phone.getByTestId("language-de").tap();
     await expect(phone.locator("html")).toHaveAttribute("lang", "de");
     await expect(phone).toHaveURL(`/game/${code}`);
@@ -366,6 +368,8 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     await phone.getByTestId("game-menu").tap();
     await expect(phone.getByTestId("sound-toggle")).toHaveAttribute("aria-pressed", "true");
     await expect(phone.getByTestId("sound-toggle")).toContainText("Ton aus");
+    await expect(phone.getByTestId("music-toggle")).toHaveAttribute("aria-pressed", "true");
+    await expect(phone.getByTestId("music-toggle")).toContainText("Musik an");
   } finally {
     closeAfterDump(desktopBrowser, phoneBrowser);
   }
