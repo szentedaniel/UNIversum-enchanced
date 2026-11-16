@@ -30,3 +30,8 @@ the entries; the weekly health report (`factory:report`, #92) reads them.
 
 - Medium: two concurrent merge-gate runs hit one pull request, giving duplicate 'waiting for a human' comments on #296 and #313 and the owner's false 'Merge already in progress' escalation on #312 (run 43663043570). The likely cause is the run_id concurrency fallback in factory-merge.yml. Opened a ticket to make the gate idempotent against it and to name the group fallback for the owner. The other review advisories are already ticketed as follow-ups (#319 to #343) and the red main #320 is already fixed by open #341, so there is no new fix for them.
 - Opened #344: Merge gate: two concurrent runs for one pull request must not double-escalate or fail on 'Merge already in progress'
+
+## 2026-11-16
+
+- The first-push `check` failures on #345 and #348 (CI runs 43674311131, 43678289400) went away after one fix round. The facts give no shared cause, so I proposed no fix.
+- Reviewer advisories about duplicated e2e steps and bare timing constants (#348, #356, #379, #382, #386) are already tracked as open follow-ups (#381, #383, #388), so I proposed nothing new. The merge-gate escalations on #341, #342 and #346 were protected-path holds working as designed.
