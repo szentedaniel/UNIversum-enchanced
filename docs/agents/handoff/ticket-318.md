@@ -11,12 +11,12 @@ Branch `agent/issue-318-web-hover-tooltip-shows-name-owner-and-rent-next-t`. All
 ## Placement
 
 - `placeTooltip(at, size, viewport): Point` is the pure part (`board/FieldTooltip.tsx` exports it): beside the Field on the side that fits, clamped inside the viewport (`GAP` 12 px, `MARGIN` 8 px, a box wider than the viewport keeps the left margin). Pinned by `test/field-tooltip.test.ts`.
-- The component measures itself in a `useLayoutEffect` before paint, because the box wraps with its text; the effect's one dependency is `at`, which the Board rebuilds on every parent render, so a new hover or Playback step re-measures.
+- The component measures itself in a `useLayoutEffect` before paint, because the box wraps with its text; the effect's one dependency is `at`, which the Board rebuilds on every parent render, so a new hover, Playback step or camera move re-measures.
 - It is `position: fixed` with viewport coordinates inside `.board` (whose `overflow: hidden` does not clip a fixed child; a transformed ancestor would).
 
 ## Gotchas
 
-- A camera move without a `pointermove` (wheel zoom, camera buttons, Follow) leaves the hover — and so the tooltip's point — stale until the mouse moves, as #317's note says. Both were accepted, not re-snapped.
+- A camera move without a `pointermove` now re-snaps the hover and re-places the tooltip (#357): `board.ts` keeps the last hover point (`hoverAt`) and `setCamera` ends with `resnapHover`, which re-runs the gesture layer's `snapField` and calls the optional `BoardOptions.onCameraChange`; `Board.tsx` wires that to `uiStore.cameraMoved`, and `HoveredTooltip` subscribes to `uiStore.cameraRevision` (without reading it) so it re-renders and `fieldCenter` gives the Field's new point. `onFieldHover` stays change-only, so a wheel zoom that keeps the same Field reports no hover. A camera button or Follow still clears the hover first — the pointer leaves the canvas for the button — and the tooltip returns with the next mouse move. The old note here accepted the staleness; that is superseded.
 - The tooltip reads `playbackStore.frame.view`, never `roomStore.push.view`, so it cannot run ahead of a running Playback (ADR-0004); it does no `clockOffset` or `PLAYBACK_MS` arithmetic.
 - Hover reaches every Field during a pick because #317's `hover` snap passes no `allowed` filter; do not narrow it to `pickable`, or the tooltip vanishes over the rest of the Board.
 - Touch and pen pointers never raise a hover (#317's `hoverEligible`), so the tooltip needs no touch guard of its own; the Field card stays the accessible path.
