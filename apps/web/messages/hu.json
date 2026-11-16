@@ -394,6 +394,5 @@
   "summary_chart_minute": "Perc",
   "summary_chart_wealth": "Vagyon",
   "summary_chart_alt": "Kezdő és záró vagyon",
-  "summary_chart_player_line": "{name}: {start} → {end}",
-  "summary_chart_empty": "Ehhez a játékhoz nincs vagyonminta, ezért nincs grafikon."
+  "summary_chart_player_line": "{name}: {start} → {end}"
 }

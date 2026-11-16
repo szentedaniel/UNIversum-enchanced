@@ -211,13 +211,13 @@ describe("the Summary", () => {
     expect(plain(html)).toContain("Brave Bear: Ft 2,500,000 → Ft 4,100,000");
   });
 
-  it("draws no chart frame and no line when the game has no Wealth samples", () => {
+  it("draws no chart at all when the game has no Wealth samples", () => {
     inLanguage("en");
     const html = renderSummary(gameOver(EMPTY));
 
     expect(countOf(html, "chart-line")).toBe(0);
-    expect(html).not.toContain('data-testid="wealth-chart-svg"');
-    expect(html).toContain("This game has no Wealth samples to chart.");
+    expect(html).not.toContain('data-testid="wealth-chart"');
+    expect(html).not.toContain("Wealth samples");
   });
 
   it("renders nothing when the view carries no Summary", () => {
