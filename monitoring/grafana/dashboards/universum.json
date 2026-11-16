@@ -345,6 +345,15 @@
           },
           "expr": "seats_held_disconnected",
           "legendFormat": "held, disconnected"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "spectators",
+          "legendFormat": "watching"
         }
       ],
       "fieldConfig": {
