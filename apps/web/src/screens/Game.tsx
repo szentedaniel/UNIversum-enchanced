@@ -20,6 +20,7 @@ import {
 } from "#components/PlayerCard.tsx";
 import { Podium } from "#components/Podium.tsx";
 import { SpectatorChip } from "#components/SpectatorChip.tsx";
+import { WatchingMark } from "#components/WatchingMark.tsx";
 import { buttonVariants } from "#components/ui/button.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ensureJoined, JoinError } from "#connection.ts";
@@ -160,14 +161,7 @@ export function Game() {
   const statusRow = (
     <>
       {/* A spectator's one badge (spec #179): the screen is read-only, and says so. */}
-      {watching && (
-        <span
-          data-testid="watching"
-          className="sticker-sm shrink-0 rounded-full bg-card px-2 py-1 text-xs font-black text-card-foreground"
-        >
-          {m.watching()}
-        </span>
-      )}
+      {watching && <WatchingMark />}
       <SpectatorChip count={spectators} />
       <MinutePill endsAt={view.endsAt} clockOffset={clockOffset} />
       <EventToast
