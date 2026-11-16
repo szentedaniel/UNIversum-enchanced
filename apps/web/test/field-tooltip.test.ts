@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FieldTooltip, placeTooltip } from "#board/FieldTooltip.tsx";
 import { baseLocale, overwriteGetLocale, type Locale } from "#paraglide/runtime.js";
+import { uiStore } from "#stores/ui-store.ts";
 import { fieldOf, viewOf } from "./playback-fixtures.ts";
 
 // The hover tooltip (#318): a mouse hovering a Field shows a small note beside
@@ -53,6 +54,14 @@ describe("placeTooltip", () => {
   it("clamps at the viewport's top and bottom edges", () => {
     expect(placeTooltip({ x: 300, y: 10 }, size, viewport).y).toBe(8);
     expect(placeTooltip({ x: 300, y: 710 }, size, viewport).y).toBe(652);
+  });
+
+  it("keeps the top-left margin when the box is bigger than the viewport", () => {
+    // Both axes go through the same clamp: an oversized box keeps the margin
+    // rather than following the Field off screen.
+    expect(
+      placeTooltip({ x: 50, y: 50 }, { width: 400, height: 300 }, { width: 200, height: 200 }),
+    ).toEqual({ x: 8, y: 8 });
   });
 });
 
@@ -106,5 +115,22 @@ describe("the Field tooltip", () => {
 
     expect(html).not.toContain("data-board-obstacle");
     expect(html).toContain("pointer-events-none");
+  });
+});
+
+describe("the hover reset", () => {
+  it("clears the hovered Field for its subscriber, as an unmounted Board does", () => {
+    const seen: (number | null)[] = [];
+    const stop = uiStore.subscribe(
+      (state) => state.hoveredField,
+      (field) => seen.push(field),
+    );
+    uiStore.getState().hoverField(ZURICH);
+    // Board.tsx's effect cleanup calls this when the Board or the Game unmounts.
+    uiStore.getState().hoverField(null);
+    stop();
+
+    expect(seen).toEqual([ZURICH, null]);
+    expect(uiStore.getState().hoveredField).toBeNull();
   });
 });
