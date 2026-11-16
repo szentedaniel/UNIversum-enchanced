@@ -2,11 +2,12 @@
  * The sound cues and the background music (spec #178): a named cue plays
  * through a small pool of `HTMLAudioElement`s, so two cues in quick succession
  * do not cut each other off, and one looping element carries the music. Every
- * element is unlocked on the first tap or key press (iOS only plays audio a
- * gesture started); one created after that is unlocked when it is made. While
- * every sound is muted the first gesture only records itself and makes
- * nothing, so a Guest who silenced the game downloads no audio; the tap that
- * turns a setting on creates and unlocks what it needs, being a gesture too.
+ * element the settings need is unlocked on the first tap or key press (iOS
+ * only plays audio a gesture started); one created after that is unlocked when
+ * it is made, and while every sound is muted the first gesture only records
+ * itself and makes nothing, so a Guest who silenced the game downloads no
+ * audio. The tap that turns a setting on creates and unlocks what it needs,
+ * being a gesture too.
  * The menu's effects toggle silences the cues, its music toggle starts or
  * pauses the music, and under browser automation the elements start muted, so
  * `play()` is still called and can be counted.
