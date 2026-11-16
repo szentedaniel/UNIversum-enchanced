@@ -33,11 +33,17 @@ spec #178. A spec asserts a cue without hearing it: the app counts its own
   `cuePlays(): Record<string, number>`; `window.dicePlays` and the
   `HTMLMediaElement.prototype.play` init script stay for the spec that still
   reads them.
-- `apps/e2e/tests/two-guests.spec.ts` has the spec-local `cuePlays(page)` and
-  `cueCounts(cue)` (one count per page, in `both`'s order): every Roll must
-  raise `dice` by exactly one on both pages, and every purchase (the first
-  Level, the first Museum) must raise `buy` by exactly one on both. Both waits
-  poll for `ROLL_PLAYBACK_MS + 1_000`, not a bare number.
+- `apps/e2e/tests/two-guests.spec.ts` has the spec-local `readCuePlays(page)`
+  and `cueCountsOnBoth(cue)` (one count per page, in `both`'s order): every
+  Roll must raise `dice` by exactly one on both pages, and every purchase (the
+  first Level, the first Museum) must raise `buy` by exactly one on both. Both
+  waits go through `expectCueOnce(cue, before)`, which polls for
+  `ROLL_WAIT_MS` (`ROLL_PLAYBACK_MS + 1_000`), not a bare number.
+- `expectCueOnce` then settles: after the count reaches `before + 1`, it waits
+  `CUE_SETTLE_MS` (300 ms, short because it runs after every Turn of a spec CI
+  repeats six times) and re-asserts the same count, so a late duplicate play
+  fails. The settle sits after the dice poll, never before
+  `expectPlaybackHold`.
 - A cue plays from the push's Playback frame at its step's start
   (`playback-store.ts` → `sound/cue-sync.ts`), never from the push itself:
   the first step starts at the push's arrival, a later one after the steps

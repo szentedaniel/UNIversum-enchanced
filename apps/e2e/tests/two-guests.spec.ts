@@ -14,6 +14,18 @@ import {
   type OfferPhase,
 } from "./helpers.ts";
 
+/**
+ * A wait after a Roll's Playback: its own length plus a second of slack for the
+ * push's arrival and the poll's interval (CODING_STANDARDS §E2E).
+ */
+const ROLL_WAIT_MS = ROLL_PLAYBACK_MS + 1_000;
+
+/**
+ * How long a cue's count must hold after its poll, so a duplicate play from a
+ * re-read Playback frame fails the settle. Kept short: it runs after every Turn.
+ */
+const CUE_SETTLE_MS = 300;
+
 const viewOf = (page: Page) => page.evaluate(() => window.universumTest?.view() ?? null);
 
 /** The latest push's view, with every phase's options; `view()` is the view the Board last drew. */
@@ -23,7 +35,7 @@ const pushView = (page: Page): Promise<PublicView | null> =>
 const me = (page: Page) => page.evaluate(() => window.universumTest?.room().me ?? null);
 
 /** The app's own play count per cue on one page, from the test hooks (`dice`, `buy`, …). */
-const cuePlays = (page: Page) => page.evaluate(() => window.universumTest!.cuePlays());
+const readCuePlays = (page: Page) => page.evaluate(() => window.universumTest!.cuePlays());
 
 /**
  * Samples every animation frame (ADR-0004): whether a control for the pushed
@@ -127,8 +139,20 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     });
     const both = [desktop, phone];
     /** One cue's play count on each page, in `both`'s order. */
-    const cueCounts = (cue: string) =>
-      Promise.all(both.map(async (page) => (await cuePlays(page))[cue] ?? 0));
+    const cueCountsOnBoth = (cue: string) =>
+      Promise.all(both.map(async (page) => (await readCuePlays(page))[cue] ?? 0));
+    /**
+     * Every screen plays `cue` exactly once: the poll waits out its Playback
+     * step, then the settle fails a late duplicate before the next Turn.
+     */
+    const expectCueOnce = async (cue: string, before: number[]) => {
+      const once = before.map((count) => count + 1);
+      await expect.poll(() => cueCountsOnBoth(cue), { timeout: ROLL_WAIT_MS }).toEqual(once);
+      const settled = Promise.withResolvers<void>();
+      setTimeout(settled.resolve, CUE_SETTLE_MS);
+      await settled.promise;
+      expect(await cueCountsOnBoth(cue)).toEqual(once);
+    };
 
     // The desktop Guest creates a 2-Player Room and lands in its Lobby.
     await desktop.goto("/");
@@ -201,8 +225,8 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
                 ),
               )
             ).every(Boolean),
-          // One poll interval past the Playback: the roll can be a 7 s Chance card.
-          { timeout: ROLL_PLAYBACK_MS + 1_000 },
+          // Past the Playback with slack: the roll can be a 7 s Chance card.
+          { timeout: ROLL_WAIT_MS },
         )
         .toBe(true);
       for (const samples of await Promise.all(both.map(stopPlaybackProbe))) {
@@ -252,7 +276,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
         if (choice === "decline" && phase.buyout !== undefined) {
           await expect(roller.getByRole("button", { name: /^Buy out · / })).toBeVisible();
         }
-        buysBefore = await cueCounts("buy");
+        buysBefore = await cueCountsOnBoth("buy");
       }
       const result = await resolveSharedDecision(
         actor(roller),
@@ -265,9 +289,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
         else museum = taken;
         // The buy cue starts with its Playback step, not when the push arrives:
         // each page plays it once, after the wait the roll's Playback can take.
-        await expect
-          .poll(() => cueCounts("buy"), { timeout: ROLL_PLAYBACK_MS + 1_000 })
-          .toEqual(buysBefore.map((count) => count + 1));
+        await expectCueOnce("buy", buysBefore);
       }
     };
 
@@ -275,7 +297,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
       const [roller, waiter] = turn % 2 === 1 ? [desktop, phone] : [phone, desktop];
       await expect(waiter.getByRole("button", { name: "Roll" })).toHaveCount(0);
       const versionBefore = (await pushView(roller))?.version ?? 0;
-      const diceBefore = await cueCounts("dice");
+      const diceBefore = await cueCountsOnBoth("dice");
       if (checkHold) await Promise.all(both.map(startPlaybackProbe));
       // Not `exact`: a Player who landed on Quarantine gets "Roll for 12"
       // instead, which also ends the Turn (or, on a 12, may stop at a decision).
@@ -286,9 +308,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
         .toBeGreaterThan(versionBefore);
       if (checkHold) await expectPlaybackHold(roller, versionBefore);
       // Every screen plays the dice cue once, when its Playback reaches the roll.
-      await expect
-        .poll(() => cueCounts("dice"), { timeout: ROLL_PLAYBACK_MS + 1_000 })
-        .toEqual(diceBefore.map((count) => count + 1));
+      await expectCueOnce("dice", diceBefore);
 
       // A Roll can stop at more than one decision in a Turn (a pick, then the
       // offer its travel leads to; a Sale, then a Buyout): resolve each until
