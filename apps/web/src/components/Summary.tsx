@@ -10,7 +10,7 @@ import type { PlayerView, PublicView } from "@universum/rules";
 import { FIELDS, type GroupId } from "@universum/rules/board";
 import { ChevronLeft } from "lucide-react";
 import type { ReactNode } from "react";
-import { GROUP_COLORS } from "#board/colors.ts";
+import { cssHex, GROUP_COLORS } from "#board/colors.ts";
 import { PlayerToken } from "#components/PlayerToken.tsx";
 import { Button } from "#components/ui/button.tsx";
 import { WealthChart } from "#components/WealthChart.tsx";
@@ -22,9 +22,6 @@ const groupUniversities = (group: GroupId): string =>
   FIELDS.filter((field) => field.group === group)
     .map((field) => fieldName(field.key))
     .join(", ");
-
-const groupColor = (group: GroupId): string =>
-  `#${GROUP_COLORS[group].toString(16).padStart(6, "0")}`;
 
 /** A Monopoly row: a Group completed twice is one row with its count. */
 type MonopolyRow = SummaryMonopoly & { count: number };
@@ -156,7 +153,7 @@ export function Summary({ view, onBack }: { view: PublicView; onBack: () => void
                     <span
                       aria-hidden
                       className="size-3 shrink-0 rounded-full border-2 border-ink"
-                      style={{ background: groupColor(monopoly.group) }}
+                      style={{ background: cssHex(GROUP_COLORS[monopoly.group]) }}
                     />
                     <span>
                       {monopoly.count === 1

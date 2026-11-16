@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PLAYER_COLORS as BOARD_PLAYER_COLORS } from "#board/colors.ts";
+import { cssHex, PLAYER_COLORS as BOARD_PLAYER_COLORS } from "#board/colors.ts";
 import { INK, playerLook } from "#players.ts";
 import { contrast } from "./wcag.ts";
 
@@ -32,8 +32,6 @@ describe("a Seat's look", () => {
   });
 
   it("uses the same colours on the Board", () => {
-    expect(BOARD_PLAYER_COLORS.map((n) => `#${n.toString(16).padStart(6, "0")}`)).toEqual(
-      SEATS.map((seat) => playerLook(seat).color),
-    );
+    expect(BOARD_PLAYER_COLORS.map(cssHex)).toEqual(SEATS.map((seat) => playerLook(seat).color));
   });
 });

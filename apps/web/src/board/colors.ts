@@ -5,6 +5,9 @@ export const PLAYER_COLORS = [0xf29db6, 0x8db5e7, 0x70c4a8, 0xffcc00] as const;
 
 export const INK = 0x2b2238;
 
+/** A board colour as a CSS hex string, each channel padded to two digits. */
+export const cssHex = (color: number): string => `#${color.toString(16).padStart(6, "0")}`;
+
 /** v1's Group colours. */
 export const GROUP_COLORS: Record<GroupId, number> = {
   1: 0x915537,

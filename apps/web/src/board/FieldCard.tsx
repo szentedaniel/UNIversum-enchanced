@@ -2,7 +2,7 @@ import type { PublicView } from "@universum/rules";
 import { FIELD_COUNT, type FieldId } from "@universum/rules/board";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { CSSProperties } from "react";
-import { GROUP_COLORS, KIND_COLORS } from "#board/colors.ts";
+import { cssHex, GROUP_COLORS, KIND_COLORS } from "#board/colors.ts";
 import { fieldFacts } from "#board/field-facts.ts";
 import { PlayerToken } from "#components/PlayerToken.tsx";
 import { Button } from "#components/ui/button.tsx";
@@ -16,7 +16,7 @@ const bands = new Map<number, CSSProperties>();
 function band(color: number): CSSProperties {
   let style = bands.get(color);
   if (!style) {
-    style = { background: `#${color.toString(16).padStart(6, "0")}` };
+    style = { background: cssHex(color) };
     bands.set(color, style);
   }
   return style;
