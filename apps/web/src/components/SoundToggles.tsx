@@ -15,8 +15,8 @@ import { soundStore } from "#stores/sound-store.ts";
 import { m } from "#text.ts";
 
 /**
- * The one place the two forms differ: `icon` is the round sticker button, and
- * the menu's toggles are the same height (`min-h-12`), so it stays a
+ * The one place the two forms differ. `size`: `icon` is the round sticker
+ * button; the menu's `default` is the same height (`min-h-12`), so both stay a
  * thumb-sized target on a phone. Only the compact form moves the label into
  * `aria-label`; the menu writes it out, inside no wrapper of its own.
  */
