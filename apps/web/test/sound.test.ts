@@ -75,6 +75,7 @@ const settle = async () => {
     FakeAudio.pending = [];
     quiet = playing.length === 0 ? quiet + 1 : 0;
     for (const complete of playing) complete();
+    // oxlint-disable-next-line no-await-in-loop -- the completed plays schedule the next round
     await Promise.resolve();
   }
 };
