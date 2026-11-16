@@ -1,7 +1,11 @@
 import type { FieldView, PlayerState, PublicView } from "@universum/rules";
 import { FIELD_COUNT } from "@universum/rules/board";
-import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, describe, expect, it } from "vitest";
+import { FieldCard } from "#board/FieldCard.tsx";
 import { fieldFacts } from "#board/field-facts.ts";
+import { baseLocale, overwriteGetLocale, type Locale } from "#paraglide/runtime.js";
 
 // The Field card and the tiles read a Field's numbers from the view (#26); the
 // Level Rent table, the Group's owners, the base price and the Doubler count
@@ -183,5 +187,57 @@ describe("fieldFacts", () => {
       monopoly: false,
       basePrice: null,
     });
+  });
+});
+
+const inLanguage = (locale: Locale) => overwriteGetLocale(() => locale);
+
+afterEach(() => inLanguage(baseLocale));
+
+const renderCard = (view: PublicView, id: number) =>
+  renderToStaticMarkup(createElement(FieldCard, { id, view }));
+
+// The e2e's seeded game reaches neither a Monopoly nor the Doubler token, so
+// the card's rendered mark and badge are pinned here (#353).
+describe("the Field card", () => {
+  const BUILT = {
+    ...OPEN,
+    owner: owner.id,
+    level: 2,
+    value: 400_000,
+    rent: 60_000,
+    levelRents: [20_000, 60_000, 100_000, 140_000],
+  };
+
+  it("labels each Level in the language's own word order", () => {
+    inLanguage("hu");
+    const markup = renderCard(viewWith({ [VESZPREM]: BUILT }), VESZPREM);
+    expect(markup).toContain(">2. szint<");
+    expect(markup).not.toContain("Szint 2");
+  });
+
+  it("names the Level Rent table with the glossary's term", () => {
+    inLanguage("en");
+    expect(renderCard(viewWith({ [VESZPREM]: BUILT }), VESZPREM)).toContain(
+      'aria-label="Level Rents"',
+    );
+  });
+
+  it("marks a Monopoly when one owner holds every Group Field", () => {
+    inLanguage("en");
+    const held = { ...OPEN, owner: owner.id };
+    const markup = renderCard(
+      viewWith({ [VESZPREM]: held, [BUDAPEST]: held, [DEBRECEN]: held }),
+      VESZPREM,
+    );
+    expect(markup).toContain('data-testid="field-card-monopoly"');
+    expect(markup).toContain(">Monopoly<");
+  });
+
+  it("shows the Doubler badge with the count on the Field it stands on", () => {
+    inLanguage("en");
+    const markup = renderCard(viewWith({ [VESZPREM]: { ...OPEN, doublers: 2 } }), VESZPREM);
+    expect(markup).toContain('data-testid="field-card-doubler"');
+    expect(markup).toContain("Doubler ×2");
   });
 });

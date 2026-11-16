@@ -209,8 +209,8 @@ What a Field is worth at its current Level: the total of what its Levels cost.
 _Avoid_: toBuy, price
 
 **Rent**:
-What a Player pays the owner on landing on a Field another Player owns.
-_Avoid_: Tuition, Tandíj
+What a Player pays the owner on landing on a Field another Player owns; the Hungarian UI says Tandíj.
+_Avoid_: Tuition
 
 **Level Rent**:
 The Rent a University would charge at one of its Levels, 1 to 4, with the Monopoly multiplier when its owner holds the Group; the Field card lists them as its table.

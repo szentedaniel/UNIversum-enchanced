@@ -241,6 +241,7 @@
   "field_card_next": "Következő mező",
   "field_card_rent": "Tandíj",
   "field_card_level": "Szint",
+  "field_card_level_n": "{level}. szint",
   "field_card_value": "Érték",
   "field_card_owner": "Tulajdonos",
   "field_card_unowned": "Nincs tulajdonosa",
