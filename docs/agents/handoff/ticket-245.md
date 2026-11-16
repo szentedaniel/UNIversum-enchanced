@@ -44,17 +44,22 @@ element on the first gesture, only the ones the settings need.
   `unlockedElements` guard.
 - Music side: "unlocks the music alone, silently, when only the music is on"
   and "starts the music on the tap that turns it on after a muted first
-  gesture" (music only, no cue elements).
+  gesture" (music only, no cue elements). The tap test, and #243's "starts
+  looping from the stored choice on the first gesture, after the silent unlock",
+  also assert the element ends unpaused: the play counts alone pass when the
+  unlock's `pause()` lands after the music's play and silently stops it.
 - The old "unlocks without a sound when the effects are off" test is gone: that
   unlock created every element while muted, which this ticket forbids. The
-  other unlock tests are unchanged and still see `3 * Object.keys(CUES).length + 1`
-  elements, because their settings leave the effects on.
+  other unlock tests are unchanged: their settings leave the effects on, so the
+  first gesture still makes the whole pool.
 
 ## E2E
 
-- Under `navigator.webdriver` the settings are the defaults (effects on), so the
-  first gesture still makes the whole pool and the `two-guests` play counter
-  (`window.dicePlays`) counts the same silent unlocks as before. That spec mutes
-  the effects only after its roll assertions, and reads `playsBeforeRoll` after
-  the taps, so nothing it asserts changes: a muted, reloaded page makes no
-  element until a toggle turns a sound on.
+- `two-guests` runs in a fresh context, so its settings are the defaults
+  (effects on): the first gesture still makes the whole pool, and the
+  `window.dicePlays` counter counts the same silent unlocks as before (the
+  elements start muted under `navigator.webdriver`). That spec mutes the effects
+  only after its roll assertions and reads `playsBeforeRoll` after the taps, so
+  nothing it asserts changes; after its reload the effects stay muted and the
+  music on, so that page's first gesture makes only the music element, and the
+  spec reads no play count there.
