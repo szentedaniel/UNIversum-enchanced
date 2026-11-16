@@ -5,6 +5,7 @@ import { currentPlayback, playbackStore } from "#playback/playback-store.ts";
 import { logStore } from "#stores/log-store.ts";
 import {
   inFlightOf,
+  isSpectator,
   markIntentSent,
   receiveLobby,
   receivePush,
@@ -195,14 +196,16 @@ describe("the in-flight lock", () => {
 describe("the role", () => {
   it("is a Player until a watch records a spectator", () => {
     expect(roomStore.getState().role).toBe("player");
+    expect(isSpectator(roomStore.getState())).toBe(false);
     roomStore.setState({ role: "spectator" });
+    expect(isSpectator(roomStore.getState())).toBe(true);
     expect(seatedMeOf(roomStore.getState())).toBeNull();
   });
 
   it("reads a Player's own id, and nobody for a spectator, whatever the welcome said", () => {
     roomStore.setState({ me: "p1" });
     expect(seatedMeOf(roomStore.getState())).toBe("p1");
-    // A watcher gets no welcome, and a stale `me` must not hand it a Seat's controls.
+    // A spectator gets no welcome, and a stale `me` must not hand it a Seat's controls.
     roomStore.setState({ role: "spectator" });
     expect(seatedMeOf(roomStore.getState())).toBeNull();
   });
