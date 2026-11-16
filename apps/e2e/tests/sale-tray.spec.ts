@@ -3,10 +3,11 @@ import { PLAYBACK_MS } from "@universum/rules";
 import {
   closeAfterDump,
   fieldCenter,
-  fieldView,
   playerCards,
+  SALE_FIELDS,
   scale,
   showChance,
+  showSale,
   startGame,
   test,
 } from "./helpers.ts";
@@ -18,11 +19,8 @@ import {
 // commit button and the Board's marks. Nothing is sent to the server.
 test.use({ locale: "en-US" });
 
-const VESZPREM = 1; // sale 180,000
-const BUDAPEST = 2; // sale 198,000
+const { veszprem: VESZPREM, budapest: BUDAPEST, berlin: BERLIN } = SALE_FIELDS;
 const CHANCE = 14; // not the Player's; next to Berlin
-const BERLIN = 15; // sale 792,000
-const SEATTLE = 17;
 /**
  * The card reset runs on the push, so a quarter of the Chance card's step is
  * ample and still well inside the card's Playback.
@@ -36,47 +34,6 @@ async function tapField(page: Page, isMobile: boolean, id: number) {
   const point = await fieldCenter(page, id);
   if (isMobile) await page.touchscreen.tap(point.x, point.y);
   else await page.mouse.click(point.x, point.y);
-}
-
-/** This Guest owes Seattle's Rent: a Sale for a 300,000 Shortfall, with `msLeft` on the timer. */
-function showSale(page: Page, msLeft: number, otherBankrupt = false) {
-  return page.evaluate(
-    ({ left, bankrupt, fields, views }) => {
-      const hooks = window.universumTest!;
-      const { me, push } = hooks.room();
-      const view = structuredClone(push!.view);
-      const other = view.players.find((p) => p.id !== me)!;
-      other.bankrupt = bankrupt;
-      view.currentPlayer = me!;
-      view.phase = {
-        kind: "selling",
-        shortfall: 300_000,
-        resume: { kind: "rent", amount: 400_000, owner: other.id, field: fields.seattle },
-      };
-      view.fields[fields.veszprem] = { ...views.veszprem, owner: me };
-      view.fields[fields.budapest] = { ...views.budapest, owner: me };
-      view.fields[fields.berlin] = { ...views.berlin, owner: me };
-      view.fields[fields.seattle] = { ...views.seattle, owner: other.id };
-      view.autoSell = [fields.veszprem, fields.budapest];
-      // A new decision each time (fresh picks), open now, with `msLeft` on the server's clock.
-      const now = hooks.serverNow();
-      view.actsAfter = now;
-      view.turnDeadline = now + left + 3_000;
-      view.turnTimer = { endsAt: view.turnDeadline - 3_000, limitMs: 20_000 };
-      hooks.showView(view);
-    },
-    {
-      left: msLeft,
-      bankrupt: otherBankrupt,
-      fields: { veszprem: VESZPREM, budapest: BUDAPEST, berlin: BERLIN, seattle: SEATTLE },
-      views: {
-        veszprem: fieldView({ level: 1, sale: 180_000 }),
-        budapest: fieldView({ level: 1, sale: 198_000 }),
-        berlin: fieldView({ level: 4, sale: 792_000 }),
-        seattle: fieldView({ level: 1 }),
-      },
-    },
-  );
 }
 
 test("in a Sale, taps snap to the Player's Fields and toggle them; Sell unlocks once the Shortfall is covered", async ({

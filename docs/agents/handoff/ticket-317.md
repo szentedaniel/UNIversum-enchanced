@@ -18,7 +18,7 @@ Branch `agent/issue-317-board-onfieldhover-option-with-mouse-only-hover-el`. All
 
 ## Gotchas
 
-- Hover is stale while the pointer is still: a wheel zoom or a camera-button pan moves the Board under the cursor without a `pointermove`, so no re-snap happens until the mouse moves. The Field card ticket must either accept that or add a re-snap where the camera changes.
+- Hover is stale while the pointer is still: a wheel zoom moves the Board under the cursor without a `pointermove`, so no re-snap happens until the mouse moves. #318 accepted that; #357 fixed it — `board.ts` keeps the last hover point and `setCamera` re-snaps from it and reports the move (`onCameraChange`), so the tooltip re-places after a wheel, a fit or pan tween or a Follow ease (see `ticket-357.md`). A camera button still clears the hover first: the pointer leaves the canvas for it.
 - The gesture layer's clear is change-only: a leave fires `hover(null)` only after a point. Do not build behaviour that needs a `null` on every leave.
 - A press (including a touch landing during a mouse hover) clears the hover, and it does not return until the mouse moves again after the release.
 - `snapField` and `fieldHoverReporter` are importable in a Node vitest: `board.ts` imports PixiJS, which loads without a DOM, and the pure exports never call `createBoard`. `createBoard` itself still needs a real DOM and WebGL, so the renderer wiring is only covered by the gesture-level tests plus CI's e2e.

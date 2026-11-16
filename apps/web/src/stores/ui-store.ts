@@ -23,6 +23,13 @@ export type UiState = {
   /** Camera mode: Follow keeps the moving pawn in view (opt-in; a drag turns it off). */
   follow: boolean;
   setFollow(follow: boolean): void;
+  /**
+   * Bumped by the Board renderer whenever the camera moves with a hover
+   * standing (#357): the Field tooltip subscribes to it and re-places beside
+   * the Field's new screen point, since no `pointermove` comes to do that.
+   */
+  cameraRevision: number;
+  cameraMoved(): void;
   /** The Fields picked in the Sale whose decision is `key` (`pickKey`); stale for any other. */
   salePicks: SalePicks;
   /** A tap in a Sale: picks the Field, or unpicks it. Never commits. */
@@ -70,6 +77,8 @@ export const uiStore = createStore<UiState>()(
     hoverField: (field) => set({ hoveredField: field }),
     follow: false,
     setFollow: (follow) => set({ follow }),
+    cameraRevision: 0,
+    cameraMoved: () => set(({ cameraRevision }) => ({ cameraRevision: cameraRevision + 1 })),
     salePicks: { key: "", fields: [] },
     toggleSalePick: (key, field) =>
       set(({ salePicks }) => ({
