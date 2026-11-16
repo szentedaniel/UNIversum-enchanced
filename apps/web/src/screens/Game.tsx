@@ -47,7 +47,7 @@ export function Game() {
   const seatedMe = useStore(roomStore, seatedMeOf);
   const watching = useStore(roomStore, (s) => s.role === "spectator");
   // How many Guests watch the Room, from the latest push (spec #179, decision 7).
-  const spectators = useStore(roomStore, (s) => s.spectators);
+  const spectatorCount = useStore(roomStore, (s) => s.spectators);
   const status = useStore(roomStore, (s) => s.status);
   const rejection = useStore(roomStore, (s) => s.rejection);
   const selectedField = useStore(uiStore, (s) => s.selectedField);
@@ -162,7 +162,7 @@ export function Game() {
     <>
       {/* A spectator's one badge (spec #179): the screen is read-only, and says so. */}
       {watching && <WatchingMark />}
-      <SpectatorChip count={spectators} />
+      <SpectatorChip count={spectatorCount} />
       <MinutePill endsAt={view.endsAt} clockOffset={clockOffset} />
       <EventToast
         key={rejected ? `r${rejection.seq}` : push.seq}

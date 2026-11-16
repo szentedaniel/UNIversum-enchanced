@@ -100,6 +100,54 @@ function HeldCountdown({ until, clockOffset }: { until: number; clockOffset: num
   );
 }
 
+/** The Lobby's bottom block: a watcher waits, a released Guest takes a Seat, a Player starts. */
+function LobbyFooter({
+  readOnly,
+  released,
+  full,
+  openSeats,
+  onTakeSeat,
+}: {
+  readOnly: boolean;
+  released: boolean;
+  full: boolean;
+  openSeats: number;
+  onTakeSeat: () => void;
+}) {
+  if (readOnly) {
+    return <p className="mt-6 text-center font-bold text-muted-foreground">{m.watch_waiting()}</p>;
+  }
+  if (released) {
+    return (
+      <div className="sticker mt-6 flex flex-col items-center gap-3 rounded-ui bg-card p-4 text-center text-card-foreground">
+        <p data-testid="seat-released" className="m-0 font-bold">
+          {m.lobby_seat_released()}
+        </p>
+        {openSeats > 0 && (
+          <Button data-testid="take-seat" onClick={onTakeSeat}>
+            {m.lobby_take_seat()}
+          </Button>
+        )}
+      </div>
+    );
+  }
+  return (
+    <>
+      <Button
+        size="lg"
+        className="mt-6 w-full"
+        disabled={!full}
+        onClick={() => sendIntent({ type: "Start" })}
+      >
+        {m.lobby_start()}
+      </Button>
+      {!full && (
+        <p className="mt-3 text-center font-bold text-muted-foreground">{m.lobby_waiting()}</p>
+      )}
+    </>
+  );
+}
+
 export function Lobby() {
   const { code = "" } = useParams();
   const navigate = useNavigate();
@@ -109,10 +157,11 @@ export function Lobby() {
   const clockOffset = useStore(roomStore, (s) => s.lobbyClockOffset);
   const started = useStore(roomStore, (s) => s.code === code && s.push !== null);
   // How many Guests watch the Room, from the latest Lobby message (spec #179).
-  const spectators = useStore(roomStore, (s) => s.spectators);
-  // A watcher holds no Seat (spec #179): it reads the Lobby, presses nothing,
-  // and the Game screen opens with the first push (the `started` navigation).
-  const spectator = useStore(roomStore, (s) => s.role === "spectator");
+  const spectatorCount = useStore(roomStore, (s) => s.spectators);
+  // A watcher holds no Seat (spec #179): the Lobby is read-only for it, so
+  // every control below falls away, and the Game screen opens with the first
+  // push (the `started` navigation).
+  const readOnly = useStore(roomStore, (s) => s.role === "spectator");
   const [error, setError] = useState<RejectionCode | null>(null);
   const [retryAt, setRetryAt] = useState<number | null>(null);
   const wait = useCountdown(retryAt);
@@ -200,8 +249,8 @@ export function Lobby() {
   return (
     <div className="min-h-dvh pb-safe-8">
       <ScreenHeader
-        back={spectator ? "/" : "/rooms"}
-        label={spectator ? m.back_home() : m.back_to_list()}
+        back={readOnly ? "/" : "/rooms"}
+        label={readOnly ? m.back_home() : m.back_to_list()}
       />
       <ReconnectOverlay />
       <main className="mx-auto max-w-5xl px-safe-4 pt-6">
@@ -209,10 +258,10 @@ export function Lobby() {
           <h1 className="m-0 text-3xl font-black md:text-4xl">
             {roomNameText(lobby.roomName, lobby.code)}
           </h1>
-          {(spectator || spectators > 0) && (
+          {(readOnly || spectatorCount > 0) && (
             <div className="flex flex-wrap items-center justify-center gap-2">
-              {spectator && <WatchingMark />}
-              <SpectatorChip count={spectators} />
+              {readOnly && <WatchingMark />}
+              <SpectatorChip count={spectatorCount} />
             </div>
           )}
           <RoomCodeSticker code={lobby.code} />
@@ -229,7 +278,7 @@ export function Lobby() {
               creator={seat.playerId === lobby.creatorId}
               bot={seat.bot === true}
               onRemoveBot={
-                seat.bot === true && !released && !spectator
+                seat.bot === true && !released && !readOnly
                   ? () => sendIntent({ type: "RemoveBot", playerId: seat.playerId })
                   : undefined
               }
@@ -241,7 +290,7 @@ export function Lobby() {
             />
           ))}
           {/* A watcher sees the taken Seats only: an open Seat is something to take. */}
-          {!spectator &&
+          {!readOnly &&
             open.map((i) => (
               // A Bot takes the next empty Seat, so only the first open card offers it.
               <SeatCard
@@ -287,36 +336,13 @@ export function Lobby() {
             </span>
           </li>
         </ul>
-        {spectator ? (
-          <p className="mt-6 text-center font-bold text-muted-foreground">{m.watch_waiting()}</p>
-        ) : released ? (
-          <div className="sticker mt-6 flex flex-col items-center gap-3 rounded-ui bg-card p-4 text-center text-card-foreground">
-            <p data-testid="seat-released" className="m-0 font-bold">
-              {m.lobby_seat_released()}
-            </p>
-            {open.length > 0 && (
-              <Button data-testid="take-seat" onClick={() => void takeSeat()}>
-                {m.lobby_take_seat()}
-              </Button>
-            )}
-          </div>
-        ) : (
-          <>
-            <Button
-              size="lg"
-              className="mt-6 w-full"
-              disabled={!full}
-              onClick={() => sendIntent({ type: "Start" })}
-            >
-              {m.lobby_start()}
-            </Button>
-            {!full && (
-              <p className="mt-3 text-center font-bold text-muted-foreground">
-                {m.lobby_waiting()}
-              </p>
-            )}
-          </>
-        )}
+        <LobbyFooter
+          readOnly={readOnly}
+          released={released}
+          full={full}
+          openSeats={open.length}
+          onTakeSeat={() => void takeSeat()}
+        />
       </main>
     </div>
   );
