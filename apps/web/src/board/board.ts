@@ -16,7 +16,9 @@
  * to fit at each Turn change unless the Player turned Follow on. Taps open the
  * nearest Field; selecting or revealing a Field pans at most, never zooms.
  * A mouse hover reports the nearest Field within the same reach — every Field,
- * even during a pick — and the Field only when it changes.
+ * even during a pick — and the Field only when it changes. A camera move leaves
+ * the pointer still, so the hover is snapped again from its last point and the
+ * hovered Field's screen point is reported (`onCameraChange`).
  */
 import type { PlayerId, PublicView } from "@universum/rules";
 import { FIELD_COUNT, FIELDS, type FieldId } from "@universum/rules/board";
@@ -59,6 +61,13 @@ export type BoardOptions = {
   onFieldHover?(id: FieldId | null): void;
   /** Follow was switched off by hand (a drag, pinch or wheel). */
   onFollowChange?(on: boolean): void;
+  /**
+   * The camera moved under a standing hover (a wheel, a pan tween, Follow or a
+   * resize): the hover was re-snapped, so re-place whatever shows it. Fires
+   * only with a hover, so an idle camera notifies nothing; `onFieldHover` still
+   * fires only when the Field changes.
+   */
+  onCameraChange?(): void;
 };
 
 export type Board = {
@@ -360,6 +369,35 @@ export async function createBoard(
   let tween: { from: Camera; to: Camera; startedAt: number; duration: number } | null = null;
   let settleTimer = 0;
 
+  /**
+   * The last point a pointer reported a hover at, in canvas CSS px, or `null`
+   * when nothing is hovered. A camera move leaves the pointer still, so the
+   * hover is snapped again from here instead of waiting for a `pointermove`.
+   */
+  let hoverAt: Point | null = null;
+
+  /** Every Field's centre in canvas CSS px, lifted as a tap lifts it. */
+  function fieldCentres(): Point[] {
+    const centres: Point[] = [];
+    for (let id = 0; id < FIELD_COUNT; id++) centres.push(toScreen(camera, boardCentre(id)));
+    return centres;
+  }
+
+  const reportHover = fieldHoverReporter((id) => options.onFieldHover?.(id));
+
+  /**
+   * Re-snaps the hover after the camera moved under a resting pointer, and asks
+   * the tooltip to re-place beside the Field's new screen point: no
+   * `pointermove` comes to do either. Silent with no hover, and `onFieldHover`
+   * still fires only when the Field changes (#357).
+   */
+  function resnapHover(): void {
+    if (hoverAt === null) return;
+    // No `allowed`: every Field counts, so the tooltip works during a pick.
+    reportHover(snapField(hoverAt, fieldCentres(), camera.scale));
+    options.onCameraChange?.();
+  }
+
   function measure(): void {
     const hostRect = host.getBoundingClientRect();
     const fitRect = fitArea.getBoundingClientRect();
@@ -385,6 +423,7 @@ export async function createBoard(
     if (zoomed && (selected !== null || pick !== null)) applySelected();
     if (zoomed) settleText();
     invalidate();
+    resnapHover();
   }
 
   function animateTo(to: Camera, duration: number): void {
@@ -439,15 +478,6 @@ export async function createBoard(
     invalidate();
   }
 
-  /** Every Field's centre in canvas CSS px, lifted as a tap lifts it. */
-  function fieldCentres(): Point[] {
-    const centres: Point[] = [];
-    for (let id = 0; id < FIELD_COUNT; id++) centres.push(toScreen(camera, boardCentre(id)));
-    return centres;
-  }
-
-  const reportHover = fieldHoverReporter((id) => options.onFieldHover?.(id));
-
   const detachGestures = attachGestures(app.canvas, {
     camera: () => camera,
     move: (next) => {
@@ -473,6 +503,7 @@ export async function createBoard(
     },
     hover(at) {
       // No `allowed`: every Field counts, so the tooltip works during a pick.
+      hoverAt = at;
       reportHover(at === null ? null : snapField(at, fieldCentres(), camera.scale));
     },
   });
