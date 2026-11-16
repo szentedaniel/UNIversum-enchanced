@@ -108,11 +108,11 @@ The list, on the Game screen, of the lines of the events the Playback has reveal
 _Avoid_: History, chat, transcript
 
 **Cue**:
-A short sound effect one Game event's Playback step starts; the cue table maps each event type to at most one cue, and each cue is one audio file.
+A short sound effect one Game event's Playback step starts; the cue table maps each event type to at most one cue, and each cue is one audio file. The stored `effectsMuted` setting (legacy key `universum.soundMuted`) silences them and is true while they are off.
 _Avoid_: Sound effect (for the named entry), clip
 
 **Music**:
-The optional looping background track a Guest turns on for this browser, apart from the Cues; it follows that setting only, so every screen sounds the same, and it pauses while the tab is hidden.
+The optional looping background track a Guest turns on for this browser, apart from the Cues; it follows that setting only, so every screen sounds the same, and it pauses while the tab is hidden. Its stored `musicOn` setting (`universum.musicOn`) has the opposite polarity: it is true while the Music is on.
 _Avoid_: BGM, soundtrack, background audio
 
 **Quick chat**:
