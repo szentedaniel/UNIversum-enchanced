@@ -73,9 +73,12 @@ export type HoverInput = {
   dragging: boolean;
   /** A second pointer is down, so the gesture is a pinch or pan. */
   multi: boolean;
-  /** Milliseconds since a touch was last down (`0` while one is), or `null` if none has been. */
-  sinceTouch: number | null;
+  /** Where the last touch on the canvas stands, if one ever landed. */
+  sinceTouch: TouchState;
 };
+
+/** Where the last touch stands: none yet, one down now, or one lifted `ms` ago. */
+export type TouchState = { kind: "none" } | { kind: "down" } | { kind: "lifted"; ms: number };
 
 /**
  * Whether a pointer move may report a hover: a mouse, no button pressed, no
@@ -89,7 +92,8 @@ export function hoverEligible(input: HoverInput): boolean {
     input.buttons === 0 &&
     !input.dragging &&
     !input.multi &&
-    (input.sinceTouch === null || input.sinceTouch >= TOUCH_WHEEL_GRACE_MS)
+    (input.sinceTouch.kind === "none" ||
+      (input.sinceTouch.kind === "lifted" && input.sinceTouch.ms >= TOUCH_WHEEL_GRACE_MS))
   );
 }
 
@@ -161,8 +165,12 @@ export function attachGestures(
       buttons: event.buttons,
       dragging: press?.moved ?? false,
       multi: pointers.size > 1 || (press?.multi ?? false),
-      // A finger still down is the most recent touch of all.
-      sinceTouch: touches.size > 0 ? 0 : lastTouchAt === null ? null : now() - lastTouchAt,
+      sinceTouch:
+        touches.size > 0
+          ? { kind: "down" }
+          : lastTouchAt === null
+            ? { kind: "none" }
+            : { kind: "lifted", ms: now() - lastTouchAt },
     });
     reportHover(eligible ? local(event) : null);
   }
