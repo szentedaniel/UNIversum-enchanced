@@ -30,12 +30,16 @@ plays the first-game hint flow).
   `hints_reset`, right after `hint_dismiss`. Hungarian says `Súgó …`, not `Tipp`, because
   `GLOSSARY.md` lists "tip" under the Hint entry's _Avoid_; the owner reviews
   copy per spec #180 decision 6, and `messages.test.ts` pins only key parity.
-- `apps/web/test/hints.test.ts`: a file-level `vi.mock("zustand", …)` (the `chat-mute.test.ts`
-  seam: `useStore` → `getState`) so the server-rendered menu parts read real store state.
-  New `the menu's hint list` describe: the six rows match `HINTS.map(row => de[row.messageKey])`
-  with the seen set and switch off; the switch's label and `aria-pressed` follow
-  `hintStore.setState({ enabled })`; and a reset round-trip (`dismiss("offer")` → no hint →
-  `reset()` → the Offer hint opens again) pins acceptance criterion 3 through `nextHint`.
+- `apps/web/test/game-menu-hints.test.ts` (#351 split it out of `hints.test.ts`): a
+  file-level `vi.mock("zustand", …)` (the `chat-mute.test.ts` seam: `useStore` → `getState`)
+  so the server-rendered menu parts read real store state. `the menu's hint list` describe:
+  the six rows match `HINTS.map(row => de[row.messageKey])` with the seen set and switch off;
+  the switch's label and `aria-pressed` follow `hintStore.setState({ enabled })`. `the menu's
+  hint controls` walks the components' element tree to press `hints-toggle` (both ways) and
+  `hints-reset` (seen cleared, hints on), since vitest has no DOM.
+- `apps/web/test/hints.test.ts` keeps the table and `nextHint` tests unmocked; its reset
+  round-trip (`dismiss("offer")` → no hint → `reset()` → the Offer hint opens again) pins
+  acceptance criterion 3 through `nextHint` and reads only `hintStore.getState()`.
 - `apps/web/test/hint-store.test.ts` was **not** changed: `reset()` landed with #254 and its
   test already covers the cleared seen set, the switch back on and the stored values.
 
@@ -45,9 +49,10 @@ plays the first-game hint flow).
   `nextHint(...)`, so switching off or resetting in the menu re-renders the Game behind the
   dialog; there is no screen call to change. `reset()` while a Decision is open brings the
   hint straight back (same trigger), rather than waiting for the next one.
-- `hints.test.ts` mocks `zustand` for the whole file. A later test there that wants a store's
-  mounted behaviour must set state through `hintStore.setState` (the mock has no React
-  subscription), and the mock must keep the `getState` shape.
+- `game-menu-hints.test.ts` mocks `zustand` for the whole file. A later test there that wants
+  a store's mounted behaviour must set state through `hintStore.setState` (the mock has no
+  React subscription), and the mock must keep the `getState` shape. `hints.test.ts` has no
+  seam.
 - The `hints-toggle` polarity is true = hints on. If a later e2e asserts the sound toggle's
   polarity by analogy, it will be backwards.
 - The menu's six rows duplicate the card text by design; there is no per-row test id and no
