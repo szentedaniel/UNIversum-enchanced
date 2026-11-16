@@ -486,18 +486,21 @@ describe("the background music", () => {
     expect(element?.plays).toBe(3);
   });
 
-  it("keeps the music playing after the unlock's silent pause", async () => {
+  it("does not start over when the toggle's own pause lands", async () => {
     stubBrowser();
     storage.set(MUSIC_ON_KEY, "1");
-    const { installAudioUnlock } = await loadAudio();
+    const { installAudioUnlock, soundStore } = await loadAudio();
     installAudioUnlock();
     press("pointerdown");
     await settle();
     const element = musicSound();
 
-    // The unlock's own pause must not read as the browser stopping the music.
+    // `stopMusic` clears the flag before pausing, so the listener must not read
+    // the toggle's pause as the browser stopping the music and play it again.
+    soundStore.getState().setMusicOn(false);
     press("visibilitychange");
 
+    expect(element?.pauses).toBe(2);
     expect(element?.plays).toBe(2);
   });
 

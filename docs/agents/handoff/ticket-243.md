@@ -75,7 +75,7 @@ Branch `agent/issue-243-sound-background-music-and-separate-effects-music`.
   returns a promise and records its resolver in `FakeAudio.pending`, and `settle()` completes those
   plays until two quiet microtask turns pass. `FakeAudio.pause()` now also fires the element's
   `pause` event, and `fire(type)` drives a pause the module did not ask for. Two tests pin the
-  browser's pause and the unlock's silent one.
+  browser's pause and the toggle's own.
 - `two-guests.spec.ts` taps `music-toggle` beside `sound-toggle` and asserts its `aria-pressed` (true
   = the music on) and, after the language reload, its `Musik an` label. The music steps read no play
   count: the hook counts Cues only.
