@@ -8,6 +8,7 @@ import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ScreenHeader } from "#components/ScreenHeader.tsx";
 import { SeatCard } from "#components/SeatCard.tsx";
 import { SpectatorChip } from "#components/SpectatorChip.tsx";
+import { WatchingMark } from "#components/WatchingMark.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { ensureJoined, JoinError, joinRoom, sendIntent } from "#connection.ts";
 import { inviteLink } from "#invite.ts";
@@ -95,18 +96,6 @@ function HeldCountdown({ until, clockOffset }: { until: number; clockOffset: num
   return (
     <span data-testid="seat-held" className="tnum">
       {m.seat_reconnecting({ time })}
-    </span>
-  );
-}
-
-/** A watcher's one badge (spec #179): the Room's Lobby is read-only for it. */
-function WatchingMark() {
-  return (
-    <span
-      data-testid="watching"
-      className="sticker-sm shrink-0 rounded-full bg-card px-2 py-1 text-xs font-black text-card-foreground"
-    >
-      {m.watching()}
     </span>
   );
 }
