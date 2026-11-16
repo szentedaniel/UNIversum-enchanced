@@ -5,6 +5,7 @@ import { currentPlayback, playbackStore } from "#playback/playback-store.ts";
 import { logStore } from "#stores/log-store.ts";
 import {
   inFlightOf,
+  isSpectator,
   markIntentSent,
   receiveLobby,
   receivePush,
@@ -67,21 +68,19 @@ describe("the answer's seq", () => {
 });
 
 describe("a push that only changes the spectator count", () => {
-  it("is accepted for the shown view and replays no event", () => {
+  it("stores only the count, spending no seq and moving no push", () => {
     const view = viewOf(undefined, { version: 3 });
     receivePush({ view, events: [], reveals: [], spectators: 0, now: 0 }, 0);
     const before = roomStore.getState().push!;
 
     // A spectator joined the Room (spec #179, ticket #249): the same view and
-    // no events, so the Playback has nothing to replay and the log gains no line.
+    // no events, so the push stays as it is: it answers nothing and replays
+    // nothing, and the log gains no line.
     const countOnly: GameMessage = { view, events: [], reveals: [], spectators: 1, now: 0 };
     receivePush(countOnly, 1_000);
 
-    const shown = roomStore.getState().push!;
-    expect(shown.seq).toBeGreaterThan(before.seq);
-    expect(shown.receivedAt).toBe(1_000);
-    expect(shown.events).toEqual([]);
-    expect(shown.reveals).toEqual([]);
+    expect(roomStore.getState().spectators).toBe(1);
+    expect(roomStore.getState().push).toBe(before);
     expect(playbackStore.getState().frame).toMatchObject({ eventsReached: 0, view });
     expect(logStore.getState().lines).toEqual([]);
   });
@@ -129,7 +128,8 @@ describe("the spectator count", () => {
     receivePush({ view, events: [], reveals: [], spectators: 3, now: 0 }, arrivedAt + 10);
 
     expect(roomStore.getState().spectators).toBe(3);
-    expect(roomStore.getState().push!.seq).toBeGreaterThan(shown.seq);
+    // The push itself does not move: no seq spent, no clock offset rewritten.
+    expect(roomStore.getState().push).toBe(shown);
     // Nothing is replayed: the same core at the same step of the Roll.
     expect(currentPlayback()).toBe(core);
     expect(playbackStore.getState().frame?.eventsReached).toBe(reached);
@@ -175,6 +175,30 @@ describe("the in-flight lock", () => {
     expect(inFlightOf(roomStore.getState())).toBe(false);
   });
 
+  it("is not cleared by a push that only changes the spectator count", () => {
+    receivePush(push(), 0);
+    markIntentSent();
+    expect(inFlightOf(roomStore.getState())).toBe(true);
+
+    // A spectator joined (spec #179): the same view, no events, a new count.
+    receivePush({ ...push(), spectators: 1 }, 1_000);
+
+    expect(roomStore.getState().spectators).toBe(1);
+    expect(inFlightOf(roomStore.getState())).toBe(true);
+    expect(roomStore.getState().push!.receivedAt).toBe(0);
+  });
+
+  it("is still cleared by a Rejection after a count-only push, without the push spending a seq", () => {
+    receivePush(push(), 0);
+    markIntentSent();
+    receivePush({ ...push(), spectators: 1 }, 1_000);
+
+    receiveRejection("NOT_YOUR_TURN");
+
+    expect(inFlightOf(roomStore.getState())).toBe(false);
+    expect(roomStore.getState().rejection!.seq).toBeGreaterThan(roomStore.getState().push!.seq);
+  });
+
   it("is set with no answer yet and cleared by the first push", () => {
     markIntentSent();
     expect(inFlightOf(roomStore.getState())).toBe(true);
@@ -195,14 +219,16 @@ describe("the in-flight lock", () => {
 describe("the role", () => {
   it("is a Player until a watch records a spectator", () => {
     expect(roomStore.getState().role).toBe("player");
+    expect(isSpectator(roomStore.getState())).toBe(false);
     roomStore.setState({ role: "spectator" });
+    expect(isSpectator(roomStore.getState())).toBe(true);
     expect(seatedMeOf(roomStore.getState())).toBeNull();
   });
 
   it("reads a Player's own id, and nobody for a spectator, whatever the welcome said", () => {
     roomStore.setState({ me: "p1" });
     expect(seatedMeOf(roomStore.getState())).toBe("p1");
-    // A watcher gets no welcome, and a stale `me` must not hand it a Seat's controls.
+    // A spectator gets no welcome, and a stale `me` must not hand it a Seat's controls.
     roomStore.setState({ role: "spectator" });
     expect(seatedMeOf(roomStore.getState())).toBeNull();
   });

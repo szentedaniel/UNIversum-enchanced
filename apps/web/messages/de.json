@@ -241,6 +241,7 @@
   "field_card_next": "Nächstes Feld",
   "field_card_rent": "Miete",
   "field_card_level": "Stufe",
+  "field_card_level_n": "Stufe {level}",
   "field_card_value": "Wert",
   "field_card_owner": "Besitzer",
   "field_card_unowned": "Ohne Besitzer",

@@ -6,23 +6,46 @@ import { MUSIC_ON_KEY, SOUND_MUTED_KEY } from "#stores/sound-store.ts";
 /** Just the parts of HTMLAudioElement the sound module uses. */
 class FakeAudio {
   static instances: FakeAudio[] = [];
+  /** The plays the module started and is still awaiting: `settle` completes them. */
+  static pending: (() => void)[] = [];
   currentTime = 0;
   volume = 1;
   muted = false;
   loop = false;
+  /** Whether a play is running: `pause()` stops it, as the element's own flag does. */
+  paused = true;
   plays = 0;
   pauses = 0;
   src: string;
+  private listeners = new Map<string, Set<() => void>>();
   constructor(src: string) {
     this.src = src;
     FakeAudio.instances.push(this);
   }
+  /**
+   * A play that lasts until `settle` completes it, as a browser's does: the
+   * module's `await` and the work behind it only run while the test waits.
+   */
   play(): Promise<void> {
     this.plays += 1;
-    return Promise.resolve();
+    this.paused = false;
+    const play = Promise.withResolvers<void>();
+    FakeAudio.pending.push(play.resolve);
+    return play.promise;
   }
   pause(): void {
     this.pauses += 1;
+    this.paused = true;
+    this.fire("pause");
+  }
+  addEventListener(type: string, listener: () => void): void {
+    const forType = this.listeners.get(type) ?? new Set();
+    forType.add(listener);
+    this.listeners.set(type, forType);
+  }
+  /** Fires an event the browser makes itself, such as a pause the settings never asked for. */
+  fire(type: string): void {
+    for (const listener of this.listeners.get(type) ?? []) listener();
   }
 }
 
@@ -45,19 +68,26 @@ const press = (type: string) => {
 const musicSound = () => FakeAudio.instances.find((sound) => sound.src === musicFile);
 
 /**
- * Lets an unlock's awaited silent play finish, and the music or cue it holds
- * back, so the assertions read the final counts: a few microtask rounds drain
- * the unlock's `await play()`, its `pause()` and the play queued behind it.
+ * Completes the plays the module started, as the browser does, until it has
+ * none left: the unlock's silent play, its pause and the play or cue it held
+ * back. Two quiet rounds mean no continuation has another play to start.
  */
-const settle = () => {
-  let rounds = Promise.resolve();
-  for (let round = 0; round < 10; round += 1) rounds = rounds.then(() => undefined);
-  return rounds;
+const settle = async () => {
+  let quiet = 0;
+  while (quiet < 2) {
+    const playing = FakeAudio.pending;
+    FakeAudio.pending = [];
+    quiet = playing.length === 0 ? quiet + 1 : 0;
+    for (const complete of playing) complete();
+    // oxlint-disable-next-line no-await-in-loop -- the completed plays schedule the next round
+    await Promise.resolve();
+  }
 };
 
 afterEach(() => {
   vi.unstubAllGlobals();
   FakeAudio.instances = [];
+  FakeAudio.pending = [];
   storage.clear();
   listeners.clear();
   hidden = false;
@@ -345,8 +375,10 @@ describe("the background music", () => {
     await settle();
 
     expect(musicSound()?.loop).toBe(true);
-    // The unlock's silent play, then the music itself.
+    // The unlock's silent play, then the music itself: the unlock's pause has
+    // already landed, so the track is running.
     expect(musicSound()?.plays).toBe(2);
+    expect(musicSound()?.paused).toBe(false);
   });
 
   it("is unlocked but silent when the music is off", async () => {
@@ -392,6 +424,9 @@ describe("the background music", () => {
     // The music only: the cues stay unloaded until the effects come on too.
     expect(FakeAudio.instances.map((sound) => sound.src)).toEqual([musicFile]);
     expect(musicSound()?.plays).toBe(2);
+    // The tap's silent unlock comes before the music's play, so its pause
+    // cannot stop the track.
+    expect(musicSound()?.paused).toBe(false);
   });
 
   it("pauses when turned off and resumes when turned on again", async () => {
@@ -441,6 +476,41 @@ describe("the background music", () => {
     hidden = false;
     press("visibilitychange");
     expect(element?.plays).toBe(3);
+  });
+
+  it("restarts on the next wake after the browser paused the music itself", async () => {
+    stubBrowser();
+    storage.set(MUSIC_ON_KEY, "1");
+    const { installAudioUnlock } = await loadAudio();
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+    const element = musicSound();
+    expect(element?.plays).toBe(2);
+
+    // An interruption (an iOS call, a lost audio focus) pauses the element, not the setting.
+    element?.fire("pause");
+    press("visibilitychange");
+
+    expect(element?.plays).toBe(3);
+  });
+
+  it("does not start over when the toggle's own pause lands", async () => {
+    stubBrowser();
+    storage.set(MUSIC_ON_KEY, "1");
+    const { installAudioUnlock, soundStore } = await loadAudio();
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+    const element = musicSound();
+
+    // `stopMusic` clears the flag before pausing, so the listener must not read
+    // the toggle's pause as the browser stopping the music and play it again.
+    soundStore.getState().setMusicOn(false);
+    press("visibilitychange");
+
+    expect(element?.pauses).toBe(2);
+    expect(element?.plays).toBe(2);
   });
 
   it("stays muted under automation but still calls play()", async () => {

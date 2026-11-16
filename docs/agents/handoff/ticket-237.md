@@ -10,7 +10,7 @@ Branch `agent/issue-237-web-pure-wealth-chart-geometry-and-summary-view-mo`. Two
 - Coordinates are SVG ones (y down) rounded to two decimals, so `points` strings are stable. The y axis is inverted by `scaleOf({ min, max }, { from, to })`.
 - Domains come only from the samples that players in the view carry; a Player id the view lacks is ignored and a Player with no sample has no `ChartPlayer`, so an empty (pre-series, v8) game returns `players: []` and no ticks. Domain 0–0 or a one-value range maps to the plot's middle (`x` 320, `y` 142 at 600×300), so no division by zero; the tests pin the one-sample, flat-Wealth and Bankrupt-to-zero cases.
 - Ticks: an integer step of roughly `span / 5`, rounded to 1, 2 or 5 × a power of ten; the first tick is the first step inside the domain. A flat range yields one tick at the value, at the middle. Ticks carry `value` and `position` only — #238 formats the y label with `formatCompactMoney` and the x label from the minute.
-- `[...series].sort((a, b) => a.minute - b.minute)` sorts a copy, not the caller's array; the engine already records minutes monotonic. It is not `toSorted` — see the browser baseline below.
+- `series.toSorted((a, b) => a.minute - b.minute)` returns a sorted copy, never the caller's array; the engine already records minutes monotonic. The old-browser notice checks `toSorted`, so it needs no fallback — see the browser baseline below.
 
 ## `apps/web/src/pick/summary.ts`
 
@@ -28,9 +28,9 @@ Branch `agent/issue-237-web-pure-wealth-chart-geometry-and-summary-view-mo`. Two
 
 ## Browser baseline
 
-- Vite 8.3.6's default `build.target` is `baseline-widely-available`, i.e. chrome111, firefox114, safari16.4 (`node_modules/vite/dist/node/chunks/node.js`); `apps/web/index.html` states the same baseline and its old-browser notice checks a slice of it. The target is an esbuild syntax target: it does not polyfill a newer `Array.prototype` method.
+- Vite 8.3.6's default `build.target` is `baseline-widely-available`, i.e. chrome111, firefox114, safari16.4 (`node_modules/vite/dist/node/chunks/node.js`); `apps/web/index.html` states that baseline, but its old-browser notice also checks `toSorted`, so the effective floor is Firefox 115. The target is an esbuild syntax target: it does not polyfill a newer `Array.prototype` method.
 - `Array.prototype.at` (Chrome 92, Firefox 90, Safari 15.4) is inside that baseline and the notice checks `typeof Array.prototype.at === "function"`, so the two `.at(-1)` calls here stay.
-- `Array.prototype.toSorted` (Chrome 110, Firefox 115, Safari 16.0) is **not** covered for Firefox 114, so this module no longer uses it. Other modules still do — `board/art.ts`, `pick/checklist.ts`, `pick/sale.ts`, `playback/playback.ts` — and the notice does not check it, so the app-wide Firefox 114 gap lives outside this module (ticket #310 left it alone).
+- `Array.prototype.toSorted` (Chrome 110, Firefox 115, Safari 16.0) needs Firefox 115, above the Vite target, so ticket #337 added `typeof Array.prototype.toSorted === "function"` to the notice's `supported` chain. It is a runtime check, not a polyfill: this module and `board/art.ts`, `pick/checklist.ts`, `pick/sale.ts` and `playback/playback.ts` call `toSorted`, and Firefox 114 gets the notice instead of the bundle. The notice copy is unchanged.
 
 ## Kept on purpose
 

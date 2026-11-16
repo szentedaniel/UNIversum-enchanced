@@ -188,7 +188,8 @@ test("an owned University's card highlights its current Level among the Level Re
   }).toPass({ timeout: 15_000 });
 
   // The table's four Levels, the current one highlighted with the Level 1 Rent;
-  // an owned Field shows no base price and no Doubler badge.
+  // every cell's label comes from the parameterised `field_card_level_n`
+  // (#353), and an owned Field shows no base price and no Doubler badge.
   const rents = card.getByTestId("field-card-level-rents");
   await expect(rents.getByTestId("field-card-level-rent")).toHaveCount(4);
   const levelRent = await page.evaluate(
@@ -196,7 +197,9 @@ test("an owned University's card highlights its current Level among the Level Re
     offered.field,
   );
   if (levelRent === null) throw new Error("the owned Field has no Level 1 Rent");
+  await expect(rents.locator('[aria-current="true"]')).toContainText("Level 1");
   await expect(rents.locator('[aria-current="true"]')).toContainText(moneyOf(levelRent));
+  await expect(rents.getByTestId("field-card-level-rent").nth(3)).toContainText("Level 4");
   await expect(card.getByTestId("field-card-base-price")).toHaveCount(0);
   await expect(card.getByTestId("field-card-doubler")).toHaveCount(0);
 
@@ -210,18 +213,35 @@ test("an owned University's card highlights its current Level among the Level Re
   await expect(group.locator("[data-shape]")).toHaveCount(1);
   await expect(card.getByTestId("field-card-monopoly")).toHaveCount(0);
 
-  // A Doubler on the Field states its count (#316). No seeded game reaches the
-  // Doubler token this early, so the test shows a made-up view with one on it.
-  await page.evaluate((id) => {
-    const hooks = window.universumTest;
-    const push = hooks?.room().push;
-    const view = push ? structuredClone(push.view) : null;
-    const field = view?.fields[id];
-    if (!hooks || !view || !field) throw new Error("no view to put a Doubler on");
-    field.doublers = 2;
-    hooks.showView(view);
-  }, offered.field);
+  // A Doubler on the Field states its count and a completed Group its Monopoly
+  // mark (#316, #353). No seeded game reaches the Doubler token or completes a
+  // Group this early, and this test adds no hook just for that, so it shows one
+  // made-up view with the Group bought out and a Doubler standing on the Field.
+  // `apps/web/test/field-facts.test.ts` pins the same two render cases.
+  const groupFields = await group
+    .getByTestId("field-card-group-field")
+    .evaluateAll((members) => members.map((member) => Number(member.getAttribute("data-field"))));
+  await page.evaluate(
+    ({ id, members }) => {
+      const hooks = window.universumTest;
+      const push = hooks?.room().push;
+      const view = push ? structuredClone(push.view) : null;
+      const field = view?.fields[id];
+      const viewOwner = view?.players.find((player) => player.id === view.currentPlayer);
+      if (!hooks || !view || !field || !viewOwner) throw new Error("no view to patch");
+      field.doublers = 2;
+      for (const member of members) {
+        const memberField = view.fields[member];
+        if (!memberField) throw new Error(`no Field ${member} in the view`);
+        memberField.owner = viewOwner.id;
+      }
+      hooks.showView(view);
+    },
+    { id: offered.field, members: groupFields },
+  );
   await expect(card.getByTestId("field-card-doubler")).toHaveText("Doubler ×2");
+  await expect(card.getByTestId("field-card-monopoly")).toHaveText("Monopoly");
+  await expect(group.locator("[data-shape]")).toHaveCount(3);
 });
 
 test("a mouse hover shows the Field tooltip, and a click through it opens the card", async ({

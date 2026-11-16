@@ -17,8 +17,8 @@ import { m, rejectionText } from "#text.ts";
 type JoinState = {
   /** The Room code of the last join tried; `asking` and `error` belong to it. */
   code: string | null;
-  /** Whether that try was a watch: its password prompt and retry repeat the same one. */
-  watching: boolean;
+  /** Whether that try watched without a Seat: its password prompt and retry repeat the same one. */
+  asSpectator: boolean;
   /** The Room needs a password before a Seat is taken (or the Guest starts watching). */
   asking: boolean;
   error: RejectionCode | null;
@@ -29,7 +29,7 @@ type JoinState = {
 
 const idle: JoinState = {
   code: null,
-  watching: false,
+  asSpectator: false,
   asking: false,
   error: null,
   busy: false,
@@ -58,6 +58,14 @@ export function useCountdown(until: number | null): number {
 }
 
 /**
+ * Whether the password form already open belongs to this very try: the same
+ * Room code and the same action. The try keeps it open, and so does a refusal
+ * with a wait (`PASSWORD_LOCKED`, `RATE_LIMITED`).
+ */
+const askingFor = (state: JoinState, code: string, asSpectator: boolean): boolean =>
+  state.code === code && state.asSpectator === asSpectator && state.asking;
+
+/**
  * Joining or watching a Room and opening its Lobby; a password Room first asks
  * for its password, whichever of the two the Guest chose.
  */
@@ -65,17 +73,17 @@ export function useJoin() {
   const navigate = useNavigate();
   const [state, setState] = useState<JoinState>(idle);
 
-  async function enter(code: string, watching: boolean, password?: string): Promise<void> {
+  async function attempt(code: string, asSpectator: boolean, password?: string): Promise<void> {
     setState((s) => ({
       code,
-      watching,
-      asking: s.code === code && s.watching === watching && s.asking,
+      asSpectator,
+      asking: askingFor(s, code, asSpectator),
       error: null,
       busy: true,
       retryAt: null,
     }));
     try {
-      if (watching) await watchRoom(code, password);
+      if (asSpectator) await watchRoom(code, password);
       else await joinRoom(code, password);
       await navigate(`/room/${code}`);
     } catch (e) {
@@ -84,15 +92,11 @@ export function useJoin() {
       // No password given yet: that is a question, not a mistake.
       setState({
         code,
-        watching,
+        asSpectator,
         // A wait (PASSWORD_LOCKED, RATE_LIMITED) keeps the password form open, its button counting down.
         asking:
           asking ||
-          (state.code === code &&
-            state.watching === watching &&
-            state.asking &&
-            e instanceof JoinError &&
-            e.retryAfter !== null),
+          (askingFor(state, code, asSpectator) && e instanceof JoinError && e.retryAfter !== null),
         error: asking && password === undefined ? null : error,
         busy: false,
         retryAt: retryAtOf(e),
@@ -101,13 +105,13 @@ export function useJoin() {
   }
 
   /** Takes a Seat in the Room. */
-  const join = (code: string, password?: string) => enter(code, false, password);
+  const join = (code: string, password?: string) => attempt(code, false, password);
   /** Watches the Room without a Seat (spec #179). */
-  const watch = (code: string, password?: string) => enter(code, true, password);
+  const watch = (code: string, password?: string) => attempt(code, true, password);
 
   /** Asks for the password of a Room known to have one, before trying to join. */
   const ask = useCallback((code: string): void => {
-    setState({ code, watching: false, asking: true, error: null, busy: false, retryAt: null });
+    setState({ code, asSpectator: false, asking: true, error: null, busy: false, retryAt: null });
   }, []);
 
   /** Seconds until a refused join may be tried again; 0: now. */
@@ -192,14 +196,23 @@ export function RejectionText({ code, wait = 0 }: { code: RejectionCode; wait?: 
 
 /** The Room code boxes, Join and Watch, with the password prompt when the Room has one. */
 export function JoinByCode() {
-  const { code: tried, watching: triedWatch, asking, error, busy, wait, join, watch } = useJoin();
+  const {
+    code: tried,
+    asSpectator: triedAsSpectator,
+    asking,
+    error,
+    busy,
+    wait,
+    join,
+    watch,
+  } = useJoin();
   const [code, setCode] = useState("");
   const current = tried === code;
-  const ready = code.length === ROOM_CODE_LENGTH && wait === 0;
+  const codeComplete = code.length === ROOM_CODE_LENGTH && wait === 0;
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (ready) void join(code);
+    if (codeComplete) void join(code);
   }
 
   return (
@@ -209,7 +222,7 @@ export function JoinByCode() {
         onSubmit={submit}
       >
         <RoomCodeInput value={code} onValueChange={setCode} disabled={busy} />
-        <Button type="submit" variant="accent" disabled={busy || !ready}>
+        <Button type="submit" variant="accent" disabled={busy || !codeComplete}>
           {waitLabel(wait, m.home_join())}
         </Button>
         {/* Watching takes no Seat (spec #179): its own action, so a full or started Room is no mistake. */}
@@ -217,7 +230,7 @@ export function JoinByCode() {
           type="button"
           variant="plain"
           data-testid="watch"
-          disabled={busy || !ready}
+          disabled={busy || !codeComplete}
           onClick={() => void watch(code)}
         >
           {m.watch_button()}
@@ -225,11 +238,11 @@ export function JoinByCode() {
       </form>
       {current && asking && (
         <PasswordForm
-          label={triedWatch ? m.watch_button() : m.home_join()}
+          label={triedAsSpectator ? m.watch_button() : m.home_join()}
           className="sticker rounded-ui bg-card p-3 text-card-foreground"
           busy={busy}
           wait={wait}
-          onSubmit={(pw) => void (triedWatch ? watch(code, pw) : join(code, pw))}
+          onSubmit={(pw) => void (triedAsSpectator ? watch(code, pw) : join(code, pw))}
         />
       )}
       {current && error && <RejectionText code={error} />}

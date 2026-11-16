@@ -147,7 +147,7 @@ export function FieldCard({
                     )}
                   >
                     <span className="text-[0.65rem] leading-tight font-bold">
-                      {m.field_card_level()} {level}
+                      {m.field_card_level_n({ level })}
                     </span>
                     <span className="tnum text-[0.7rem] leading-tight font-black whitespace-nowrap">
                       {formatMoney(rent)}

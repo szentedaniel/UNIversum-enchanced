@@ -1,17 +1,19 @@
-import type { JoinOptions } from "@universum/protocol/messages";
+import { MESSAGE, type JoinOptions } from "@universum/protocol/messages";
 import { MatchMakeError } from "@colyseus/sdk";
 import type * as ColyseusSdk from "@colyseus/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { joinRoom, watchRoom } from "#connection.ts";
-import { reset, roomStore } from "#stores/room-store.ts";
+import { joinRoom, sendIntent, watchRoom } from "#connection.ts";
+import { inFlightOf, reset, roomStore } from "#stores/room-store.ts";
 
-// Watching a Room (spec #179, decisions 2–4): the wire options a watcher and a
-// Player send, and how a dropped watcher comes back. The `@colyseus/sdk` client
-// is the one boundary between `connection.ts` and the Room server, so this
-// replaces it with a fake that records each join and can drop the connection.
-// A real Room's refusal is a `MatchMakeError`, which the real SDK class stays.
+// Watching a Room (spec #179, decisions 2–4): the wire options a spectator and
+// a Player send, and how a dropped spectator comes back. The `@colyseus/sdk`
+// client is the one boundary between `connection.ts` and the Room server, so
+// this replaces it with a fake that records each join and can drop the
+// connection. A real Room's refusal is a `MatchMakeError`, which the real SDK
+// class stays.
 
 type Join = { method: "joinById" | "create"; code: string | null; options: JoinOptions };
+type Send = { type: string; payload: unknown };
 
 const sdk = vi.hoisted(() => {
   const joins: Join[] = [];
@@ -28,6 +30,8 @@ const sdk = vi.hoisted(() => {
     } = {};
     readonly dropHandlers: (() => void)[] = [];
     readonly leaveHandlers: ((code: number) => void)[] = [];
+    /** Every `send` the module made, in order. */
+    readonly sends: Send[] = [];
 
     constructor(roomId: string) {
       this.roomId = roomId;
@@ -35,6 +39,10 @@ const sdk = vi.hoisted(() => {
 
     onMessage(): void {}
     onReconnect(): void {}
+
+    send(type: string, payload: unknown): void {
+      this.sends.push({ type, payload });
+    }
 
     onDrop(handler: () => void): void {
       this.dropHandlers.push(handler);
@@ -133,6 +141,25 @@ describe("watching a Room", () => {
       retryAfter: null,
     });
     expect(roomStore.getState().status).toBe("idle");
+  });
+
+  it("drops a Spectator's intent: nothing is sent and the in-flight lock stays clear", async () => {
+    await watchRoom("123456");
+    expect(inFlightOf(roomStore.getState())).toBe(false);
+
+    sendIntent({ type: "Start" });
+
+    expect(sdk.rooms.at(-1)!.sends).toEqual([]);
+    expect(inFlightOf(roomStore.getState())).toBe(false);
+  });
+
+  it("sends a Player's intent and takes the in-flight lock", async () => {
+    await joinRoom("123456");
+
+    sendIntent({ type: "Start" });
+
+    expect(sdk.rooms.at(-1)!.sends).toEqual([{ type: MESSAGE.intent, payload: { type: "Start" } }]);
+    expect(inFlightOf(roomStore.getState())).toBe(true);
   });
 });
 

@@ -18,7 +18,7 @@ Branch `agent/issue-316-web-field-card-shows-level-rents-group-ownership-b`. Rea
 
 - Only the ownable block changed. Universities get, in order: the existing Rent / Level / Value tiles, the owner line, the base price while unowned, the Level Rent table, the Group row and the Doubler badge. Museums keep the Rent / Level / Value tiles and the owner line, get the base price while unowned and the Doubler badge, and draw no Level table and no Group row.
 - Test ids (read by `apps/e2e/tests/field-card.spec.ts`; keep them stable):
-  - `field-card-level-rents` — the `<ul>`, `aria-label` "Rent by Level"; one `field-card-level-rent` per Level with `data-level="1".."4"`, and `aria-current="true"` on the current Level (none while unowned).
+  - `field-card-level-rents` — the `<ul>`, `aria-label` "Level Rents" (en; changed from "Rent by Level" by #353); one `field-card-level-rent` per Level with `data-level="1".."4"`, `aria-current="true"` on the current Level (none while unowned) and a `field_card_level_n` label (`{level}`).
   - `field-card-base-price` — the unowned price line; absent once owned.
   - `field-card-group` — the Group box; one `field-card-group-field` per Group Field with `data-field` and `data-owner` (the Player id, `""` while unowned). An owned member also carries a `PlayerToken` (`[data-shape]`).
   - `field-card-monopoly` — the Monopoly mark inside `field-card-group`, present only on a true Monopoly.

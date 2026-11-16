@@ -100,7 +100,7 @@ The moment the next decision opens, once the Playback before it has ended; the d
 _Avoid_: Playback over, unlock
 
 **Hint**:
-A short, one-time note beside a concept a first-time Guest meets — an Offer, Quarantine, the Doubler or Erasmus pick, a Sale, or the game end — with a dismiss button; it never blocks the Decision, and the browser remembers the ones the Guest dismissed.
+A short, one-time note beside a concept a first-time Guest meets — an Offer, Quarantine, the Doubler or Erasmus pick, a Sale, or the game end — with a dismiss button; it never blocks the Decision, and the browser remembers the ones the Guest dismissed. The Game menu has a switch that turns hints off and on, and a list of every hint to re-read with a reset that makes the dismissed ones appear again.
 _Avoid_: Tooltip, tutorial, tip
 
 **Event log**:
@@ -108,11 +108,11 @@ The list, on the Game screen, of the lines of the events the Playback has reveal
 _Avoid_: History, chat, transcript
 
 **Cue**:
-A short sound effect one Game event's Playback step starts; the cue table maps each event type to at most one cue, and each cue is one audio file.
+A short sound effect one Game event's Playback step starts; the cue table maps each event type to at most one cue, and each cue is one audio file. The stored `effectsMuted` setting (legacy key `universum.soundMuted`) silences them and is true while they are off.
 _Avoid_: Sound effect (for the named entry), clip
 
 **Music**:
-The optional looping background track a Guest turns on for this browser, apart from the Cues; it follows that setting only, so every screen sounds the same, and it pauses while the tab is hidden.
+The optional looping background track a Guest turns on for this browser, apart from the Cues; it follows that setting only, so every screen sounds the same, and it pauses while the tab is hidden. Its stored `musicOn` setting (`universum.musicOn`) has the opposite polarity: it is true while the Music is on.
 _Avoid_: BGM, soundtrack, background audio
 
 **Quick chat**:
@@ -209,8 +209,8 @@ What a Field is worth at its current Level: the total of what its Levels cost.
 _Avoid_: toBuy, price
 
 **Rent**:
-What a Player pays the owner on landing on a Field another Player owns.
-_Avoid_: Tuition, Tandíj
+What a Player pays the owner on landing on a Field another Player owns; the Hungarian UI says Tandíj.
+_Avoid_: Tuition
 
 **Level Rent**:
 The Rent a University would charge at one of its Levels, 1 to 4, with the Monopoly multiplier when its owner holds the Group; the Field card lists them as its table.

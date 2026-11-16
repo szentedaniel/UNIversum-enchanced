@@ -106,16 +106,42 @@ type ReceivedPush = {
 };
 
 /**
+ * Whether `incoming` is only the spectator count moving: a join or leave
+ * re-sends the view the server holds with no events (spec #179, ticket #249),
+ * so the version, the view and the rematch votes match the shown push while
+ * the count moves. A rejoin's restatement carries the count already shown, and
+ * the Podium's vote push moves `rematch`, so both take the ordinary path.
+ * Views are JSON by construction: one serialization compares every field.
+ */
+function countOnlyPush(state: RoomState, incoming: ReceivedPush): boolean {
+  const last = state.push;
+  return (
+    last !== null &&
+    incoming.spectators !== state.spectators &&
+    incoming.events.length === 0 &&
+    incoming.reveals.length === 0 &&
+    incoming.view.version === last.view.version &&
+    JSON.stringify(incoming.view) === JSON.stringify(last.view) &&
+    JSON.stringify(incoming.rematch) === JSON.stringify(last.rematch)
+  );
+}
+
+/**
  * A push arrived: keeps the shown view when the server's is older (spec:
  * Client → State), otherwise puts it up with the next `seq` and this client's
- * clock offset. An ignored push spends no `seq`.
+ * clock offset. An ignored push spends no `seq`. A push that only moves the
+ * spectator count stores the count and nothing else: it spends no `seq` either,
+ * so it answers no in-flight intent and restarts no Playback (spec #179).
  */
-export function receivePush(
-  { view, events, reveals, rematch, spectators, now }: ReceivedPush,
-  receivedAt: number,
-): void {
-  const last = roomStore.getState().push;
+export function receivePush(incoming: ReceivedPush, receivedAt: number): void {
+  const { view, events, reveals, rematch, spectators, now } = incoming;
+  const state = roomStore.getState();
+  const last = state.push;
   if (last && view.version < last.view.version) return;
+  if (countOnlyPush(state, incoming)) {
+    roomStore.setState({ spectators });
+    return;
+  }
   roomStore.setState({
     spectators,
     push: {
@@ -173,14 +199,20 @@ export function reset(): void {
 }
 
 /**
+ * Whether this client watches the Room without a Seat (spec #179): the one
+ * read of the role the screens and the intent guard make.
+ */
+export const isSpectator = (state: RoomState): boolean => state.role === "spectator";
+
+/**
  * This client as a Player: its own public id, or `null` for a spectator. A
- * watcher holds no Seat, so every Player-only read — a Decision, the
+ * spectator holds no Seat, so every Player-only read — a Decision, the
  * quick-chat tray, the "your Turn" heading, the rematch vote — takes its
  * `null` from here and not from `me` alone (spec #179, decision 4: the Room
  * enforces read-only; the screen only stops offering controls).
  */
 export const seatedMeOf = (state: RoomState): PlayerId | null =>
-  state.role === "spectator" ? null : state.me;
+  isSpectator(state) ? null : state.me;
 
 /**
  * Whether the Room's latest news is its Lobby, not a game: `receiveLobby`
@@ -193,8 +225,9 @@ export const inLobbyOf = (state: RoomState): boolean => state.push === null && s
 /**
  * The in-flight lock ("No optimistic UI"): this client sent an intent and no
  * push or Rejection with a later `seq` has arrived. The two share one counter,
- * so a single comparison with `answeredAtOf` covers both; a `reset` clears the
- * lock too.
+ * so a single comparison with `answeredAtOf` covers both; a push that only
+ * moves the spectator count spends no `seq` and so answers nothing, and a
+ * `reset` clears the lock too.
  */
 export const inFlightOf = (state: RoomState): boolean =>
   state.sentAt !== null && answeredAtOf(state) <= state.sentAt;
