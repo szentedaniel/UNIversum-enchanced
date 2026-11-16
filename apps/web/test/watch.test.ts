@@ -25,7 +25,7 @@ import { viewOf } from "./playback-fixtures.ts";
 // Seat sees (the same Board, Player cards and Turn, with no way to play and a
 // watching marker), the read-only Lobby it waits in with the spectator count,
 // the Watch action beside Join, and the overlay that no longer promises a
-// watcher a kept Seat. React's server renderer reads a zustand store's *initial*
+// spectator a kept Seat. React's server renderer reads a zustand store's *initial*
 // state, so this hands the screens the state the store holds, as a mounted client
 // reads it; the media query and the PixiJS Board are the two things a server
 // render cannot build. No DOM environment is installed (#224).
@@ -48,7 +48,7 @@ afterEach(() => {
 /**
  * A running game joined as `role`, where it is p1's Turn and a Roll is due,
  * drawn by the route as the address `/game/123456` reaches it. `me` is what a
- * `welcome` would have written: a watcher gets none, and the role alone must
+ * `welcome` would have written: a spectator gets none, and the role alone must
  * drop the controls.
  */
 function showGame(role: Role, me: string | null, spectators = 0): string {
@@ -136,7 +136,7 @@ const lobbyOf = (): LobbyMessage => ({
   now: 1_000,
 });
 
-/** A Lobby a watcher reads: a Bot's Seat and a held Seat among the taken ones. */
+/** A Lobby a spectator reads: a Bot's Seat and a held Seat among the taken ones. */
 const watchableLobby = (): LobbyMessage => ({
   ...lobbyOf(),
   seats: [
@@ -198,7 +198,7 @@ describe("the watching Lobby screen", () => {
     expect(html).toContain(en.watch_waiting);
   });
 
-  it("offers a watcher no control that sends an intent", () => {
+  it("offers a spectator no control that sends an intent", () => {
     const html = showLobby("spectator", null, "connected", watchableLobby());
 
     // The creator's crown stays (a fact of the Room), but nothing to press:
@@ -216,7 +216,7 @@ describe("the watching Lobby screen", () => {
 
   it("offers none either when a stale welcome named the creator as this client", () => {
     // The role, not the Player id, is what drops the controls (spec #179): a
-    // watcher whose `me` happens to be the creator's must still press nothing.
+    // spectator whose `me` happens to be the creator's must still press nothing.
     const html = showLobby("spectator", "p1", "connected", watchableLobby());
 
     expect(html).not.toContain(">Start<");
@@ -226,13 +226,13 @@ describe("the watching Lobby screen", () => {
     expect(html).not.toContain('data-testid="take-seat"');
   });
 
-  it("marks no Seat as the watcher's own, even if a welcome named a Player", () => {
+  it("marks no Seat as the spectator's own, even if a welcome named a Player", () => {
     const html = showLobby("spectator", "p1", "connected", watchableLobby());
 
     expect(html).not.toContain(en.lobby_you);
   });
 
-  it("tells a watcher whose Room is gone that the connection was lost", () => {
+  it("tells a spectator whose Room is gone that the connection was lost", () => {
     const html = showLobby("spectator", null, "lost");
 
     expect(html).toContain(en.connection_lost);
@@ -260,7 +260,7 @@ describe("the spectator count on the Lobby", () => {
     expect(html).not.toContain('data-testid="spectators"');
   });
 
-  it("shows one watcher and many watchers, with a label of their number", () => {
+  it("shows one spectator and many spectators, with a label of their number", () => {
     const one = showLobby("player", "p1", "connected", { ...lobbyOf(), spectators: 1 });
     expect(one).toContain('data-testid="spectators"');
     expect(one).toContain("1 spectator");
@@ -317,7 +317,7 @@ function overlay(role: Role): string {
 describe("the reconnecting overlay", () => {
   it("promises a kept Seat to a Player, and to nobody else", () => {
     expect(overlay("player")).toContain(en.reconnecting_hint);
-    // A watcher holds no Seat (spec #179, story 6).
+    // A spectator holds no Seat (spec #179, story 6).
     expect(overlay("spectator")).not.toContain(en.reconnecting_hint);
     expect(overlay("spectator")).toContain(en.reconnecting);
   });

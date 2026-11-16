@@ -240,7 +240,7 @@ export function Lobby() {
               }
             />
           ))}
-          {/* A watcher sees the taken Seats only: an open Seat is something to take. */}
+          {/* A spectator sees the taken Seats only: an open Seat is something to take. */}
           {!spectator &&
             open.map((i) => (
               // A Bot takes the next empty Seat, so only the first open card offers it.

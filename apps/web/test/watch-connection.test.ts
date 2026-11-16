@@ -158,9 +158,7 @@ describe("watching a Room", () => {
 
     sendIntent({ type: "Start" });
 
-    expect(sdk.rooms.at(-1)!.sends).toEqual([
-      { type: MESSAGE.intent, payload: { type: "Start" } },
-    ]);
+    expect(sdk.rooms.at(-1)!.sends).toEqual([{ type: MESSAGE.intent, payload: { type: "Start" } }]);
     expect(inFlightOf(roomStore.getState())).toBe(true);
   });
 });
