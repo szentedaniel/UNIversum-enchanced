@@ -91,7 +91,9 @@ function wake(): void {
  * and its timer stay: a watcher's join replays nothing and opens no decision
  * early. A made-up view the e2e hooks show is a changed view with no events, and
  * it must rebuild the Playback, so the version alone is not the test — the views
- * are JSON by construction, and one serialization compares every field.
+ * are JSON by construction, and one serialization compares every field. The
+ * held side is cached in `currentViewJson`, so an event-less push pays one
+ * `JSON.stringify` against it (ADR-0004).
  */
 function restatesView(push: Push): boolean {
   if (currentPush === null) return false;

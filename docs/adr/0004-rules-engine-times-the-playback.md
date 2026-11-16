@@ -11,3 +11,4 @@ Clients show what an intent set off (the Roll, the pawn's hops, money changes, a
 
 - Closing a Chance card early hides it locally but does not start the next decision sooner.
 - A reconnecting client that gets no events still hides the controls until `actsAfter`, by the server's clock.
+- A push that restates the identical view at the same `version` with no events keeps the running Playback and its timer (a Spectator's count-only push, spec #179). The client compares the views as JSON and caches the held one, so each event-less push pays one serialisation.
