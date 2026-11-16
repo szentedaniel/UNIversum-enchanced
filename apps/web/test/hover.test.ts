@@ -16,7 +16,7 @@ const eligibleMove = {
   buttons: 0,
   dragging: false,
   multi: false,
-  sinceTouch: null,
+  sinceTouch: { kind: "none" },
 } as const;
 
 describe("hoverEligible", () => {
@@ -39,10 +39,17 @@ describe("hoverEligible", () => {
     expect(hoverEligible({ ...eligibleMove, multi: true })).toBe(false);
   });
 
-  it("rejects a hover within the touch grace and accepts it after", () => {
-    expect(hoverEligible({ ...eligibleMove, sinceTouch: 0 })).toBe(false);
-    expect(hoverEligible({ ...eligibleMove, sinceTouch: TOUCH_WHEEL_GRACE_MS - 1 })).toBe(false);
-    expect(hoverEligible({ ...eligibleMove, sinceTouch: TOUCH_WHEEL_GRACE_MS })).toBe(true);
+  it("rejects a hover while a finger is down or within the touch grace, and accepts it after", () => {
+    expect(hoverEligible({ ...eligibleMove, sinceTouch: { kind: "down" } })).toBe(false);
+    expect(
+      hoverEligible({
+        ...eligibleMove,
+        sinceTouch: { kind: "lifted", ms: TOUCH_WHEEL_GRACE_MS - 1 },
+      }),
+    ).toBe(false);
+    expect(
+      hoverEligible({ ...eligibleMove, sinceTouch: { kind: "lifted", ms: TOUCH_WHEEL_GRACE_MS } }),
+    ).toBe(true);
   });
 });
 

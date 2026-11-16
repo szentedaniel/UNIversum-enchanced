@@ -27,14 +27,21 @@ const eventOf = (
 ): Input => input as unknown as Input;
 
 /** A pointer event stand-in; `buttons` is the bitmask `pointermove` carries while one is held. */
-const pointer = (type: string, id: number, at: Point, pointerType: string, buttons = 0) =>
+const pointer = (
+  type: string,
+  id: number,
+  at: Point,
+  pointerType: string,
+  buttons = 0,
+  button = 0,
+) =>
   eventOf({
     type,
     pointerId: id,
     clientX: at.x,
     clientY: at.y,
     pointerType,
-    button: 0,
+    button,
     buttons,
   });
 
@@ -100,8 +107,8 @@ function mount(
     at(ms: number) {
       clock = ms;
     },
-    down(id: number, at: Point, pointerType = "touch") {
-      canvas.dispatch("pointerdown", pointer("pointerdown", id, at, pointerType, 1));
+    down(id: number, at: Point, pointerType = "touch", button = 0) {
+      canvas.dispatch("pointerdown", pointer("pointerdown", id, at, pointerType, 1, button));
     },
     move(id: number, at: Point, pointerType = "touch", buttons = 0) {
       canvas.dispatch("pointermove", pointer("pointermove", id, at, pointerType, buttons));
@@ -245,6 +252,23 @@ describe("hover", () => {
     board.move(1, { x: 100 + TAP_SLOP, y: 100 }, "mouse", 1);
 
     expect(board.hovers).toEqual([{ x: 100, y: 100 }, null]);
+  });
+
+  it("clears a standing hover at once on a right-button press, and starts no gesture", () => {
+    const board = mount();
+    board.move(1, { x: 100, y: 100 }, "mouse");
+    board.at(0);
+    board.down(1, { x: 100, y: 100 }, "mouse", 2);
+    expect(board.hovers).toEqual([{ x: 100, y: 100 }, null]);
+
+    board.at(100);
+    board.move(1, { x: 160, y: 100 }, "mouse", 2);
+    board.at(200);
+    board.up(1, { x: 160, y: 100 }, "mouse");
+
+    expect(board.moves).toEqual([]);
+    expect(board.moved()).toBe(0);
+    expect(board.taps).toEqual([]);
   });
 
   it("clears the hover when a second finger lands on the Board", () => {
