@@ -7,7 +7,8 @@ import {
   press as pressControl,
   registerPage,
   resolveDecision as resolveSharedDecision,
-  ROLL_PLAYBACK_MS,
+  ROLL_WAIT_MS,
+  shownView,
   test,
   type Interactor,
   type OfferChoice,
@@ -15,18 +16,10 @@ import {
 } from "./helpers.ts";
 
 /**
- * A wait after a Roll's Playback: its own length plus a second of slack for the
- * push's arrival and the poll's interval (CODING_STANDARDS §E2E).
- */
-const ROLL_WAIT_MS = ROLL_PLAYBACK_MS + 1_000;
-
-/**
  * How long a cue's count must hold after its poll, so a duplicate play from a
  * re-read Playback frame fails the settle. Kept short: it runs after every Turn.
  */
 const CUE_SETTLE_MS = 300;
-
-const viewOf = (page: Page) => page.evaluate(() => window.universumTest?.view() ?? null);
 
 /** The latest push's view, with every phase's options; `view()` is the view the Board last drew. */
 const pushView = (page: Page): Promise<PublicView | null> =>
@@ -344,7 +337,7 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
     }
 
     // Every client got the same view, and sees the bought University's owner and Level.
-    const [desktopView, phoneView] = await Promise.all(both.map(viewOf));
+    const [desktopView, phoneView] = await Promise.all(both.map(shownView));
     expect(desktopView).toEqual(phoneView);
     expect(desktopView?.version).toBeGreaterThanOrEqual(4);
     expect(bought).not.toBeNull();

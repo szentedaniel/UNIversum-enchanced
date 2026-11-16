@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { closeAfterDump, press, ROLL_PLAYBACK_MS, startGame, test } from "./helpers.ts";
+import { closeAfterDump, press, ROLL_WAIT_MS, startGame, test } from "./helpers.ts";
 
 /*
  * The first-game Offer hint (#258, spec #180, story 1). The seeded first Roll
@@ -36,7 +36,7 @@ test("the first Offer's hint shows, stays dismissed through a reload, and leaves
   // dice and the walk, not right after the press.
   await expect
     .poll(() => page.evaluate(() => window.universumTest?.playback().gateOpen ?? false), {
-      timeout: ROLL_PLAYBACK_MS + 1_000,
+      timeout: ROLL_WAIT_MS,
     })
     .toBe(true);
   await expect(offer).toBeVisible();
