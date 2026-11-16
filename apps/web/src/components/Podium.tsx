@@ -1,8 +1,8 @@
 /**
  * The result screen (R80): the podium in a scroll box, the way back to the
  * Lobby list, and the Summary switch over it. `PodiumBody` holds the podium
- * itself; this keeps the Playback gate, the Summary's open state and the
- * scroll box that keeps the Lobby link on screen.
+ * itself; this keeps the Summary's open state and the scroll box, while the
+ * Game screen's Decision slot still decides when the Podium mounts.
  */
 import type { PhaseOf, PlayerId, PublicView } from "@universum/rules";
 import { useState } from "react";

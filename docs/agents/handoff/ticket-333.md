@@ -19,7 +19,7 @@ Branch `agent/issue-333-factory-review-follow-ups-325`, based on `main`. All in 
 
 ## The podium body split
 
-- `apps/web/src/components/PodiumBody.tsx` holds the podium itself: `PodiumBody({ view, phase, rematch, me, busy, onOpenSummary })`, the `REASONS`/`HEIGHTS` tables and `PodiumPlace`, the `podium-title` through the `summary-open` button. `apps/web/src/components/Podium.tsx` keeps the `showSummary`/`openSummary` state, the Playback gate, the confetti, the scroll box and the `Back to the Lobby list` link. Pure move: every `podium*`, `rematch-*` and `summary-open` test id and their order are unchanged.
+- `apps/web/src/components/PodiumBody.tsx` holds the podium itself: `PodiumBody({ view, phase, rematch, me, busy, onOpenSummary })`, the `REASONS`/`HEIGHTS` tables and `PodiumPlace`, the `podium-title` through the `summary-open` button. `apps/web/src/components/Podium.tsx` keeps the `showSummary`/`openSummary` state, the confetti, the scroll box and the `Back to the Lobby list` link; the Game screen's Decision slot (`slot.kind === "podium"`) still gates when the Podium mounts. Pure move: every `podium*`, `rematch-*` and `summary-open` test id and their order are unchanged.
 
 ## e2e
 
