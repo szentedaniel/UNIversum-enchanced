@@ -67,10 +67,10 @@ Branch `agent/issue-243-sound-background-music-and-separate-effects-music`.
 
 - `musicElement()` adds a `pause` listener: a pause the browser or the OS makes (an interruption, a
   lost audio focus) while `musicPlaying` is set clears the flag, and the next `syncMusic()` — a
-  `visibilitychange` wake or a toggle — starts the track again. `stopMusic` and the unlock's silent
-  `pause()` clear the flag before pausing, so the listener does not read them as a stop and never
-  restarts the music; a looped element never fires `ended`, so it has no such listener. The
-  `musicAttempt` invalidation is unchanged.
+  `visibilitychange` wake or a music toggle — starts the track again. `stopMusic` clears the flag
+  before pausing, and the unlock's silent `pause()` runs while it is off, so the listener does not
+  read either as a stop and never restarts the music; a looped element never fires `ended`, so it
+  has no such listener. The `musicAttempt` invalidation is unchanged.
 - `apps/web/test/sound.test.ts`'s `settle()` no longer drains ten microtask rounds: `FakeAudio.play()`
   returns a promise and records its resolver in `FakeAudio.pending`, and `settle()` completes those
   plays until two quiet microtask turns pass. `FakeAudio.pause()` now also fires the element's
