@@ -3,6 +3,7 @@
  * told apart without colour) and their alien figure. The figure always sits on
  * a cream disc, so a pink alien stays visible on a pink Seat card.
  */
+import type { ReactNode } from "react";
 import { cn } from "#lib/utils.ts";
 import { INK, playerLook } from "#players.ts";
 
@@ -27,6 +28,24 @@ export function PlayerToken({
       style={{ width: size, height: size, background: color, color: INK, fontSize: size * 0.55 }}
     >
       {shape}
+    </span>
+  );
+}
+
+/** A Player's token beside a line about them: the Summary's rows and the Wealth chart's list share it. */
+export function PlayerLine({
+  seat,
+  children,
+  className,
+}: {
+  seat: number;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span className={cn("flex items-center gap-1.5", className)}>
+      <PlayerToken seat={seat} size={14} />
+      <span>{children}</span>
     </span>
   );
 }

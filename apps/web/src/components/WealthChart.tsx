@@ -6,7 +6,7 @@
  * the series is small, static and the geometry is already pure code.
  */
 import type { PlayerView, WealthSample } from "@universum/rules";
-import { PlayerToken } from "#components/PlayerToken.tsx";
+import { PlayerLine } from "#components/PlayerToken.tsx";
 import { wealthChart } from "#pick/wealth-chart.ts";
 import { INK, playerLook } from "#players.ts";
 import { formatCompactMoney, formatCount, formatMoney, m, playerName } from "#text.ts";
@@ -152,20 +152,14 @@ export function WealthChart({
         className="m-0 flex list-none flex-col gap-1 p-0 text-sm font-bold"
       >
         {chart.players.map((entry) => (
-          <li
-            key={entry.player.id}
-            data-testid="chart-player"
-            data-player={entry.player.id}
-            className="flex items-center gap-1.5"
-          >
-            <PlayerToken seat={entry.player.seat} size={14} />
-            <span>
+          <li key={entry.player.id} data-testid="chart-player" data-player={entry.player.id}>
+            <PlayerLine seat={entry.player.seat}>
               {m.summary_chart_player_line({
                 name: playerName(entry.player.name),
                 start: formatMoney(entry.start),
                 end: formatMoney(entry.end),
               })}
-            </span>
+            </PlayerLine>
           </li>
         ))}
       </ul>
