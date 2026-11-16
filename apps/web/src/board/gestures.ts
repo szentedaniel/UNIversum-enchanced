@@ -177,9 +177,11 @@ export function attachGestures(
   }
 
   function down(event: PointerEvent): void {
-    if (event.button !== 0 && event.pointerType === "mouse") return;
-    // The press ends the hover: nothing is hovered while a button or finger is down.
+    // Every press ends the hover, including a right or middle button's; it
+    // comes before the guard because that guard ends a non-left mouse press
+    // before it begins any gesture.
     reportHover(null);
+    if (event.button !== 0 && event.pointerType === "mouse") return;
     const at = local(event);
     pointers.set(event.pointerId, at);
     if (press === null) {
