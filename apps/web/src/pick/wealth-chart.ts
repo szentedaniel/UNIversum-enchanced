@@ -132,10 +132,7 @@ export function wealthChart(
   const lines = new Map<PlayerId, { minute: number; wealth: number }[]>();
   const minutes: number[] = [];
   const wealths: number[] = [];
-  // Copy-and-sort, not `toSorted`: it needs Firefox 115, above the Firefox 114
-  // baseline the old-browser notice states (index.html).
-  // oxlint-disable-next-line unicorn/no-array-sort -- `toSorted` is outside that baseline
-  for (const sample of [...series].sort((a, b) => a.minute - b.minute)) {
+  for (const sample of series.toSorted((a, b) => a.minute - b.minute)) {
     if (!Number.isFinite(sample.minute)) continue;
     minutes.push(sample.minute);
     for (const player of players) {
