@@ -68,7 +68,8 @@ export function Podium({
   return (
     <section
       data-testid="podium"
-      aria-labelledby={openSummary !== null ? "summary-title" : "podium-title"}
+      // `summary-title` labels the Summary alone while it is open.
+      aria-labelledby={openSummary === null ? "podium-title" : undefined}
       className="fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden p-safe-4"
       style={{ background: OVERLAY_BG }}
     >

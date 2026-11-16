@@ -164,8 +164,13 @@ test("the result screen: a 2-1-3 podium in Player colours, the Bankrupt Player g
     const summary = page.getByTestId("summary");
     await expect(summary).toBeVisible();
     await expect(summary.getByTestId("chart-line")).toHaveCount(4);
+    // `summary-title` labels the Summary alone: the Podium's section drops its
+    // own label while the Summary is open, so one landmark carries it.
+    await expect(page.getByRole("region", { name: "The game in numbers" })).toHaveCount(1);
+    await expect(podium).not.toHaveAttribute("aria-labelledby");
     await summary.getByTestId("summary-back").click();
     await expect(podium.getByTestId("podium-places")).toBeVisible();
+    await expect(podium).toHaveAttribute("aria-labelledby", "podium-title");
 
     // Back to the Lobby list.
     await podium.getByRole("link", { name: "Back to the Lobby list" }).click();
