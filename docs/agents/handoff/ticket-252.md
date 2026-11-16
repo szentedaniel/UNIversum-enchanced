@@ -16,7 +16,7 @@ builds on it. The rules engine, `GameState`, the stored snapshot and the server 
   and `eventsReached`. The view comparison is what tells it apart from a made-up view: the e2e hooks
   clone the push and keep its `version`, so `version` alone would swallow every `showView` push.
   Consequence for e2e: `playback().seq` keeps the Playback push's `seq` after a watcher joins or
-  leaves; `room().push.seq` does move on.
+  leaves. `room().push.seq` moved on then; since #328 it stays too (see `ticket-328.md`).
 - **`apps/web/src/test-hooks.ts`**: `showView` passes `spectators: roomStore.getState().spectators`,
   so a made-up view never resets the count a spec is watching for.
 
