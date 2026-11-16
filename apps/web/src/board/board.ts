@@ -394,8 +394,11 @@ export async function createBoard(
   function resnapHover(): void {
     if (hoverAt === null) return;
     // No `allowed`: every Field counts, so the tooltip works during a pick.
-    reportHover(snapField(hoverAt, fieldCentres(), camera.scale));
-    options.onCameraChange?.();
+    const id = snapField(hoverAt, fieldCentres(), camera.scale);
+    reportHover(id);
+    // Nothing under the pointer: no tooltip to re-place, and `onFieldHover`
+    // already told the store if the Field just went.
+    if (id !== null) options.onCameraChange?.();
   }
 
   function measure(): void {
