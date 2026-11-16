@@ -1,11 +1,13 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import {
   closeAfterDump,
   dragBoard,
   expectGate,
   fieldCenter,
   ROLL_PLAYBACK_MS,
+  SALE_FIELDS,
   scale,
+  showSale,
   shownView,
   startGame,
   test,
@@ -43,6 +45,23 @@ function moneyOf(amount: number): string {
     currencyDisplay: "narrowSymbol",
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+/**
+ * Rolls, and waits for the seeded first Roll's University offer. Returns the
+ * Offer panel and the Field it landed on; the seed always stops at an unowned
+ * University, as the specs below rely on.
+ */
+async function rollOntoOffer(page: Page): Promise<{ offer: Locator; field: number }> {
+  await page.getByRole("button", { name: "Roll" }).click();
+  const offer = page.getByTestId("offer");
+  await expect(offer).toBeVisible({ timeout: ROLL_PLAYBACK_MS });
+  const field = await page.evaluate(() => {
+    const phase = window.universumTest?.view()?.phase;
+    return phase?.kind === "offer" ? phase.field : null;
+  });
+  if (field === null) throw new Error("the first Roll is expected to stop at a University offer");
+  return { offer, field };
 }
 
 test("a tap opens the nearest Field's card, and the card never changes the zoom", async ({
@@ -155,30 +174,17 @@ test("an owned University's card highlights its current Level among the Level Re
   const card = page.getByTestId("field-card");
 
   // The seeded first Roll stops at an unowned University: buy Level 1.
-  await page.getByRole("button", { name: "Roll" }).click();
-  const offer = page.getByTestId("offer");
-  await expect(offer).toBeVisible({ timeout: 15_000 });
-  const offered = await page.evaluate(() => {
-    const phase = window.universumTest?.view()?.phase;
-    return phase?.kind === "offer"
-      ? { field: phase.field, levels: phase.levels.map((level) => level.level) }
-      : null;
-  });
-  if (offered === null || offered.levels.length === 0) {
-    throw new Error("the first Roll is expected to stop at a University offer");
-  }
+  const { offer, field } = await rollOntoOffer(page);
   await offer.getByRole("button", { name: /^Level 1/ }).click();
   await expect
-    .poll(() =>
-      page.evaluate((id) => window.universumTest?.view()?.fields[id]?.level ?? 0, offered.field),
-    )
+    .poll(() => page.evaluate((id) => window.universumTest?.view()?.fields[id]?.level ?? 0, field))
     .toBe(1);
 
   // Tapping the bought Field opens its card; a tap that misses while the
   // camera settles after the Turn change is retried with a fresh centre.
   await expect(async () => {
     await expectGate(page, true, 15_000);
-    await tapAt(page, isMobile, await fieldCenter(page, offered.field));
+    await tapAt(page, isMobile, await fieldCenter(page, field));
     await expect(
       card.getByTestId("field-card-level-rents").locator('[aria-current="true"]'),
     ).toHaveAttribute("data-level", "1");
@@ -191,7 +197,7 @@ test("an owned University's card highlights its current Level among the Level Re
   await expect(rents.getByTestId("field-card-level-rent")).toHaveCount(4);
   const levelRent = await page.evaluate(
     (id) => window.universumTest?.view()?.fields[id]?.levelRents[0] ?? null,
-    offered.field,
+    field,
   );
   if (levelRent === null) throw new Error("the owned Field has no Level 1 Rent");
   await expect(rents.locator('[aria-current="true"]')).toContainText("Level 1");
@@ -223,10 +229,10 @@ test("an owned University's card highlights its current Level among the Level Re
       const hooks = window.universumTest;
       const push = hooks?.room().push;
       const view = push ? structuredClone(push.view) : null;
-      const field = view?.fields[id];
+      const bought = view?.fields[id];
       const viewOwner = view?.players.find((player) => player.id === view.currentPlayer);
-      if (!hooks || !view || !field || !viewOwner) throw new Error("no view to patch");
-      field.doublers = 2;
+      if (!hooks || !view || !bought || !viewOwner) throw new Error("no view to patch");
+      bought.doublers = 2;
       for (const member of members) {
         const memberField = view.fields[member];
         if (!memberField) throw new Error(`no Field ${member} in the view`);
@@ -234,7 +240,7 @@ test("an owned University's card highlights its current Level among the Level Re
       }
       hooks.showView(view);
     },
-    { id: offered.field, members: groupFields },
+    { id: field, members: groupFields },
   );
   await expect(card.getByTestId("field-card-doubler")).toHaveText("Doubler ×2");
   await expect(card.getByTestId("field-card-monopoly")).toHaveText("Monopoly");
@@ -278,6 +284,13 @@ test("a mouse hover shows the Field tooltip, and a click through it opens the ca
   await expect(tooltip).not.toContainText("Rent");
   await expect(tooltip).not.toContainText("Unowned");
 
+  // A Tax Field is name-only too, like the corners.
+  const tax = await fieldCenter(page, 30);
+  await page.mouse.move(tax.x, tax.y);
+  await expect(tooltip).toContainText("Tax");
+  await expect(tooltip).not.toContainText("Rent");
+  await expect(tooltip).not.toContainText("Owner");
+
   // Leaving the Board hides it: it is a hover, never pinned.
   await page.mouse.move(2, 2);
   await expect(tooltip).toHaveCount(0);
@@ -300,16 +313,9 @@ test("the tooltip shows over an open Offer with the shown view's owner and Rent"
   const { context } = await startGame(page, browser);
   closeAfterDump(context);
   const tooltip = page.getByTestId("field-tooltip");
-  const offer = page.getByTestId("offer");
 
   // The seeded first Roll stops at an unowned University and waits for an Offer.
-  await page.getByRole("button", { name: "Roll" }).click();
-  await expect(offer).toBeVisible({ timeout: ROLL_PLAYBACK_MS });
-  const offered = await page.evaluate(() => {
-    const phase = window.universumTest?.view()?.phase;
-    return phase?.kind === "offer" ? phase.field : null;
-  });
-  if (offered === null) throw new Error("the first Roll is expected to stop at a University offer");
+  const { offer, field: offered } = await rollOntoOffer(page);
 
   // The tooltip is its own layer: the Offer keeps the bottom slot.
   const at = await fieldCenter(page, offered);
@@ -386,4 +392,96 @@ test("the mouse wheel zooms on desktop", async ({ page, browser, isMobile }) => 
   const after = await fieldCenter(page, 16);
   expect(Math.abs(after.x - centre.x)).toBeLessThan(2);
   expect(Math.abs(after.y - centre.y)).toBeLessThan(2);
+});
+
+/**
+ * How far the tooltip's box is from sitting beside the Field's centre: the
+ * placement's 12 px gap on whichever side fits, vertically centred, so 0 means
+ * the box tracks that Field.
+ */
+async function tooltipGap(page: Page, tooltip: Locator, field: number): Promise<number> {
+  const box = (await tooltip.boundingBox())!;
+  const at = await fieldCenter(page, field);
+  const beside = Math.min(Math.abs(box.x - (at.x + 12)), Math.abs(box.x + box.width - (at.x - 12)));
+  return Math.max(beside, Math.abs(box.y + box.height / 2 - at.y));
+}
+
+test("a wheel zoom under a resting pointer moves the tooltip with the Field", async ({
+  page,
+  browser,
+  isMobile,
+}) => {
+  test.skip(isMobile, "desktop only");
+  const { context } = await startGame(page, browser);
+  closeAfterDump(context);
+  const tooltip = page.getByTestId("field-tooltip");
+  await settledScale(page);
+
+  // The mouse rests 40% of the way from Zurich to Paris, still nearest to
+  // Zurich; a wheel zooms around the cursor, so both centres — and the
+  // tooltip — have to move.
+  const zurich = await fieldCenter(page, 5);
+  const paris = await fieldCenter(page, 6);
+  const resting = {
+    x: zurich.x + (paris.x - zurich.x) * 0.4,
+    y: zurich.y + (paris.y - zurich.y) * 0.4,
+  };
+  await page.mouse.move(resting.x, resting.y);
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText("Zurich");
+  expect(await tooltipGap(page, tooltip, 5)).toBeLessThan(2);
+  const before = (await tooltip.boundingBox())!;
+
+  await page.mouse.wheel(0, -300);
+  // No `pointermove` follows the zoom: the renderer re-snaps the hover from the
+  // last pointer point and the tooltip re-places beside the Field's new one
+  // (#357), keeping the Field it described.
+  await expect(tooltip).toContainText("Zurich");
+  await expect.poll(() => tooltipGap(page, tooltip, 5)).toBeLessThan(2);
+  const after = (await tooltip.boundingBox())!;
+  const at = await fieldCenter(page, 5);
+  // The box sits a fixed gap beside the Field's centre, so it moves exactly as
+  // the Field did: staying put is the stale-point bug #357 fixes.
+  const fieldMove = Math.abs(at.x - zurich.x);
+  const boxMove = Math.abs(after.x - before.x);
+  expect(fieldMove, "the Field did not move under the cursor").toBeGreaterThan(4);
+  expect(Math.abs(boxMove - fieldMove), "the tooltip did not follow the Field").toBeLessThan(2);
+});
+
+test("the tooltip shows over a Sale pick, and a click through it picks instead of opening the card", async ({
+  page,
+  browser,
+  isMobile,
+}) => {
+  test.skip(isMobile, "only a mouse pointer raises a hover (#317)");
+  const { context } = await startGame(page, browser);
+  closeAfterDump(context);
+  const tooltip = page.getByTestId("field-tooltip");
+  const tray = page.getByTestId("sale-tray");
+  const card = page.getByTestId("field-card");
+
+  // A made-up Sale: Berlin is one of the Fields the Sale can pick.
+  await showSale(page, 15_000);
+  await expect(tray).toBeVisible();
+  await settledScale(page);
+
+  // The tooltip is its own layer over the pick's marks: the Sale keeps the
+  // bottom slot, and the Field is still hoverable.
+  const berlin = await fieldCenter(page, SALE_FIELDS.berlin);
+  await page.mouse.move(berlin.x, berlin.y);
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText("Berlin");
+  await expect(tooltip).toContainText("Owner");
+  await expect(tray).toBeVisible();
+  await expect(card).toHaveCount(0);
+
+  // A click through the tooltip picks the Field, as a tap would: a Decision is
+  // open, so it must not open the Field card in its place.
+  await page.mouse.click(berlin.x, berlin.y);
+  await expect(tray.getByRole("button", { name: "Remove Berlin" })).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => window.universumTest?.pick()?.picked ?? []))
+    .toEqual([SALE_FIELDS.berlin]);
+  await expect(card).toHaveCount(0);
+  await expect(tooltip).toHaveCount(0);
 });

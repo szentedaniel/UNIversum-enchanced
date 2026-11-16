@@ -64,6 +64,10 @@ function onFieldTap(id: FieldId | null): void {
  */
 function HoveredTooltip({ fieldCenter }: { fieldCenter: (id: FieldId) => Point }) {
   const field = useStore(uiStore, (state) => state.hoveredField);
+  // Subscribed, not read: the renderer bumps this when the camera moves under a
+  // standing hover, which re-renders this component so `fieldCenter` gives the
+  // Field's new point and the box re-places (#357).
+  useStore(uiStore, (state) => state.cameraRevision);
   const view = useStore(playbackStore, (state) => state.frame?.view ?? null);
   return <FieldTooltip id={field} view={view} at={field === null ? null : fieldCenter(field)} />;
 }
@@ -104,6 +108,7 @@ export function Board() {
         },
         onFieldTap,
         onFieldHover: (id) => uiStore.getState().hoverField(id),
+        onCameraChange: () => uiStore.getState().cameraMoved(),
         onFollowChange: (on) => uiStore.getState().setFollow(on),
       });
       if (cancelled) {

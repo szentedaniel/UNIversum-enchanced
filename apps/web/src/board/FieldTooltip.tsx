@@ -19,12 +19,20 @@ import type { Point } from "#board/layout.ts";
 import { fieldName, formatMoney, m, playerName } from "#text.ts";
 
 /** A box in CSS pixels: the tooltip's measured size, or the viewport's. */
-export type Size = { width: number; height: number };
+type Size = { width: number; height: number };
 
 /** The gap between the Field's centre and the tooltip. */
 const GAP = 12;
 /** The least the tooltip leaves between itself and the viewport's edge. */
 const MARGIN = 8;
+
+/**
+ * `value` kept inside the viewport with `MARGIN` on either side. A box bigger
+ * than its viewport keeps the near margin rather than hanging off the far one.
+ */
+function clamp(value: number, size: number, viewportSize: number): number {
+  return Math.min(Math.max(value, MARGIN), Math.max(MARGIN, viewportSize - size - MARGIN));
+}
 
 /**
  * Where the tooltip's box goes: beside the Field's centre `at`, on the side
@@ -37,15 +45,12 @@ export function placeTooltip(at: Point, size: Size, viewport: Size): Point {
   // Right of the Field unless that leaves the screen and the left side fits.
   const beside = right + size.width <= viewport.width - MARGIN || left < MARGIN ? right : left;
   return {
-    x: Math.min(Math.max(beside, MARGIN), Math.max(MARGIN, viewport.width - size.width - MARGIN)),
-    y: Math.min(
-      Math.max(at.y - size.height / 2, MARGIN),
-      Math.max(MARGIN, viewport.height - size.height - MARGIN),
-    ),
+    x: clamp(beside, size.width, viewport.width),
+    y: clamp(at.y - size.height / 2, size.height, viewport.height),
   };
 }
 
-export type FieldTooltipProps = {
+type FieldTooltipProps = {
   /** The Field the pointer hovers (`uiStore.hoveredField`), or `null`. */
   id: FieldId | null;
   /** The pushed view the screen draws (the Playback's frame), or `null` before the first push. */

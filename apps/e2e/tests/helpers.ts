@@ -418,6 +418,67 @@ export function showPick(page: Page, kind: "doubler" | "erasmus"): Promise<void>
   );
 }
 
+/** The Fields the made-up Sale in `showSale` owns, by the Board's ids. */
+export const SALE_FIELDS = { veszprem: 1, budapest: 2, berlin: 15, seattle: 17 } as const;
+
+/**
+ * Shows a made-up Sale through the test-only `showView` hook, as if the server
+ * had pushed it: a random game can't be steered into one, and nothing is sent
+ * to the server. This Guest owes Seattle's Rent and must sell Fields to cover a
+ * 300,000 Shortfall, with `msLeft` on the timer; `otherBankrupt` marks the
+ * second Player bankrupt, for the Player card's state.
+ */
+export function showSale(page: Page, msLeft: number, otherBankrupt = false): Promise<void> {
+  return page.evaluate(
+    ({ left, bankrupt, fields }) => {
+      const hooks = window.universumTest!;
+      const { me, push } = hooks.room();
+      const view = structuredClone(push!.view);
+      const other = view.players.find((p) => p.id !== me)!;
+      other.bankrupt = bankrupt;
+      view.currentPlayer = me!;
+      view.phase = {
+        kind: "selling",
+        shortfall: 300_000,
+        resume: { kind: "rent", amount: 400_000, owner: other.id, field: fields.seattle },
+      };
+      const own = (id: number, level: number, sale: number) => {
+        view.fields[id] = {
+          owner: me,
+          level,
+          value: 0,
+          rent: 0,
+          sale,
+          levelRents: [],
+          basePrice: 0,
+          doublers: 0,
+        };
+      };
+      own(fields.veszprem, 1, 180_000);
+      own(fields.budapest, 1, 198_000);
+      own(fields.berlin, 4, 792_000);
+      view.fields[fields.seattle] = {
+        owner: other.id,
+        level: 1,
+        value: 0,
+        rent: 0,
+        sale: 0,
+        levelRents: [],
+        basePrice: 0,
+        doublers: 0,
+      };
+      view.autoSell = [fields.veszprem, fields.budapest];
+      // A new decision each time (fresh picks), open now, with `msLeft` on the server's clock.
+      const now = hooks.serverNow();
+      view.actsAfter = now;
+      view.turnDeadline = now + left + 3_000;
+      view.turnTimer = { endsAt: view.turnDeadline - 3_000, limitMs: 20_000 };
+      hooks.showView(view);
+    },
+    { left: msLeft, bankrupt: otherBankrupt, fields: SALE_FIELDS },
+  );
+}
+
 export type OfferPhase = PhaseOf<"offer">;
 export type OfferChoice = "level" | "museum" | "buyout" | "decline";
 
