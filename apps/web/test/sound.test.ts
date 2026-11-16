@@ -468,6 +468,38 @@ describe("the background music", () => {
     expect(element?.plays).toBe(3);
   });
 
+  it("restarts on the next wake after the browser paused the music itself", async () => {
+    stubBrowser();
+    storage.set(MUSIC_ON_KEY, "1");
+    const { installAudioUnlock } = await loadAudio();
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+    const element = musicSound();
+    expect(element?.plays).toBe(2);
+
+    // An interruption (an iOS call, a lost audio focus) pauses the element, not the setting.
+    element?.fire("pause");
+    press("visibilitychange");
+
+    expect(element?.plays).toBe(3);
+  });
+
+  it("keeps the music playing after the unlock's silent pause", async () => {
+    stubBrowser();
+    storage.set(MUSIC_ON_KEY, "1");
+    const { installAudioUnlock } = await loadAudio();
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+    const element = musicSound();
+
+    // The unlock's own pause must not read as the browser stopping the music.
+    press("visibilitychange");
+
+    expect(element?.plays).toBe(2);
+  });
+
   it("stays muted under automation but still calls play()", async () => {
     stubBrowser();
     storage.set(MUSIC_ON_KEY, "1");
