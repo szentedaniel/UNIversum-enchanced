@@ -43,6 +43,12 @@ export const TIMEOUT = (): GameEvent[] => [
   { type: "TurnPassed", player: "p2", turn: 3 },
 ];
 
+/** A charge that bankrupts the last opponent: the Bankrupt and the game's end, in order. */
+export const BANKRUPT_END = (): GameEvent[] => [
+  { type: "WentBankrupt", player: "p1", fields: [3, 4] },
+  { type: "GameEnded", winner: "p2", reason: "lastPlayer" },
+];
+
 const player = (id: string, seat: number, position: number, cash = 100_000) => ({
   id,
   name: { adjective: "happy", noun: "tiger" },

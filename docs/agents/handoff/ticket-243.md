@@ -62,3 +62,20 @@ Branch `agent/issue-243-sound-background-music-and-separate-effects-music`.
   are plain strings, which is why the tests only use those.
 - The music adds one `play()` per first gesture (its silent unlock), so a spec that counts
   `window.dicePlays` must keep comparing against a value read after the taps, as `two-guests` does.
+
+## Follow-ups (#323)
+
+- `musicElement()` adds a `pause` listener: a pause the browser or the OS makes (an interruption, a
+  lost audio focus) while `musicPlaying` is set clears the flag, and the next `syncMusic()` — a
+  `visibilitychange` wake or a music toggle — starts the track again. `stopMusic` clears the flag
+  before pausing, and the unlock's silent `pause()` runs while it is off, so the listener does not
+  read either as a stop and never restarts the music; a looped element never fires `ended`, so it
+  has no such listener. The `musicAttempt` invalidation is unchanged.
+- `apps/web/test/sound.test.ts`'s `settle()` no longer drains ten microtask rounds: `FakeAudio.play()`
+  returns a promise and records its resolver in `FakeAudio.pending`, and `settle()` completes those
+  plays until two quiet microtask turns pass. `FakeAudio.pause()` now also fires the element's
+  `pause` event, and `fire(type)` drives a pause the module did not ask for. Two tests pin the
+  browser's pause and the toggle's own.
+- `two-guests.spec.ts` taps `music-toggle` beside `sound-toggle` and asserts its `aria-pressed` (true
+  = the music on) and, after the language reload, its `Musik an` label. The music steps read no play
+  count: the hook counts Cues only.

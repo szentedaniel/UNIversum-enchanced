@@ -17,6 +17,18 @@ function sample(scrape: string, series: string): number {
   return Number(line.slice(series.length + 1));
 }
 
+/**
+ * Asserts one scrape's Seat metrics are untouched, for a spectator's join,
+ * drop or leave: both Seats connected, none held or dropped, and the
+ * spectator counter at `joins`.
+ */
+function expectSeatsUnchanged(scrape: string, joins: number): void {
+  expect(sample(scrape, "spectator_joins_total")).toBe(joins);
+  expect(sample(scrape, "players_connected")).toBe(2);
+  expect(sample(scrape, "seats_held_disconnected")).toBe(0);
+  expect(sample(scrape, "seat_drops_total")).toBe(0);
+}
+
 describe("metrics", () => {
   it("a scrape after played intents shows the Rooms, connections, intents and Rejections", async () => {
     server = await startTestServer();
@@ -110,10 +122,7 @@ describe("metrics", () => {
     expect((await watching.next("game")).spectators).toBe(1);
     await expect.poll(async () => sample(await scrape(), "spectators")).toBe(1);
     const joined = await scrape();
-    expect(sample(joined, "spectator_joins_total")).toBe(1);
-    expect(sample(joined, "players_connected")).toBe(2);
-    expect(sample(joined, "seats_held_disconnected")).toBe(0);
-    expect(sample(joined, "seat_drops_total")).toBe(0);
+    expectSeatsUnchanged(joined, 1);
     expect(joined).toContain("# HELP spectators ");
     expect(joined).toContain("# TYPE spectators gauge");
     expect(joined).toContain("# HELP spectator_joins_total ");
@@ -134,10 +143,7 @@ describe("metrics", () => {
     await watching.drop();
     await expect.poll(async () => sample(await scrape(), "spectators")).toBe(0);
     const dropped = await scrape();
-    expect(sample(dropped, "spectator_joins_total")).toBe(1);
-    expect(sample(dropped, "players_connected")).toBe(2);
-    expect(sample(dropped, "seats_held_disconnected")).toBe(0);
-    expect(sample(dropped, "seat_drops_total")).toBe(0);
+    expectSeatsUnchanged(dropped, 1);
 
     const leaving = await server.join(alice.code, { watch: true });
     await leaving.next("game");
@@ -145,10 +151,36 @@ describe("metrics", () => {
     await leaving.leave();
     await expect.poll(async () => sample(await scrape(), "spectators")).toBe(0);
     const left = await scrape();
-    expect(sample(left, "spectator_joins_total")).toBe(2);
-    expect(sample(left, "players_connected")).toBe(2);
-    expect(sample(left, "seats_held_disconnected")).toBe(0);
-    expect(sample(left, "seat_drops_total")).toBe(0);
+    expectSeatsUnchanged(left, 2);
+  });
+
+  it("sums the spectators across Rooms, and one leaving drops the sum by one", async () => {
+    server = await startTestServer();
+    const first = await server.create({ maxPlayers: 2 });
+    const second = await server.create({ maxPlayers: 2 });
+    const firstGuest = await server.join(first.code);
+    const secondGuest = await server.join(second.code);
+    await firstGuest.until("lobby", (l) => l.seats.length === 2);
+    await secondGuest.until("lobby", (l) => l.seats.length === 2);
+    first.send({ type: "Start" });
+    second.send({ type: "Start" });
+    await first.next("game");
+    await second.next("game");
+
+    const watchingFirst = [
+      await server.join(first.code, { watch: true }),
+      await server.join(first.code, { watch: true }),
+    ];
+    const watchingSecond = [await server.join(second.code, { watch: true })];
+    const watching = [...watchingFirst, ...watchingSecond];
+
+    const scrape = () => server!.metrics.scrape();
+    await expect.poll(async () => sample(await scrape(), "spectators")).toBe(watching.length);
+
+    const leaver = watchingSecond[0]!;
+    await leaver.leave();
+    await expect.poll(async () => sample(await scrape(), "spectators")).toBe(watching.length - 1);
+    expect(sample(await scrape(), "spectator_joins_total")).toBe(watching.length);
   });
 });
 

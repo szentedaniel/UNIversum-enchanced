@@ -52,11 +52,10 @@ timing arithmetic (ADR-0004).
   `["bankrupt", "gameEnd"]` by range.
 - `apps/web/test/cue-sync.test.ts`'s `the game-end cues` describe drives
   `{ seq, eventsReached }` frames 0 → 1 → 2 for the order, then a real
-  `playbackOfPush` of the same push: `bankrupt` at the push's first frame, and
-  `gameEnd` at the `GameEnded` step's start, where `bottomSlot` is still
-  `none`; the first boundary whose `bottomSlot` is `podium` adds no cue. It
-  builds the game-over view from `playback-fixtures.ts`'s
-  `viewOf`/`playersWithCash` and imports `bottomSlot` from
-  `#decision/decision.ts`.
+  `playbackOfPush`: one frame at the Playback's end jumps 0 → 2 and plays
+  `bankrupt` then `gameEnd` from that frame alone, while `gameEnd` plays at the
+  `GameEnded` step's start and never on a later frame after the Playback ends.
+  Both cue tests share the `BANKRUPT_END()` fixture in
+  `playback-fixtures.ts`; the game-over view and `bottomSlot` are not involved.
 - `apps/web/test/sound.test.ts` iterates `CUES`, so the two new cues need no
   edit there: it unlocks `3 * Object.keys(CUES).length` elements.
