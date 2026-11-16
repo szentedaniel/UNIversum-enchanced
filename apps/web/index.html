@@ -69,14 +69,16 @@
       </div>
     </section>
     <script>
-      // Vite 8 targets Chrome/Edge 111+, Firefox 114+, Safari/iOS 16.4+. A browser
-      // below that baseline gets the notice above instead of a broken page; this
-      // runs before the module bundle, which such a browser may not parse.
+      // Vite 8 targets Chrome/Edge 111+, Firefox 114+, Safari/iOS 16.4+, but the
+      // bundle calls `Array.prototype.toSorted`, so the effective floor is Firefox
+      // 115. A browser below it gets the notice above instead of a broken page;
+      // this runs before the module bundle, which such a browser may not parse.
       (function () {
         var supported = true;
         try {
           supported =
             typeof Array.prototype.at === "function" &&
+            typeof Array.prototype.toSorted === "function" &&
             typeof Object.hasOwn === "function" &&
             typeof String.prototype.replaceAll === "function" &&
             typeof structuredClone === "function" &&
