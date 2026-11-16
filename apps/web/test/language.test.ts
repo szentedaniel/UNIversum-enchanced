@@ -13,12 +13,19 @@ async function startLanguage(saved: string | null, languages: readonly string[])
     getItem: (key: string) => storage.get(key) ?? null,
     setItem: (key: string, value: string) => storage.set(key, value),
   });
+  // The runtime derives `isServer` from Vite's `import.meta.env.SSR` first, and
+  // Vitest transforms every module for SSR: without this a page load would look
+  // like a server render and no browser strategy (saved choice, language) runs.
+  vi.stubEnv("SSR", false);
+  // The locale is resolved once, when the module loads, so it must load after
+  // the stubs: a static import would be evaluated at the top of the file.
   vi.resetModules();
   const { getLocale } = await import("#paraglide/runtime.js");
   return getLocale();
 }
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
 
