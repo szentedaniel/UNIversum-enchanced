@@ -12,6 +12,8 @@ class FakeAudio {
   volume = 1;
   muted = false;
   loop = false;
+  /** Whether a play is running: `pause()` stops it, as the element's own flag does. */
+  paused = true;
   plays = 0;
   pauses = 0;
   src: string;
@@ -26,12 +28,14 @@ class FakeAudio {
    */
   play(): Promise<void> {
     this.plays += 1;
+    this.paused = false;
     const play = Promise.withResolvers<void>();
     FakeAudio.pending.push(play.resolve);
     return play.promise;
   }
   pause(): void {
     this.pauses += 1;
+    this.paused = true;
     this.fire("pause");
   }
   addEventListener(type: string, listener: () => void): void {
@@ -371,8 +375,10 @@ describe("the background music", () => {
     await settle();
 
     expect(musicSound()?.loop).toBe(true);
-    // The unlock's silent play, then the music itself.
+    // The unlock's silent play, then the music itself: the unlock's pause has
+    // already landed, so the track is running.
     expect(musicSound()?.plays).toBe(2);
+    expect(musicSound()?.paused).toBe(false);
   });
 
   it("is unlocked but silent when the music is off", async () => {
@@ -418,6 +424,9 @@ describe("the background music", () => {
     // The music only: the cues stay unloaded until the effects come on too.
     expect(FakeAudio.instances.map((sound) => sound.src)).toEqual([musicFile]);
     expect(musicSound()?.plays).toBe(2);
+    // The tap's silent unlock comes before the music's play, so its pause
+    // cannot stop the track.
+    expect(musicSound()?.paused).toBe(false);
   });
 
   it("pauses when turned off and resumes when turned on again", async () => {
