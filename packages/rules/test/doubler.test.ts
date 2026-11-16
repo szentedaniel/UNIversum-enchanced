@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { publicView, SYSTEM, type GameState } from "#index.ts";
+import { doublersOn } from "#rules/pricing.ts";
 import {
   accept,
   deadlineOf,
@@ -221,6 +222,16 @@ describe("Doubler Rent", () => {
     expect(player(landed.state, "p1").bankrupt).toBe(true);
     expect(landed.state.doubler).toBeNull();
     expect(landed.state.fields[BUDAPEST]).toEqual({ owner: null, level: 0 });
+  });
+});
+
+describe("the Doubler count on a Field", () => {
+  it("R61: the count is the Doubler's own Field's, 0 elsewhere and with no Doubler", () => {
+    const state: GameState = { ...newGame({ players: 2 }), doubler: { field: BUDAPEST, count: 2 } };
+
+    expect(doublersOn(state, BUDAPEST)).toBe(2);
+    expect(doublersOn(state, BERLIN)).toBe(0);
+    expect(doublersOn(newGame({ players: 2 }), BUDAPEST)).toBe(0);
   });
 });
 

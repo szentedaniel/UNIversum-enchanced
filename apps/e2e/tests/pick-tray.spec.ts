@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { closeAfterDump, fieldCenter, startGame, test } from "./helpers.ts";
+import { closeAfterDump, fieldCenter, fieldView, startGame, test } from "./helpers.ts";
 
 // The single-pick tray (#31): the Doubler and Erasmus. A random game can't be
 // steered into either corner, so the test shows a made-up view through the
@@ -26,53 +26,23 @@ async function tapField(page: Page, isMobile: boolean, id: number) {
 /** This Guest is choosing: the view lists `fields`, the view carries their effect. */
 function showPick(page: Page, pickKind: "doubler" | "erasmus") {
   return page.evaluate(
-    ({ kind, fields }) => {
+    ({ kind, fields, views }) => {
       const hooks = window.universumTest!;
       const { me, push } = hooks.room();
       const view = structuredClone(push!.view);
       view.currentPlayer = me!;
-      const own = (id: number, level: number, rent: number) => {
-        view.fields[id] = {
-          owner: me,
-          level,
-          value: 0,
-          rent,
-          sale: 0,
-          levelRents: [],
-          basePrice: 0,
-          doublers: 0,
-        };
-      };
       if (kind === "doubler") {
         view.phase = { kind: "placingDoubler", fields: [fields.budapest, fields.berlin] };
-        own(fields.budapest, 1, 121_000);
-        own(fields.berlin, 4, 880_000);
+        view.fields[fields.budapest] = { ...views.budapest, owner: me };
+        view.fields[fields.berlin] = { ...views.berlin, owner: me };
         view.pickOptions = [
           { kind: "doubler", field: fields.budapest, rent: 121_000, rentAfter: 242_000 },
           { kind: "doubler", field: fields.berlin, rent: 880_000, rentAfter: 1_760_000 },
         ];
       } else {
         view.phase = { kind: "choosingErasmus", fields: [fields.london, fields.museum4] };
-        view.fields[fields.london] = {
-          owner: null,
-          level: 0,
-          value: 0,
-          rent: 0,
-          sale: 0,
-          levelRents: [],
-          basePrice: 0,
-          doublers: 0,
-        };
-        view.fields[fields.museum4] = {
-          owner: null,
-          level: 0,
-          value: 0,
-          rent: 0,
-          sale: 0,
-          levelRents: [],
-          basePrice: 0,
-          doublers: 0,
-        };
+        view.fields[fields.london] = views.london;
+        view.fields[fields.museum4] = views.museum4;
         view.pickOptions = [
           { kind: "erasmus", field: fields.london, steps: 29, passesStart: true, bonus: 250_000 },
           { kind: "erasmus", field: fields.museum4, steps: 4, passesStart: false, bonus: null },
@@ -88,6 +58,12 @@ function showPick(page: Page, pickKind: "doubler" | "erasmus") {
     {
       kind: pickKind,
       fields: { budapest: BUDAPEST, berlin: BERLIN, london: LONDON, museum4: MUSEUM_4 },
+      views: {
+        budapest: fieldView({ level: 1, rent: 121_000 }),
+        berlin: fieldView({ level: 4, rent: 880_000 }),
+        london: fieldView(),
+        museum4: fieldView(),
+      },
     },
   );
 }

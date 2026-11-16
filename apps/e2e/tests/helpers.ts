@@ -18,6 +18,7 @@ import {
   playbackOf,
   type ChanceCardId,
   type Deal,
+  type FieldView,
   type GameEvent,
   type PhaseOf,
   type PublicView,
@@ -317,6 +318,25 @@ export async function tapField(actor: Interactor, field: number): Promise<void> 
 export type ChanceEffect = { type: "ChanceMoneyReceived" | "ChanceChargePaid"; amount: number };
 
 /**
+ * A Field as the screens show it, every number zeroed: the starting point a
+ * made-up push patches or stands whole. Each call owns its `levelRents` array
+ * (ADR-0005), so never hoist one Field across Fields.
+ */
+export function fieldView(patch: Partial<FieldView> = {}): FieldView {
+  return {
+    owner: null,
+    level: 0,
+    value: 0,
+    rent: 0,
+    sale: 0,
+    levelRents: [],
+    basePrice: 0,
+    doublers: 0,
+    ...patch,
+  };
+}
+
+/**
  * Shows a made-up push that drew the given Chance card, as if the server had
  * just sent it (#52). The server's clock lets the decision open at once, so
  * only the push's local Playback (the card, 7 s) holds it shut; `effects` are
@@ -355,53 +375,23 @@ const PICK_FIELDS = { budapest: 2, berlin: 15, london: 21, museum4: 28 } as cons
  */
 export function showPick(page: Page, kind: "doubler" | "erasmus"): Promise<void> {
   return page.evaluate(
-    ({ pickKind, fields }) => {
+    ({ pickKind, fields, views }) => {
       const hooks = window.universumTest!;
       const { me, push } = hooks.room();
       const view = structuredClone(push!.view);
       view.currentPlayer = me!;
-      const own = (id: number, level: number, rent: number) => {
-        view.fields[id] = {
-          owner: me,
-          level,
-          value: 0,
-          rent,
-          sale: 0,
-          levelRents: [],
-          basePrice: 0,
-          doublers: 0,
-        };
-      };
       if (pickKind === "doubler") {
         view.phase = { kind: "placingDoubler", fields: [fields.budapest, fields.berlin] };
-        own(fields.budapest, 1, 121_000);
-        own(fields.berlin, 4, 880_000);
+        view.fields[fields.budapest] = { ...views.budapest, owner: me };
+        view.fields[fields.berlin] = { ...views.berlin, owner: me };
         view.pickOptions = [
           { kind: "doubler", field: fields.budapest, rent: 121_000, rentAfter: 242_000 },
           { kind: "doubler", field: fields.berlin, rent: 880_000, rentAfter: 1_760_000 },
         ];
       } else {
         view.phase = { kind: "choosingErasmus", fields: [fields.london, fields.museum4] };
-        view.fields[fields.london] = {
-          owner: null,
-          level: 0,
-          value: 0,
-          rent: 0,
-          sale: 0,
-          levelRents: [],
-          basePrice: 0,
-          doublers: 0,
-        };
-        view.fields[fields.museum4] = {
-          owner: null,
-          level: 0,
-          value: 0,
-          rent: 0,
-          sale: 0,
-          levelRents: [],
-          basePrice: 0,
-          doublers: 0,
-        };
+        view.fields[fields.london] = views.london;
+        view.fields[fields.museum4] = views.museum4;
         view.pickOptions = [
           { kind: "erasmus", field: fields.london, steps: 29, passesStart: true, bonus: 250_000 },
           { kind: "erasmus", field: fields.museum4, steps: 4, passesStart: false, bonus: null },
@@ -414,7 +404,16 @@ export function showPick(page: Page, kind: "doubler" | "erasmus"): Promise<void>
       view.turnTimer = { endsAt: view.turnDeadline - 3_000, limitMs: 20_000 };
       hooks.showView(view);
     },
-    { pickKind: kind, fields: PICK_FIELDS },
+    {
+      pickKind: kind,
+      fields: PICK_FIELDS,
+      views: {
+        budapest: fieldView({ level: 1, rent: 121_000 }),
+        berlin: fieldView({ level: 4, rent: 880_000 }),
+        london: fieldView(),
+        museum4: fieldView(),
+      },
+    },
   );
 }
 
@@ -430,7 +429,7 @@ export const SALE_FIELDS = { veszprem: 1, budapest: 2, berlin: 15, seattle: 17 }
  */
 export function showSale(page: Page, msLeft: number, otherBankrupt = false): Promise<void> {
   return page.evaluate(
-    ({ left, bankrupt, fields }) => {
+    ({ left, bankrupt, fields, views }) => {
       const hooks = window.universumTest!;
       const { me, push } = hooks.room();
       const view = structuredClone(push!.view);
@@ -442,31 +441,10 @@ export function showSale(page: Page, msLeft: number, otherBankrupt = false): Pro
         shortfall: 300_000,
         resume: { kind: "rent", amount: 400_000, owner: other.id, field: fields.seattle },
       };
-      const own = (id: number, level: number, sale: number) => {
-        view.fields[id] = {
-          owner: me,
-          level,
-          value: 0,
-          rent: 0,
-          sale,
-          levelRents: [],
-          basePrice: 0,
-          doublers: 0,
-        };
-      };
-      own(fields.veszprem, 1, 180_000);
-      own(fields.budapest, 1, 198_000);
-      own(fields.berlin, 4, 792_000);
-      view.fields[fields.seattle] = {
-        owner: other.id,
-        level: 1,
-        value: 0,
-        rent: 0,
-        sale: 0,
-        levelRents: [],
-        basePrice: 0,
-        doublers: 0,
-      };
+      view.fields[fields.veszprem] = { ...views.veszprem, owner: me };
+      view.fields[fields.budapest] = { ...views.budapest, owner: me };
+      view.fields[fields.berlin] = { ...views.berlin, owner: me };
+      view.fields[fields.seattle] = { ...views.seattle, owner: other.id };
       view.autoSell = [fields.veszprem, fields.budapest];
       // A new decision each time (fresh picks), open now, with `msLeft` on the server's clock.
       const now = hooks.serverNow();
@@ -475,7 +453,17 @@ export function showSale(page: Page, msLeft: number, otherBankrupt = false): Pro
       view.turnTimer = { endsAt: view.turnDeadline - 3_000, limitMs: 20_000 };
       hooks.showView(view);
     },
-    { left: msLeft, bankrupt: otherBankrupt, fields: SALE_FIELDS },
+    {
+      left: msLeft,
+      bankrupt: otherBankrupt,
+      fields: SALE_FIELDS,
+      views: {
+        veszprem: fieldView({ level: 1, sale: 180_000 }),
+        budapest: fieldView({ level: 1, sale: 198_000 }),
+        berlin: fieldView({ level: 4, sale: 792_000 }),
+        seattle: fieldView({ level: 1 }),
+      },
+    },
   );
 }
 
