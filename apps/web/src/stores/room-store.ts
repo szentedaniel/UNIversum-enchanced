@@ -199,14 +199,20 @@ export function reset(): void {
 }
 
 /**
+ * Whether this client watches the Room without a Seat (spec #179): the one
+ * read of the role the screens and the intent guard make.
+ */
+export const isSpectator = (state: RoomState): boolean => state.role === "spectator";
+
+/**
  * This client as a Player: its own public id, or `null` for a spectator. A
- * watcher holds no Seat, so every Player-only read — a Decision, the
+ * spectator holds no Seat, so every Player-only read — a Decision, the
  * quick-chat tray, the "your Turn" heading, the rematch vote — takes its
  * `null` from here and not from `me` alone (spec #179, decision 4: the Room
  * enforces read-only; the screen only stops offering controls).
  */
 export const seatedMeOf = (state: RoomState): PlayerId | null =>
-  state.role === "spectator" ? null : state.me;
+  isSpectator(state) ? null : state.me;
 
 /**
  * Whether the Room's latest news is its Lobby, not a game: `receiveLobby`

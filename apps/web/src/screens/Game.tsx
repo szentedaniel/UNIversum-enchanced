@@ -20,6 +20,7 @@ import {
 } from "#components/PlayerCard.tsx";
 import { Podium } from "#components/Podium.tsx";
 import { SpectatorChip } from "#components/SpectatorChip.tsx";
+import { WatchingMark } from "#components/WatchingMark.tsx";
 import { buttonVariants } from "#components/ui/button.tsx";
 import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ensureJoined, JoinError } from "#connection.ts";
@@ -34,7 +35,7 @@ import { TurnCard } from "#screens/TurnCard.tsx";
 import { TurnRing } from "#screens/TurnRing.tsx";
 import { chatMuteStore } from "#stores/chat-mute-store.ts";
 import { hintStore } from "#stores/hint-store.ts";
-import { inFlightOf, inLobbyOf, roomStore, seatedMeOf } from "#stores/room-store.ts";
+import { inFlightOf, inLobbyOf, isSpectator, roomStore, seatedMeOf } from "#stores/room-store.ts";
 import { uiStore } from "#stores/ui-store.ts";
 import { formatCompactMoney, formatMoney, m, playerName, rejectionText } from "#text.ts";
 
@@ -44,7 +45,7 @@ export function Game() {
   // This client as a Player: a spectator has no id, so every Player-only
   // control below falls away from this one answer (spec #179).
   const seatedMe = useStore(roomStore, seatedMeOf);
-  const watching = useStore(roomStore, (s) => s.role === "spectator");
+  const watching = useStore(roomStore, isSpectator);
   // How many Guests watch the Room, from the latest push (spec #179, decision 7).
   const spectators = useStore(roomStore, (s) => s.spectators);
   const status = useStore(roomStore, (s) => s.status);
@@ -160,14 +161,7 @@ export function Game() {
   const statusRow = (
     <>
       {/* A spectator's one badge (spec #179): the screen is read-only, and says so. */}
-      {watching && (
-        <span
-          data-testid="watching"
-          className="sticker-sm shrink-0 rounded-full bg-card px-2 py-1 text-xs font-black text-card-foreground"
-        >
-          {m.watching()}
-        </span>
-      )}
+      {watching && <WatchingMark />}
       <SpectatorChip count={spectators} />
       <MinutePill endsAt={view.endsAt} clockOffset={clockOffset} />
       <EventToast

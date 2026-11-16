@@ -88,7 +88,7 @@ function wake(): void {
  * Whether `push` restates the very view `current` was built from: no events, the
  * same `version`, and the same view field for field. The server's count-only push
  * re-sends the state it holds (spec #179, ticket #249), so the running Playback
- * and its timer stay: a watcher's join replays nothing and opens no decision
+ * and its timer stay: a spectator's join replays nothing and opens no decision
  * early. A made-up view the e2e hooks show is a changed view with no events, and
  * it must rebuild the Playback, so the version alone is not the test — the views
  * are JSON by construction, and one serialization compares every field.

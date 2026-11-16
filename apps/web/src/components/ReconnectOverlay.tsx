@@ -10,7 +10,7 @@ import { useStore } from "zustand";
 import { Button } from "#components/ui/button.tsx";
 import { Card } from "#components/ui/card.tsx";
 import { leaveRoom } from "#connection.ts";
-import { roomStore } from "#stores/room-store.ts";
+import { isSpectator, roomStore } from "#stores/room-store.ts";
 import { m } from "#text.ts";
 
 /** How long the overlay waits before it offers "back to home" while reconnecting. */
@@ -20,7 +20,7 @@ export function ReconnectOverlay() {
   const status = useStore(roomStore, (s) => s.status);
   const takenElsewhere = useStore(roomStore, (s) => s.takenElsewhere);
   // A spectator holds no Seat (spec #179): only a Player is promised one back.
-  const spectator = useStore(roomStore, (s) => s.role === "spectator");
+  const spectator = useStore(roomStore, isSpectator);
   if (status === "reconnecting") {
     return <Overlay key="reconnecting" reconnecting seatKept={!spectator} />;
   }

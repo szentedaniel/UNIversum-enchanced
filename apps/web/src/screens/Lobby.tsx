@@ -8,11 +8,12 @@ import { ReconnectOverlay } from "#components/ReconnectOverlay.tsx";
 import { ScreenHeader } from "#components/ScreenHeader.tsx";
 import { SeatCard } from "#components/SeatCard.tsx";
 import { SpectatorChip } from "#components/SpectatorChip.tsx";
+import { WatchingMark } from "#components/WatchingMark.tsx";
 import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { ensureJoined, JoinError, joinRoom, sendIntent } from "#connection.ts";
 import { inviteLink } from "#invite.ts";
 import { PasswordForm, RejectionText, retryAtOf, useCountdown, useJoin } from "#screens/join.tsx";
-import { roomStore, seatedMeOf } from "#stores/room-store.ts";
+import { isSpectator, roomStore, seatedMeOf } from "#stores/room-store.ts";
 import { formatMoney, m, playerName, roomNameText } from "#text.ts";
 
 const COPIED_MS = 1500;
@@ -99,31 +100,19 @@ function HeldCountdown({ until, clockOffset }: { until: number; clockOffset: num
   );
 }
 
-/** A watcher's one badge (spec #179): the Room's Lobby is read-only for it. */
-function WatchingMark() {
-  return (
-    <span
-      data-testid="watching"
-      className="sticker-sm shrink-0 rounded-full bg-card px-2 py-1 text-xs font-black text-card-foreground"
-    >
-      {m.watching()}
-    </span>
-  );
-}
-
 export function Lobby() {
   const { code = "" } = useParams();
   const navigate = useNavigate();
   const lobby = useStore(roomStore, (s) => (s.code === code ? s.lobby : null));
-  // This client as a Player: `null` for a watcher, so no Seat reads as its own.
+  // This client as a Player: `null` for a spectator, so no Seat reads as its own.
   const me = useStore(roomStore, seatedMeOf);
   const clockOffset = useStore(roomStore, (s) => s.lobbyClockOffset);
   const started = useStore(roomStore, (s) => s.code === code && s.push !== null);
   // How many Guests watch the Room, from the latest Lobby message (spec #179).
   const spectators = useStore(roomStore, (s) => s.spectators);
-  // A watcher holds no Seat (spec #179): it reads the Lobby, presses nothing,
+  // A spectator holds no Seat (spec #179): it reads the Lobby, presses nothing,
   // and the Game screen opens with the first push (the `started` navigation).
-  const spectator = useStore(roomStore, (s) => s.role === "spectator");
+  const spectator = useStore(roomStore, isSpectator);
   const [error, setError] = useState<RejectionCode | null>(null);
   const [retryAt, setRetryAt] = useState<number | null>(null);
   const wait = useCountdown(retryAt);
@@ -251,7 +240,7 @@ export function Lobby() {
               }
             />
           ))}
-          {/* A watcher sees the taken Seats only: an open Seat is something to take. */}
+          {/* A spectator sees the taken Seats only: an open Seat is something to take. */}
           {!spectator &&
             open.map((i) => (
               // A Bot takes the next empty Seat, so only the first open card offers it.
