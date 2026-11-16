@@ -2,7 +2,7 @@ import type { GameEvent } from "@universum/rules";
 import { describe, expect, it } from "vitest";
 import { EVENT_PRESENTATION } from "#playback/presentation.ts";
 import { CUES, EVENT_CUES, cuesReached, type CueName } from "#sound/cues.ts";
-import { CHANCE, ROLL, TIMEOUT } from "./playback-fixtures.ts";
+import { BANKRUPT_END, CHANCE, ROLL, TIMEOUT } from "./playback-fixtures.ts";
 
 // The cue table (spec #178): one exhaustive row per event type saying which
 // sound it starts, or an explicit silence. A new event type fails to compile
@@ -121,10 +121,7 @@ describe("cuesReached", () => {
   });
 
   it("plays Bankrupt and the game's end in their step order", () => {
-    const events: readonly GameEvent[] = [
-      { type: "WentBankrupt", player: "p1", fields: [3, 4] },
-      { type: "GameEnded", winner: "p2", reason: "lastPlayer" },
-    ];
+    const events = BANKRUPT_END();
 
     expect(cuesReached(events, 0, 1)).toEqual(["bankrupt"]);
     expect(cuesReached(events, 1, 2)).toEqual(["gameEnd"]);
