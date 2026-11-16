@@ -7,7 +7,13 @@ import {
 } from "@universum/protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BOT_ONLY_RETENTION_MS } from "#room/game-driver.ts";
-import { eventually, newGuestToken, startTestServer, type TestServer } from "./helpers.ts";
+import {
+  eventually,
+  newGuestToken,
+  startTestServer,
+  type TestClient,
+  type TestServer,
+} from "./helpers.ts";
 
 let server: TestServer;
 
@@ -34,6 +40,14 @@ async function refusal(attempt: Promise<unknown>): Promise<RejectionCode> {
 /** A client asking to enter `code` as a spectator (spec #179). */
 const watch = (code: string, options: { password?: string; guestToken?: string } = {}) =>
   server.join(code, { watch: true, ...options });
+
+/** Takes every queued Lobby message: a running game sends none, so a later one is news. */
+async function drainLobby(client: TestClient): Promise<void> {
+  while (client.pending("lobby").length > 0) {
+    // oxlint-disable-next-line no-await-in-loop -- queued messages are taken one after another
+    await client.next("lobby");
+  }
+}
 
 /** A started 2-Guest game: the first Decision is open and both have its view. */
 async function startedGame(settings: Partial<RoomSettings> = {}) {
@@ -179,6 +193,50 @@ describe("the spectator count", () => {
     await spectator.drop();
 
     await eventually(() => expect(alice.pending("lobby").at(-1)?.spectators).toBe(0));
+  });
+
+  it("does not move for a spectator's chat or refused intent in a running game", async () => {
+    const { alice, bob, first, code } = await startedGame();
+    const spectator = await watch(code);
+    await spectator.next("game");
+    await Promise.all([alice.next("game"), bob.next("game")]); // the join's count-only push
+    // The Lobby messages before the Start are stale: only a new one would be news.
+    await Promise.all([alice, bob, spectator].map(drainLobby));
+
+    // A spectator's chat is out of scope (spec #179): the Room ignores it
+    // silently, so no `rejected` answers it and nobody hears it.
+    spectator.sendChat({ id: "good_luck" });
+    // A refused intent is answered to its sender alone.
+    spectator.send({ type: "Roll", turn: first.view.turn });
+
+    // The chat's silence is known once the intent sent behind it is answered.
+    expect(await spectator.next("rejected")).toEqual({ code: "SPECTATOR_READ_ONLY" });
+    for (const client of [alice, bob, spectator]) {
+      expect(client.pending("game")).toEqual([]);
+      expect(client.pending("lobby")).toEqual([]);
+      expect(client.pending("chat")).toEqual([]);
+    }
+    expect(spectator.pending("rejected")).toEqual([]);
+  });
+
+  it("does not move for a spectator's chat or refused intent in a Lobby", async () => {
+    const alice = await server.create({ maxPlayers: 2 });
+    await alice.next("lobby");
+    const spectator = await watch(alice.code);
+    await spectator.next("lobby");
+    await alice.next("lobby"); // the join's count-only push
+
+    spectator.sendChat({ id: "good_luck" });
+    spectator.send({ type: "Start" });
+
+    expect(await spectator.next("rejected")).toEqual({ code: "SPECTATOR_READ_ONLY" });
+    for (const client of [alice, spectator]) {
+      expect(client.pending("lobby")).toEqual([]);
+      expect(client.pending("game")).toEqual([]);
+      expect(client.pending("chat")).toEqual([]);
+    }
+    expect(spectator.pending("rejected")).toEqual([]);
+    expect(server.room(alice.code)?.game).toBeNull();
   });
 });
 
