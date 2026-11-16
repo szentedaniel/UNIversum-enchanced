@@ -100,7 +100,7 @@ The moment the next decision opens, once the Playback before it has ended; the d
 _Avoid_: Playback over, unlock
 
 **Hint**:
-A short, one-time note beside a concept a first-time Guest meets — an Offer, Quarantine, the Doubler or Erasmus pick, a Sale, or the game end — with a dismiss button; it never blocks the Decision, and the browser remembers the ones the Guest dismissed.
+A short, one-time note beside a concept a first-time Guest meets — an Offer, Quarantine, the Doubler or Erasmus pick, a Sale, or the game end — with a dismiss button; it never blocks the Decision, and the browser remembers the ones the Guest dismissed. The Game menu has a switch that turns hints off and on, and a list of every hint to re-read with a reset that makes the dismissed ones appear again.
 _Avoid_: Tooltip, tutorial, tip
 
 **Event log**:
