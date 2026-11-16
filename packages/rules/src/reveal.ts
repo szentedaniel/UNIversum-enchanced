@@ -12,6 +12,7 @@
 import type { FieldId } from "#board.ts";
 import {
   basePriceOf,
+  doublersOn,
   levelRentsOf,
   rentOf,
   saleValueOf,
@@ -74,7 +75,7 @@ export function revealOf(state: GameState): Reveal {
       sale: saleValueOf(state, id),
       levelRents: levelRentsOf(state, id),
       basePrice: basePriceOf(id),
-      doublers: state.doubler?.field === id ? state.doubler.count : 0,
+      doublers: doublersOn(state, id),
     })),
     doubler: state.doubler && { ...state.doubler },
   };

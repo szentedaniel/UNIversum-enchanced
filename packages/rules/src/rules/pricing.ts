@@ -171,12 +171,20 @@ export function levelRentsOf(state: GameState, field: FieldId): number[] {
 }
 
 /**
+ * How many Doublers stand on `field`: the state's one Doubler's count while it
+ * is there, 0 everywhere else and with none placed (R61, F10).
+ */
+export function doublersOn(state: GameState, field: FieldId): number {
+  return state.doubler?.field === field ? state.doubler.count : 0;
+}
+
+/**
  * What a Player other than the owner pays on landing here now; 0 when unowned.
  * A Doubler multiplies plain Rent by its count + 1, without the Monopoly ×1.4
  * on a University; a Museum keeps its count multiplier (R61, F10).
  */
 export function rentOf(state: GameState, field: FieldId): number {
-  return rentWithCount(state, field, state.doubler?.field === field ? state.doubler.count : 0);
+  return rentWithCount(state, field, doublersOn(state, field));
 }
 
 /**
