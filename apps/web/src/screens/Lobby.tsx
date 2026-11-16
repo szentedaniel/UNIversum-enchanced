@@ -12,7 +12,7 @@ import { Button, buttonVariants } from "#components/ui/button.tsx";
 import { ensureJoined, JoinError, joinRoom, sendIntent } from "#connection.ts";
 import { inviteLink } from "#invite.ts";
 import { PasswordForm, RejectionText, retryAtOf, useCountdown, useJoin } from "#screens/join.tsx";
-import { roomStore, seatedMeOf } from "#stores/room-store.ts";
+import { isSpectator, roomStore, seatedMeOf } from "#stores/room-store.ts";
 import { formatMoney, m, playerName, roomNameText } from "#text.ts";
 
 const COPIED_MS = 1500;
@@ -115,15 +115,15 @@ export function Lobby() {
   const { code = "" } = useParams();
   const navigate = useNavigate();
   const lobby = useStore(roomStore, (s) => (s.code === code ? s.lobby : null));
-  // This client as a Player: `null` for a watcher, so no Seat reads as its own.
+  // This client as a Player: `null` for a spectator, so no Seat reads as its own.
   const me = useStore(roomStore, seatedMeOf);
   const clockOffset = useStore(roomStore, (s) => s.lobbyClockOffset);
   const started = useStore(roomStore, (s) => s.code === code && s.push !== null);
   // How many Guests watch the Room, from the latest Lobby message (spec #179).
   const spectators = useStore(roomStore, (s) => s.spectators);
-  // A watcher holds no Seat (spec #179): it reads the Lobby, presses nothing,
+  // A spectator holds no Seat (spec #179): it reads the Lobby, presses nothing,
   // and the Game screen opens with the first push (the `started` navigation).
-  const spectator = useStore(roomStore, (s) => s.role === "spectator");
+  const spectator = useStore(roomStore, isSpectator);
   const [error, setError] = useState<RejectionCode | null>(null);
   const [retryAt, setRetryAt] = useState<number | null>(null);
   const wait = useCountdown(retryAt);
