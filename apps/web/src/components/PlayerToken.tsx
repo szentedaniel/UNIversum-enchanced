@@ -33,17 +33,9 @@ export function PlayerToken({
 }
 
 /** A Player's token beside a line about them: the Summary's rows and the Wealth chart's list share it. */
-export function PlayerLine({
-  seat,
-  children,
-  className,
-}: {
-  seat: number;
-  children: ReactNode;
-  className?: string;
-}) {
+export function PlayerLine({ seat, children }: { seat: number; children: ReactNode }) {
   return (
-    <span className={cn("flex items-center gap-1.5", className)}>
+    <span className="flex items-center gap-1.5">
       <PlayerToken seat={seat} size={14} />
       <span>{children}</span>
     </span>
