@@ -30,15 +30,16 @@ code changed: the code diff is one Playwright spec, tested in CI only.
   `expectBoardUp`; `room().me` is `null`; two Player cards/chips.
 - `data-testid="spectators"` contains `1 spectator` on both Players' screens and
   on the spectator's own screen.
-- The spectator's Board view equals the creator's pushed view (`view()` hook).
+- The spectator's Board view equals the creator's pushed view (the shared
+  `shownView` helper, which reads the `view()` hook).
 - No intent control: no button named `Roll`, no `data-testid="deal-open"`, no
   `data-testid="offer"`, no `data-testid="sale-tray"`, no `data-testid="pick-tray"`,
   and `data-testid="turn-of"` never says `Your Turn`.
-- The Roll's Playback runs on the spectator: `playback().gateOpen` goes false,
-  the `dice` cue count rises by exactly one, then the gate opens and
-  `data-testid="offer"` is visible on the creator. The moved pawn sits on its
-  destination's `fieldCenter` (within 2 px) and the spectator's `view()` equals
-  the Roll's pushed view.
+- The Roll's Playback runs on the spectator: the shared `expectGate` helper waits
+  for `playback().gateOpen` to go false, the `dice` cue count rises by exactly
+  one, then the gate opens and `data-testid="offer"` is visible on the creator.
+  The moved pawn sits on its destination's `fieldCenter` (within 2 px) and the
+  spectator's `shownView` equals the Roll's pushed view.
 
 The Roll control has no `data-testid`, so the spec finds it by its accessible
 name (`getByRole("button", { name: "Roll", exact: true })`); the buy/offer
@@ -50,10 +51,14 @@ there is nothing to assert for it.
 - `GAME_SEED` (`playwright.config.ts`) fixes the first Roll of a 2-Guest game: the
   dice [5, 5] move the creator from Start to Field 10 and stop at a University
   offer (verified against `newGame`/`roll` with seed `4,29,55,129`). A spec that
-  changes the Seat count or the seed breaks that offer assertion.
+  changes the Seat count or the seed breaks that offer assertion. The spec asserts
+  it before the Roll (#349): `joined.currentPlayer` must equal the creator page's
+  `room().me`, with a message naming the seed's dice and Field 10.
 - The Playback waits budget with `ROLL_PLAYBACK_MS` (`playbackOf` over the
   longest Roll), per `CODING_STANDARDS.md` §E2E; the actual first Roll is only
-  `DiceRolled` + a 10-Field `Moved`.
+  `DiceRolled` + a 10-Field `Moved`. A wait after a Roll uses `ROLL_WAIT_MS`
+  (`ROLL_PLAYBACK_MS + 1_000`, the push's arrival plus the poll's interval), and
+  the gate waits use `expectGate(page, open, timeout)` (#349).
 - The password case is not covered: `createAndJoin` has no password option, and
   `apps/server/test/spectators.test.ts` already pins the password gate for a
   spectator.

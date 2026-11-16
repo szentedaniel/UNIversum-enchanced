@@ -2,9 +2,11 @@ import { expect, type Page } from "@playwright/test";
 import {
   closeAfterDump,
   dragBoard,
+  expectGate,
   fieldCenter,
   ROLL_PLAYBACK_MS,
   scale,
+  shownView,
   startGame,
   test,
 } from "./helpers.ts";
@@ -130,17 +132,16 @@ test("a tap opens the nearest Field's card, and the card never changes the zoom"
   expect(await settledScale(page)).toBeLessThan(fitted);
   await page.getByRole("button", { name: "Roll" }).click();
   // The roll ends the Turn, or stops at a University offer, declined here.
-  const view = () => page.evaluate(() => window.universumTest?.view() ?? null);
   await expect
     .poll(async () => {
-      const now = await view();
+      const now = await shownView(page);
       return now?.turn === 2 || now?.phase.kind === "offer";
     })
     .toBe(true);
-  if ((await view())?.phase.kind === "offer") {
+  if ((await shownView(page))?.phase.kind === "offer") {
     await page.getByRole("button", { name: "Decline" }).click();
   }
-  await expect.poll(async () => (await view())?.turn).toBe(2);
+  await expect.poll(async () => (await shownView(page))?.turn).toBe(2);
   await expect.poll(() => scale(page)).toBe(fitted);
 });
 
@@ -176,11 +177,7 @@ test("an owned University's card highlights its current Level among the Level Re
   // Tapping the bought Field opens its card; a tap that misses while the
   // camera settles after the Turn change is retried with a fresh centre.
   await expect(async () => {
-    await expect
-      .poll(() => page.evaluate(() => window.universumTest?.playback().gateOpen ?? false), {
-        timeout: 15_000,
-      })
-      .toBe(true);
+    await expectGate(page, true, 15_000);
     await tapAt(page, isMobile, await fieldCenter(page, offered.field));
     await expect(
       card.getByTestId("field-card-level-rents").locator('[aria-current="true"]'),

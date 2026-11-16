@@ -1,11 +1,14 @@
-import { expect, type Page } from "@playwright/test";
+import { expect } from "@playwright/test";
 import {
   closeAfterDump,
   createAndJoin,
   expectBoardUp,
+  expectGate,
   playerCards,
   registerPage,
   ROLL_PLAYBACK_MS,
+  ROLL_WAIT_MS,
+  shownView,
   startLobby,
   test,
 } from "./helpers.ts";
@@ -13,9 +16,6 @@ import {
 // Spec #179, story 1–3: a Guest without a Seat watches a running game by its
 // Room code, sees a Roll play out, and finds no control that would play a move.
 test.use({ locale: "en-US" });
-
-/** The view this client's Board last drew: the Playback's frame while it runs. */
-const shownView = (page: Page) => page.evaluate(() => window.universumTest?.view() ?? null);
 
 test("a spectator watches a Roll in step with the Playback and has no way to act", async ({
   page: creator,
@@ -80,35 +80,34 @@ test("a spectator watches a Roll in step with the Playback and has no way to act
   // The Turn card says whose Turn it is, never "Your Turn".
   await expect(spectator.getByTestId("turn-of")).not.toContainText("Your Turn");
 
+  // The e2e seed fixes this Roll: the creator rolls first, and its first Roll
+  // (dice [5, 5]) moves the creator from Start to Field 10's University.
+  const creatorSeat = await creator.evaluate(() => window.universumTest?.room().me ?? null);
   const mover = joined.currentPlayer;
+  expect(
+    mover,
+    "the creator rolls first: the e2e seed's first Roll (dice [5, 5]) is the creator's and lands on Field 10's University",
+  ).toBe(creatorSeat);
   const startPosition = joined.players.find((player) => player.id === mover)?.position;
   const diceBefore = await spectator.evaluate(() => window.universumTest?.cuePlays().dice ?? 0);
   await roll.click();
 
   // The Roll's Playback runs on the spectator's screen too: its gate is shut,
   // and its dice play before the pawn moves.
-  await expect
-    .poll(() => spectator.evaluate(() => window.universumTest?.playback().gateOpen ?? true), {
-      timeout: ROLL_PLAYBACK_MS,
-    })
-    .toBe(false);
+  await expectGate(spectator, false, ROLL_PLAYBACK_MS);
   await expect
     .poll(() => spectator.evaluate(() => window.universumTest?.cuePlays().dice ?? 0), {
-      timeout: ROLL_PLAYBACK_MS + 1_000,
+      timeout: ROLL_WAIT_MS,
     })
     .toBe(diceBefore + 1);
 
   // The e2e seed lands the first Roll on a University: the Player's buy control
   // appears once the Playback ends, the spectator's screen never has one.
-  await expect(creator.getByTestId("offer")).toBeVisible({ timeout: ROLL_PLAYBACK_MS + 1_000 });
+  await expect(creator.getByTestId("offer")).toBeVisible({ timeout: ROLL_WAIT_MS });
   await expect(spectator.getByTestId("offer")).toHaveCount(0);
   await expect(spectator.getByRole("button", { name: /^Buy/ })).toHaveCount(0);
   await expect(spectator.getByRole("button", { name: "Roll", exact: true })).toHaveCount(0);
-  await expect
-    .poll(() => spectator.evaluate(() => window.universumTest?.playback().gateOpen ?? false), {
-      timeout: ROLL_PLAYBACK_MS,
-    })
-    .toBe(true);
+  await expectGate(spectator, true, ROLL_PLAYBACK_MS);
 
   // The spectator's Board drew the move: the same final view as a Player's, the
   // pawn on the Field the dice sent it to.

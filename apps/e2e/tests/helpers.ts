@@ -33,6 +33,9 @@ const camera = (page: Page) => page.evaluate(() => window.universumTest?.camera(
 /** The Board's camera scale, 0 before the Board is up. */
 export const scale = async (page: Page) => (await camera(page))?.scale ?? 0;
 
+/** The view this client's Board last drew: the Playback's frame while it runs. */
+export const shownView = (page: Page) => page.evaluate(() => window.universumTest?.view() ?? null);
+
 /** A Field's centre on the Board, from the test-only hook. */
 export const fieldCenter = (page: Page, id: number) =>
   page.evaluate((field) => window.universumTest!.fieldCenter(field), id);
@@ -123,6 +126,12 @@ export const ROLL_PLAYBACK_MS = playbackOf([
   { type: "ChanceTransferPaid", player: "p4", payee: "p1", amount: 0 },
   { type: "RoundBonusPaid", player: "p1", amount: 0 },
 ] satisfies readonly GameEvent[]);
+
+/**
+ * A wait after a Roll's Playback: its own length plus a second of slack for the
+ * push's arrival and the poll's interval (CODING_STANDARDS §E2E).
+ */
+export const ROLL_WAIT_MS = ROLL_PLAYBACK_MS + 1_000;
 
 /** Room choices a spec makes on the Create screen; the rest stay on the defaults. */
 export type RoomChoices = { turnLimitMs?: 10_000 | 20_000 | 30_000 };
@@ -265,6 +274,17 @@ export function ownFields(view: PublicView, player: string): number[] {
 }
 
 /**
+ * Waits until the Board's Playback gate is `open` (`timeout` budgets its
+ * length). A missing hook counts as neither state, so the poll waits for the
+ * Board instead of passing before it draws.
+ */
+export async function expectGate(page: Page, open: boolean, timeout: number): Promise<void> {
+  await expect
+    .poll(() => page.evaluate(() => window.universumTest?.playback().gateOpen ?? null), { timeout })
+    .toBe(open);
+}
+
+/**
  * Taps a Field through the test-only `fieldCenter` hook and waits until the
  * pick took effect. The Decision gate must be open first: the dice and a
  * Chance card overlay the Board for their own steps, and a tap right after a
@@ -272,11 +292,7 @@ export function ownFields(view: PublicView, player: string): number[] {
  */
 export async function tapField(actor: Interactor, field: number): Promise<void> {
   await expect(async () => {
-    await expect
-      .poll(() => actor.page.evaluate(() => window.universumTest?.playback().gateOpen ?? false), {
-        timeout: PLAYBACK_MS.CardDrawn,
-      })
-      .toBe(true);
+    await expectGate(actor.page, true, PLAYBACK_MS.CardDrawn);
     const point = await actor.page.evaluate(
       (id) => window.universumTest?.fieldCenter(id) ?? null,
       field,
