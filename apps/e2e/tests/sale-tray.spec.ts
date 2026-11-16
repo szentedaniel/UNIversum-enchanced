@@ -3,6 +3,7 @@ import { PLAYBACK_MS } from "@universum/rules";
 import {
   closeAfterDump,
   fieldCenter,
+  fieldView,
   playerCards,
   scale,
   showChance,
@@ -40,7 +41,7 @@ async function tapField(page: Page, isMobile: boolean, id: number) {
 /** This Guest owes Seattle's Rent: a Sale for a 300,000 Shortfall, with `msLeft` on the timer. */
 function showSale(page: Page, msLeft: number, otherBankrupt = false) {
   return page.evaluate(
-    ({ left, bankrupt, fields }) => {
+    ({ left, bankrupt, fields, views }) => {
       const hooks = window.universumTest!;
       const { me, push } = hooks.room();
       const view = structuredClone(push!.view);
@@ -52,31 +53,10 @@ function showSale(page: Page, msLeft: number, otherBankrupt = false) {
         shortfall: 300_000,
         resume: { kind: "rent", amount: 400_000, owner: other.id, field: fields.seattle },
       };
-      const own = (id: number, level: number, sale: number) => {
-        view.fields[id] = {
-          owner: me,
-          level,
-          value: 0,
-          rent: 0,
-          sale,
-          levelRents: [],
-          basePrice: 0,
-          doublers: 0,
-        };
-      };
-      own(fields.veszprem, 1, 180_000);
-      own(fields.budapest, 1, 198_000);
-      own(fields.berlin, 4, 792_000);
-      view.fields[fields.seattle] = {
-        owner: other.id,
-        level: 1,
-        value: 0,
-        rent: 0,
-        sale: 0,
-        levelRents: [],
-        basePrice: 0,
-        doublers: 0,
-      };
+      view.fields[fields.veszprem] = { ...views.veszprem, owner: me };
+      view.fields[fields.budapest] = { ...views.budapest, owner: me };
+      view.fields[fields.berlin] = { ...views.berlin, owner: me };
+      view.fields[fields.seattle] = { ...views.seattle, owner: other.id };
       view.autoSell = [fields.veszprem, fields.budapest];
       // A new decision each time (fresh picks), open now, with `msLeft` on the server's clock.
       const now = hooks.serverNow();
@@ -89,6 +69,12 @@ function showSale(page: Page, msLeft: number, otherBankrupt = false) {
       left: msLeft,
       bankrupt: otherBankrupt,
       fields: { veszprem: VESZPREM, budapest: BUDAPEST, berlin: BERLIN, seattle: SEATTLE },
+      views: {
+        veszprem: fieldView({ level: 1, sale: 180_000 }),
+        budapest: fieldView({ level: 1, sale: 198_000 }),
+        berlin: fieldView({ level: 4, sale: 792_000 }),
+        seattle: fieldView({ level: 1 }),
+      },
     },
   );
 }

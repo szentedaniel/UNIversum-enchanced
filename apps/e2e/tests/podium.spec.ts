@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
-import { closeAfterDump, startGame, test } from "./helpers.ts";
+import { FIELDS } from "@universum/rules";
+import { closeAfterDump, fieldView, startGame, test } from "./helpers.ts";
 
 // The result screen (#32), on each project's device. A random game can't be
 // played to its end quickly, so the test shows a made-up game-over view through
@@ -15,100 +16,94 @@ test.use({ locale: "en-US" });
  * proves the server's winner comes first.
  */
 function showGameOver(page: Page) {
-  return page.evaluate(() => {
-    const hooks = window.universumTest!;
-    const view = structuredClone(hooks.room().push!.view);
-    view.players = [
-      {
-        id: "p1",
-        seat: 0,
-        name: { adjective: "brave", noun: "bear" },
-        cash: 2_000_000,
-        wealth: 2_000_000,
-        position: 0,
-        bankrupt: false,
-        quarantineRounds: null,
-        hasPcrTest: false,
-        bot: false,
-      },
-      {
-        id: "p2",
-        seat: 1,
-        name: { adjective: "calm", noun: "wolf" },
-        cash: 500_000,
-        wealth: 3_000_000,
-        position: 0,
-        bankrupt: false,
-        quarantineRounds: null,
-        hasPcrTest: false,
-        bot: false,
-      },
-      {
-        id: "p3",
-        seat: 2,
-        name: { adjective: "busy", noun: "beaver" },
-        cash: 0,
-        wealth: 0,
-        position: 0,
-        bankrupt: true,
-        quarantineRounds: null,
-        hasPcrTest: false,
-        bot: false,
-      },
-      {
-        id: "p4",
-        seat: 3,
-        name: { adjective: "happy", noun: "tiger" },
-        cash: 4_100_000,
-        wealth: 4_100_000,
-        position: 0,
-        bankrupt: false,
-        quarantineRounds: null,
-        hasPcrTest: false,
-        bot: true,
-      },
-    ];
-    view.fields = view.fields.map(() => ({
-      owner: null,
-      level: 0,
-      value: 0,
-      rent: 0,
-      sale: 0,
-      levelRents: [],
-      basePrice: 0,
-      doublers: 0,
-    }));
-    view.currentPlayer = "p4";
-    view.phase = { kind: "gameOver", winner: "p4", reason: "timeUp" };
-    view.actsAfter = hooks.serverNow();
-    view.turnDeadline = null;
-    view.turnTimer = null;
-    // What the server's publicView carries at gameOver: winner first, then
-    // Wealth, the Bankrupt Player last (R80).
-    view.standings = [
-      { player: "p4", wealth: 4_100_000 },
-      { player: "p2", wealth: 3_000_000 },
-      { player: "p1", wealth: 2_000_000 },
-      { player: "p3", wealth: 0 },
-    ];
-    // The final Summary (spec #177): the counted figures and the Wealth
-    // series, from which the chart draws one line per Player.
-    view.summary = {
-      biggestRent: { payer: "p1", owner: "p4", field: 19, amount: 1_200_000 },
-      fieldsBought: { p1: 3, p2: 1, p4: 5 },
-      monopolies: [
-        { player: "p4", group: 1 },
-        { player: "p2", group: 3 },
-      ],
-      bankruptcies: ["p3"],
-      series: [
-        { minute: 0, wealth: { p1: 2_500_000, p2: 2_500_000, p3: 2_500_000, p4: 2_500_000 } },
-        { minute: 6, wealth: { p1: 2_200_000, p2: 2_900_000, p3: 1_500_000, p4: 3_200_000 } },
-        { minute: 12, wealth: { p1: 2_000_000, p2: 3_000_000, p3: 0, p4: 4_100_000 } },
-      ],
-    };
-    hooks.showView(view);
-  });
+  return page.evaluate(
+    ({ fields }) => {
+      const hooks = window.universumTest!;
+      const view = structuredClone(hooks.room().push!.view);
+      view.players = [
+        {
+          id: "p1",
+          seat: 0,
+          name: { adjective: "brave", noun: "bear" },
+          cash: 2_000_000,
+          wealth: 2_000_000,
+          position: 0,
+          bankrupt: false,
+          quarantineRounds: null,
+          hasPcrTest: false,
+          bot: false,
+        },
+        {
+          id: "p2",
+          seat: 1,
+          name: { adjective: "calm", noun: "wolf" },
+          cash: 500_000,
+          wealth: 3_000_000,
+          position: 0,
+          bankrupt: false,
+          quarantineRounds: null,
+          hasPcrTest: false,
+          bot: false,
+        },
+        {
+          id: "p3",
+          seat: 2,
+          name: { adjective: "busy", noun: "beaver" },
+          cash: 0,
+          wealth: 0,
+          position: 0,
+          bankrupt: true,
+          quarantineRounds: null,
+          hasPcrTest: false,
+          bot: false,
+        },
+        {
+          id: "p4",
+          seat: 3,
+          name: { adjective: "happy", noun: "tiger" },
+          cash: 4_100_000,
+          wealth: 4_100_000,
+          position: 0,
+          bankrupt: false,
+          quarantineRounds: null,
+          hasPcrTest: false,
+          bot: true,
+        },
+      ];
+      view.fields = fields;
+      view.currentPlayer = "p4";
+      view.phase = { kind: "gameOver", winner: "p4", reason: "timeUp" };
+      view.actsAfter = hooks.serverNow();
+      view.turnDeadline = null;
+      view.turnTimer = null;
+      // What the server's publicView carries at gameOver: winner first, then
+      // Wealth, the Bankrupt Player last (R80).
+      view.standings = [
+        { player: "p4", wealth: 4_100_000 },
+        { player: "p2", wealth: 3_000_000 },
+        { player: "p1", wealth: 2_000_000 },
+        { player: "p3", wealth: 0 },
+      ];
+      // The final Summary (spec #177): the counted figures and the Wealth
+      // series, from which the chart draws one line per Player.
+      view.summary = {
+        biggestRent: { payer: "p1", owner: "p4", field: 19, amount: 1_200_000 },
+        fieldsBought: { p1: 3, p2: 1, p4: 5 },
+        monopolies: [
+          { player: "p4", group: 1 },
+          { player: "p2", group: 3 },
+        ],
+        bankruptcies: ["p3"],
+        series: [
+          { minute: 0, wealth: { p1: 2_500_000, p2: 2_500_000, p3: 2_500_000, p4: 2_500_000 } },
+          { minute: 6, wealth: { p1: 2_200_000, p2: 2_900_000, p3: 1_500_000, p4: 3_200_000 } },
+          { minute: 12, wealth: { p1: 2_000_000, p2: 3_000_000, p3: 0, p4: 4_100_000 } },
+        ],
+      };
+      hooks.showView(view);
+    },
+    { fields: FIELDS.map(() => fieldView()) },
+  );
 }
 
 test("the result screen: a 2-1-3 podium in Player colours, the Bankrupt Player greyed below, the summary chart, and back to the list", async ({
