@@ -10,6 +10,7 @@ import {
   showSale,
   shownView,
   startGame,
+  tapField,
   test,
 } from "./helpers.ts";
 
@@ -395,15 +396,34 @@ test("the mouse wheel zooms on desktop", async ({ page, browser, isMobile }) => 
 });
 
 /**
+ * The Board's `GAP` between a Field's centre and the tooltip: 12 px in
+ * `apps/web/src/board/FieldTooltip.tsx`. The e2e has no dependency on the web
+ * app, so the two numbers are kept in step by hand rather than shared.
+ */
+const TOOLTIP_GAP = 12;
+
+/**
  * How far the tooltip's box is from sitting beside the Field's centre: the
- * placement's 12 px gap on whichever side fits, vertically centred, so 0 means
- * the box tracks that Field.
+ * placement's `TOOLTIP_GAP` on whichever side fits, vertically centred, so 0
+ * means the box tracks that Field.
  */
 async function tooltipGap(page: Page, tooltip: Locator, field: number): Promise<number> {
   const box = (await tooltip.boundingBox())!;
   const at = await fieldCenter(page, field);
-  const beside = Math.min(Math.abs(box.x - (at.x + 12)), Math.abs(box.x + box.width - (at.x - 12)));
+  const beside = Math.min(
+    Math.abs(box.x - (at.x + TOOLTIP_GAP)),
+    Math.abs(box.x + box.width - (at.x - TOOLTIP_GAP)),
+  );
   return Math.max(beside, Math.abs(box.y + box.height / 2 - at.y));
+}
+
+/**
+ * Presses a camera button from the keyboard. A mouse click first moves the
+ * pointer onto the button, whose `pointerleave` clears the hover the tooltip
+ * needs (#357), so only a key press moves the camera under a resting pointer.
+ */
+async function pressCamera(page: Page, name: string): Promise<void> {
+  await page.getByRole("button", { name }).press("Enter");
 }
 
 test("a wheel zoom under a resting pointer moves the tooltip with the Field", async ({
@@ -448,6 +468,43 @@ test("a wheel zoom under a resting pointer moves the tooltip with the Field", as
   expect(Math.abs(boxMove - fieldMove), "the tooltip did not follow the Field").toBeLessThan(2);
 });
 
+test("a zoom-out and a fit move the tooltip with the Field under a resting pointer", async ({
+  page,
+  browser,
+  isMobile,
+}) => {
+  test.skip(isMobile, "desktop only, and only a mouse raises a hover (#317)");
+  const { context } = await startGame(page, browser);
+  closeAfterDump(context);
+  const tooltip = page.getByTestId("field-tooltip");
+  await settledScale(page);
+  const fitted = await scale(page);
+
+  // Veszprém sits on the front-left edge, near the ring's closest point to the
+  // Board's centre, so the camera's zooms about that centre keep it the Field
+  // the resting pointer snaps to.
+  const veszprem = await fieldCenter(page, 1);
+  await page.mouse.move(veszprem.x, veszprem.y);
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText("Veszprém");
+  expect(await tooltipGap(page, tooltip, 1)).toBeLessThan(2);
+
+  // A fitted Board's zoom-out is clamped to the 0.9 zoom limit, so every Field
+  // moves a tenth of its distance from the centre — inside the hover's reach —
+  // and the box has to re-place itself beside the Field's new point with no
+  // `pointermove` (`setCamera` -> `resnapHover`, #357). A full 1.5-step zoom
+  // would carry the hovered Field out of that reach instead, and a mouse click
+  // on the button would clear the hover before it moved anything.
+  await pressCamera(page, "Zoom out");
+  await expect.poll(() => scale(page)).toBeCloseTo(fitted * 0.9, 6);
+  await expect.poll(() => tooltipGap(page, tooltip, 1)).toBeLessThan(2);
+
+  // The fit tween is the second camera path that moves a hovered Field.
+  await pressCamera(page, "Fit the Board");
+  await expect.poll(() => scale(page)).toBe(fitted);
+  await expect.poll(() => tooltipGap(page, tooltip, 1)).toBeLessThan(2);
+});
+
 test("the tooltip shows over a Sale pick, and a click through it picks instead of opening the card", async ({
   page,
   browser,
@@ -478,6 +535,34 @@ test("the tooltip shows over a Sale pick, and a click through it picks instead o
   // A click through the tooltip picks the Field, as a tap would: a Decision is
   // open, so it must not open the Field card in its place.
   await page.mouse.click(berlin.x, berlin.y);
+  await expect(tray.getByRole("button", { name: "Remove Berlin" })).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => window.universumTest?.pick()?.picked ?? []))
+    .toEqual([SALE_FIELDS.berlin]);
+  await expect(card).toHaveCount(0);
+  await expect(tooltip).toHaveCount(0);
+});
+
+test("a touch tap picks a Sale Field, opening neither its card nor a tooltip", async ({
+  page,
+  browser,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "needs a touch-emulating context");
+  const { context } = await startGame(page, browser);
+  closeAfterDump(context);
+  const tooltip = page.getByTestId("field-tooltip");
+  const tray = page.getByTestId("sale-tray");
+  const card = page.getByTestId("field-card");
+
+  // The same made-up Sale as the mouse case: Berlin is one of the Fields it can pick.
+  await showSale(page, 15_000);
+  await expect(tray).toBeVisible();
+  await settledScale(page);
+
+  // A touch pointer raises no hover (#317), so the tap is the whole interaction:
+  // it picks the Field, and the open Sale Decision keeps the Field card shut.
+  await tapField({ page, mobile: isMobile }, SALE_FIELDS.berlin);
   await expect(tray.getByRole("button", { name: "Remove Berlin" })).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => window.universumTest?.pick()?.picked ?? []))
