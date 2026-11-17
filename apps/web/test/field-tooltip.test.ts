@@ -118,15 +118,17 @@ describe("the Field tooltip", () => {
   });
 });
 
-describe("the hover reset", () => {
-  it("clears the hovered Field for its subscriber, as an unmounted Board does", () => {
+describe("uiStore.hoverField(null)", () => {
+  it("clears the hovered Field for its subscriber", () => {
     const seen: (number | null)[] = [];
     const stop = uiStore.subscribe(
       (state) => state.hoveredField,
       (field) => seen.push(field),
     );
     uiStore.getState().hoverField(ZURICH);
-    // Board.tsx's effect cleanup calls this when the Board or the Game unmounts.
+    // The store's side of Board.tsx's effect cleanup, which calls this when the
+    // Board or the Game unmounts; there is no DOM environment (#224), so the
+    // unmount itself is not pinned here.
     uiStore.getState().hoverField(null);
     stop();
 
