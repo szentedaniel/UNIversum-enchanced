@@ -160,11 +160,13 @@ function musicElement(): HTMLAudioElement {
   element.preload = "none";
   if (navigator.webdriver) element.muted = true;
   // A pause the browser or the OS makes (an interruption, a lost audio focus)
-  // forgets the play, so the next wake restarts the track; `stopMusic` and the
-  // unlock's silent pause run with the flag already off, so they cannot land
-  // here, and a looped track never ends, so it needs no `ended` listener.
+  // forgets the play, so the next wake restarts the track. The element's own
+  // `paused` tells that apart from a stale event: a browser delivers `pause`
+  // as a queued task, so one from `stopMusic` or the unlock's silent pause can
+  // land after a later `play()` has started the track again. A looped track
+  // never ends, so it needs no `ended` listener.
   element.addEventListener("pause", () => {
-    if (musicPlaying) musicPlaying = false;
+    if (element.paused && musicPlaying) musicPlaying = false;
   });
   music = element;
   return element;
