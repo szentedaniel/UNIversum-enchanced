@@ -153,6 +153,36 @@ describe("the spectator count", () => {
     });
   });
 
+  it("follows a view that changed after a count-only push, with no events", () => {
+    const view = viewOf(undefined, { version: 3 });
+    receivePush({ view, events: [], reveals: [], spectators: 0, now: 0 }, 0);
+    const shown = roomStore.getState().push!;
+    const core = currentPlayback();
+    expect(core).not.toBeNull();
+
+    // A Guest started watching (spec #179, ticket #249): the same view, no events.
+    // The count-only push leaves the shown push and the Playback where they were.
+    receivePush({ view, events: [], reveals: [], spectators: 2, now: 0 }, 1_000);
+    expect(roomStore.getState().push).toBe(shown);
+    expect(currentPlayback()).toBe(core);
+
+    // A made-up view at the same version (the e2e hooks clone the push and keep
+    // its version) is compared with the *shown* push, not the swallowed one, so
+    // the count-only branch must not take it (#374).
+    const madeUp = { ...view, turn: view.turn + 1, currentPlayer: "p2" };
+    receivePush({ view: madeUp, events: [], reveals: [], spectators: 2, now: 0 }, 2_000);
+
+    const followed = roomStore.getState().push!;
+    expect(followed).not.toBe(shown);
+    expect(followed.view).toBe(madeUp);
+    expect(followed.seq).toBeGreaterThan(shown.seq);
+    expect(currentPlayback()).not.toBe(core);
+    expect(playbackStore.getState().frame?.shownTurn).toEqual({
+      turn: view.turn + 1,
+      currentPlayer: "p2",
+    });
+  });
+
   it("keeps the count a Lobby message carries", () => {
     receiveLobby(lobbyOf(3), 0);
     expect(roomStore.getState().spectators).toBe(3);

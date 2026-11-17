@@ -17,6 +17,7 @@ Tests (`apps/web/test/room-store.test.ts`):
 
 - `a push that only changes the spectator count > stores only the count, spending no seq and moving no push` (the same push object survives; no log line; frame stays at `eventsReached: 0`).
 - `... > keeps the running Playback when only the count changes` (same core, same `eventsReached`, push object unchanged).
+- `... > follows a view that changed after a count-only push, with no events` (#374): the count-only branch leaves the shown push alone, so the next same-version push with a changed view is compared against it, spends a `seq` and rebuilds the Playback.
 - `the in-flight lock > is not cleared by a push that only changes the spectator count`.
 - `... > is still cleared by a Rejection after a count-only push, without the push spending a seq` (the Rejection still lands later than the shown push's `seq`).
 
