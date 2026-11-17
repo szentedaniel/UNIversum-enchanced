@@ -370,8 +370,6 @@ const PICK_FIELDS = { budapest: 2, berlin: 15, london: 21, museum4: 28 } as cons
  * server had pushed it: a random game can't be steered into the Doubler corner
  * or an Erasmus Field, and nothing is sent to the server. A Doubler view makes
  * the Player own its two Fields; an Erasmus view clears the destinations.
- * `pick-tray.spec.ts` builds the same view inline and moves onto this step when
- * it is next edited.
  */
 export function showPick(page: Page, kind: "doubler" | "erasmus"): Promise<void> {
   return page.evaluate(
