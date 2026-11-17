@@ -170,6 +170,21 @@ test("the result screen: a 2-1-3 podium in Player colours, the Bankrupt Player g
     const lobbyLink = page.getByRole("link", { name: "Back to the Lobby list" });
     await expect(lobbyLink).toBeVisible();
     await expect(lobbyLink).toBeInViewport({ ratio: 1 });
+    // The Summary's Rent and top-buyer cards and the chart's Player lines stay
+    // inside the 360px card instead of running off its right edge. Each row's
+    // own box never widens, so its spans are measured too: that is where a long
+    // unbroken name or amount escapes. Only the width is checked, because the
+    // Summary scrolls and a line may sit below the fold.
+    const pastTheEdge = await summary
+      .locator('[data-figure="rent"], [data-figure="buyer"], [data-testid="chart-player"]')
+      .evaluateAll((rows) =>
+        rows
+          .flatMap((row) => [row, ...row.querySelectorAll("span")])
+          .map((node) => node.getBoundingClientRect())
+          .filter((box) => box.left < -1 || box.right > innerWidth + 1)
+          .map((box) => ({ left: Math.round(box.left), right: Math.round(box.right) })),
+      );
+    expect(pastTheEdge).toEqual([]);
     if (viewport !== null) await page.setViewportSize(viewport);
     await summary.getByTestId("summary-back").click();
     await expect(podium.getByTestId("podium-places")).toBeVisible();

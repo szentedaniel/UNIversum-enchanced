@@ -32,12 +32,17 @@ export function PlayerToken({
   );
 }
 
-/** A Player's token beside a line about them: the Summary's rows and the Wealth chart's list share it. */
+/**
+ * A Player's token beside a line about them: the Summary's rows and the Wealth
+ * chart's list share it. The text shrinks and breaks, so a long name or amount
+ * stays inside a 360px card; the token keeps the first line when it wraps, its
+ * 14px sitting centred on the 20px line.
+ */
 export function PlayerLine({ seat, children }: { seat: number; children: ReactNode }) {
   return (
-    <span className="flex items-center gap-1.5">
-      <PlayerToken seat={seat} size={14} />
-      <span>{children}</span>
+    <span className="flex items-start gap-1.5">
+      <PlayerToken seat={seat} size={14} className="mt-0.75" />
+      <span className="min-w-0 break-words">{children}</span>
     </span>
   );
 }
