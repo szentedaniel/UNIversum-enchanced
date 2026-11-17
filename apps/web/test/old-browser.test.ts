@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { createContext, runInContext, type Context } from "node:vm";
+import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 
 // The old-browser notice (spec #22): index.html carries a classic inline script
@@ -50,7 +50,6 @@ interface Sandbox {
 }
 
 interface Page {
-  readonly context: Context;
   readonly notice: NoticeStub;
   readonly root: ElementStub;
   readonly cards: readonly CardStub[];
@@ -93,11 +92,10 @@ function loadPage(options: { language?: string; withoutToSorted?: boolean } = {}
     structuredClone: globalThis.structuredClone,
   };
 
-  const context = createContext(sandbox);
-  if (options.withoutToSorted) runInContext("delete Array.prototype.toSorted", context);
-  runInContext(classicScript(html), context);
+  if (options.withoutToSorted) runInNewContext("delete Array.prototype.toSorted", sandbox);
+  runInNewContext(classicScript(html), sandbox);
 
-  return { context, notice, root, cards, attributes };
+  return { notice, root, cards, attributes };
 }
 
 /** The `lang`s of the cards the script left visible. */
