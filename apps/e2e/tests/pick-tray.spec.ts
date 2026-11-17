@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { closeAfterDump, fieldCenter, fieldView, startGame, test } from "./helpers.ts";
+import { closeAfterDump, fieldCenter, showPick, startGame, test } from "./helpers.ts";
 
 // The single-pick tray (#31): the Doubler and Erasmus. A random game can't be
 // steered into either corner, so the test shows a made-up view through the
@@ -21,51 +21,6 @@ async function tapField(page: Page, isMobile: boolean, id: number) {
   const point = await fieldCenter(page, id);
   if (isMobile) await page.touchscreen.tap(point.x, point.y);
   else await page.mouse.click(point.x, point.y);
-}
-
-/** This Guest is choosing: the view lists `fields`, the view carries their effect. */
-function showPick(page: Page, pickKind: "doubler" | "erasmus") {
-  return page.evaluate(
-    ({ kind, fields, views }) => {
-      const hooks = window.universumTest!;
-      const { me, push } = hooks.room();
-      const view = structuredClone(push!.view);
-      view.currentPlayer = me!;
-      if (kind === "doubler") {
-        view.phase = { kind: "placingDoubler", fields: [fields.budapest, fields.berlin] };
-        view.fields[fields.budapest] = { ...views.budapest, owner: me };
-        view.fields[fields.berlin] = { ...views.berlin, owner: me };
-        view.pickOptions = [
-          { kind: "doubler", field: fields.budapest, rent: 121_000, rentAfter: 242_000 },
-          { kind: "doubler", field: fields.berlin, rent: 880_000, rentAfter: 1_760_000 },
-        ];
-      } else {
-        view.phase = { kind: "choosingErasmus", fields: [fields.london, fields.museum4] };
-        view.fields[fields.london] = views.london;
-        view.fields[fields.museum4] = views.museum4;
-        view.pickOptions = [
-          { kind: "erasmus", field: fields.london, steps: 29, passesStart: true, bonus: 250_000 },
-          { kind: "erasmus", field: fields.museum4, steps: 4, passesStart: false, bonus: null },
-        ];
-      }
-      // A new decision each time (fresh picks), open now, with time on the server's clock.
-      const now = hooks.serverNow();
-      view.actsAfter = now;
-      view.turnDeadline = now + 18_000;
-      view.turnTimer = { endsAt: view.turnDeadline - 3_000, limitMs: 20_000 };
-      hooks.showView(view);
-    },
-    {
-      kind: pickKind,
-      fields: { budapest: BUDAPEST, berlin: BERLIN, london: LONDON, museum4: MUSEUM_4 },
-      views: {
-        budapest: fieldView({ level: 1, rent: 121_000 }),
-        berlin: fieldView({ level: 4, rent: 880_000 }),
-        london: fieldView(),
-        museum4: fieldView(),
-      },
-    },
-  );
 }
 
 test("placing the Doubler: taps snap to the Player's Fields, replace the choice and show the Rent effect", async ({
