@@ -42,10 +42,10 @@ build on it. The rules engine, `GameState` and the stored snapshot are untouched
 
 - **`watchRoom(code, password?)`** in `apps/web/src/connection.ts` joins with
   `{ code, password?, watch: true }` and **no `guestToken`** (`joinOptions`'s third argument).
-  `joinRoom`/`createRoom` pass `spectator = false`; `attach`/`listen`/`rejoin`/`tryRejoin` all
-  thread that one boolean, and `listen` writes it to `role` with `status: "connected"`. Never call
-  `guestToken()` on the watch path: it would make the browser store a token for a Guest that never
-  took a Seat.
+  `joinRoom`/`createRoom` pass `AS_PLAYER` (`false`) and `watchRoom` `AS_SPECTATOR` (`true`) to
+  `attach`; `attach`/`listen`/`rejoin`/`tryRejoin` all thread that one boolean, and `listen`
+  writes it to `role` with `status: "connected"`. Never call `guestToken()` on the watch path: it
+  would make the browser store a token for a Guest that never took a Seat.
 - **`tryRejoin` sends `watch: true` for a spectator** (the flag captured by `listen`), so a dropped
   spectator comes back by Room code with no token and no Seat. `SPECTATORS_FULL`, `ROOM_NOT_FOUND`
   (after `RECONNECT.notFoundTries`) and a password refusal end in the normal `lost` state.

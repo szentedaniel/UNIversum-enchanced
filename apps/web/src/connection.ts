@@ -88,9 +88,16 @@ const joinOptions = (code: string, password?: string, watch = false): JoinOption
   ...(watch ? { watch: true } : { guestToken: guestToken() }),
 });
 
+/**
+ * The role a join takes, as `attach`'s `spectator` flag: a Player takes a
+ * Seat (or gets its own back), a Spectator none (spec #179).
+ */
+const AS_PLAYER = false;
+const AS_SPECTATOR = true;
+
 /** Creates a Room and takes its first Seat; resolves with the Room code. */
 export async function createRoom(options: CreateOptions = {}): Promise<string> {
-  return attach(() => sdk.create(GAME_ROOM, { ...options, guestToken: guestToken() }), false);
+  return attach(() => sdk.create(GAME_ROOM, { ...options, guestToken: guestToken() }), AS_PLAYER);
 }
 
 /**
@@ -99,7 +106,7 @@ export async function createRoom(options: CreateOptions = {}): Promise<string> {
  * gets that Seat back, in a running game too.
  */
 export async function joinRoom(code: string, password?: string): Promise<string> {
-  return attach(() => sdk.joinById(code, joinOptions(code, password)), false);
+  return attach(() => sdk.joinById(code, joinOptions(code, password)), AS_PLAYER);
 }
 
 /**
@@ -109,7 +116,7 @@ export async function joinRoom(code: string, password?: string): Promise<string>
  * rejoins by Room code, not by token (see `tryRejoin`).
  */
 export async function watchRoom(code: string, password?: string): Promise<string> {
-  return attach(() => sdk.joinById(code, joinOptions(code, password, true)), true);
+  return attach(() => sdk.joinById(code, joinOptions(code, password, true)), AS_SPECTATOR);
 }
 
 let joining: { code: string; done: Promise<string> } | null = null;
