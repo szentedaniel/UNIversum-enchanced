@@ -8,6 +8,10 @@ class FakeAudio {
   static instances: FakeAudio[] = [];
   /** The plays the module started and is still awaiting: `settle` completes them. */
   static pending: (() => void)[] = [];
+  /** Whether `pause()` queues its event, as a browser does: `flushEvents` delivers it. */
+  static lateEvents = false;
+  /** The `pause` events the browser queued after `pause()` returned: `flushEvents` fires them. */
+  static queued: (() => void)[] = [];
   currentTime = 0;
   volume = 1;
   muted = false;
@@ -36,7 +40,8 @@ class FakeAudio {
   pause(): void {
     this.pauses += 1;
     this.paused = true;
-    this.fire("pause");
+    if (FakeAudio.lateEvents) FakeAudio.queued.push(() => this.fire("pause"));
+    else this.fire("pause");
   }
   addEventListener(type: string, listener: () => void): void {
     const forType = this.listeners.get(type) ?? new Set();
@@ -84,10 +89,19 @@ const settle = async () => {
   }
 };
 
+/** Delivers the pause events the browser queued after `pause()` returned. */
+const flushEvents = () => {
+  const queued = FakeAudio.queued;
+  FakeAudio.queued = [];
+  for (const fire of queued) fire();
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
   FakeAudio.instances = [];
   FakeAudio.pending = [];
+  FakeAudio.lateEvents = false;
+  FakeAudio.queued = [];
   storage.clear();
   listeners.clear();
   hidden = false;
@@ -489,6 +503,7 @@ describe("the background music", () => {
     expect(element?.plays).toBe(2);
 
     // An interruption (an iOS call, a lost audio focus) pauses the element, not the setting.
+    element!.paused = true;
     element?.fire("pause");
     press("visibilitychange");
 
@@ -510,6 +525,50 @@ describe("the background music", () => {
     press("visibilitychange");
 
     expect(element?.pauses).toBe(2);
+    expect(element?.plays).toBe(2);
+  });
+
+  it("ignores a stop's pause event that lands after the music plays again", async () => {
+    stubBrowser();
+    storage.set(MUSIC_ON_KEY, "1");
+    const { installAudioUnlock, soundStore } = await loadAudio();
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+    const element = musicSound();
+    expect(element?.plays).toBe(2);
+
+    // A browser delivers `pause` as a queued task: the toggle's off, the next
+    // on, and only then the pause event, while the element is playing again.
+    FakeAudio.lateEvents = true;
+    soundStore.getState().setMusicOn(false);
+    soundStore.getState().setMusicOn(true);
+    expect(element?.plays).toBe(3);
+    flushEvents();
+
+    press("visibilitychange");
+
+    expect(element?.pauses).toBe(2);
+    expect(element?.plays).toBe(3);
+  });
+
+  it("ignores the unlock's silent pause event that lands after the music plays", async () => {
+    stubBrowser();
+    storage.set(MUSIC_ON_KEY, "1");
+    const { installAudioUnlock } = await loadAudio();
+
+    FakeAudio.lateEvents = true;
+    installAudioUnlock();
+    press("pointerdown");
+    await settle();
+    const element = musicSound();
+    // The silent unlock, then the music itself, which waits for the unlock.
+    expect(element?.plays).toBe(2);
+    expect(element?.paused).toBe(false);
+
+    flushEvents();
+    press("visibilitychange");
+
     expect(element?.plays).toBe(2);
   });
 

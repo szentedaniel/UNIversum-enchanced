@@ -79,3 +79,17 @@ Branch `agent/issue-243-sound-background-music-and-separate-effects-music`.
 - `two-guests.spec.ts` taps `music-toggle` beside `sound-toggle` and asserts its `aria-pressed` (true
   = the music on) and, after the language reload, its `Musik an` label. The music steps read no play
   count: the hook counts Cues only.
+
+## Follow-ups (#360)
+
+- `musicElement()`'s `pause` listener clears `musicPlaying` only while `element.paused` is true: a
+  browser delivers `pause` as a queued task, so the event `stopMusic` or the unlock's silent pause
+  scheduled can land after a later `play()` has started the track again. The element's own state
+  tells that stale event from a real interruption, and only the interruption restarts the track on
+  the next wake.
+- `apps/web/test/sound.test.ts`'s `FakeAudio` has a late-delivery mode beside the synchronous
+  default: `FakeAudio.lateEvents` makes `pause()` queue its event in `FakeAudio.queued`, and
+  `flushEvents()` fires and clears the queue. `pause()` still counts the pause and flips `paused` at
+  once, so a test can land the event after the next `play()`. Two tests pin the stale events (the
+  toggle's own and the unlock's); the browser-interruption test sets `paused` before its
+  `fire("pause")`, because `fire()` only dispatches the listeners.
