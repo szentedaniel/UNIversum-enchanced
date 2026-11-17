@@ -40,10 +40,11 @@ spec #178. A spec asserts a cue without hearing it: the app counts its own
   waits go through `expectCueOnce(cue, before)`, which polls for
   `ROLL_WAIT_MS` (`ROLL_PLAYBACK_MS + 1_000`), not a bare number.
 - `expectCueOnce` then settles: after the count reaches `before + 1`, it waits
-  `CUE_SETTLE_MS` (300 ms, short because it runs after every Turn of a spec CI
-  repeats six times) and re-asserts the same count, so a late duplicate play
-  fails. The settle sits after the dice poll, never before
-  `expectPlaybackHold`.
+  for both pages' Decision gate to open (`expectGate` from `helpers.ts`, so
+  the cue's Playback frame has ended, ADR-0004) and re-asserts the same count,
+  so a duplicate from a re-read frame fails. The count poll comes first, so a
+  decision's answer push cannot pass on the previous push's open gate, and the
+  settle sits after the dice poll, never before `expectPlaybackHold`.
 - A cue plays from the push's Playback frame at its step's start
   (`playback-store.ts` → `sound/cue-sync.ts`), never from the push itself:
   the first step starts at the push's arrival, a later one after the steps

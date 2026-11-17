@@ -3,6 +3,7 @@ import type { PublicView } from "@universum/rules";
 import {
   closeAfterDump,
   expectBoardUp,
+  expectGate,
   fieldCenter,
   press as pressControl,
   registerPage,
@@ -14,12 +15,6 @@ import {
   type OfferChoice,
   type OfferPhase,
 } from "./helpers.ts";
-
-/**
- * How long a cue's count must hold after its poll, so a duplicate play from a
- * re-read Playback frame fails the settle. Kept short: it runs after every Turn.
- */
-const CUE_SETTLE_MS = 300;
 
 /** The latest push's view, with every phase's options; `view()` is the view the Board last drew. */
 const pushView = (page: Page): Promise<PublicView | null> =>
@@ -136,14 +131,15 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
       Promise.all(both.map(async (page) => (await readCuePlays(page))[cue] ?? 0));
     /**
      * Every screen plays `cue` exactly once: the poll waits out its Playback
-     * step, then the settle fails a late duplicate before the next Turn.
+     * step, then the settle waits for both Decision gates to open (the cue's
+     * Playback frame has ended, ADR-0004), so a duplicate from a re-read frame
+     * fails. The count poll comes first: a decision's answer push arrives after
+     * the previous push's gate opened.
      */
     const expectCueOnce = async (cue: string, before: number[]) => {
       const once = before.map((count) => count + 1);
       await expect.poll(() => cueCountsOnBoth(cue), { timeout: ROLL_WAIT_MS }).toEqual(once);
-      const settled = Promise.withResolvers<void>();
-      setTimeout(settled.resolve, CUE_SETTLE_MS);
-      await settled.promise;
+      await Promise.all(both.map((page) => expectGate(page, true, ROLL_WAIT_MS)));
       expect(await cueCountsOnBoth(cue)).toEqual(once);
     };
 
