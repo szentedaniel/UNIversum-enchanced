@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { closeAfterDump, press, ROLL_WAIT_MS, startGame, test } from "./helpers.ts";
+import { closeAfterDump, expectGate, press, ROLL_WAIT_MS, startGame, test } from "./helpers.ts";
 
 /*
  * The first-game Offer hint (#258, spec #180, story 1). The seeded first Roll
@@ -34,11 +34,7 @@ test("the first Offer's hint shows, stays dismissed through a reload, and leaves
     .toBe("offer");
   // The hint waits for the gate (spec #180, Decision 3): assert it after the
   // dice and the walk, not right after the press.
-  await expect
-    .poll(() => page.evaluate(() => window.universumTest?.playback().gateOpen ?? false), {
-      timeout: ROLL_WAIT_MS,
-    })
-    .toBe(true);
+  await expectGate(page, true, ROLL_WAIT_MS);
   await expect(offer).toBeVisible();
   await expect(hint).toBeVisible();
   await expect(hint).toHaveAttribute("data-hint", "offer");
@@ -66,10 +62,6 @@ test("the first Offer's hint shows, stays dismissed through a reload, and leaves
   // token; the same Offer is up and its dismissed hint does not come back.
   await page.reload();
   await expect(offer).toBeVisible({ timeout: 30_000 });
-  await expect
-    .poll(() => page.evaluate(() => window.universumTest?.playback().gateOpen ?? false), {
-      timeout: 5_000,
-    })
-    .toBe(true);
+  await expectGate(page, true, 5_000);
   await expect(hint).toHaveCount(0);
 });
