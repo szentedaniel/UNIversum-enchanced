@@ -48,6 +48,9 @@ Branch `ticket/41-language-sound`.
   lookbehind, `color-mix(…)`) and, when unsupported, hides `#root` and shows `#old-browser` with the card
   matching `navigator.language` (hu/en/de, else en). Do not add a check that Firefox 114 fails: `:has()`
   only shipped in Firefox 121, above the Vite 8 target.
+- `apps/web/test/old-browser.test.ts` runs that inline script in a `vm` context and pins the `toSorted`
+  check: without `Array.prototype.toSorted` the notice and its `en`/`hu`/`de` card show and `#root` hides;
+  with every check present the page is untouched. Deleting the check from `index.html` turns it red.
 - Playwright: `tests/language.spec.ts` breaks `Object.hasOwn` with `addInitScript` and asserts the notice
   and its language; it also covers the home picker and the saved choice across reloads.
 
