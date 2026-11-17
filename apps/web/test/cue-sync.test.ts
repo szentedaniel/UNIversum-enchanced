@@ -248,9 +248,9 @@ describe("the game-end cues", () => {
     syncCues(push(5, events), core.frameAt(endStarts));
     expect(playCue.mock.calls).toEqual([["bankrupt"], ["gameEnd"]]);
 
-    // The Playback's end, and every later frame, plays nothing more.
+    // From the GameEnded step's start on, no boundary frame plays it again.
     for (const time of core.boundaries) {
-      if (time < core.opensAt) continue;
+      if (time < endStarts) continue;
       syncCues(push(5, events), core.frameAt(time));
     }
     syncCues(push(5, events), core.frameAt(core.opensAt + 1_000));
