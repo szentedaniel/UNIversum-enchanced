@@ -8,31 +8,20 @@
  * full-width form with the labels written out.
  */
 import { Music, Music2, Volume2, VolumeX, type LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
 import { useStore } from "zustand";
 import { Button } from "#components/ui/button.tsx";
 import { soundStore } from "#stores/sound-store.ts";
 import { m } from "#text.ts";
 
 /**
- * The one place the two forms differ. `size`: `icon` is the round sticker
- * button; the menu's `default` is the same height (`min-h-12`), so both stay a
- * thumb-sized target on a phone. Only the compact form moves the label into
- * `aria-label`; the menu writes it out, inside no wrapper of its own.
+ * The one place the two forms differ. `iconOnly` is the compact sticker: an
+ * icon-sized round button whose label is carried in `aria-label` only. The
+ * menu's full form writes the label out at the Button's `default` size, the
+ * same height (`min-h-12`), so both stay a thumb-sized target on a phone.
  */
 const FORMS = {
-  compact: {
-    size: "icon",
-    labelled: false,
-    wrap: (toggles: ReactNode) => (
-      <div className="flex flex-wrap items-center justify-center gap-2">{toggles}</div>
-    ),
-  },
-  menu: {
-    size: "default",
-    labelled: true,
-    wrap: (toggles: ReactNode) => toggles,
-  },
+  compact: { iconOnly: true },
+  menu: { iconOnly: false },
 } as const;
 
 type Form = (typeof FORMS)[keyof typeof FORMS];
@@ -63,14 +52,14 @@ function SoundButton({
   return (
     <Button
       variant="plain"
-      size={form.size}
-      aria-label={form.labelled ? undefined : label}
+      size={form.iconOnly ? "icon" : "default"}
+      aria-label={form.iconOnly ? label : undefined}
       aria-pressed={pressed}
       data-testid={testId}
       onClick={onToggle}
     >
       <Icon size={20} strokeWidth={3} aria-hidden />
-      {form.labelled ? label : null}
+      {form.iconOnly ? null : label}
     </Button>
   );
 }
@@ -101,5 +90,9 @@ export function SoundToggles({ compact = false }: { compact?: boolean }) {
       />
     </>
   );
-  return form.wrap(toggles);
+  return compact ? (
+    <div className="flex flex-wrap items-center justify-center gap-2">{toggles}</div>
+  ) : (
+    toggles
+  );
 }
