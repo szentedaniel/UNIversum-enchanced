@@ -10,7 +10,7 @@ Branch `agent/issue-333-factory-review-follow-ups-325`, based on `main`. All in 
 ## Shared helpers
 
 - `cssHex(color: number)` sits beside `GROUP_COLORS` in `apps/web/src/board/colors.ts` and is the one colour-to-CSS-hex conversion: `FieldCard`'s memoised `band()` styles, the Summary's Monopoly dot (`cssHex(GROUP_COLORS[group])`), and `apps/web/test/players.test.ts` use it. `apps/web/test/colors.test.ts` pins the channel padding with `GROUP_COLORS[8]` (`#0572bb`).
-- `PlayerLine` in `apps/web/src/components/PlayerToken.tsx` (`{ seat, children, className? }`) is a `PlayerToken` at size 14 beside a line of text. The Summary's Rent, top-buyer and Bankruptcies rows and the Wealth chart's `chart-player` list use it; every `data-testid` and `data-player` stays on the surrounding `<li>`, and the chart keeps its own list markup.
+- `PlayerLine` in `apps/web/src/components/PlayerToken.tsx` (`{ seat, children }`) is a `PlayerToken` at size 14 beside a line of text that shrinks (`min-w-0`) and wraps (`break-words`), so a long name or amount stays inside a 360px card; the token keeps the first line. The Summary's Rent, top-buyer and Bankruptcies rows and the Wealth chart's `chart-player` list use it; every `data-testid` and `data-player` stays on the surrounding `<li>`, and the chart keeps its own list markup.
 - `groupUniversities` stays in `Summary.tsx`: moving it to `board/colors.ts` would make that module import `#text.ts` (the messages) and it has no second caller.
 
 ## One label per landmark
@@ -23,6 +23,6 @@ Branch `agent/issue-333-factory-review-follow-ups-325`, based on `main`. All in 
 
 ## e2e
 
-- `apps/e2e/tests/podium.spec.ts` now, while the Summary is open, sets the viewport to `360 × 640`, asserts the `Back to the Lobby list` link is visible and **fully** in the viewport (`toBeInViewport({ ratio: 1 })`), then restores the project viewport before `summary-back`. CI runs it.
+- `apps/e2e/tests/podium.spec.ts` now, while the Summary is open, sets the viewport to `360 × 640`, asserts the `Back to the Lobby list` link is visible and **fully** in the viewport (`toBeInViewport({ ratio: 1 })`), asserts the Rent and top-buyer figure cards and every `chart-player` line — the spans inside them too, where a long unbroken word escapes — stay inside the 360px width (boxes from one `evaluateAll`, width only because the Summary scrolls), then restores the project viewport before `summary-back`. CI runs it.
 
 Read for: any Summary, Wealth chart, podium-body or result-screen label/empty-state touch.
