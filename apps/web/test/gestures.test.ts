@@ -48,6 +48,8 @@ const pointer = (
 /** The canvas the gestures listen on: listeners, a rect and pointer capture. */
 function fakeCanvas(origin: Point) {
   const listeners = new Map<string, Listener[]>();
+  /** The pointer ids the gestures captured, in order. */
+  const captures: number[] = [];
   return {
     addEventListener(type: string, listener: Listener) {
       listeners.set(type, [...(listeners.get(type) ?? []), listener]);
@@ -59,7 +61,10 @@ function fakeCanvas(origin: Point) {
       );
     },
     getBoundingClientRect: () => ({ left: origin.x, top: origin.y, width: 400, height: 400 }),
-    setPointerCapture: () => undefined,
+    setPointerCapture(pointerId: number) {
+      captures.push(pointerId);
+    },
+    captures,
     dispatch(type: string, event: Input) {
       for (const listener of listeners.get(type) ?? []) listener(event);
     },
@@ -140,6 +145,7 @@ function mount(
     moves,
     taps,
     hovers,
+    captures: canvas.captures,
     moved: () => moved,
     prevented: () => prevented,
   };
@@ -260,6 +266,9 @@ describe("hover", () => {
     board.at(0);
     board.down(1, { x: 100, y: 100 }, "mouse", 2);
     expect(board.hovers).toEqual([{ x: 100, y: 100 }, null]);
+    // The right press itself leaves nothing behind: it captures no pointer, so
+    // no gesture holds one.
+    expect(board.captures).toEqual([]);
 
     board.at(100);
     board.move(1, { x: 160, y: 100 }, "mouse", 2);
@@ -269,6 +278,29 @@ describe("hover", () => {
     expect(board.moves).toEqual([]);
     expect(board.moved()).toBe(0);
     expect(board.taps).toEqual([]);
+
+    // A left press on the same canvas then starts its own gesture: a move
+    // inside the mouse slop does not drag, and a move past it pans by its own
+    // delta.
+    board.at(500);
+    board.down(2, { x: 200, y: 200 }, "mouse");
+    expect(board.captures).toEqual([2]);
+    board.at(600);
+    board.move(2, { x: 200 + TAP_SLOP - 1, y: 200 }, "mouse", 1);
+    expect(board.moves).toEqual([]);
+    board.at(700);
+    board.move(2, { x: 200 + TAP_SLOP, y: 200 }, "mouse", 1);
+    expect(board.moves).toEqual([{ scale: 1, x: TAP_SLOP, y: 0 }]);
+    expect(board.moved()).toBe(1);
+    board.up(2, { x: 200 + TAP_SLOP, y: 200 }, "mouse");
+    expect(board.taps).toEqual([]);
+
+    // And a left tap still taps.
+    board.at(800);
+    board.down(3, { x: 50, y: 50 }, "mouse");
+    board.at(900);
+    board.up(3, { x: 50, y: 50 }, "mouse");
+    expect(board.taps).toEqual([{ x: 50, y: 50 }]);
   });
 
   it("clears the hover when a second finger lands on the Board", () => {
