@@ -74,7 +74,7 @@ export type HoverInput = {
   /** A second pointer is down, so the gesture is a pinch or pan. */
   multi: boolean;
   /** Where the last touch on the canvas stands, if one ever landed. */
-  sinceTouch: TouchState;
+  lastTouch: TouchState;
 };
 
 /** Where the last touch stands: none yet, one down now, or one lifted `ms` ago. */
@@ -92,8 +92,8 @@ export function hoverEligible(input: HoverInput): boolean {
     input.buttons === 0 &&
     !input.dragging &&
     !input.multi &&
-    (input.sinceTouch.kind === "none" ||
-      (input.sinceTouch.kind === "lifted" && input.sinceTouch.ms >= TOUCH_WHEEL_GRACE_MS))
+    (input.lastTouch.kind === "none" ||
+      (input.lastTouch.kind === "lifted" && input.lastTouch.ms >= TOUCH_WHEEL_GRACE_MS))
   );
 }
 
@@ -165,7 +165,7 @@ export function attachGestures(
       buttons: event.buttons,
       dragging: press?.moved ?? false,
       multi: pointers.size > 1 || (press?.multi ?? false),
-      sinceTouch:
+      lastTouch:
         touches.size > 0
           ? { kind: "down" }
           : lastTouchAt === null
