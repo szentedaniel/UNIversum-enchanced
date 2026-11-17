@@ -55,6 +55,15 @@ catalog:
   zod: 4.6.7
   zustand: 5.1.0
 
+# @emnapi/core and @emnapi/runtime resolve at the 2.0.0-beta.2 that
+# @rolldown/binding-wasm32-wasi (vite > rolldown) requires exactly, and
+# @napi-rs/wasm-runtime's peer then hands the same beta to
+# @assetpack/core > @napi-rs/woff-build. Stable 1.11.3 satisfies that peer but
+# not rolldown's exact range, so no override pins them back: it would force an
+# out-of-range shim into the wasm32 rolldown binding. Both chains sit under
+# devDependencies as wasm32 optionals: installed on no supported platform and
+# imported by no app code.
+
 allowBuilds:
   msgpackr-extract: false
   # AssetPack (apps/web atlas build) pulls these in. sharp ships prebuilt
