@@ -16,7 +16,10 @@ class FakeAudio {
   volume = 1;
   muted = false;
   loop = false;
-  /** Whether a play is running: `pause()` stops it, as the element's own flag does. */
+  /**
+   * Mirrors `HTMLMediaElement.paused`: true until `play()` is called, and again
+   * after `pause()`.
+   */
   paused = true;
   plays = 0;
   pauses = 0;
