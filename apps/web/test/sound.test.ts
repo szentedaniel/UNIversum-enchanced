@@ -3,15 +3,21 @@ import musicFile from "#assets/sounds/music.mp3";
 import { CUES } from "#sound/cues.ts";
 import { MUSIC_ON_KEY, SOUND_MUTED_KEY } from "#stores/sound-store.ts";
 
-/** Just the parts of HTMLAudioElement the sound module uses. */
+/** Just the parts of HTMLAudioElement the sound module uses, plus the events a browser makes itself. */
 class FakeAudio {
   static instances: FakeAudio[] = [];
   /** The plays the module started and is still awaiting: `settle` completes them. */
   static pending: (() => void)[] = [];
-  /** Whether `pause()` queues its event, as a browser does: `flushEvents` delivers it. */
-  static lateEvents = false;
-  /** The `pause` events the browser queued after `pause()` returned: `flushEvents` fires them. */
-  static queued: (() => void)[] = [];
+  /** Delivers `pause` events late, as a browser does, until the next teardown. */
+  static queueEvents(): void {
+    FakeAudio.queued = [];
+  }
+  /**
+   * The `pause` events a browser has queued but not delivered, while
+   * `queueEvents()` has turned its late delivery on: `flushEvents` fires them.
+   * Null delivers every event at once, the synchronous default.
+   */
+  static queued: (() => void)[] | null = null;
   currentTime = 0;
   volume = 1;
   muted = false;
@@ -43,8 +49,13 @@ class FakeAudio {
   pause(): void {
     this.pauses += 1;
     this.paused = true;
-    if (FakeAudio.lateEvents) FakeAudio.queued.push(() => this.fire("pause"));
+    if (FakeAudio.queued) FakeAudio.queued.push(() => this.fire("pause"));
     else this.fire("pause");
+  }
+  /** Pauses the element as the browser does, without `pause()`: a lost audio focus. */
+  interrupt(): void {
+    this.paused = true;
+    this.fire("pause");
   }
   addEventListener(type: string, listener: () => void): void {
     const forType = this.listeners.get(type) ?? new Set();
@@ -95,6 +106,7 @@ const settle = async () => {
 /** Delivers the pause events the browser queued after `pause()` returned. */
 const flushEvents = () => {
   const queued = FakeAudio.queued;
+  if (queued === null) return;
   FakeAudio.queued = [];
   for (const fire of queued) fire();
 };
@@ -103,8 +115,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   FakeAudio.instances = [];
   FakeAudio.pending = [];
-  FakeAudio.lateEvents = false;
-  FakeAudio.queued = [];
+  FakeAudio.queued = null;
   storage.clear();
   listeners.clear();
   hidden = false;
@@ -506,8 +517,7 @@ describe("the background music", () => {
     expect(element?.plays).toBe(2);
 
     // An interruption (an iOS call, a lost audio focus) pauses the element, not the setting.
-    element!.paused = true;
-    element?.fire("pause");
+    element!.interrupt();
     press("visibilitychange");
 
     expect(element?.plays).toBe(3);
@@ -543,7 +553,7 @@ describe("the background music", () => {
 
     // A browser delivers `pause` as a queued task: the toggle's off, the next
     // on, and only then the pause event, while the element is playing again.
-    FakeAudio.lateEvents = true;
+    FakeAudio.queueEvents();
     soundStore.getState().setMusicOn(false);
     soundStore.getState().setMusicOn(true);
     expect(element?.plays).toBe(3);
@@ -560,7 +570,7 @@ describe("the background music", () => {
     storage.set(MUSIC_ON_KEY, "1");
     const { installAudioUnlock } = await loadAudio();
 
-    FakeAudio.lateEvents = true;
+    FakeAudio.queueEvents();
     installAudioUnlock();
     press("pointerdown");
     await settle();
