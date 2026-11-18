@@ -88,8 +88,9 @@ Branch `agent/issue-243-sound-background-music-and-separate-effects-music`.
   tells that stale event from a real interruption, and only the interruption restarts the track on
   the next wake.
 - `apps/web/test/sound.test.ts`'s `FakeAudio` has a late-delivery mode beside the synchronous
-  default: `FakeAudio.lateEvents` makes `pause()` queue its event in `FakeAudio.queued`, and
-  `flushEvents()` fires and clears the queue. `pause()` still counts the pause and flips `paused` at
-  once, so a test can land the event after the next `play()`. Two tests pin the stale events (the
-  toggle's own and the unlock's); the browser-interruption test sets `paused` before its
-  `fire("pause")`, because `fire()` only dispatches the listeners.
+  default: `FakeAudio.queueEvents()` turns it on, which sets `FakeAudio.queued` to an array, and
+  `flushEvents()` fires and clears it. `queued` is null while events deliver at once, so one field
+  carries both the mode and the queue. `pause()` still counts the pause and flips `paused` at
+  once, so a test can land the event after the next `play()`; `interrupt()` is the browser's own
+  pause (flips `paused`, then fires) for the interruption test. Two tests pin the stale events
+  (the toggle's own and the unlock's).
