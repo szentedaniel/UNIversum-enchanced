@@ -1,4 +1,5 @@
 import { MatchMakeError } from "@colyseus/sdk";
+import type { PublicView } from "@universum/rules";
 import { afterEach, describe, expect, it } from "vitest";
 import { createLogger } from "#observability/logger.ts";
 import {
@@ -43,15 +44,20 @@ function expectSeatsUnchanged(scrape: string): void {
   expect(sample(scrape, "seat_drops_total")).toBe(0);
 }
 
-/** A started Room: its creator, a joined Guest, and both `game` pushes read. */
-async function startedRoom(testServer: TestServer): Promise<TestClient> {
+/**
+ * A started Room: its creator, the first `game` push's `view`, a joined Guest,
+ * and both `game` pushes read.
+ */
+async function startedRoom(
+  testServer: TestServer,
+): Promise<{ creator: TestClient; view: PublicView }> {
   const creator = await testServer.create({ maxPlayers: 2 });
   const guest = await testServer.join(creator.code);
   await guest.until("lobby", (l) => l.seats.length === 2);
   creator.send({ type: "Start" });
-  await creator.next("game");
+  const { view } = await creator.next("game");
   await guest.next("game");
-  return creator;
+  return { creator, view };
 }
 
 describe("metrics", () => {
@@ -129,13 +135,7 @@ describe("metrics", () => {
 
   it("counts spectators apart from the Seats, and none of their comings and goings moves a Seat metric", async () => {
     server = await startTestServer();
-    const alice = await server.create({ maxPlayers: 2 });
-    const bob = await server.join(alice.code);
-    await alice.next("welcome");
-    await bob.until("lobby", (l) => l.seats.length === 2);
-    alice.send({ type: "Start" });
-    const { view } = await alice.next("game");
-    await bob.next("game");
+    const { creator: alice, view } = await startedRoom(server);
 
     const scrape = () => server!.metrics.scrape();
     const before = await scrape();
@@ -184,8 +184,8 @@ describe("metrics", () => {
 
   it("sums the spectators across Rooms, and one leaving drops the sum by one", async () => {
     server = await startTestServer();
-    const first = await startedRoom(server);
-    const second = await startedRoom(server);
+    const { creator: first } = await startedRoom(server);
+    const { creator: second } = await startedRoom(server);
 
     const watchingFirst = [
       await server.join(first.code, { watch: true }),
@@ -197,7 +197,7 @@ describe("metrics", () => {
     const scrape = () => server!.metrics.scrape();
     await pollSpectators(scrape, watching.length);
     // Two Rooms with two connected Seats each: the creator and the joined Guest.
-    expect(sample(await scrape(), "players_connected")).toBe(4);
+    await expect.poll(async () => sample(await scrape(), "players_connected")).toBe(4);
 
     const leaver = watchingSecond[0]!;
     await leaver.leave();
