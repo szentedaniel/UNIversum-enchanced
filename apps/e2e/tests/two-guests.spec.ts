@@ -16,6 +16,15 @@ import {
   type OfferPhase,
 } from "./helpers.ts";
 
+/**
+ * How long the cue count must hold after both Decision gates open, before the
+ * final read: the gate covers the cue's own Playback frame, not a duplicate
+ * that lands once it opens, and a gate already open at the count poll adds no
+ * wait of its own. Kept short: it runs after every Roll and purchase, and CI
+ * repeats the spec.
+ */
+const CUE_RECHECK_MS = 150;
+
 /** The latest push's view, with every phase's options; `view()` is the view the Board last drew. */
 const pushView = (page: Page): Promise<PublicView | null> =>
   page.evaluate(() => window.universumTest?.room().push?.view ?? null);
@@ -131,15 +140,19 @@ test("two Guests, on desktop Chromium and iPhone WebKit, create, join, start and
       Promise.all(both.map(async (page) => (await readCuePlays(page))[cue] ?? 0));
     /**
      * Every screen plays `cue` exactly once: the poll waits out its Playback
-     * step, then the settle waits for both Decision gates to open (the cue's
-     * Playback frame has ended, ADR-0004), so a duplicate from a re-read frame
-     * fails. The count poll comes first: a decision's answer push arrives after
-     * the previous push's gate opened.
+     * step, the settle waits for both Decision gates to open (the cue's
+     * Playback frame has ended, ADR-0004), and the recheck holds the count for
+     * `CUE_RECHECK_MS` past that, so a duplicate from a re-read frame or one
+     * that lands after the gate opens fails. The count poll comes first: a
+     * decision's answer push arrives after the previous push's gate opened.
      */
     const expectCueOnce = async (cue: string, before: number[]) => {
       const once = before.map((count) => count + 1);
       await expect.poll(() => cueCountsOnBoth(cue), { timeout: ROLL_WAIT_MS }).toEqual(once);
       await Promise.all(both.map((page) => expectGate(page, true, ROLL_WAIT_MS)));
+      const rechecked = Promise.withResolvers<void>();
+      setTimeout(rechecked.resolve, CUE_RECHECK_MS);
+      await rechecked.promise;
       expect(await cueCountsOnBoth(cue)).toEqual(once);
     };
 
