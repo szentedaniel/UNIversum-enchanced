@@ -39,3 +39,7 @@ the entries; the weekly health report (`factory:report`, #92) reads them.
 ## 2026-11-17
 
 - Nothing new: all 15 pull requests merged with a pass and no fix rounds. The one reviewer commit (#409) was a one-off wording fix. The only red CI run (run 43814357897) was a Dependabot bump branch. The advisories on e2e waits and duplicated steps (#401, #408, #412, #413) are already open follow-ups, and CODING_STANDARDS.md already has the rule on waits after a Playback. The rest are single-pull-request nits.
+
+## 2026-11-18
+
+- No recurring problem: one red CI run (run 44211734141, check, on #415, now blocked for the owner) and no reviewer fixes, fix rounds or escalations across #415-#421; advisory findings already tracked in #422 and #423.
