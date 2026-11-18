@@ -12,6 +12,13 @@ test.use({ locale: "en-US" });
 // The reload draws the Board a second time (slow on WebKit in CI).
 test.setTimeout(90_000);
 
+/**
+ * The gate wait after the reload: the rejoin push carries no events and the
+ * Offer's `actsAfter` passed with the first gate wait, so no Playback is left to
+ * budget. The 5 s covers the second Board draw, at the old inline wait's length.
+ */
+const RELOAD_GATE_WAIT_MS = 5_000;
+
 test("the first Offer's hint shows, stays dismissed through a reload, and leaves Buy tappable", async ({
   page,
   browser,
@@ -62,6 +69,6 @@ test("the first Offer's hint shows, stays dismissed through a reload, and leaves
   // token; the same Offer is up and its dismissed hint does not come back.
   await page.reload();
   await expect(offer).toBeVisible({ timeout: 30_000 });
-  await expectGate(page, true, 5_000);
+  await expectGate(page, true, RELOAD_GATE_WAIT_MS);
   await expect(hint).toHaveCount(0);
 });
