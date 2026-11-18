@@ -290,7 +290,7 @@ describe("the spectator count in the Game", () => {
     receivePush({ view, events: [], reveals: [], spectators: 0, now: 0 }, 0);
     expect(renderGame()).not.toContain('data-testid="spectators"');
 
-    // A Guest started watching (spec #179, ticket #249): the same view, no events.
+    // A Spectator started watching (spec #179, ticket #249): the same view, no events.
     receivePush({ view, events: [], reveals: [], spectators: 2, now: 0 }, 1_000);
     expect(renderGame()).toContain("2 spectators");
   });
