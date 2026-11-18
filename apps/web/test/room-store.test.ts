@@ -110,7 +110,7 @@ describe("the spectator count", () => {
     receivePush({ view, events: [], reveals: [], spectators: 0, now: 0 }, 0);
     expect(roomStore.getState().spectators).toBe(0);
 
-    // A Guest started watching (spec #179, ticket #249): the same view, no events.
+    // A Spectator started watching (spec #179, ticket #249): the same view, no events.
     receivePush({ view, events: [], reveals: [], spectators: 2, now: 0 }, 1_000);
     expect(roomStore.getState().spectators).toBe(2);
   });
@@ -160,7 +160,7 @@ describe("the spectator count", () => {
     const core = currentPlayback();
     expect(core).not.toBeNull();
 
-    // A Guest started watching (spec #179, ticket #249): the same view, no events.
+    // A Spectator started watching (spec #179, ticket #249): the same view, no events.
     // The count-only push leaves the shown push and the Playback where they were.
     receivePush({ view, events: [], reveals: [], spectators: 2, now: 0 }, 1_000);
     expect(roomStore.getState().push).toBe(shown);
