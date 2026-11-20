@@ -55,14 +55,16 @@ catalog:
   zod: 4.6.7
   zustand: 5.1.0
 
-# @emnapi/core and @emnapi/runtime resolve at the 2.0.0-beta.2 that
-# @rolldown/binding-wasm32-wasi (vite > rolldown) requires exactly, and
-# @napi-rs/wasm-runtime's peer then hands the same beta to
-# @assetpack/core > @napi-rs/woff-build. Stable 1.x satisfies that peer but
-# not rolldown's exact range, so no override pins them back: it would force an
-# out-of-range shim into the wasm32 rolldown binding. Both chains sit under
-# devDependencies as wasm32 optionals: installed on no supported platform and
-# imported by no app code.
+# Do not add an @emnapi/core or @emnapi/runtime override; re-trace with
+# `pnpm why` when rolldown or @napi-rs/wasm-runtime bumps. As traced with
+# rolldown 1.2.19 and @napi-rs/wasm-runtime 1.2.5 / 1.2.6, both chains resolve
+# at the 2.0.0-beta.2 that @rolldown/binding-wasm32-wasi (vite > rolldown)
+# requires exactly, and @napi-rs/wasm-runtime's peer then hands the same beta
+# to @assetpack/core > @napi-rs/woff-build. Stable 1.x satisfies that peer but
+# not rolldown's exact range. No override exists today, and adding one would
+# force an out-of-range shim into the wasm32 rolldown binding. Both chains are
+# wasm32 optionals under devDependencies: installed on no supported platform
+# and imported by no app code.
 
 allowBuilds:
   msgpackr-extract: false

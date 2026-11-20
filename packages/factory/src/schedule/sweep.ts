@@ -420,12 +420,15 @@ const STATUS_LINE = /^HTTP\/[\d.]+ (\d{3})/u;
 /**
  * Merges `main` into the branch through the API: GitHub writes the merge
  * commit and pushes it as the PAT, so the push event starts CI. A conflict is
- * the fix loop's; anything else is a failure the tick reports.
+ * the fix loop's; anything else is a failure the tick reports. The message is
+ * the fix loop's conventional one: GitHub's default `Merge main into …` fails
+ * the branch's commit check.
  */
 const pushMain = (repo: string, branch: string): "pushed" | "unchanged" | "conflict" => {
   try {
+    const message = `chore: merge main into ${branch}`;
     const response = sh(
-      `gh api --include --method POST "repos/${repo}/merges" -f base=${shellArg(branch)} -f head=main`,
+      `gh api --include --method POST "repos/${repo}/merges" -f base=${shellArg(branch)} -f head=main -f commit_message=${shellArg(message)}`,
       GH_CALL_TIMEOUT_MS,
     );
     return STATUS_LINE.exec(response)?.[1] === "204" ? "unchanged" : "pushed";
