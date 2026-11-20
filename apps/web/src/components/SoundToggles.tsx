@@ -13,35 +13,28 @@ import { Button } from "#components/ui/button.tsx";
 import { soundStore } from "#stores/sound-store.ts";
 import { m } from "#text.ts";
 
-/**
- * The one place the two forms differ. `iconOnly` is the compact sticker: an
- * icon-sized round button whose label is carried in `aria-label` only. The
- * menu's full form writes the label out at the Button's `default` size, the
- * same height (`min-h-12`), so both stay a thumb-sized target on a phone.
- */
-const FORMS = {
-  compact: { iconOnly: true },
-  menu: { iconOnly: false },
-} as const;
-
-type Form = (typeof FORMS)[keyof typeof FORMS];
-
 /** The icon a toggle shows while pressed, and while released. */
 type IconPair = { pressed: LucideIcon; released: LucideIcon };
 
 const EFFECTS_ICONS: IconPair = { pressed: VolumeX, released: Volume2 };
 const MUSIC_ICONS: IconPair = { pressed: Music, released: Music2 };
 
-/** One toggle: the same button in both forms, differing only by the form's size and label placement. */
+/**
+ * One toggle: the same button in both forms, differing only by size and by
+ * where the label goes. `iconOnly` is Home's compact sticker: an icon-sized
+ * round button whose label is carried in `aria-label` only. The menu's full
+ * form writes the label out at the Button's `default` size, the same height
+ * (`min-h-12`), so both stay a thumb-sized target on a phone.
+ */
 function SoundButton({
-  form,
+  iconOnly,
   testId,
   pressed,
   label,
   icons,
   onToggle,
 }: {
-  form: Form;
+  iconOnly: boolean;
   testId: string;
   pressed: boolean;
   label: string;
@@ -52,14 +45,14 @@ function SoundButton({
   return (
     <Button
       variant="plain"
-      size={form.iconOnly ? "icon" : "default"}
-      aria-label={form.iconOnly ? label : undefined}
+      size={iconOnly ? "icon" : "default"}
+      aria-label={iconOnly ? label : undefined}
       aria-pressed={pressed}
       data-testid={testId}
       onClick={onToggle}
     >
       <Icon size={20} strokeWidth={3} aria-hidden />
-      {form.iconOnly ? null : label}
+      {iconOnly ? null : label}
     </Button>
   );
 }
@@ -69,11 +62,10 @@ export function SoundToggles({ compact = false }: { compact?: boolean }) {
   const effectsMuted = useStore(soundStore, (state) => state.effectsMuted);
   // The music button is pressed while the music is on.
   const musicOn = useStore(soundStore, (state) => state.musicOn);
-  const form = FORMS[compact ? "compact" : "menu"];
   const toggles = (
     <>
       <SoundButton
-        form={form}
+        iconOnly={compact}
         testId="sound-toggle"
         pressed={effectsMuted}
         label={effectsMuted ? m.sound_off() : m.sound_on()}
@@ -81,7 +73,7 @@ export function SoundToggles({ compact = false }: { compact?: boolean }) {
         onToggle={() => soundStore.getState().toggleEffectsMuted()}
       />
       <SoundButton
-        form={form}
+        iconOnly={compact}
         testId="music-toggle"
         pressed={musicOn}
         label={musicOn ? m.music_on() : m.music_off()}
