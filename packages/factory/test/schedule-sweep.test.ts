@@ -553,6 +553,8 @@ describe("sweepWiring", () => {
       `base=${BRANCH}`,
       "-f",
       "head=main",
+      "-f",
+      `commit_message=chore: merge main into ${BRANCH}`,
     ]);
     expect(calls()).toContainEqual([
       "pr",
