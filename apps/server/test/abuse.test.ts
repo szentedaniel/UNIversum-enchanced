@@ -41,6 +41,14 @@ async function refusalOf(attempt: Promise<unknown>): Promise<Refusal> {
   return matchmakeRefusal(error);
 }
 
+/** A Colyseus error body's human string: 0.18.29's `message`, older versions' `error`. */
+function detailOf(answer: unknown): unknown {
+  if (typeof answer !== "object" || answer === null) return undefined;
+  if ("message" in answer) return answer.message;
+  if ("error" in answer) return answer.error;
+  return undefined;
+}
+
 /** A Lobby nobody in the test is limited by: made from an IP of its own. */
 let lobbies = 0;
 async function someLobby(options: { password?: string } = {}): Promise<TestClient> {
@@ -302,6 +310,20 @@ describe("message sizes", () => {
     expect(response.headers.get("retry-after")).toBeNull();
     expect(response.headers.get("access-control-allow-headers")).toContain("Content-Type");
     expect(await response.json()).toEqual({ code: 413, error: "MALFORMED" });
+  });
+
+  it("answers a malformed matchmaking body with 400 and a message or error", async () => {
+    const response = await fetch(`http://127.0.0.1:${server.port}/matchmake/create/game`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-real-ip": "203.0.113.53" },
+      body: '{"roomName": ',
+    });
+
+    expect(response.status).toBe(400);
+    // @colyseus/core 0.18.29 answers `{ message, code }` where 0.18.28 answered
+    // `{ error }`; the SDK reads `data.message ?? data.error`, so either shape
+    // keeps a browser's refusal path working (#427).
+    expect(detailOf(await response.json())).toBeTypeOf("string");
   });
 
   it("closes a WebSocket that sends a message over 1 KB", async () => {
