@@ -20,7 +20,7 @@ production or lockfile edit.
   `@colyseus/sdk`, whose `build/HTTP.mjs` reads `data.message ?? data.error ?? raw.statusText`
   and wraps it in `MatchMakeError`; `matchmakeRefusal` then maps our message. The only `.error`
   reader is `apps/server/test/helpers.ts` `matchmake`, which reads our gate's body, not Colyseus'.
-  `apps/loadtest/src/prometheus.ts:25` is a Prometheus response and unrelated.
+  `apps/loadtest/src/prometheus.ts` is a Prometheus response and unrelated.
 - `apps/server/test/abuse.test.ts` (`describe("malformed matchmaking JSON")`) pins the boundary:
   a non-JSON body gets 400, `content-type: application/json`, and a JSON object with a `code` and
   a string `message` or `error`. It asserts loosely on purpose: `@colyseus/sdk` accepts either
