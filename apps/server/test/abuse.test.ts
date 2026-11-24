@@ -348,7 +348,7 @@ describe("malformed matchmaking JSON", () => {
   it("answers a non-JSON body with a 400 and an error body the SDK can read", async () => {
     const response = await fetch(`http://127.0.0.1:${server.port}/matchmake/create/game`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-real-ip": "203.0.113.53" },
+      headers: { "content-type": "application/json", "x-real-ip": "203.0.113.54" },
       body: "{not json",
     });
 
