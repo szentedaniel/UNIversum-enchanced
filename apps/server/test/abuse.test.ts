@@ -344,6 +344,29 @@ describe("message sizes", () => {
   });
 });
 
+describe("malformed matchmaking JSON", () => {
+  it("answers a non-JSON body with a 400 and an error body the SDK can read", async () => {
+    const response = await fetch(`http://127.0.0.1:${server.port}/matchmake/create/game`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-real-ip": "203.0.113.54" },
+      body: "{not json",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    // Colyseus' own 400 (not our `{ code, error }` refusal): `@colyseus/sdk`
+    // reads `message` or `error` from a JSON body, so pin only that it has
+    // one, plus a `code`, and leave the exact keys to the dependency.
+    const body: unknown = await response.json();
+    if (typeof body !== "object" || body === null || !("code" in body)) {
+      throw new Error(`the 400 body is not a JSON object with a code: ${JSON.stringify(body)}`);
+    }
+    const message = "message" in body ? body.message : "error" in body ? body.error : undefined;
+    expect(["number", "string"]).toContain(typeof body.code);
+    expect(message).toEqual(expect.any(String));
+  });
+});
+
 /** A 2-Player game Alice has sent nothing in yet. */
 async function runningGame(): Promise<[TestClient, TestClient]> {
   const alice = await someLobby();
