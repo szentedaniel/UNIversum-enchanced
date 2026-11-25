@@ -68,6 +68,22 @@ async function close(lobby: TestClient): Promise<void> {
   await expect.poll(() => matchMaker.getLocalRoomById(lobby.code)).toBeUndefined();
 }
 
+/** A matchmaking POST from one IP; a stream body is chunked (undici: half-duplex). */
+async function postMatchmake(
+  ip: string,
+  body: string | ReadableStream<Uint8Array>,
+): Promise<Response> {
+  const request = {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-real-ip": ip },
+    body,
+  };
+  return fetch(
+    `http://127.0.0.1:${server.port}/matchmake/create/game`,
+    typeof body === "string" ? request : { ...request, duplex: "half" },
+  );
+}
+
 describe("Room creations per IP", () => {
   it("allows the per-minute number, then refuses with RATE_LIMITED and the wait", async () => {
     const guest = server.from("203.0.113.1");
@@ -286,12 +302,7 @@ describe("message sizes", () => {
         controller.close();
       },
     });
-    const response = await fetch(`http://127.0.0.1:${server.port}/matchmake/create/game`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-real-ip": "203.0.113.51" },
-      body,
-      duplex: "half",
-    });
+    const response = await postMatchmake("203.0.113.51", body);
 
     expect(response.status).toBe(413);
   });
@@ -299,11 +310,7 @@ describe("message sizes", () => {
   it("answers a matchmaking body over the cap with the matchmaking refusal shape", async () => {
     const big = JSON.stringify({ roomName: "x".repeat(2100) });
 
-    const response = await fetch(`http://127.0.0.1:${server.port}/matchmake/create/game`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-real-ip": "203.0.113.52" },
-      body: big,
-    });
+    const response = await postMatchmake("203.0.113.52", big);
 
     expect(response.status).toBe(413);
     expect(response.headers.get("content-type")).toBe("application/json");
@@ -313,11 +320,7 @@ describe("message sizes", () => {
   });
 
   it("answers a malformed matchmaking body with 400 and a message or error", async () => {
-    const response = await fetch(`http://127.0.0.1:${server.port}/matchmake/create/game`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-real-ip": "203.0.113.53" },
-      body: '{"roomName": ',
-    });
+    const response = await postMatchmake("203.0.113.53", '{"roomName": ');
 
     expect(response.status).toBe(400);
     // @colyseus/core 0.18.29 answers `{ message, code }` where 0.18.28 answered
@@ -346,11 +349,7 @@ describe("message sizes", () => {
 
 describe("malformed matchmaking JSON", () => {
   it("answers a non-JSON body with a 400 and an error body the SDK can read", async () => {
-    const response = await fetch(`http://127.0.0.1:${server.port}/matchmake/create/game`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-real-ip": "203.0.113.54" },
-      body: "{not json",
-    });
+    const response = await postMatchmake("203.0.113.54", "{not json");
 
     expect(response.status).toBe(400);
     expect(response.headers.get("content-type")).toContain("application/json");
