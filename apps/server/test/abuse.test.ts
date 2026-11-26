@@ -73,14 +73,14 @@ async function postMatchmake(
   ip: string,
   body: string | ReadableStream<Uint8Array>,
 ): Promise<Response> {
-  const request = {
+  const init = {
     method: "POST",
     headers: { "content-type": "application/json", "x-real-ip": ip },
     body,
   };
   return fetch(
     `http://127.0.0.1:${server.port}/matchmake/create/game`,
-    typeof body === "string" ? request : { ...request, duplex: "half" },
+    typeof body === "string" ? init : { ...init, duplex: "half" },
   );
 }
 
