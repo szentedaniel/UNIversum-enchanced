@@ -59,3 +59,7 @@ the entries; the weekly health report (`factory:report`, #92) reads them.
 ## 2026-11-25
 
 - Nothing recurred: #432 merged on a passing review, and its two advisories are already tracked in #433.
+
+## 2026-11-26
+
+- Nothing new.
